@@ -643,7 +643,6 @@ function initTemplateHostSearch(row) {
         try {
             const res = await fetch(`/api/events/users/search?q=${encodeURIComponent(term)}`, {
                 credentials: 'include',
-                headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
             });
             if (!res.ok) { clearSuggestions(); return; }
             const data = await res.json();
@@ -724,7 +723,7 @@ document.querySelectorAll('#templateHostsContainer .host-row').forEach(initTempl
     const savedChannelId = '<%= tmpl.locationDiscordChannelId || "" %>';
     async function loadVoiceChannels() {
         try {
-            const res = await fetch('/api/events/discord/voice-channels', { credentials: 'include', headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> } });
+            const res = await fetch('/api/events/discord/voice-channels', { credentials: 'include' });
             const data = await res.json();
             voiceSelect.innerHTML = '<option value="">— select a channel —</option>';
             let lastCat = null, grp;
@@ -806,7 +805,7 @@ document.getElementById('templateForm').addEventListener('submit', async (e) => 
     const res = await fetch(endpoint, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     });
     const data = await res.json();
@@ -818,7 +817,7 @@ document.getElementById('templateForm').addEventListener('submit', async (e) => 
         const annRes = await fetch('/api/events/templates/announcements/update', {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ templateId: savedTemplateId, announcements: collectTemplateAnnouncements() }),
         });
         const annData = await annRes.json();

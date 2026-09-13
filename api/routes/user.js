@@ -263,6 +263,8 @@ export default function userApiRoute(app, config, db, features, lang) {
   });
 
   app.get(baseEndpoint + "/punishments", async function (req, res) {
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 60 })) return;
+
     const uuid = optional(req.query, "uuid");
     const username = optional(req.query, "username");
     const discordId = optional(req.query, "discordId");

@@ -4,6 +4,7 @@
  */
 
 import { prisma } from "../controllers/databaseController.js";
+import { sanitizeForumHtml } from "../lib/htmlSanitize.js";
 
 // Valid status transitions
 const STATUS_TRANSITIONS = {
@@ -242,7 +243,7 @@ export async function createEvent(data, actorId, actorName) {
     data: {
       title: data.title,
       slug,
-      description: data.description || null,
+      description: data.description ? sanitizeForumHtml(data.description) : null,
       eventType: data.eventType || "once",
       startAt: new Date(data.startAt),
       endAt: new Date(data.endAt),
@@ -309,7 +310,10 @@ export async function updateEvent(eventId, data, actorId, actorName) {
     updateData.title = data.title;
     updateData.slug = await generateSlug(data.title, data.startAt || existing.startAt, existing.slug);
   }
-  if (data.description !== undefined) updateData.description = data.description;
+  // Summernote rich text — sanitized on write because events-view.ejs renders
+  // it unescaped (<%- ev.description %>).
+  if (data.description !== undefined)
+    updateData.description = data.description ? sanitizeForumHtml(data.description) : null;
   if (data.eventType !== undefined) updateData.eventType = data.eventType;
   if (data.startAt !== undefined) updateData.startAt = new Date(data.startAt);
   if (data.endAt !== undefined) updateData.endAt = new Date(data.endAt);

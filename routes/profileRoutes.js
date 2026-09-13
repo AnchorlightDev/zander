@@ -289,6 +289,8 @@ export default function profileSiteRoutes(
   // Edit Signed in User profile
   //
   app.get("/profile/:username/edit", async function (req, res) {
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 30 })) return;
+
     const username = req.params.username;
 
     try {

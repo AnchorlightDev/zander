@@ -110,7 +110,7 @@ document.querySelectorAll('.btn-generate-draft').forEach(btn => {
         btn.disabled = true;
         const res = await fetch('/api/events/templates/generate-draft', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ templateId: btn.dataset.templateId }),
         });
         const data = await res.json();
@@ -128,7 +128,7 @@ document.querySelectorAll('.btn-delete-template').forEach(btn => {
         if (!confirm(`Delete template "${btn.dataset.title}"? This will not delete generated events.`)) return;
         const res = await fetch('/api/events/templates/delete', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ templateId: btn.dataset.templateId }),
         });
         const data = await res.json();

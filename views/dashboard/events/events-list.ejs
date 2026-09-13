@@ -154,7 +154,7 @@ document.querySelectorAll('.btn-duplicate-event').forEach(btn => {
             const res = await fetch('/api/events/duplicate', {
                 method: 'POST',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ eventId: btn.dataset.eventId }),
             });
             const data = await res.json();
@@ -183,7 +183,7 @@ document.querySelectorAll('.btn-delete-event').forEach(btn => {
             const res = await fetch('/api/events/delete', {
                 method: 'POST',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ eventId: btn.dataset.eventId }),
             });
             const data = await res.json();

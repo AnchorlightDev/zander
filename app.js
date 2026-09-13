@@ -30,6 +30,11 @@ import fastify from "fastify";
 import fastifySession from "@fastify/session";
 import fastifyCookie from "@fastify/cookie";
 import { FastifyPrismaSessionStore } from "./lib/fastifyPrismaSessionStore.js";
+import {
+  isHttpsDeployment as detectHttpsDeployment,
+  buildHelmetOptions,
+  buildSessionCookieOptions,
+} from "./lib/securityConfig.js";
 
 const config = require("./config.json");
 const features = require("./features.json");
@@ -97,7 +102,19 @@ const buildApp = async () => {
   // take 60+ seconds while registering Discord slash commands, which can delay
   // event-loop ticks long enough for avvio to fire the default 10-second
   // timeout before route-registration plugins have a chance to complete.
-  const app = fastify({ logger: config.debug, pluginTimeout: 120000 });
+  // trustProxy: the app is deployed behind a TLS-terminating reverse proxy
+  // (see Procfile).  Without it req.protocol is always "http", which both
+  // defeats secure-cookie issuance below and makes req.ip the proxy address
+  // rather than the client's — breaking per-IP rate limiting.
+  const app = fastify({
+    logger: config.debug,
+    pluginTimeout: 120000,
+    trustProxy: true,
+  });
+
+  // Drives both the Secure flag on the session cookie and HSTS below, so local
+  // http development still works while any https deployment is hardened.
+  const isHttpsDeployment = detectHttpsDeployment(process.env.siteAddress);
 
   if (process.env.SENTRY_DSN) {
     Sentry.setupFastifyErrorHandler(app, {
@@ -231,6 +248,13 @@ const buildApp = async () => {
       return res.send("<h1>Down for Maintenance</h1><p>We'll be back shortly.</p>");
     }
   });
+
+  // Security headers.  Options live in lib/securityConfig.js so the exact
+  // object registered here is the one covered by tests.
+  await app.register(
+    await import("@fastify/helmet"),
+    buildHelmetOptions(isHttpsDeployment)
+  );
 
   // EJS Rendering Engine
   await app.register(await import("@fastify/view"), {
@@ -371,12 +395,7 @@ const buildApp = async () => {
     cookieName: "sessionId",
     secret: process.env.sessionCookieSecret,
     store: sessionStore,
-    cookie: {
-      secure: false,
-      maxAge: 86400000 * 7, // 7 days default
-      httpOnly: true,
-      sameSite: "lax",
-    },
+    cookie: buildSessionCookieOptions(isHttpsDeployment),
     saveUninitialized: false,
     // rolling: false — do not refresh the session cookie / extend TTL on every
     // read-only request.  Without this, @fastify/session calls store.touch()

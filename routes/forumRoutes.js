@@ -300,7 +300,7 @@ export default function forumRoutes(
       return;
     }
 
-    return res.redirect(301, "/forums");
+    return res.redirect("/forums", 301);
   });
 
   app.get("/forums", async function (req, res) {

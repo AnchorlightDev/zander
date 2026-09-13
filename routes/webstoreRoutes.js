@@ -329,6 +329,6 @@ export default function webstoreRoutes(app, config, features) {
   // GET /give — legacy entry point now redirected to the Finance Centre support section
   // -------------------------------------------------------------------------
   app.get("/give", async function (req, res) {
-    return res.redirect(301, "/finance#support");
+    return res.redirect("/finance#support", 301);
   });
 }

@@ -591,7 +591,6 @@ function initHostRowSearch(row) {
         try {
             const res = await fetch(`/api/events/users/search?q=${encodeURIComponent(term)}`, {
                 credentials: 'include',
-                headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
             });
             if (!res.ok) { clearSuggestions(); return; }
             const data = await res.json();
@@ -896,7 +895,6 @@ function localInputToUtc(localStr, ianaTimezone) {
         try {
             const res = await fetch('/api/events/discord/voice-channels', {
                 credentials: 'include',
-                headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
             });
             const data = await res.json();
             voiceSelect.innerHTML = '<option value="">— select a channel —</option>';
@@ -933,7 +931,6 @@ function localInputToUtc(localStr, ianaTimezone) {
         try {
             const res = await fetch('/api/server/get', {
                 credentials: 'include',
-                headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
             });
             const data = await res.json();
             mcSelect.innerHTML = '<option value="">— select a server —</option>';
@@ -995,7 +992,6 @@ function populateTextChannelSelect(select, selectedId) {
     try {
         const res = await fetch('/api/events/discord/text-channels', {
             credentials: 'include',
-            headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
         });
         const data = await res.json();
         _textChannels = data.channels || [];
@@ -1080,7 +1076,7 @@ document.getElementById('eventForm').addEventListener('submit', async (e) => {
         const res = await fetch(apiEndpoint, {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
         const data = await res.json();
@@ -1092,13 +1088,13 @@ document.getElementById('eventForm').addEventListener('submit', async (e) => {
                 fetch('/api/events/actions/update', {
                     method: 'POST',
                     credentials: 'include',
-                    headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ eventId, actions: body.actions }),
                 }),
                 fetch('/api/events/announcements/update', {
                     method: 'POST',
                     credentials: 'include',
-                    headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ eventId, announcements: body.announcements }),
                 }),
             ]);
@@ -1122,7 +1118,7 @@ if (submitBtn) {
         const res = await fetch('/api/events/submit-review', {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ eventId: submitBtn.dataset.eventId }),
         });
         const data = await res.json();
@@ -1139,7 +1135,7 @@ if (publishBtn) {
         const res = await fetch('/api/events/publish', {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ eventId: publishBtn.dataset.eventId }),
         });
         const data = await res.json();

@@ -494,6 +494,8 @@ export default function sessionSiteRoute(
   });
 
   app.get("/forgot-password/verify", async function (req, res) {
+    if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 10 })) return;
+
     if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
@@ -695,6 +697,8 @@ export default function sessionSiteRoute(
   });
 
   app.post("/register", async function (req, res) {
+    if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 5 })) return;
+
     if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
       return;
 

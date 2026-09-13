@@ -13,6 +13,7 @@ import { getWebAnnouncement } from "../../controllers/announcementController.js"
 import { hasPermission as hasPermissionNode } from "../../lib/discord/permissions.mjs";
 import { getEventById } from "../../services/eventService.js";
 import { enrichHostsWithAvatars } from "../../lib/avatarHelpers.js";
+import { sanitizeForumHtml } from "../../lib/htmlSanitize.js";
 
 /** Fetch a URL with the internal API key and parse JSON, returning fallback on error. */
 async function fetchJson(fetchFn, url, fallback = null) {
@@ -263,6 +264,11 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     const isReviewer = userIsReviewer(req);
     // userCanEditEvent already accounts for status; only exclude terminal states
     const canEdit = !["cancelled", "archived"].includes(ev.status) && userCanEditEvent(ev, req);
+
+    // events-view.ejs renders the description unescaped.  New writes are
+    // sanitized in eventService, but rows created before that are not, so
+    // sanitize again here — sanitizeForumHtml is idempotent.
+    ev.description = ev.description ? sanitizeForumHtml(ev.description) : ev.description;
 
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-view", {

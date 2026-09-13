@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 const res = await fetch(
                     `/api/events/calendar?start=${encodeURIComponent(fetchInfo.startStr)}&end=${encodeURIComponent(fetchInfo.endStr)}`,
-                    { headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> } }
+                    {}
                 );
                 const data = await res.json();
                 if (!data.success) { failureCallback(data.message); return; }
@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function () {
     calendar.render();
 
     // Update review queue badge
-    fetch('/api/events/pending-review', { headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> } })
+    fetch('/api/events/pending-review', {})
         .then(r => r.json())
         .then(data => {
             if (data.success && data.data.length > 0) {

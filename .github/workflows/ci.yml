@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  push:
+    branches: [master, staging]
+  pull_request:
+    branches: [master, staging]
+  workflow_dispatch:
+
+# Cancel superseded runs on the same branch/PR rather than queueing them.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 20 is the floor declared in package.json engines; 22 is what runs in
+        # production. Both are exercised so neither silently breaks.
+        node: ["20", "22"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The tests import modules that transitively load @prisma/client, which
+      # throws unless a client has been generated from the schema. No database
+      # connection is made — generate only reads prisma/schema.prisma.
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run tests
+        run: npm test
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Fails the build on high or critical advisories. The tree is at zero as
+      # of the security remediation; this keeps it there rather than letting
+      # alerts accumulate until the next audit.
+      - name: Audit production dependencies
+        run: npm audit --audit-level=high
+
+  lint:
+    name: Syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The project has no linter configured; this at least catches syntax
+      # errors in every source file before they reach a running server.
+      - name: Parse all source files
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(git ls-files '*.js' '*.mjs' \
+            | grep -v '^assets/' \
+            | grep -v '^node_modules/')
+          echo "Checking ${#files[@]} files"
+          for f in "${files[@]}"; do
+            node --check "$f"
+          done
+
+      # EJS templates are only parsed at render time, so a broken template can
+      # ship unnoticed. This compiles every one of them without rendering.
+      - name: Compile EJS templates
+        run: |
+          set -euo pipefail
+          node -e '
+            const ejs = require("ejs");
+            const fs = require("fs");
+            const path = require("path");
+            const root = "views";
+            let checked = 0;
+            const failures = [];
+            const walk = (dir) => {
+              for (const entry of fs.readdirSync(dir)) {
+                const full = path.join(dir, entry);
+                if (fs.statSync(full).isDirectory()) walk(full);
+                else if (entry.endsWith(".ejs")) {
+                  checked++;
+                  try {
+                    ejs.compile(fs.readFileSync(full, "utf8"), { filename: full });
+                  } catch (err) {
+                    failures.push(`${full}: ${err.message}`);
+                  }
+                }
+              }
+            };
+            walk(root);
+            console.log(`Compiled ${checked} templates`);
+            if (failures.length) {
+              console.error(failures.join("\n"));
+              process.exit(1);
+            }
+          '
