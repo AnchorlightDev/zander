@@ -8,6 +8,10 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import dev.anchorlight.zander.velocity.util.ChatFreezeManager;
 
 public class FreezeChatListener {
+    // Denying a PlayerChatEvent is deprecated: on 1.19.1+ it kicks the player
+    // unless SignedVelocity is installed, which this plugin depends on for
+    // exactly that reason. Suppressed knowingly — see the note at the call.
+    @SuppressWarnings("deprecation")
     @Subscribe
     public void onPlayerChat(PlayerChatEvent event) {
         Player player = event.getPlayer();

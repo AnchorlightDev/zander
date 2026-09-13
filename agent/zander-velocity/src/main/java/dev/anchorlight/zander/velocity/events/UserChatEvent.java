@@ -35,6 +35,7 @@ public class UserChatEvent {
     // dependency for exactly that reason, so the denials below are
     // deliberate. If SignedVelocity is ever removed from the proxy, every
     // filtered message becomes a kick.
+    @SuppressWarnings("deprecation")
     @Subscribe
     public void onPlayerChat(PlayerChatEvent event) {
         Player player = event.getPlayer();
