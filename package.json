@@ -47,7 +47,7 @@
     "ejs": "^3.1.7",
     "express-session": "^1.19.0",
     "fast-xml-parser": "^5.9.3",
-    "fastify": "^4.25.2",
+    "fastify": "^5.12.1",
     "imgur": "^2.2.0",
     "mailtrap": "^3.2.0",
     "moment": ">=2.29.2",
