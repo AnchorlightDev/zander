@@ -50,27 +50,6 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | `zander.web.finance.manage` | Create, edit, and delete finance records |
 | `zander.web.finance.*` | Equivalent to both `zander.web.finance` and `zander.web.finance.manage` |
 
-### Mixed (PGM stats portal)
-
-| Permission Node | Description |
-|---|---|
-| `zander.web.mixed` | Access all Mixed admin pages and the `/api/admin/mixed` API |
-
-The Mixed module is the public PGM stats portal for the **Mixed** server brand
-(public section `/mixed`, admin section `/dashboard/mixed`). It ingests data
-from the **zander-pgm** plugin and provides matches, maps, players,
-leaderboards, ratings, voting, Map Tokens and a Stripe store. It intentionally
-excludes moderation, punishments and chat-tag management. See
-[docs/MIXED.md](docs/MIXED.md) for full setup, API and security details.
-
-### Forms
-
-| Permission Node | Description |
-|---|---|
-| `zander.web.forms` | Access the forms dashboard |
-| `zander.web.forms.{slug}` | Access a specific form by its slug (dynamic) |
-| `zander.web.forms.*` | Access all forms |
-
 ### Support Tickets
 
 | Permission Node | Description |

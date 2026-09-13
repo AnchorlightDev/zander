@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-zander-web is the web + Discord-bot component of the Zander project: a Fastify web app (dashboard, public site, JSON API) combined with a Discord bot (Sapphire framework) sharing one database layer and one codebase. It talks to game servers via a companion Minecraft plugin ecosystem (e.g. `zander-pgm` for the Mixed module) and to LuckPerms/LiteBans/QuickShop databases that live outside this app's own schema.
+zander-web is the web + Discord-bot component of the Zander project: a Fastify web app (dashboard, public site, JSON API) combined with a Discord bot (Sapphire framework) sharing one database layer and one codebase. It talks to game servers via a companion Minecraft plugin ecosystem and to LuckPerms/LiteBans/QuickShop databases that live outside this app's own schema.
 
 ## Commands
 
@@ -15,7 +15,7 @@ npm run build   # npm install + prisma migrate deploy + prisma generate — used
 npm test        # vitest run (tests/unit + tests/integration, *.test.mjs / *.test.js)
 ```
 
-Run a single test file: `npx vitest run tests/unit/mixedAuth.test.mjs`
+Run a single test file: `npx vitest run tests/unit/permissions.test.mjs`
 
 Database schema changes are Prisma-migration-only (no ORM query usage at runtime for most tables — see below). Add a new folder under `prisma/migrations/NNNN_description/migration.sql` (numeric-prefixed, sequential) and run `npx prisma migrate deploy`. `config.json` and `.env` are gitignored; copy `config.json.example` as a starting point.
 
@@ -40,26 +40,24 @@ Several *other* databases are connected via raw connection URLs (`LUCKPERMS_URL`
 ### Config layering
 
 - `config.json` (gitignored, copy from `config.json.example`) — non-secret operational config, loaded via CommonJS `createRequire` at the top of any file that needs it (`const require = createRequire(import.meta.url); const config = require("../config.json");`), since the project is `"type": "module"` but `config.json` is loaded as CJS.
-- `features.json` — boolean feature flags gating entire modules/routes (e.g. `features.mixed`, `features.webstore`). Check this before assuming a module is reachable.
+- `features.json` — boolean feature flags gating entire modules/routes (e.g. `features.webstore`, `features.events`). Check this before assuming a module is reachable.
 - `.env` — secrets and connection strings, read via `process.env.X` (dotenv loaded once in `app.js`/`api/common.js`). Never put secrets in `config.json`.
 - `lang.json` — user-facing string overrides.
 
 ### Module pattern (self-contained feature slices)
 
-Larger features (Mixed, Webstore, Events, Forms, Watch/creator content) each follow the same shape: a `controllers/xController.js` (or `api/x/*.js` for multi-file domains) data-access layer, a `routes/xRoutes.js` for public pages, a `routes/dashboard/x.js` + `views/dashboard/x/*.ejs` for the admin UI, and (for API-driven modules) `api/x/admin.js` + `api/x/ingestion.js`/`public.js` for JSON endpoints, each with their own local `guard()`-style auth wrapper. When adding to an existing module, mirror its existing file split rather than inventing a new structure.
-
-The **Mixed** module (public PGM stats portal, `/mixed` + `/dashboard/mixed`, fed by the `zander-pgm` plugin) is the largest and most actively developed slice — see `docs/MIXED.md` for its full data flow, ingestion contract, and the GitHub-repo map-sync subsystem (`services/mixed/`, `lib/mixed/`).
+Larger features (Webstore, Events, Finance, Watch/creator content) each follow the same shape: a `controllers/xController.js` data-access layer, a `routes/xRoutes.js` for public pages, a `routes/dashboard/x.js` + `views/dashboard/x/*.ejs` for the admin UI, and `api/routes/x.js` for JSON endpoints. When adding to an existing module, mirror its existing file split rather than inventing a new structure.
 
 ### Auth / permissions
 
-Permissions are dot-notation LuckPerms nodes (e.g. `zander.web.mixed`), checked via `hasPermission(node, req, res, features)` from `api/common.js` for dashboard routes, or module-local `requireXAdmin`/`guard()` wrappers for JSON APIs. Wildcards (`zander.web.*`, `*`) grant broader access — always check for both the specific node and its wildcard ancestors when writing new permission checks (see existing `isAdmin` checks in `routes/mixedRoutes.js` for the pattern). Full permission node reference is in `README.md`.
+Permissions are dot-notation LuckPerms nodes (e.g. `zander.web.webstore`), checked via `hasPermission(node, req, res, features)` from `api/common.js` for dashboard routes. Wildcards (`zander.web.*`, `*`) grant broader access — always check for both the specific node and its wildcard ancestors when writing new permission checks; the matching logic lives in `hasPermission` in `api/common.js`. Full permission node reference is in `README.md`.
 
-Plugin-to-server ingestion endpoints (e.g. Mixed's `/api/mixed/*`) use the app-wide `apiKey` Bearer-token scheme, not session auth — see `api/mixed/auth.js`.
+Plugin-to-server ingestion endpoints use the app-wide `apiKey` Bearer-token scheme, not session auth — see `api/routes/verifyToken.js`.
 
 ### Views
 
-EJS templates under `views/`, rendered via `@fastify/view`. Static assets are served directly from `assets/` at `/`. Admin dashboard pages share chrome via `views/admin/_head.ejs`, `_topbar.ejs`, `_sidebar.ejs`, `_footer.ejs`; public module pages use a per-module `_top.ejs`/`_bottom.ejs` include pair (see `views/modules/mixed/`).
+EJS templates under `views/`, rendered via `@fastify/view`. Static assets are served directly from `assets/` at `/`. Admin dashboard pages share chrome via `views/admin/_head.ejs`, `_topbar.ejs`, `_sidebar.ejs`, `_footer.ejs`; public module pages include `views/modules/header.ejs` and `views/modules/navigationBar.ejs` directly at the top of each template (see `views/modules/webstore/index.ejs`).
 
 ### Cron jobs
 
-`cron/*.js` files are dynamically imported once, unconditionally, near the top of `app.js`. Each file is responsible for its own feature-flag/config gating internally (check `config.mixed?.mapSync?.enabled`-style guards inside the cron file, not in `app.js`) and registers itself with `node-cron` if enabled.
+`cron/*.js` files are dynamically imported once, unconditionally, near the top of `app.js`. Each file is responsible for its own feature-flag/config gating internally (check `config.staffAuditReport?.enabled`-style guards inside the cron file, not in `app.js`) and registers itself with `node-cron` if enabled.

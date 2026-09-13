@@ -311,13 +311,23 @@ export default function sessionSiteRoute(
   });
 
   app.get("/login/callback", async (req, res) => {
-    const { code } = req.query;
+    const { code, error: oauthError } = req.query;
+
+    // Discord sends us back with ?error=access_denied (and no code) when the
+    // user declines the consent screen. That is a normal outcome, not a
+    // failure — don't log it as one.
+    if (oauthError) {
+      setBannerCookie("info", "Discord sign-in was cancelled.", res);
+      return res.redirect("/login");
+    }
+
+    // No code and no error means the callback was hit directly — a bot
+    // probing the URL, or a stale bookmark. Nothing to report.
+    if (!code) {
+      return res.redirect("/login");
+    }
 
     try {
-      if (!code) {
-        throw new Error("Authorization code is missing");
-      }
-
       const tokenParams = {
         client_id: process.env.discordClientId,
         client_secret: process.env.discordClientSecret,
