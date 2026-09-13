@@ -23,21 +23,15 @@
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
 
-                    <% if (features.server || features.mixed !== false || features.ranks || features.vote) { %>
+                    <% if (features.server || features.ranks) { %>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="navPlayDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Play</a>
                             <div class="dropdown-menu" aria-labelledby="navPlayDropdown">
                                 <% if (features.server) { %>
                                     <a class="dropdown-item" href="/play">Play</a>
                                 <% } %>
-                                <% if (features.mixed !== false) { %>
-                                    <a class="dropdown-item" href="/mixed">Mixed</a>
-                                <% } %>
                                 <% if (features.ranks) { %>
                                     <a class="dropdown-item" href="/ranks">Ranks</a>
-                                <% } %>
-                                <% if (features.vote) { %>
-                                    <a class="dropdown-item" href="/vote">Vote</a>
                                 <% } %>
                             </div>
                         </li>
