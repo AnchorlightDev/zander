@@ -83,17 +83,6 @@ export const adminPages = [
     group: "Community",
     sortOrder: 21,
   },
-  {
-    slug: "forms",
-    title: "Forms",
-    menuTitle: "Forms",
-    icon: "fas fa-poll",
-    capability: "zander.web.forms",
-    path: "/dashboard/forms",
-    featureFlag: "forms",
-    group: "Community",
-    sortOrder: 22,
-  },
 
   // ── Events group ───────────────────────────────────────────────────────────
   {
@@ -189,50 +178,6 @@ export const adminPages = [
   },
 
   // ── Voting group ───────────────────────────────────────────────────────────
-  {
-    slug: "voting-sites",
-    title: "Vote Sites",
-    menuTitle: "Vote Sites",
-    icon: "fa-solid fa-check-to-slot",
-    capability: "zander.web.voting",
-    path: "/dashboard/voting",
-    featureFlag: "vote",
-    group: "Voting",
-    sortOrder: 60,
-  },
-  {
-    slug: "voting-rewards",
-    title: "Reward Templates",
-    menuTitle: "Reward Templates",
-    icon: "fa-solid fa-gift",
-    capability: "zander.web.voting",
-    path: "/dashboard/voting/rewards",
-    featureFlag: "vote",
-    group: "Voting",
-    sortOrder: 61,
-  },
-  {
-    slug: "voting-leaderboard",
-    title: "Vote Leaderboard",
-    menuTitle: "Leaderboard",
-    icon: "fa-solid fa-trophy",
-    capability: "zander.web.voting",
-    path: "/dashboard/voting/leaderboard",
-    featureFlag: "vote",
-    group: "Voting",
-    sortOrder: 62,
-  },
-  {
-    slug: "voting-queue",
-    title: "Reward Queue",
-    menuTitle: "Reward Queue",
-    icon: "fa-solid fa-list-check",
-    capability: "zander.web.voting",
-    path: "/dashboard/voting/queue",
-    featureFlag: "vote",
-    group: "Voting",
-    sortOrder: 63,
-  },
 
   // ── System group ───────────────────────────────────────────────────────────
   {
@@ -286,16 +231,6 @@ export const adminPages = [
     path: "/dashboard/scheduler",
     group: "System",
     sortOrder: 74,
-  },
-  {
-    slug: "wrapped",
-    title: "Wrapped",
-    menuTitle: "Wrapped",
-    icon: "fa-solid fa-gift",
-    capability: "zander.web.wrapped",
-    path: "/dashboard/wrapped",
-    group: "System",
-    sortOrder: 74.5,
   },
 
   // ── Webstore group ─────────────────────────────────────────────────────────
@@ -369,61 +304,6 @@ export const adminPages = [
   },
 
   // ── Mixed group ──────────────────────────────────────────────────────────
-  {
-    slug: "mixed-overview",
-    title: "Mixed Overview",
-    menuTitle: "Overview",
-    icon: "fa-solid fa-gauge-high",
-    capability: "zander.web.mixed",
-    path: "/dashboard/mixed",
-    featureFlag: "mixed",
-    group: "Mixed",
-    sortOrder: 90,
-  },
-  {
-    slug: "mixed-maps",
-    title: "Mixed Maps",
-    menuTitle: "Maps",
-    icon: "fa-solid fa-map",
-    capability: "zander.web.mixed",
-    path: "/dashboard/mixed/maps",
-    featureFlag: "mixed",
-    group: "Mixed",
-    sortOrder: 91,
-  },
-  {
-    slug: "mixed-voting",
-    title: "Mixed Voting",
-    menuTitle: "Voting",
-    icon: "fa-solid fa-check-to-slot",
-    capability: "zander.web.mixed",
-    path: "/dashboard/mixed/voting",
-    featureFlag: "mixed",
-    group: "Mixed",
-    sortOrder: 92,
-  },
-  {
-    slug: "mixed-ratings",
-    title: "Mixed Ratings",
-    menuTitle: "Ratings",
-    icon: "fa-solid fa-star",
-    capability: "zander.web.mixed",
-    path: "/dashboard/mixed/ratings",
-    featureFlag: "mixed",
-    group: "Mixed",
-    sortOrder: 93,
-  },
-  {
-    slug: "mixed-map-tokens",
-    title: "Mixed Map Tokens",
-    menuTitle: "Map Tokens",
-    icon: "fa-solid fa-coins",
-    capability: "zander.web.mixed",
-    path: "/dashboard/mixed/map-tokens",
-    featureFlag: "mixed",
-    group: "Mixed",
-    sortOrder: 94,
-  },
   // ── Community — Users ──────────────────────────────────────────────────────
   {
     slug: "users",
@@ -486,20 +366,6 @@ export const adminSubPages = [
     parent: "events-list",
     path: "/dashboard/events",
     capability: "zander.web.events",
-  },
-  {
-    slug: "forms-create",
-    title: "Create Form",
-    parent: "forms",
-    path: "/dashboard/forms/create",
-    capability: "zander.web.forms",
-  },
-  {
-    slug: "forms-edit",
-    title: "Edit Form",
-    parent: "forms",
-    path: "/dashboard/forms/edit",
-    capability: "zander.web.forms",
   },
   {
     slug: "badges-create",

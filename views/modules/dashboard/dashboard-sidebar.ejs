@@ -21,7 +21,6 @@
       <li><a href="/dashboard/events/templates" class="dashboard-nav-link <%= currentPath.includes('/events/templates') ? 'active' : '' %>"><i class="fas fa-copy fa-fw me-2"></i>Templates</a></li>
       <li><a href="/dashboard/servers" class="dashboard-nav-link <%= isActive('/dashboard/servers') ? 'active' : '' %>"><i class="fas fa-server fa-fw me-2"></i>Servers</a></li>
       <li><a href="/dashboard/applications" class="dashboard-nav-link <%= isActive('/dashboard/applications') ? 'active' : '' %>"><i class="fas fa-file-alt fa-fw me-2"></i>Applications</a></li>
-      <li><a href="/dashboard/forms" class="dashboard-nav-link <%= isActive('/dashboard/forms') ? 'active' : '' %>"><i class="fas fa-poll fa-fw me-2"></i>Forms</a></li>
 
       <li class="dashboard-nav-heading">Moderation</li>
       <li><a href="/dashboard/web-punishments" class="dashboard-nav-link <%= isActive('/dashboard/web-punishments') ? 'active' : '' %>"><i class="fa-solid fa-gavel fa-fw me-2"></i>Web Punishments</a></li>
@@ -31,11 +30,6 @@
       <li><a href="/dashboard/support/explorer" class="dashboard-nav-link <%= currentPath.includes('/support/explorer') ? 'active' : '' %>"><i class="fas fa-search fa-fw me-2"></i>Ticket Explorer</a></li>
       <li><a href="/dashboard/support/categories" class="dashboard-nav-link <%= currentPath.includes('/support/categories') ? 'active' : '' %>"><i class="fas fa-folder fa-fw me-2"></i>Categories</a></li>
 
-      <li class="dashboard-nav-heading">Voting</li>
-      <li><a href="/dashboard/voting" class="dashboard-nav-link <%= isActive('/dashboard/voting') && !currentPath.includes('/queue') && !currentPath.includes('/leaderboard') && !currentPath.includes('/rewards') ? 'active' : '' %>"><i class="fa-solid fa-check-to-slot fa-fw me-2"></i>Vote Sites</a></li>
-      <li><a href="/dashboard/voting/rewards" class="dashboard-nav-link <%= currentPath.includes('/voting/rewards') ? 'active' : '' %>"><i class="fa-solid fa-gift fa-fw me-2"></i>Reward Templates</a></li>
-      <li><a href="/dashboard/voting/leaderboard" class="dashboard-nav-link <%= currentPath.includes('/voting/leaderboard') ? 'active' : '' %>"><i class="fa-solid fa-trophy fa-fw me-2"></i>Leaderboard</a></li>
-      <li><a href="/dashboard/voting/queue" class="dashboard-nav-link <%= currentPath.includes('/voting/queue') ? 'active' : '' %>"><i class="fa-solid fa-list-check fa-fw me-2"></i>Reward Queue</a></li>
 
       <li class="dashboard-nav-heading">System</li>
       <li><a href="/dashboard/vault" class="dashboard-nav-link <%= isActive('/dashboard/vault') ? 'active' : '' %>"><i class="fa-solid fa-vault fa-fw me-2"></i>Vault</a></li>
@@ -49,12 +43,6 @@
       <li><a href="/dashboard/finance/reports" class="dashboard-nav-link <%= isActive('/dashboard/finance/reports') ? 'active' : '' %>"><i class="fa-solid fa-file-invoice-dollar fa-fw me-2"></i>Reports</a></li>
       <li><a href="/dashboard/finance/settings" class="dashboard-nav-link <%= isActive('/dashboard/finance/settings') ? 'active' : '' %>"><i class="fa-solid fa-gear fa-fw me-2"></i>Settings</a></li>
 
-      <li class="dashboard-nav-heading">Mixed</li>
-      <li><a href="/dashboard/mixed" class="dashboard-nav-link <%= currentPath === '/dashboard/mixed' ? 'active' : '' %>"><i class="fa-solid fa-gauge-high fa-fw me-2"></i>Overview</a></li>
-      <li><a href="/dashboard/mixed/maps" class="dashboard-nav-link <%= isActive('/dashboard/mixed/maps') ? 'active' : '' %>"><i class="fa-solid fa-map fa-fw me-2"></i>Maps</a></li>
-      <li><a href="/dashboard/mixed/voting" class="dashboard-nav-link <%= isActive('/dashboard/mixed/voting') ? 'active' : '' %>"><i class="fa-solid fa-check-to-slot fa-fw me-2"></i>Voting</a></li>
-      <li><a href="/dashboard/mixed/ratings" class="dashboard-nav-link <%= isActive('/dashboard/mixed/ratings') ? 'active' : '' %>"><i class="fa-solid fa-star fa-fw me-2"></i>Ratings</a></li>
-      <li><a href="/dashboard/mixed/map-tokens" class="dashboard-nav-link <%= isActive('/dashboard/mixed/map-tokens') ? 'active' : '' %>"><i class="fa-solid fa-coins fa-fw me-2"></i>Map Tokens</a></li>
     </ul>
   </nav>
 </div>
@@ -88,11 +76,6 @@
         <li><a href="/dashboard/support/explorer" class="dashboard-nav-link <%= currentPath.includes('/support/explorer') ? 'active' : '' %>"><i class="fas fa-search fa-fw me-2"></i>Ticket Explorer</a></li>
         <li><a href="/dashboard/support/categories" class="dashboard-nav-link <%= currentPath.includes('/support/categories') ? 'active' : '' %>"><i class="fas fa-folder fa-fw me-2"></i>Categories</a></li>
 
-        <li class="dashboard-nav-heading">Voting</li>
-        <li><a href="/dashboard/voting" class="dashboard-nav-link <%= isActive('/dashboard/voting') && !currentPath.includes('/queue') && !currentPath.includes('/leaderboard') && !currentPath.includes('/rewards') ? 'active' : '' %>"><i class="fa-solid fa-check-to-slot fa-fw me-2"></i>Vote Sites</a></li>
-        <li><a href="/dashboard/voting/rewards" class="dashboard-nav-link <%= currentPath.includes('/voting/rewards') ? 'active' : '' %>"><i class="fa-solid fa-gift fa-fw me-2"></i>Reward Templates</a></li>
-        <li><a href="/dashboard/voting/leaderboard" class="dashboard-nav-link <%= currentPath.includes('/voting/leaderboard') ? 'active' : '' %>"><i class="fa-solid fa-trophy fa-fw me-2"></i>Leaderboard</a></li>
-        <li><a href="/dashboard/voting/queue" class="dashboard-nav-link <%= currentPath.includes('/voting/queue') ? 'active' : '' %>"><i class="fa-solid fa-list-check fa-fw me-2"></i>Reward Queue</a></li>
 
         <li class="dashboard-nav-heading">System</li>
         <li><a href="/dashboard/vault" class="dashboard-nav-link <%= isActive('/dashboard/vault') ? 'active' : '' %>"><i class="fa-solid fa-vault fa-fw me-2"></i>Vault</a></li>
@@ -106,12 +89,6 @@
         <li><a href="/dashboard/finance/reports" class="dashboard-nav-link <%= isActive('/dashboard/finance/reports') ? 'active' : '' %>"><i class="fa-solid fa-file-invoice-dollar fa-fw me-2"></i>Reports</a></li>
         <li><a href="/dashboard/finance/settings" class="dashboard-nav-link <%= isActive('/dashboard/finance/settings') ? 'active' : '' %>"><i class="fa-solid fa-gear fa-fw me-2"></i>Settings</a></li>
 
-        <li class="dashboard-nav-heading">Mixed</li>
-        <li><a href="/dashboard/mixed" class="dashboard-nav-link <%= currentPath === '/dashboard/mixed' ? 'active' : '' %>"><i class="fa-solid fa-gauge-high fa-fw me-2"></i>Overview</a></li>
-        <li><a href="/dashboard/mixed/maps" class="dashboard-nav-link <%= isActive('/dashboard/mixed/maps') ? 'active' : '' %>"><i class="fa-solid fa-map fa-fw me-2"></i>Maps</a></li>
-        <li><a href="/dashboard/mixed/voting" class="dashboard-nav-link <%= isActive('/dashboard/mixed/voting') ? 'active' : '' %>"><i class="fa-solid fa-check-to-slot fa-fw me-2"></i>Voting</a></li>
-        <li><a href="/dashboard/mixed/ratings" class="dashboard-nav-link <%= isActive('/dashboard/mixed/ratings') ? 'active' : '' %>"><i class="fa-solid fa-star fa-fw me-2"></i>Ratings</a></li>
-        <li><a href="/dashboard/mixed/map-tokens" class="dashboard-nav-link <%= isActive('/dashboard/mixed/map-tokens') ? 'active' : '' %>"><i class="fa-solid fa-coins fa-fw me-2"></i>Map Tokens</a></li>
       </ul>
     </nav>
   </div>

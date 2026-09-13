@@ -96,7 +96,6 @@ export default function sitemapRoutes(app, config, features) {
     if (features.forums) L.push(`- [Forums](${baseUrl}/forums): community discussion boards`);
     if (features.events) L.push(`- [Events](${baseUrl}/events): upcoming and past community events`);
     if (features.watch) L.push(`- [Watch](${baseUrl}/watch): community creator content and streams`);
-    if (features.mixed) L.push(`- [Mixed stats portal](${baseUrl}/mixed): live matches, maps and player leaderboards for the Mixed (PGM) module`);
     if (features.shopdirectory) L.push(`- [Player shop directory](${baseUrl}/shopdirectory): in-game player-run stores, items and prices`);
     if (features.discord?.punishments) L.push(`- [Punishment log](${baseUrl}/punishments): the public moderation log`);
     L.push("");
@@ -126,10 +125,6 @@ export default function sitemapRoutes(app, config, features) {
       features.applications && { url: "/apply", priority: "0.7", changefreq: "weekly" },
       features.watch && { url: "/watch", priority: "0.7", changefreq: "daily" },
       features.events && { url: "/events", priority: "0.7", changefreq: "daily" },
-      features.mixed && { url: "/mixed", priority: "0.7", changefreq: "daily" },
-      features.mixed && { url: "/mixed/matches", priority: "0.6", changefreq: "daily" },
-      features.mixed && { url: "/mixed/maps", priority: "0.6", changefreq: "weekly" },
-      features.mixed && { url: "/mixed/players", priority: "0.6", changefreq: "daily" },
       features.shopdirectory && { url: "/shopdirectory", priority: "0.6", changefreq: "daily" },
       features.discord?.punishments && { url: "/punishments", priority: "0.4", changefreq: "daily" },
       { url: "/appeal", priority: "0.5", changefreq: "monthly" },

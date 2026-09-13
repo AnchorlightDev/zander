@@ -1,7 +1,6 @@
 {
   "announcements": true,
   "applications": true,
-  "forms": true,
   "forums": true,
   "discord": {
     "events": {
@@ -32,11 +31,9 @@
   "support": true,
   "staffAuditReport": true,
   "watch": true,
-  "vote": true,
   "events": true,
   "webstore": true,
   "finance": true,
-  "mixed": true,
 
   "smDiscord": true,
   "smFacebook": true,

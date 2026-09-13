@@ -2,7 +2,6 @@ import { hasPermission } from "../../api/common.js";
 import { adminViewData } from "../../admin/adminHelpers.js";
 import { prisma } from "../../controllers/databaseController.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
-import { getAllForms } from "../../controllers/formController.js";
 import moment from "moment";
 
 export default function dashboardSiteRoute(app, config, features, lang) {
@@ -17,14 +16,12 @@ export default function dashboardSiteRoute(app, config, features, lang) {
       announcementsCount,
       applicationsCount,
       serversCount,
-      formsCount,
       recentAnnouncements,
       announcementWeb,
     ] = await Promise.all([
       prisma.announcements.count(),
       prisma.applications.count(),
       prisma.servers.count(),
-      features.forms ? getAllForms().then(f => f.length).catch(() => 0) : Promise.resolve(0),
       prisma.announcements.findMany({
         orderBy: { announcementId: "desc" },
         take: 5,
@@ -51,7 +48,6 @@ export default function dashboardSiteRoute(app, config, features, lang) {
         announcementsCount,
         applicationsCount,
         serversCount,
-        formsCount,
         recentAnnouncements,
         ...adminViewData(req, features),
       })

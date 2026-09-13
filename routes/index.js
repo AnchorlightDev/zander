@@ -12,7 +12,6 @@ import {
   getDiscordPunishmentsForProfile,
 } from "../controllers/discordPunishmentController.js";
 import { UserGetter } from "../controllers/userController.js";
-import { getLiveMatches as getMixedLiveMatches } from "../controllers/mixedController.js";
 
 import dashboardSiteRoutes from "./dashboard/index.js";
 import sessionRoutes from "./sessionRoutes.js";
@@ -22,15 +21,11 @@ import profileSiteRoutes from "./profileRoutes.js";
 import forumSiteRoutes from "./forumRoutes.js";
 import supportRoutes from "./support.js";
 import notificationRoutes from "./notificationRoutes.js";
-import formSiteRoutes from "./formRoutes.js";
 import watchSiteRoutes from "./watchRoutes.js";
 import sitemapRoutes from "./sitemapRoute.js";
-import voteSiteRoutes from "./voteRoutes.js";
 import eventsSiteRoutes from "./eventsRoutes.js";
 import financeRoutes from "./financeRoutes.js";
 import webstoreSiteRoutes from "./webstoreRoutes.js";
-import mixedSiteRoutes from "./mixedRoutes.js";
-import wrappedSiteRoutes from "./wrappedRoutes.js";
 import { getRankCatalogForPublicPage } from "../controllers/rankCatalogController.js";
 import {
   buildGraph,
@@ -60,15 +55,11 @@ export default function applicationSiteRoutes(
   redirectSiteRoutes(app, config, features);
   supportRoutes(app, client, fetch, moment, config, db, features, lang);
   notificationRoutes(app, config, features);
-  formSiteRoutes(app, client, fetch, moment, config, db, features, lang);
   watchSiteRoutes(app, client, fetch, moment, config, db, features, lang);
   sitemapRoutes(app, config, features);
-  voteSiteRoutes(app, fetch, config, db, features, lang);
   eventsSiteRoutes(app, config, features);
   financeRoutes(app, config, features);
   webstoreSiteRoutes(app, config, features);
-  mixedSiteRoutes(app, config, features);
-  wrappedSiteRoutes(app, client, fetch, moment, config, db, features, lang);
 
   // Summernote editor fetches /emojis to populate its emoji picker.
   // Return an empty map so it silently falls back to the GitHub emoji list
@@ -117,25 +108,6 @@ export default function applicationSiteRoutes(
       ]),
     ]);
 
-    // Advertise a live Mixed match on the homepage once it has enough
-    // players to be worth interrupting the hero section for.
-    const MIXED_HOMEPAGE_PLAYER_THRESHOLD = 6;
-    let mixedHighlight = null;
-    if (features.mixed) {
-      try {
-        const live = await getMixedLiveMatches();
-        const busiest = live.reduce(
-          (best, m) => (m.server_players > (best?.server_players || 0) ? m : best),
-          null
-        );
-        if (busiest && busiest.server_players >= MIXED_HOMEPAGE_PLAYER_THRESHOLD) {
-          mixedHighlight = busiest;
-        }
-      } catch (_) {
-        // Mixed data unavailable — homepage renders without the highlight.
-      }
-    }
-
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("modules/index/index", {
       pageTitle: `${config.siteConfiguration.siteName}`,
@@ -148,7 +120,6 @@ export default function applicationSiteRoutes(
       jumboVideo: getJumboVideo(),
       statApiData: statApiData,
       announcementWeb: await getWebAnnouncement(),
-      mixedHighlight,
     }));
     return;
   });

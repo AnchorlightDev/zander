@@ -49,14 +49,11 @@ import("./cron/userCodeExpiryCron.js");
 import("./cron/bridgeCleanupCron.js");
 import("./cron/cakeDayUserCheck.js");
 import("./cron/staffAuditReportCron.js");
-import("./cron/mixedMapSyncCron.js");
-import("./cron/mixedMatchStaleCron.js");
 import("./cron/schedulerCron.js");
 import("./cron/nicknameCheckCron.js");
 import("./cron/punishmentExpiryCron.js");
 import("./cron/watchTwitchCron.js");
 import("./cron/watchYoutubeCron.js");
-import("./cron/voteMonthlyRewardCron.js");
 import("./cron/unverifiedReminderCron.js");
 // eventAnnouncementCron removed — event announcements now use scheduledDiscordMessages via schedulerCron
 import("./cron/eventTemplateCron.js");
@@ -77,11 +74,6 @@ import uploadApiRoute from "./api/routes/upload.js";
 import apiRedirectRoutes from "./api/internal_redirect/index.js";
 import webstoreWebhookRoutes from "./api/internal_redirect/webstore.js";
 import configApiRoute from "./api/routes/config.js";
-
-// Mixed module API (own auth: plugin Bearer token / session user / admin)
-import mixedApiRoutes from "./api/mixed/index.js";
-import mixedStripeWebhookRoutes from "./api/mixed/stripeWebhook.js";
-import mixedSiteRoutes from "./routes/mixedRoutes.js";
 
 // API token authentication
 import verifyToken from "./api/routes/verifyToken.js";
@@ -353,9 +345,6 @@ const buildApp = async () => {
     );
     try {
       webstoreWebhookRoutes(instance, config);
-      // Mixed Map Token fulfilment webhook (POST /api/stripe/webhook) —
-      // shares this raw-body scope for HMAC signature verification.
-      mixedStripeWebhookRoutes(instance);
     } catch (err) {
       return next(err);
     }
@@ -416,17 +405,6 @@ const buildApp = async () => {
     }
   });
 
-  // Mixed module API — registered AFTER session so user/admin endpoints can
-  // read req.session. Ingestion endpoints authenticate with a Bearer token.
-  await app.register((instance, options, next) => {
-    try {
-      mixedApiRoutes(instance, features);
-    } catch (err) {
-      return next(err);
-    }
-    next();
-  });
-
   await app.register((instance, options, next) => {
     // Routes
     try {
@@ -445,192 +423,6 @@ const buildApp = async () => {
     console.log("[DB] Prisma connection warmed up.");
   } catch (err) {
     console.warn("[DB] Prisma warm-up query failed (will retry on first request):", err.message);
-  }
-
-  // ── Auto-migrate: forms tables ──────────────────────────────────────────
-  if (features.forms) {
-    try {
-      await new Promise((resolve, reject) => {
-        db.query(
-          `SELECT 1 FROM forms LIMIT 1`,
-          (err) => {
-            if (err && err.code === "ER_NO_SUCH_TABLE") {
-              console.log("[DB] Forms tables not found — running migration...");
-              const migrationSQL = `
-                CREATE TABLE IF NOT EXISTS forms (
-                    formId INT NOT NULL AUTO_INCREMENT,
-                    name VARCHAR(120) NOT NULL,
-                    slug VARCHAR(150) NOT NULL,
-                    status ENUM('draft', 'published', 'archived') NOT NULL DEFAULT 'draft',
-                    createdByUserId INT NOT NULL,
-                    discordWebhookUrl TEXT,
-                    discordForumChannelId VARCHAR(255),
-                    postToForumEnabled TINYINT(1) NOT NULL DEFAULT 0,
-                    webhookEnabled TINYINT(1) NOT NULL DEFAULT 0,
-                    submitterCanView TINYINT(1) NOT NULL DEFAULT 1,
-                    requireLogin TINYINT(1) NOT NULL DEFAULT 1,
-                    allowAnonymous TINYINT(1) NOT NULL DEFAULT 0,
-                    accessPassword VARCHAR(255),
-                    createdAt DATETIME NOT NULL DEFAULT NOW(),
-                    updatedAt DATETIME NOT NULL DEFAULT NOW() ON UPDATE NOW(),
-                    PRIMARY KEY (formId),
-                    UNIQUE KEY forms_slug_unique (slug),
-                    INDEX forms_status_idx (status)
-                );
-                CREATE TABLE IF NOT EXISTS formBlocks (
-                    blockId INT NOT NULL AUTO_INCREMENT,
-                    formId INT NOT NULL,
-                    type ENUM('short_answer','paragraph','multiple_choice','checkboxes','dropdown','linear_scale','title_description','section_break') NOT NULL,
-                    orderIndex INT NOT NULL DEFAULT 0,
-                    required TINYINT(1) NOT NULL DEFAULT 0,
-                    label VARCHAR(255),
-                    description TEXT,
-                    config JSON,
-                    PRIMARY KEY (blockId),
-                    INDEX formBlocks_formId_idx (formId),
-                    INDEX formBlocks_order_idx (formId, orderIndex),
-                    CONSTRAINT fk_formBlocks_form FOREIGN KEY (formId) REFERENCES forms(formId) ON DELETE CASCADE
-                );
-                CREATE TABLE IF NOT EXISTS formResponses (
-                    responseId INT NOT NULL AUTO_INCREMENT,
-                    formId INT NOT NULL,
-                    submittedByUserId INT,
-                    submittedAt DATETIME NOT NULL DEFAULT NOW(),
-                    answers JSON NOT NULL,
-                    status ENUM('new','reviewed','converted','archived') NOT NULL DEFAULT 'new',
-                    discordWebhookFailed TINYINT(1) NOT NULL DEFAULT 0,
-                    discordForumPostFailed TINYINT(1) NOT NULL DEFAULT 0,
-                    discordForumThreadId VARCHAR(255),
-                    ticketId INT,
-                    convertedByUserId INT,
-                    convertedAt DATETIME,
-                    PRIMARY KEY (responseId),
-                    INDEX formResponses_formId_idx (formId),
-                    INDEX formResponses_submitter_idx (submittedByUserId),
-                    INDEX formResponses_status_idx (status),
-                    CONSTRAINT fk_formResponses_form FOREIGN KEY (formId) REFERENCES forms(formId) ON DELETE CASCADE
-                );
-              `;
-              db.query(migrationSQL, (migErr) => {
-                if (migErr) {
-                  console.error("[DB] Forms migration failed:", migErr.message);
-                  return reject(migErr);
-                }
-                console.log("[DB] Forms tables created successfully.");
-
-                // Add linked form columns to applications if missing
-                db.query(
-                  `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'applications' AND COLUMN_NAME = 'applicationType'`,
-                  (colErr, colResults) => {
-                    if (colErr || (colResults && colResults.length > 0)) {
-                      return resolve();
-                    }
-                    db.query(
-                      `ALTER TABLE applications ADD COLUMN applicationType ENUM('external','linked_form') NOT NULL DEFAULT 'external' AFTER applicationStatus, ADD COLUMN linkedFormId INT AFTER applicationType`,
-                      (alterErr) => {
-                        if (alterErr) {
-                          console.warn("[DB] Applications ALTER skipped:", alterErr.message);
-                        } else {
-                          console.log("[DB] Applications table updated with form linking columns.");
-                        }
-                        resolve();
-                      }
-                    );
-                  }
-                );
-              });
-            } else {
-              // Forms table exists — add missing columns
-              db.query(
-                `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'forms' AND COLUMN_NAME IN ('allowAnonymous', 'accessPassword')`,
-                (colErr, colResults) => {
-                  if (colErr) return resolve();
-                  const existing = (colResults || []).map(r => r.COLUMN_NAME);
-                  const alters = [];
-                  if (!existing.includes('allowAnonymous')) {
-                    alters.push(`ADD COLUMN allowAnonymous TINYINT(1) NOT NULL DEFAULT 0 AFTER requireLogin`);
-                  }
-                  if (!existing.includes('accessPassword')) {
-                    alters.push(`ADD COLUMN accessPassword VARCHAR(255) AFTER allowAnonymous`);
-                  }
-                  if (alters.length === 0) return resolve();
-                  db.query(
-                    `ALTER TABLE forms ${alters.join(', ')}`,
-                    (alterErr) => {
-                      if (alterErr) {
-                        console.warn("[DB] Forms ALTER skipped:", alterErr.message);
-                      } else {
-                        console.log("[DB] Forms table updated with new columns.");
-                      }
-                      resolve();
-                    }
-                  );
-                }
-              );
-            }
-          }
-        );
-      });
-    } catch (err) {
-      console.error("[DB] Forms auto-migration error:", err.message);
-    }
-  }
-
-  // ── Auto-migration: formBlocks type ENUM → add image_upload ──
-  if (db) {
-    try {
-      await new Promise((resolve) => {
-        db.query(
-          `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'formBlocks' AND COLUMN_NAME = 'type'`,
-          (err, results) => {
-            if (err || !results || results.length === 0) return resolve();
-            const colType = results[0].COLUMN_TYPE || '';
-            if (colType.includes('image_upload')) return resolve();
-            db.query(
-              `ALTER TABLE formBlocks MODIFY COLUMN type ENUM('short_answer','paragraph','multiple_choice','checkboxes','dropdown','linear_scale','title_description','section_break','image_upload') NOT NULL`,
-              (alterErr) => {
-                if (alterErr) {
-                  console.warn("[DB] formBlocks type ENUM migration skipped:", alterErr.message);
-                } else {
-                  console.log("[DB] formBlocks: added image_upload to type ENUM.");
-                }
-                resolve();
-              }
-            );
-          }
-        );
-      });
-    } catch (err) {
-      console.error("[DB] formBlocks auto-migration error:", err.message);
-    }
-  }
-
-  // ── Auto-migration: vote_sites image_url column ──
-  if (db) {
-    try {
-      await new Promise((resolve) => {
-        db.query(
-          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'vote_sites' AND COLUMN_NAME = 'image_url'`,
-          (err, results) => {
-            if (err || !results) return resolve();
-            if (results.length > 0) return resolve();
-            db.query(
-              `ALTER TABLE vote_sites ADD COLUMN image_url VARCHAR(512) NULL AFTER vote_url`,
-              (alterErr) => {
-                if (alterErr) {
-                  console.warn("[DB] vote_sites image_url migration skipped:", alterErr.message);
-                } else {
-                  console.log("[DB] vote_sites: added image_url column.");
-                }
-                resolve();
-              }
-            );
-          }
-        );
-      });
-    } catch (err) {
-      console.error("[DB] vote_sites auto-migration error:", err.message);
-    }
   }
 
   // ── Auto-migration: supportTicketMessages charset → utf8mb4 (emoji support) ──
