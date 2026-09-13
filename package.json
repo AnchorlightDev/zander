@@ -51,7 +51,7 @@
     "imgur": "^2.2.0",
     "mailtrap": "^3.2.0",
     "moment": ">=2.29.2",
-    "mysql2": "^3.11.3",
+    "mysql2": "^3.23.1",
     "node-cron": "^3.0.3",
     "node-fetch": "^3.3.2",
     "nodemailer": "^6.9.7",
