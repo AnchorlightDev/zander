@@ -32,7 +32,7 @@ public class discord implements SimpleCommand {
 
                 Component message = Component.text("Get to know the community and join our Discord here: " + siteAddress + "/discord")
                         .color(NamedTextColor.BLUE);
-                message = message.clickEvent(ClickEvent.clickEvent(ClickEvent.Action.OPEN_URL, siteAddress + "/discord"));
+                message = message.clickEvent(ClickEvent.openUrl(siteAddress + "/discord"));
                 source.sendMessage(message);
             } catch (Exception e) {
                 Component builder = Component.text("An error has occurred. Is the API down?").color(NamedTextColor.RED);

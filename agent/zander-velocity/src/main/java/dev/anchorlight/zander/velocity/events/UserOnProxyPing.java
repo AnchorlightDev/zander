@@ -21,11 +21,11 @@ public class UserOnProxyPing {
 
     private static final Logger logger = ZanderVelocityMain.getLogger();
 
-    private final ZanderVelocityMain plugin;
     private volatile List<Component> cachedMotds = List.of();
 
     public UserOnProxyPing(ZanderVelocityMain plugin) {
-        this.plugin = plugin;
+        // Used only to register the listener; nothing reads it afterwards, so
+        // it is not retained as a field.
         ZanderVelocityMain.getProxy().getEventManager().register(plugin, this);
 
         // Fetch MOTD immediately, then refresh every 60 seconds
@@ -60,7 +60,9 @@ public class UserOnProxyPing {
         }
     }
 
-    @Subscribe(order = PostOrder.FIRST)
+    // PostOrder is deprecated in favour of priority, where a higher value
+    // runs earlier — so FIRST becomes Short.MAX_VALUE.
+    @Subscribe(priority = Short.MAX_VALUE)
     public void onProxyPingEvent(ProxyPingEvent event) {
         Builder pingBuilder = event.getPing().asBuilder();
 

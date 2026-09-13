@@ -29,8 +29,14 @@ public class UserChatEvent {
 
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
 
+    // NOTE: PlayerChatEvent.setResult is deprecated — on 1.19.1+ a denied
+    // result kicks the player instead of dropping the message, unless
+    // SignedVelocity is present. This plugin declares SignedVelocity as a
+    // dependency for exactly that reason, so the denials below are
+    // deliberate. If SignedVelocity is ever removed from the proxy, every
+    // filtered message becomes a kick.
     @Subscribe
-    public void UserChatEvent(PlayerChatEvent event) {
+    public void onPlayerChat(PlayerChatEvent event) {
         Player player = event.getPlayer();
         String rawMessage = event.getMessage();
         Component originalMessage = Component.text(rawMessage);

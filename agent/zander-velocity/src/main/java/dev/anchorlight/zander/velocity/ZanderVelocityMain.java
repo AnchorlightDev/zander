@@ -129,10 +129,13 @@ public class ZanderVelocityMain {
             CommandManager commandManager,
             @DataDirectory Path dataDirectory
     ) {
-        this.proxy = proxy;
-        this.logger = logger;
+        // proxy, logger and dataDirectory are static; assigning them through
+        // `this` compiles but reads as instance state and is what the
+        // "should be accessed in a static way" warning is pointing at.
+        ZanderVelocityMain.proxy = proxy;
+        ZanderVelocityMain.logger = logger;
+        ZanderVelocityMain.dataDirectory = dataDirectory;
         this.commandManager = commandManager;
-        this.dataDirectory = dataDirectory;
         instance = this;
 
         // Create configuration file
