@@ -1,15 +1,22 @@
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import db from "./databaseController.js";
 
+/**
+ * Generate a 6-digit code for email verification and password resets.
+ *
+ * This used Math.random(), which is V8's xorshift128+: fast, but not a CSPRNG.
+ * Its internal state can be recovered from a small number of observed outputs,
+ * after which every subsequent value is predictable. Since this same generator
+ * issues password-reset codes, an attacker able to sample the stream — by
+ * requesting resets for an account they control — could predict the code
+ * emailed to someone else and take over that account. Hashing the code at rest
+ * and expiring it does not help if the value itself is guessable.
+ *
+ * crypto.randomInt draws from the CSPRNG and is uniform over [min, max).
+ */
 export async function generateVerificationCode() {
-  return new Promise((resolve, reject) => {
-    try {
-      const code = Math.floor(100000 + Math.random() * 900000);
-      resolve(code.toString());
-    } catch (error) {
-      reject(error);
-    }
-  });
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 export async function createEmailVerification(userId, code, expiresAt) {

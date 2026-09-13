@@ -101,6 +101,23 @@ export default function sessionSiteRoute(
   };
 
   async function hydrateUserSession(req, userLoginData) {
+    // Issue a fresh session id at the moment privilege is granted.
+    //
+    // Without this the id the visitor arrived with survives login, so anyone
+    // who managed to fix a known session id on the victim's browser
+    // beforehand would hold an authenticated session afterwards. Every login
+    // path (local, Discord OAuth, verification link) funnels through here, so
+    // regenerating once covers all four callers.
+    //
+    // returnTo is preserved: it is set before login to remember where the
+    // visitor was headed, and dropping it would send them to the dashboard
+    // instead of back to the page they wanted.
+    try {
+      await req.session.regenerate(["returnTo"]);
+    } catch (error) {
+      logRouteError("session regenerate on login", error);
+    }
+
     const userPermissionData = await getUserPermissions(userLoginData);
     // userPermissionData.userRanks is an array of rank slug strings e.g. ["admin","member"]
     const rankSlugs = userPermissionData.userRanks || [];

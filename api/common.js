@@ -406,13 +406,28 @@ function verifyCodeIsActive(code) {
   });
 }
 
+/**
+ * Draw a 6-digit verification code from a cryptographically secure source.
+ *
+ * This was Math.random(), which is V8's xorshift128+ — fast, but its internal
+ * state is recoverable from a handful of outputs, so subsequent codes become
+ * predictable. That matters here because this code authorises linking a
+ * Minecraft account to a Discord account: an attacker able to sample the
+ * stream (by requesting codes for accounts they control) could predict the
+ * next code issued to someone else and link that account to themselves.
+ */
+function secureVerifyCode() {
+  // randomInt is uniform over [min, max) and draws from the CSPRNG.
+  return crypto.randomInt(100000, 1000000);
+}
+
 export async function generateVerifyCode() {
   // 6-digit code space is 900,000 wide and only a handful are ever active
   // at once, so a collision is very unlikely — but an active duplicate would
   // let one player's code verify another's account, so retry a few times if
   // the generated code is already in use.
   for (let attempt = 0; attempt < 10; attempt++) {
-    const code = Math.floor(Math.random() * 900000) + 100000;
+    const code = secureVerifyCode();
 
     try {
       if (!(await verifyCodeIsActive(code))) {
@@ -427,5 +442,5 @@ export async function generateVerifyCode() {
   }
 
   // Extremely unlikely: 10 straight collisions. Return a fresh code anyway.
-  return Math.floor(Math.random() * 900000) + 100000;
+  return secureVerifyCode();
 }
