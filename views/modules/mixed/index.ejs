@@ -91,8 +91,11 @@
     <div class="card shadow-sm border-0 mixed-table-card mb-4">
       <ol class="list-group list-group-numbered list-group-flush">
         <% topLevel.forEach(function(p){ %>
-          <li class="list-group-item mixed-list-item d-flex justify-content-between">
-            <a href="/mixed/players/<%= p.player_uuid %>"><%= p.username || p.player_uuid %></a>
+          <li class="list-group-item mixed-list-item d-flex justify-content-between align-items-center">
+            <a href="/mixed/players/<%= p.player_uuid %>" class="d-flex align-items-center gap-2 text-decoration-none">
+              <img src="https://crafatar.com/avatars/<%= p.player_uuid %>?size=24&overlay" width="24" height="24" class="rounded flex-shrink-0" alt="" loading="lazy" onerror="this.style.display='none'">
+              <span><%= p.username || p.player_uuid %></span>
+            </a>
             <span class="badge rank-pill">Lvl <%= p.level %></span>
           </li>
         <% }) %>
