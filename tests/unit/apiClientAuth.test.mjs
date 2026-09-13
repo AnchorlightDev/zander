@@ -116,6 +116,15 @@ describe("resolveScope", () => {
     expect(resolveScope("/api/user/get?username=steve")).toBe("user");
   });
 
+  it("does not map /api/config, which is served unauthenticated elsewhere", () => {
+    // app.js registers configApiRoute a second time under /api/config with no
+    // token check. Mapping it here would imply a gate that does not exist.
+    expect(resolveScope("/api/config/policy")).toBeNull();
+    expect(resolveScope("/api/config/social")).toBeNull();
+    // The token-protected copies are gated.
+    expect(resolveScope("/social")).toBe("config");
+  });
+
   it("returns null for unmapped paths so they fail closed", () => {
     expect(resolveScope("/api/heartbeat")).toBeNull();
     expect(resolveScope("/nope")).toBeNull();

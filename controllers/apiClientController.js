@@ -182,7 +182,15 @@ export async function getClientByPrefixCached(keyPrefix) {
   if (hit && now < hit.expiresAt) return hit.client;
 
   const client = await getClientByPrefix(keyPrefix);
-  _clientCache.set(keyPrefix, { client, expiresAt: now + CLIENT_CACHE_TTL_MS });
+
+  // Only successful lookups are cached. Caching misses would let anyone grow
+  // this map without bound by presenting well-formed random prefixes, and
+  // nothing sweeps it. Cached on hit only, the map is bounded by the number of
+  // real clients.
+  if (client) {
+    _clientCache.set(keyPrefix, { client, expiresAt: now + CLIENT_CACHE_TTL_MS });
+  }
+
   return client;
 }
 
