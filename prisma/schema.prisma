@@ -88,16 +88,6 @@ enum discord_punishment_appeals_status {
   REJECTED
 }
 
-enum vote_reward_templates_type {
-  vote
-  monthly_top
-}
-
-enum vote_reward_templates_execute_as {
-  console
-  player
-}
-
 enum player_command_queue_execute_as {
   console
   player
@@ -544,71 +534,6 @@ model session {
   expiresAt DateTime
 
   @@map("sessions")
-}
-
-model vote_reward_templates {
-  id               Int                               @id @default(autoincrement()) @db.UnsignedInt
-  reward_type      vote_reward_templates_type
-  command_template String                            @db.VarChar(512)
-  execute_as       vote_reward_templates_execute_as  @default(console)
-  server_scope     String                            @default("any") @db.VarChar(64)
-  is_active        Int                               @default(1) @db.TinyInt
-  display_order    Int                               @default(0)
-  created_at       DateTime                          @default(now())
-  updated_at       DateTime                          @updatedAt
-}
-
-model vote_sites {
-  id           Int      @id @default(autoincrement()) @db.UnsignedInt
-  site_name    String   @db.VarChar(128)
-  service_name String   @unique @db.VarChar(64)
-  vote_url     String   @db.VarChar(512)
-  is_active    Int      @default(1) @db.TinyInt
-  display_order Int     @default(0)
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
-
-  votes        votes[]
-}
-
-model votes {
-  id           Int        @id @default(autoincrement()) @db.UnsignedInt
-  vote_site_id Int        @db.UnsignedInt
-  player_uuid  String     @db.VarChar(36)
-  player_name  String     @db.VarChar(16)
-  service_name String     @db.VarChar(64)
-  received_from String?   @db.VarChar(64)
-  received_at  DateTime
-  month_key    String     @db.Char(7)
-  dedupe_key   String     @unique @db.VarChar(128)
-  created_at   DateTime   @default(now())
-
-  site         vote_sites @relation(fields: [vote_site_id], references: [id], onUpdate: Cascade)
-}
-
-model vote_monthly_totals {
-  id          Int       @id @default(autoincrement()) @db.UnsignedInt
-  player_uuid String    @db.VarChar(36)
-  player_name String    @db.VarChar(16)
-  month_key   String    @db.Char(7)
-  vote_count  Int       @default(0) @db.UnsignedInt
-  last_vote_at DateTime?
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
-
-  @@unique([player_uuid, month_key])
-}
-
-model vote_monthly_results {
-  id          Int      @id @default(autoincrement()) @db.UnsignedInt
-  month_key   String   @db.Char(7)
-  player_uuid String   @db.VarChar(36)
-  player_name String   @db.VarChar(16)
-  vote_count  Int      @db.UnsignedInt
-  tie_position Int     @default(1) @db.TinyInt
-  rewarded_at DateTime @default(now())
-
-  @@unique([month_key, player_uuid])
 }
 
 model player_command_queue {
