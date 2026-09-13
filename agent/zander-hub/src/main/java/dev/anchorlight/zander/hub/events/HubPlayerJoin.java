@@ -9,6 +9,8 @@ import org.bukkit.Color;
 import org.bukkit.FireworkEffect;
 import org.bukkit.Location;
 import org.bukkit.Sound;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Firework;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -84,6 +86,32 @@ public class HubPlayerJoin implements Listener {
         player.getInventory().clear();
         player.getInventory().setHeldItemSlot(compassSlot);
         player.getInventory().setItem(compassSlot, NavigationCompassItem.createCompass());
+        resetVitals(player);
+    }
+
+    /// Reset the player's survival state on arrival in the hub.
+    ///
+    /// HubProtection cancels FoodLevelChangeEvent, which stops hunger draining
+    /// but equally stops it ever refilling, and nothing here previously set it.
+    /// A player therefore kept whatever food level their hub playerdata last
+    /// stored, permanently — arriving hungry meant staying hungry forever.
+    /// The same applied to health, since EntityDamageEvent is cancelled but
+    /// nothing heals.
+    ///
+    /// setFoodLevel/setHealth are direct setters and do not fire the cancelled
+    /// FoodLevelChangeEvent, so these take effect.
+    private void resetVitals(Player player) {
+        player.setFoodLevel(20);
+        player.setSaturation(20.0f);
+        player.setExhaustion(0.0f);
+
+        AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+        player.setHealth(maxHealth != null ? maxHealth.getValue() : 20.0);
+
+        // Carried over from wherever the player came from; damage is cancelled
+        // in the hub so these would otherwise persist as a cosmetic artefact.
+        player.setFireTicks(0);
+        player.setRemainingAir(player.getMaximumAir());
     }
 
     /// Delayed login triggers (logic that's not immediate on login).
