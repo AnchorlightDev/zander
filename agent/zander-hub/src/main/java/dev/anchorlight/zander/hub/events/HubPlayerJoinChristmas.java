@@ -1,10 +1,5 @@
 package dev.anchorlight.zander.hub.events;
 
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
-import net.kyori.adventure.title.Title;
-import org.bukkit.Bukkit;
 import dev.anchorlight.zander.hub.ZanderHubMain;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -12,7 +7,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 
-import java.time.Duration;
 import java.util.Calendar;
 import java.util.Date;
 

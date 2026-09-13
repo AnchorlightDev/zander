@@ -16,7 +16,6 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.NamespacedKey;
 import dev.anchorlight.zander.addon.ZanderAddonMain;
-import dev.anchorlight.zander.addon.model.SocialConfig;
 
 import java.util.List;
 import java.util.Map;

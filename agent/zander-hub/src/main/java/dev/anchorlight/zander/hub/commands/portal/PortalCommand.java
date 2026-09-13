@@ -8,6 +8,7 @@ import dev.anchorlight.zander.hub.ConfigurationManager;
 import dev.anchorlight.zander.hub.ZanderHubMain;
 import dev.anchorlight.zander.hub.bridge.BridgeMessage;
 import dev.anchorlight.zander.hub.portal.LocationPortalDestination;
+import dev.anchorlight.zander.hub.portal.PortalSounds;
 import dev.anchorlight.zander.hub.portal.Portal;
 import dev.anchorlight.zander.hub.portal.PortalAppearance;
 import dev.anchorlight.zander.hub.portal.PortalRenderer;
@@ -17,7 +18,6 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -315,9 +315,7 @@ public class PortalCommand implements CommandExecutor, TabCompleter {
         }
         String sound = args[1].equalsIgnoreCase("none") ? null : args[1];
         if (sound != null) {
-            try {
-                Sound.valueOf(sound);
-            } catch (IllegalArgumentException e) {
+            if (!PortalSounds.isValid(sound)) {
                 msg(sender, "<red>Unknown sound: " + sound + "</red>");
                 return;
             }

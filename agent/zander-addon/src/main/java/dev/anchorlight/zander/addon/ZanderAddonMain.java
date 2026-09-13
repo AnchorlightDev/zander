@@ -38,7 +38,7 @@ public class ZanderAddonMain extends JavaPlugin {
         this.storeCommandService = new StoreCommandService(this);
         this.bridgeService = new BridgeService(this);
 
-        PolicyGUI policyGUI = new PolicyGUI(this);
+        PolicyGUI policyGUI = new PolicyGUI();
         SocialGUI socialGUI = new SocialGUI(this);
         getServer().getPluginManager().registerEvents(policyGUI, this);
         getServer().getPluginManager().registerEvents(socialGUI, this);
@@ -57,7 +57,7 @@ public class ZanderAddonMain extends JavaPlugin {
         }
 
         getCommand("policy").setExecutor(new PolicyCommand(this, policyService));
-        getCommand("social").setExecutor(new SocialCommand(this, socialGUI));
+        getCommand("social").setExecutor(new SocialCommand(socialGUI));
         getCommand("freeze").setExecutor(new FreezeCommand(freezeService));
 
         getLogger().info("Zander Addon has been enabled.");

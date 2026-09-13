@@ -16,12 +16,7 @@ import dev.anchorlight.zander.addon.ZanderAddonMain;
 import java.util.List;
 
 public class PolicyGUI implements Listener {
-    private final ZanderAddonMain plugin;
     private final Component inventoryTitle = Component.text("Server Policies", NamedTextColor.DARK_BLUE);
-
-    public PolicyGUI(ZanderAddonMain plugin) {
-        this.plugin = plugin;
-    }
 
     public void open(Player player) {
         Inventory gui = Bukkit.createInventory(null, 9, inventoryTitle);
