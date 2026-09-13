@@ -41,7 +41,7 @@ import {
   getCommandsByPriceId,
   getPurchaseBySessionId,
   getSubscriptionByStripeId,
-  hasWebhookEvent,
+  claimWebhookEvent,
   recordWebhookEvent,
   revokeSubscription,
   updatePurchasePayment,
@@ -218,8 +218,10 @@ export default function webstoreWebhookRoutes(app, config) {
 async function processWebhookEvent(event, config) {
   const { id: eventId, type: eventType } = event;
 
-  // Idempotency guard — skip events already processed
-  if (await hasWebhookEvent(eventId)) {
+  // Idempotency guard — claim the event before doing any work. This is an
+  // atomic INSERT against a UNIQUE index rather than a read-then-write, so a
+  // retry arriving mid-processing loses the race instead of double-crediting.
+  if (!(await claimWebhookEvent(eventId, eventType))) {
     console.log(`[webstore] Duplicate event ignored: ${eventId} (${eventType})`);
     return;
   }

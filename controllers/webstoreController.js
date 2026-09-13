@@ -512,18 +512,48 @@ export async function updateSubscriptionPeriod(stripeSubscriptionId, currentPeri
 // ---------------------------------------------------------------------------
 
 /** Returns true if this Stripe event ID has already been processed. */
-export async function hasWebhookEvent(stripeEventId) {
-  const rows = await query(
-    "SELECT webhookEventId FROM webstoreWebhookEvents WHERE stripeEventId = ? LIMIT 1",
-    [stripeEventId]
-  );
-  return rows.length > 0;
+/**
+ * Claim a Stripe event for processing, atomically.
+ *
+ * hasWebhookEvent() followed by processing is check-then-act: Stripe retries
+ * events, and a retry can arrive while the first delivery is still working
+ * (the HTTP response is sent before processing begins). Both deliveries would
+ * see "not processed" and both would credit the purchase.
+ *
+ * Inserting first makes the stripeEventId UNIQUE index the arbiter — exactly
+ * one caller can win, and the loser is told to stand down before any money
+ * moves. Handlers then fill in the detail via recordWebhookEvent(), which
+ * upserts onto the claimed row.
+ *
+ * @returns {Promise<boolean>} true if this caller now owns the event
+ */
+export async function claimWebhookEvent(stripeEventId, eventType) {
+  try {
+    await query(
+      `INSERT INTO webstoreWebhookEvents (stripeEventId, purchaseId, eventType, payload)
+       VALUES (?, NULL, ?, NULL)`,
+      [stripeEventId, eventType]
+    );
+    return true;
+  } catch (error) {
+    // Someone else already claimed it.
+    if (error?.code === "ER_DUP_ENTRY" || error?.errno === 1062) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 export async function recordWebhookEvent({ stripeEventId, purchaseId, eventType, payload }) {
+  // Upsert: the row usually already exists because claimWebhookEvent() created
+  // it, so this fills in the purchase link and payload rather than colliding.
   return query(
     `INSERT INTO webstoreWebhookEvents (stripeEventId, purchaseId, eventType, payload)
-     VALUES (?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       purchaseId = COALESCE(VALUES(purchaseId), purchaseId),
+       eventType  = VALUES(eventType),
+       payload    = COALESCE(VALUES(payload), payload)`,
     [stripeEventId, purchaseId || null, eventType, payload ? JSON.stringify(payload) : null]
   );
 }
