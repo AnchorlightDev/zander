@@ -47,9 +47,15 @@ export default function announcementApiRoute(app, config, db, features, lang) {
         });
       });
 
+      // An empty result set is a valid state, not a failure. Returning
+      // success:false with no `data` key broke every consumer that reads
+      // $.data unconditionally — zander-velocity's MOTD refresh logged a
+      // PathNotFoundException once a minute whenever no motd announcement was
+      // inside its active window. Always return the key, empty if need be.
       if (!results || !results.length) {
         return res.send({
-          success: false,
+          success: true,
+          data: [],
           message: lang.announcement.noAnnouncements,
         });
       }
