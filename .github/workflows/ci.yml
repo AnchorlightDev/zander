@@ -37,6 +37,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # config.json is gitignored (it holds per-deployment operational config),
+      # but modules such as lib/discord/rankRoleSync.mjs require() it at import
+      # time, so the suite cannot load without one. The example file is the
+      # documented starting point and is sufficient for the tests.
+      - name: Create config.json from the example
+        run: cp config.json.example config.json
+
       # The tests import modules that transitively load @prisma/client, which
       # throws unless a client has been generated from the schema. No database
       # connection is made — generate only reads prisma/schema.prisma.
