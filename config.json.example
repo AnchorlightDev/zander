@@ -1,5 +1,16 @@
 {
   "debug": false,
+  "connection": {
+    "_comment": "Server connection details. Every public surface (navbar, /play, /ranks, /vault, landing pages) reads from here so these values can never drift between pages. Set port to null to render the host without a port.",
+    "java": {
+      "host": "play.example.net",
+      "port": null
+    },
+    "bedrock": {
+      "host": "bedrock.example.net",
+      "port": 19132
+    }
+  },
   "siteConfiguration": {
     "siteUrl": "https://craftingforchrist.net",
     "siteName": "Crafting For Christ",
