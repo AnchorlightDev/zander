@@ -60,7 +60,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.14.0</version>
                 <configuration>
-                    <release>25</release>
+                    <release>21</release>
                     <!-- JDK 23+ no longer discovers annotation processors implicitly. -->
                     <annotationProcessorPaths>
                         <path>
