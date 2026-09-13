@@ -6,6 +6,7 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const features = require("../features.json");
 
+import { internalApiHeaders } from "../api/common.js";
 export class ReportCommand extends Command {
   constructor(context, options) {
     super(context, { ...options });
@@ -74,10 +75,7 @@ export class ReportCommand extends Command {
     const reportURL = `${process.env.siteAddress}/api/report/create`;
     const response = await fetch(reportURL, {
       method: "POST",
-      headers: {
-        "x-access-token": process.env.apiKey,
-        "Content-Type": "application/json",
-      },
+      headers: internalApiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         reporterUser: userData.username,
         reportedUser: reportedUser,

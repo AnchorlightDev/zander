@@ -1,5 +1,5 @@
 import { getWebAnnouncement } from "../controllers/announcementController.js";
-import { isFeatureWebRouteEnabled, getGlobalImage, setBannerCookie } from "../api/common.js";
+import { isFeatureWebRouteEnabled, getGlobalImage, setBannerCookie, internalApiHeaders} from "../api/common.js";
 import {
   getSupportCategories,
   createSupportTicket,
@@ -130,7 +130,7 @@ export default function supportRoutes(
         req.session.user.username
       )}`;
       const punishmentsResponse = await fetch(fetchPunishmentsURL, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       });
       const appealPunishmentsApiData = await punishmentsResponse.json();
       const punishments = Array.isArray(appealPunishmentsApiData.data)

@@ -11,6 +11,7 @@ import {
 
 const AUDIT_PERMISSION_NODE = "zander.web.audit";
 
+import { internalApiHeaders } from "../api/common.js";
 function formatAuditTimestamp(value) {
   return formatDiscordTimestamp(value);
 }
@@ -118,7 +119,7 @@ export class AuditCommand extends Command {
     let apiData;
     try {
       const response = await fetch(fetchURL, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       });
 
       apiData = await response.json();

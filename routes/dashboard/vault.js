@@ -2,6 +2,7 @@ import {
   getGlobalImage,
   hasPermission,
   isFeatureWebRouteEnabled,
+  internalApiHeaders,
 } from "../../api/common.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 
@@ -13,7 +14,7 @@ export default function dashboardVaultSiteRoute(
   features,
   lang
 ) {
-  const headers = { "x-access-token": process.env.apiKey };
+  const headers = internalApiHeaders();
 
   async function fetchJson(url, fallback = null) {
     try {

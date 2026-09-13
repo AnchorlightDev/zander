@@ -3,6 +3,7 @@ import {
   hasPermission,
   isFeatureWebRouteEnabled,
   setBannerCookie,
+  internalApiHeaders,
 } from "../../api/common.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 
@@ -37,7 +38,7 @@ export default function dashboardApplicationsSiteRoute(
 
     const [response, globalImage, announcementWeb] = await Promise.all([
       fetch(`${process.env.siteAddress}/api/application/get`, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       }).catch(() => null),
       getGlobalImage(),
       getWebAnnouncement(),
@@ -95,7 +96,7 @@ export default function dashboardApplicationsSiteRoute(
 
     const [response, globalImage, announcementWeb] = await Promise.all([
       fetch(fetchURL, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       }).catch(() => null),
       getGlobalImage(),
       getWebAnnouncement(),

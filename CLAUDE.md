@@ -52,7 +52,7 @@ Larger features (Webstore, Events, Finance, Watch/creator content) each follow t
 
 Permissions are dot-notation LuckPerms nodes (e.g. `zander.web.webstore`), checked via `hasPermission(node, req, res, features)` from `api/common.js` for dashboard routes. Wildcards (`zander.web.*`, `*`) grant broader access — always check for both the specific node and its wildcard ancestors when writing new permission checks; the matching logic lives in `hasPermission` in `api/common.js`. Full permission node reference is in `README.md`.
 
-Plugin-to-server ingestion endpoints use the app-wide `apiKey` Bearer-token scheme, not session auth — see `api/routes/verifyToken.js`.
+Plugin-to-server ingestion endpoints use **per-client API credentials**, not session auth — see `api/routes/verifyToken.js`. Each caller (a Minecraft server, the uptime monitor, this app's own internal self-calls) has a row in `apiClients` holding a SHA-256 hash of its key plus an explicit scope list; keys look like `zdr_<prefix>_<secret>` and are matched by the non-secret prefix, then verified with `crypto.timingSafeEqual`. Scopes are coarse, one per API surface, with no wildcard — an unmapped path fails closed. Key format and scope resolution live in `lib/apiKeys.js` (no DB import, so it is unit-testable); the database side is `controllers/apiClientController.js`. Manage clients at `/dashboard/apikeys` (`zander.web.apikeys`). This app authenticates its own self-calls with `INTERNAL_API_KEY` via `internalApiHeaders()` in `api/common.js` — never reintroduce a shared `process.env.apiKey`. The `features.legacyApiKey` flag temporarily accepts the old shared key during migration and logs every such use.
 
 ### Views
 

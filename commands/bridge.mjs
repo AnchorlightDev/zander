@@ -15,6 +15,7 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const features = require("../features.json");
 
+import { internalApiHeaders } from "../api/common.js";
 export class BridgeCommand extends Command {
   constructor(context, options) {
     super(context, { ...options });
@@ -267,10 +268,7 @@ export class BridgeCommand extends Command {
     const postBridge = async (path, payload) =>
       fetch(`${process.env.siteAddress}${path}`, {
         method: "POST",
-        headers: {
-          "x-access-token": process.env.apiKey,
-          "Content-Type": "application/json",
-        },
+        headers: internalApiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(payload),
       });
 
@@ -310,7 +308,7 @@ export class BridgeCommand extends Command {
             }
 
             const response = await fetch(url, {
-              headers: { "x-access-token": process.env.apiKey },
+              headers: internalApiHeaders(),
             });
             const data = await response.json();
             if (!data.success) {

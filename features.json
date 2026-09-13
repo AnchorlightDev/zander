@@ -27,14 +27,12 @@
     "login": true,
     "register": true
   },
-
   "support": true,
   "staffAuditReport": true,
   "watch": true,
   "events": true,
   "webstore": true,
   "finance": true,
-
   "smDiscord": true,
   "smFacebook": true,
   "smTwitter": true,
@@ -43,5 +41,6 @@
   "smTwitch": true,
   "smYouTube": true,
   "smLinkedIn": true,
-  "smTikTok": true
+  "smTikTok": true,
+  "legacyApiKey": true
 }

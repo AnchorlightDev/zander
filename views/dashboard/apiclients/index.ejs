@@ -1,0 +1,188 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-key me-2"></i>API Keys</h1>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (error) { %>
+        <div class="alert alert-danger"><%= error %></div>
+      <% } %>
+
+      <%# The full key exists only in this render. It is never stored, so it
+          cannot be shown again on any later page load. %>
+      <% if (newKey) { %>
+        <div class="card border-success shadow-sm mb-4">
+          <div class="card-header bg-success text-white">
+            <i class="fa-solid fa-circle-check me-1"></i>
+            API key created for <strong><%= newKey.name %></strong>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-warning d-flex align-items-start mb-3">
+              <i class="fa-solid fa-triangle-exclamation me-2 mt-1"></i>
+              <div>
+                <strong>Copy this key now &mdash; it will not be shown again.</strong>
+                Only a hash is stored, so it cannot be recovered. If it is lost,
+                revoke this client and create a new one.
+              </div>
+            </div>
+            <div class="input-group">
+              <input type="text" class="form-control font-monospace" id="newKeyValue"
+                     value="<%= newKey.fullKey %>" readonly>
+              <button class="btn btn-outline-secondary" type="button" id="copyKeyBtn">
+                <i class="fa-regular fa-copy me-1"></i>Copy
+              </button>
+            </div>
+            <div class="form-text mt-2">
+              Scopes: <%= newKey.scopes.join(", ") %>
+            </div>
+          </div>
+        </div>
+      <% } %>
+
+      <!-- Existing clients -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header"><i class="fa-solid fa-list me-1"></i>Clients</div>
+        <div class="card-body p-0">
+          <% if (!clients || !clients.length) { %>
+            <div class="p-3 text-muted mb-0">
+              No API clients yet. Create one below.
+            </div>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Prefix</th>
+                    <th>Scopes</th>
+                    <th>Last used</th>
+                    <th>Created</th>
+                    <th class="text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% clients.forEach(function (c) { %>
+                    <tr class="<%= c.isRevoked ? 'table-secondary text-muted' : '' %>">
+                      <td>
+                        <strong><%= c.name %></strong>
+                        <% if (c.isRevoked) { %>
+                          <span class="badge text-bg-danger ms-1">Revoked</span>
+                        <% } %>
+                        <% if (c.description) { %>
+                          <div class="small text-muted"><%= c.description %></div>
+                        <% } %>
+                      </td>
+                      <%# The prefix is a non-secret lookup handle, safe to display. %>
+                      <td><code><%= c.keyPrefix %></code></td>
+                      <td>
+                        <% c.scopes.forEach(function (s) { %>
+                          <span class="badge text-bg-light border me-1"><%= s %></span>
+                        <% }) %>
+                      </td>
+                      <td>
+                        <% if (c.lastUsedAt) { %>
+                          <%= new Date(c.lastUsedAt).toLocaleString() %>
+                          <% if (c.lastUsedIp) { %>
+                            <div class="small text-muted"><%= c.lastUsedIp %></div>
+                          <% } %>
+                        <% } else { %>
+                          <span class="text-muted">Never</span>
+                        <% } %>
+                      </td>
+                      <td><%= c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "" %></td>
+                      <td class="text-end">
+                        <% if (!c.isRevoked) { %>
+                          <form method="POST" action="/dashboard/apikeys/<%= c.clientId %>/revoke"
+                                onsubmit="return confirm('Revoke this client? Any caller using its key stops working immediately.');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                              <i class="fa-solid fa-ban me-1"></i>Revoke
+                            </button>
+                          </form>
+                        <% } else { %>
+                          <span class="small text-muted">
+                            <%= c.revokedAt ? new Date(c.revokedAt).toLocaleDateString() : "" %>
+                          </span>
+                        <% } %>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </div>
+
+      <!-- Create -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header"><i class="fa-solid fa-plus me-1"></i>Create a client</div>
+        <div class="card-body">
+          <form method="POST" action="/dashboard/apikeys">
+            <div class="row g-3 mb-3">
+              <div class="col-md-4">
+                <label class="form-label" for="name">Name</label>
+                <input type="text" class="form-control" id="name" name="name"
+                       placeholder="survival-server" maxlength="100" required>
+                <div class="form-text">How this caller is identified in the audit log.</div>
+              </div>
+              <div class="col-md-8">
+                <label class="form-label" for="description">Description</label>
+                <input type="text" class="form-control" id="description" name="description"
+                       placeholder="Survival server plugin" maxlength="255">
+              </div>
+            </div>
+
+            <label class="form-label">Scopes</label>
+            <div class="form-text mb-2">
+              Grant only what this caller needs. There is no wildcard &mdash; broad
+              access has to be selected deliberately.
+            </div>
+            <div class="row g-2 mb-3">
+              <% apiScopes.forEach(function (scope) { %>
+                <div class="col-6 col-md-3 col-lg-2">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="scopes"
+                           value="<%= scope %>" id="scope-<%= scope %>">
+                    <label class="form-check-label" for="scope-<%= scope %>">
+                      <%= scope %>
+                    </label>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-key me-1"></i>Create client
+            </button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<%- include("../../admin/_footer.ejs") %>
+
+<script>
+  document.getElementById('copyKeyBtn')?.addEventListener('click', function () {
+    var field = document.getElementById('newKeyValue');
+    field.select();
+    field.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(field.value).then(function () {
+      var btn = document.getElementById('copyKeyBtn');
+      btn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Copied';
+      setTimeout(function () {
+        btn.innerHTML = '<i class="fa-regular fa-copy me-1"></i>Copy';
+      }, 2000);
+    });
+  });
+</script>

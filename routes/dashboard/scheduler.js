@@ -2,6 +2,7 @@ import {
   getGlobalImage,
   hasPermission,
   isFeatureWebRouteEnabled,
+  internalApiHeaders,
 } from "../../api/common.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { ChannelType } from "discord.js";
@@ -19,7 +20,7 @@ export default function dashboardSchedulerSiteRoute(
 
     if (!await hasPermission("zander.web.scheduler", req, res, features)) return;
 
-    const headers = { "x-access-token": process.env.apiKey };
+    const headers = internalApiHeaders();
 
     // Fetch announcements, scheduled messages, and page-chrome data concurrently.
     const [announcementsData, scheduledMessages, globalImage, announcementWeb] =

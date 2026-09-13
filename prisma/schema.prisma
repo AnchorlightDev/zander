@@ -1308,3 +1308,24 @@ model financeMonthlyReports {
   @@unique([year, month])
   @@index([isPublished])
 }
+
+/// Per-client API credentials.  Replaces the single app-wide `apiKey`: each
+/// caller (Minecraft server, uptime monitor, this app's own internal calls)
+/// gets its own key with an explicit scope list so it can be revoked alone.
+/// Only the SHA-256 hash of the full key is stored.
+model apiClients {
+  clientId        Int       @id @default(autoincrement())
+  name            String    @db.VarChar(100)
+  description     String?   @db.VarChar(255)
+  keyPrefix       String    @unique @db.VarChar(20)
+  keyHash         String    @db.Char(64)
+  scopes          String    @db.Text
+  isRevoked       Int       @default(0) @db.TinyInt
+  lastUsedAt      DateTime?
+  lastUsedIp      String?   @db.VarChar(45)
+  createdAt       DateTime  @default(now())
+  createdByUserId Int?
+  revokedAt       DateTime?
+
+  @@index([isRevoked])
+}

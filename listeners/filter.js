@@ -6,6 +6,7 @@ const require = createRequire(import.meta.url);
 const features = require("../features.json");
 import { isDbHealthy } from "../controllers/databaseController.js";
 
+import { internalApiHeaders } from "../api/common.js";
 export class GuildMessageListener extends Listener {
   constructor(context, options) {
     super(context, {
@@ -35,10 +36,7 @@ export class GuildMessageListener extends Listener {
         const response = await fetch(filterURL, {
           method: "POST",
           body: JSON.stringify(bodyJSON),
-          headers: {
-            "Content-Type": "application/json",
-            "x-access-token": process.env.apiKey,
-          },
+          headers: internalApiHeaders({ "Content-Type": "application/json" }),
         });
 
         // If the API is unavailable (e.g. DB down), skip filtering rather than

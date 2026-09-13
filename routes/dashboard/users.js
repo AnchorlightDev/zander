@@ -19,6 +19,7 @@ import {
   getGlobalImage,
   hasPermission,
   generateLog,
+  internalApiHeaders,
 } from "../../api/common.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { maskEmail, hasPermissionSilent } from "../../controllers/userAccountState.js";
@@ -30,10 +31,7 @@ const MANAGE_PERMISSION = "zander.web.users.manage";
 async function proxyToApi(fetch, method, path, body) {
   const res = await fetch(`${process.env.siteAddress}${path}`, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "x-access-token": process.env.apiKey,
-    },
+    headers: internalApiHeaders({ "Content-Type": "application/json" }),
     body: body ? JSON.stringify(body) : undefined,
   });
   return res.json();

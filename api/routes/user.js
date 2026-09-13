@@ -15,6 +15,7 @@ import {
   required,
   optional,
   generateVerifyCode,
+  internalApiHeaders,
 } from "../common.js";
 import { hasActiveWebBan } from "../../controllers/discordPunishmentController.js";
 import { checkRateLimit } from "../../lib/rateLimiter.mjs";
@@ -216,7 +217,7 @@ export default function userApiRoute(app, config, db, features, lang) {
       if (username) {
         const fetchURL = `${process.env.siteAddress}/api/user/get?username=${encodeURIComponent(username)}`;
         const response = await fetch(fetchURL, {
-          headers: { "x-access-token": process.env.apiKey },
+          headers: internalApiHeaders(),
         });
 
         const apiData = await response.json();
@@ -232,7 +233,7 @@ export default function userApiRoute(app, config, db, features, lang) {
       } else if (discordId) {
         const fetchURL = `${process.env.siteAddress}/api/user/get?discordId=${encodeURIComponent(discordId)}`;
         const response = await fetch(fetchURL, {
-          headers: { "x-access-token": process.env.apiKey },
+          headers: internalApiHeaders(),
         });
 
         const apiData = await response.json();
@@ -648,10 +649,7 @@ export default function userApiRoute(app, config, db, features, lang) {
       const response = await fetch(filterURL, {
         method: "POST",
         body: JSON.stringify(bodyJSON),
-        headers: {
-          "Content-Type": "application/json",
-          "x-access-token": process.env.apiKey,
-        },
+        headers: internalApiHeaders({ "Content-Type": "application/json" }),
       });
 
       const dataResponse = await response.json();
@@ -704,10 +702,7 @@ export default function userApiRoute(app, config, db, features, lang) {
       const response = await fetch(filterURL, {
         method: "POST",
         body: JSON.stringify(bodyJSON),
-        headers: {
-          "Content-Type": "application/json",
-          "x-access-token": process.env.apiKey,
-        },
+        headers: internalApiHeaders({ "Content-Type": "application/json" }),
       });
 
       const dataResponse = await response.json();

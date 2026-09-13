@@ -193,6 +193,26 @@ export async function hasPermission(permissionNode, req, res, features) {
 }
 
 /*
+    Headers for this app's calls to its own API.
+
+    The app used to present the same app-wide `apiKey` it validated, which made
+    rotating that key impossible without a simultaneous redeploy.  It now holds
+    a dedicated client credential (`zander-web-internal`) in INTERNAL_API_KEY,
+    so it can be rotated and scoped like any other caller.
+
+    Centralised here rather than repeated in every call site so there is one
+    place to change when the internal credential moves again.
+
+    @param extraHeaders Additional headers to merge, e.g. Content-Type.
+*/
+export function internalApiHeaders(extraHeaders = {}) {
+  return {
+    ...extraHeaders,
+    "x-access-token": process.env.INTERNAL_API_KEY,
+  };
+}
+
+/*
     Makes a POST API request to the specified postURL with the provided apiPostBody.
     It includes a header with the x-access-token value taken from an environment variable named apiKey.
     If the request is successful, it logs the response data.
@@ -213,10 +233,7 @@ export async function postAPIRequest(
   const response = await fetch(postURL, {
     method: "POST",
     body: JSON.stringify(apiPostBody),
-    headers: {
-      "Content-Type": "application/json",
-      "x-access-token": process.env.apiKey,
-    },
+    headers: internalApiHeaders({ "Content-Type": "application/json" }),
   });
 
   let data = null;

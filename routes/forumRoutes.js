@@ -30,6 +30,7 @@ import {
   isFeatureWebRouteEnabled,
   isLoggedIn,
   setBannerCookie,
+  internalApiHeaders,
 } from "../api/common.js";
 import { UserGetter } from "../controllers/userController.js";
 import { getWebAnnouncement } from "../controllers/announcementController.js";
@@ -1494,10 +1495,7 @@ export default function forumRoutes(
         `${process.env.siteAddress}/api/report/create`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-access-token": process.env.apiKey,
-          },
+          headers: internalApiHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify(reportBody),
         }
       );

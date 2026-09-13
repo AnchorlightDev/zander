@@ -8,6 +8,7 @@ import {
   hasPermission,
   isFeatureWebRouteEnabled,
   setBannerCookie,
+  internalApiHeaders,
 } from "../../api/common.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { hasPermission as hasPermissionNode } from "../../lib/discord/permissions.mjs";
@@ -19,7 +20,7 @@ import { sanitizeForumHtml } from "../../lib/htmlSanitize.js";
 async function fetchJson(fetchFn, url, fallback = null) {
   try {
     const res = await fetchFn(url, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     return await res.json();
   } catch (error) {

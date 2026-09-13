@@ -6,6 +6,7 @@ import {
   isFeatureWebRouteEnabled,
   setBannerCookie,
   getGlobalImage,
+  internalApiHeaders,
 } from "../api/common.js";
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import {
@@ -994,7 +995,7 @@ export default function sessionSiteRoute(
 
     const fetchURL = `${process.env.siteAddress}/api/server/get?type=VERIFICATION`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 
@@ -1077,7 +1078,7 @@ export default function sessionSiteRoute(
 
     const fetchURL = `${process.env.siteAddress}/api/server/get?type=VERIFICATION`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 

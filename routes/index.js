@@ -5,7 +5,7 @@ import {
   getPopupAnnouncements,
   getWebAnnouncement,
 } from "../controllers/announcementController.js";
-import { isFeatureWebRouteEnabled, getGlobalImage, getJumboVideo, hasPermission, isLoggedIn } from "../api/common.js";
+import { isFeatureWebRouteEnabled, getGlobalImage, getJumboVideo, hasPermission, isLoggedIn, internalApiHeaders} from "../api/common.js";
 import { getTicketsAccessibleByUser } from "../controllers/supportTicketController.js";
 import { getStaffPageData } from "../controllers/staffController.js";
 import {
@@ -73,7 +73,7 @@ export default function applicationSiteRoutes(
     try {
       const fetchURL = `${process.env.siteAddress}/api/web/statistics`;
       const response = await fetch(fetchURL, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       });
       const json = await response.json();
       if (json?.data) statApiData = json;
@@ -148,7 +148,7 @@ export default function applicationSiteRoutes(
 
     const fetchURL = `${process.env.siteAddress}/api/server/get?type=EXTERNAL`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 
@@ -219,7 +219,7 @@ export default function applicationSiteRoutes(
 
     const fetchURL = `${process.env.siteAddress}/api/application/get`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 
@@ -365,7 +365,7 @@ export default function applicationSiteRoutes(
           req.session.user.username
         )}`;
         const punishmentsResponse = await fetch(fetchPunishmentsURL, {
-          headers: { "x-access-token": process.env.apiKey },
+          headers: internalApiHeaders(),
         });
         appealPunishmentsApiData = await punishmentsResponse.json();
 
@@ -450,7 +450,7 @@ export default function applicationSiteRoutes(
         req.session.user.username
       )}`;
       const punishmentsResponse = await fetch(fetchPunishmentsURL, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       });
       const appealPunishmentsApiData = await punishmentsResponse.json();
       const punishments = Array.isArray(appealPunishmentsApiData.data)
@@ -550,7 +550,7 @@ export default function applicationSiteRoutes(
 
     try {
       const shopResponse = await fetch(shopFetchURL, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       });
 
       if (!shopResponse.ok) {
@@ -588,7 +588,7 @@ export default function applicationSiteRoutes(
 
     const fetchURL = `${process.env.siteAddress}/api/vault/get`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 
@@ -624,7 +624,7 @@ export default function applicationSiteRoutes(
 
     const fetchURL = `${process.env.siteAddress}/api/punishments/get?page=${page}&limit=${limit}`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 

@@ -326,8 +326,17 @@ export const adminPages = [
     group: "Community",
     sortOrder: 23,
   },
+  {
+    slug: "apikeys",
+    title: "API Keys",
+    menuTitle: "API Keys",
+    icon: "fa-solid fa-key",
+    capability: "zander.web.apikeys",
+    path: "/dashboard/apikeys",
+    group: "System",
+    sortOrder: 75,
+  },
 ];
-
 // ---------------------------------------------------------------------------
 // Sub-pages (registered for breadcrumb / title lookup; not shown in sidebar)
 // ---------------------------------------------------------------------------

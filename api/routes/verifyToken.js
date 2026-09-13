@@ -1,24 +1,27 @@
-import crypto from "crypto";
 import { createRequire } from "module";
 import { hasPermission } from "../../lib/discord/permissions.mjs";
+import { parseKey, resolveScope, verifyKeyHash } from "../../lib/apiKeys.js";
+import {
+  getClientByPrefixCached,
+  touchLastUsed,
+} from "../../controllers/apiClientController.js";
 
 const require = createRequire(import.meta.url);
 const lang = require("../../lang.json");
+const features = require("../../features.json");
 
 /*
     Endpoints that a logged-in dashboard user may call using their session
-    cookie instead of the machine API key.
+    cookie instead of an API client key.
 
-    Previously the dashboard shipped `process.env.apiKey` into page source so
-    the browser could call these, which handed every viewer the app-wide token
-    that guards *all* /api routes (finance, vault, punishments, admin users).
-    The key is now server-only; browsers authenticate with their session and
-    are held to the same permission node the corresponding dashboard page
-    already enforces.
+    The dashboard previously shipped the app-wide API key into page source so
+    the browser could call these, which handed every viewer the token guarding
+    *all* /api routes.  Browsers now authenticate with their session and are
+    held to the same permission node the corresponding dashboard page enforces.
 
-    Fail-closed: anything not listed here still requires the machine token.
-    Keys are `METHOD /path`; the required nodes are OR-ed.  `zander.web.*` and
-    `*` are honoured by hasPermission() itself.
+    Fail-closed: anything not listed here requires a client key.  Keys are
+    `METHOD /path`; the required nodes are OR-ed.  `zander.web.*` and `*` are
+    honoured by hasPermission() itself.
 */
 const EVENTS_WRITE = ["zander.web.events.edit", "zander.web.events.review"];
 const EVENTS_REVIEW = ["zander.web.events.review"];
@@ -48,63 +51,129 @@ const SESSION_ALLOWED_ROUTES = new Map([
   ["POST /api/events/templates/announcements/update", EVENTS_WRITE],
 ]);
 
-/*
-    Constant-time string comparison.  Returns false for length mismatches
-    without leaking the expected length through early return timing.
-*/
-function safeEqual(a, b) {
-  if (typeof a !== "string" || typeof b !== "string") return false;
-
-  const left = Buffer.from(a, "utf8");
-  const right = Buffer.from(b, "utf8");
-
-  // timingSafeEqual throws on differing lengths, so compare digests of equal
-  // width instead — the digest of a wrong-length token still differs.
-  const leftHash = crypto.createHash("sha256").update(left).digest();
-  const rightHash = crypto.createHash("sha256").update(right).digest();
-
-  return crypto.timingSafeEqual(leftHash, rightHash);
+/** Client address for audit lines, preferring the proxied original. */
+function clientIp(req) {
+  const forwarded = req.headers?.["x-forwarded-for"];
+  const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(",")[0]?.trim();
+  return first || req.ip || "unknown";
 }
 
-export default function verifyToken(req, res, done) {
+/**
+ * Audit an auth failure.  Logs the key prefix — the non-secret lookup handle —
+ * never the presented key itself.
+ */
+function logDenial(reason, { req, keyPrefix, scope }) {
+  console.warn(
+    `[apiAuth] ${reason}` +
+      ` path=${req.method} ${String(req.url).split("?")[0]}` +
+      ` prefix=${keyPrefix ?? "none"}` +
+      (scope ? ` scope=${scope}` : "") +
+      ` ip=${clientIp(req)}`
+  );
+}
+
+function deny(res, status, message) {
+  // 401 for bad or missing credentials, 403 for scope denial.  The body keeps
+  // the { success, message } shape so existing callers still parse it — the
+  // previous implementation returned 200 OK on failure.
+  return res.status(status).send({ success: false, message });
+}
+
+export default async function verifyToken(req, res) {
   const token = req.headers["x-access-token"];
-  const expected = process.env.apiKey;
+  const path = String(req.url).split("?")[0];
 
-  // Machine token — full API access, used by the Minecraft plugin ecosystem.
-  if (token) {
-    if (typeof expected === "string" && expected.length > 0 && safeEqual(token, expected)) {
-      return done();
-    }
+  // ── No token: fall back to a dashboard session ───────────────────────────
+  if (!token) {
+    const user = req.session?.user;
 
-    return res.status(401).send({
-      success: false,
-      message: lang.api.invalidToken,
-    });
-  }
+    if (user) {
+      const routeKey = `${req.method} ${path}`;
+      const requiredNodes = SESSION_ALLOWED_ROUTES.get(routeKey);
 
-  // Browser fallback — session cookie plus the dashboard permission node.
-  const user = req.session?.user;
+      if (requiredNodes) {
+        const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+        if (requiredNodes.some((node) => hasPermission(permissions, node))) return;
 
-  if (user) {
-    const routeKey = `${req.method} ${req.url.split("?")[0]}`;
-    const requiredNodes = SESSION_ALLOWED_ROUTES.get(routeKey);
-
-    if (requiredNodes) {
-      const permissions = Array.isArray(user.permissions) ? user.permissions : [];
-
-      if (requiredNodes.some((node) => hasPermission(permissions, node))) {
-        return done();
+        logDenial("session lacks permission", { req });
+        return deny(res, 403, "You do not have permission to perform this action.");
       }
+    }
 
-      return res.status(403).send({
-        success: false,
-        message: "You do not have permission to perform this action.",
-      });
+    logDenial("no token", { req });
+    return deny(res, 401, lang.api.noToken);
+  }
+
+  // ── Per-client key ───────────────────────────────────────────────────────
+  const parsed = parseKey(token);
+
+  if (parsed) {
+    let client;
+    try {
+      client = await getClientByPrefixCached(parsed.keyPrefix);
+    } catch (error) {
+      console.error("[apiAuth] client lookup failed:", error?.message ?? error);
+      return deny(res, 503, lang.api.databaseError);
+    }
+
+    if (!client) {
+      logDenial("unknown key prefix", { req, keyPrefix: parsed.keyPrefix });
+      return deny(res, 401, lang.api.invalidToken);
+    }
+
+    if (!verifyKeyHash(token, client.keyHash)) {
+      logDenial("key hash mismatch", { req, keyPrefix: parsed.keyPrefix });
+      return deny(res, 401, lang.api.invalidToken);
+    }
+
+    if (client.isRevoked) {
+      logDenial("revoked key", { req, keyPrefix: parsed.keyPrefix });
+      return deny(res, 401, lang.api.invalidToken);
+    }
+
+    const scope = resolveScope(path);
+
+    // An unmapped path fails closed: a new route is unreachable until it is
+    // given a scope, rather than silently accepting every key.
+    if (!scope) {
+      logDenial("no scope mapped for path", { req, keyPrefix: parsed.keyPrefix });
+      return deny(res, 403, "This endpoint is not available to API clients.");
+    }
+
+    if (!client.scopes.includes(scope)) {
+      logDenial("scope not granted", { req, keyPrefix: parsed.keyPrefix, scope });
+      return deny(res, 403, `This API client is not scoped for "${scope}".`);
+    }
+
+    req.apiClient = {
+      clientId: client.clientId,
+      name: client.name,
+      scopes: client.scopes,
+    };
+
+    // Fire-and-forget and internally throttled; never awaited on the hot path.
+    touchLastUsed(client.clientId, clientIp(req));
+    return;
+  }
+
+  // ── Legacy shared key ────────────────────────────────────────────────────
+  // Retained only while features.legacyApiKey is true so callers can migrate.
+  // Every use is logged so the remaining un-migrated callers are visible; once
+  // the log is silent, flip the flag to false and delete apiKey from .env.
+  if (features.legacyApiKey) {
+    const expected = process.env.apiKey;
+
+    if (typeof expected === "string" && expected.length > 0 && token === expected) {
+      console.warn(
+        `[apiAuth] LEGACY shared apiKey accepted —` +
+          ` path=${req.method} ${path} ip=${clientIp(req)}.` +
+          ` Migrate this caller to a per-client key.`
+      );
+      req.apiClient = { clientId: null, name: "legacy-shared-key", scopes: ["*legacy*"] };
+      return;
     }
   }
 
-  return res.status(401).send({
-    success: false,
-    message: lang.api.noToken,
-  });
+  logDenial("invalid token", { req });
+  return deny(res, 401, lang.api.invalidToken);
 }

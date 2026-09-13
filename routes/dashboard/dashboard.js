@@ -1,4 +1,4 @@
-import { hasPermission } from "../../api/common.js";
+import { hasPermission, internalApiHeaders} from "../../api/common.js";
 import { adminViewData } from "../../admin/adminHelpers.js";
 import { prisma } from "../../controllers/databaseController.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
@@ -71,7 +71,7 @@ export default function dashboardSiteRoute(app, config, features, lang) {
     try {
       const qs  = params.toString() ? `?${params.toString()}` : "";
       const url = `${process.env.siteAddress}/api/web/logs/get${qs}`;
-      const r   = await fetch(url, { headers: { "x-access-token": process.env.apiKey } });
+      const r   = await fetch(url, { headers: internalApiHeaders() });
       apiData   = await r.json();
     } catch (err) {
       console.error("[dashboard/logs] fetch failed:", err.message);
@@ -104,7 +104,7 @@ export default function dashboardSiteRoute(app, config, features, lang) {
 
     try {
       const base    = process.env.siteAddress;
-      const headers = { "x-access-token": process.env.apiKey };
+      const headers = internalApiHeaders();
 
       const [pr, cr, rr] = await Promise.all([
         fetch(`${base}/api/bridge/processor/get?status=pending&limit=100`,    { headers }),
