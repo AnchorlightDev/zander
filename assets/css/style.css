@@ -2143,6 +2143,21 @@ a:focus {
   color: #2f508c;
 }
 
+/* Footer logo.  .navbar-brand img is capped at a fixed height, but the footer
+   copy had no constraint, so img-fluid let the 264x372 source render at its
+   full natural size and dominate the column. */
+.footer .logo img {
+  height: 90px;
+  width: auto;
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  .footer .logo img {
+    height: 72px;
+  }
+}
+
 .widget .divider {
   height: 3px;
 }

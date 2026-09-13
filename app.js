@@ -35,6 +35,8 @@ import {
   buildHelmetOptions,
   buildSessionCookieOptions,
 } from "./lib/securityConfig.js";
+import { checkRateLimit } from "./lib/rateLimiter.mjs";
+import { createCspOnSendHook } from "./lib/csp.js";
 
 const config = require("./config.json");
 const features = require("./features.json");
@@ -256,6 +258,22 @@ const buildApp = async () => {
     buildHelmetOptions(isHttpsDeployment)
   );
 
+  // Content Security Policy — REPORT-ONLY.
+  //
+  // Browsers never block on a report-only policy, so this cannot break a page;
+  // it reports what would have been blocked so the policy can be tightened
+  // against real traffic first. See lib/csp.js for what must be closed before
+  // switching the header name to Content-Security-Policy.
+  //
+  // The nonce is stamped onto the finished HTML rather than passed through the
+  // templates because this codebase renders via app.view() (the instance
+  // decorator) in 126 places, which @fastify/view does not merge reply.locals
+  // into. Rewriting on the way out covers every render path identically.
+  app.addHook(
+    "onSend",
+    createCspOnSendHook({ reportUri: "/api/csp-report", enforce: false })
+  );
+
   // EJS Rendering Engine
   await app.register(await import("@fastify/view"), {
     engine: {
@@ -282,6 +300,32 @@ const buildApp = async () => {
     }
     next();
   });
+
+  // CSP violation collector — public by necessity: the browser posts these
+  // with no credentials. Rate limited because it is an unauthenticated write
+  // path, and only the fields worth acting on are logged.
+  app.post(
+    "/api/csp-report",
+    { config: { rawBody: false } },
+    async function (req, res) {
+      if (!checkRateLimit(req, res, { windowMs: 60_000, max: 60 })) return;
+
+      const report = req.body?.["csp-report"] ?? req.body ?? {};
+      const directive = report["violated-directive"] || report.effectiveDirective;
+      const blocked = report["blocked-uri"] || report.blockedURL;
+      const document = report["document-uri"] || report.documentURL;
+
+      if (directive) {
+        app.log.warn(
+          { directive, blocked, document },
+          "[CSP] report-only violation"
+        );
+      }
+
+      // 204: the browser ignores the body and this keeps the endpoint cheap.
+      return res.status(204).send();
+    }
+  );
 
   // Heartbeat — public, no token required so monitoring tools can reach it
   app.get("/api/heartbeat", async function (req, res) {
