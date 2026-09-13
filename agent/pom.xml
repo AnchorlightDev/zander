@@ -16,7 +16,7 @@
         <module>zander-hub</module>
         <module>zander-auth</module>
         <module>zander-addon</module>
-        <module>zander-pgm</module>
+        <!-- zander-pgm is deferred out of 2.0.0 — see the feat-deferred-features branch -->
     </modules>
 
     <properties>
