@@ -1,23 +1,10 @@
-<%- include('../../../modules/header.ejs', {
-    pageTitle: "Edit Support Category",
-    pageDescription: "Edit an existing support ticket category"
-}) %>
+<%- include("../../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../../admin/_topbar.ejs") %>
+<%- include("../../../admin/_sidebar.ejs") %>
 
-<%- include('../../../modules/navigationBar.ejs') %>
-
-<%- include('../../../partials/miniHeader.ejs', {
-    headerTitle: "Edit Support Category",
-    globalImage,
-}) %>
-
-<%- include('../dashboard-header.ejs') %>
-
-<div class="container my-4">
-    <div class="row g-4">
-        <div class="col-lg-3">
-            <%- include('../dashboard-sidebar.ejs') %>
-        </div>
-        <main class="col-lg-9">
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h1 class="h3 mb-0">Edit Support Category</h1>
                     <a href="/dashboard/support/categories" class="btn btn-outline-secondary">Back to categories</a>
@@ -86,8 +73,9 @@
                         </form>
                     </div>
                 </div>
-        </main>
-    </div>
-</div>
 
-<%- include('../../../modules/footer.ejs') %>
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->

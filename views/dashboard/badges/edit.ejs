@@ -1,0 +1,250 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">
+          <i class="fa-solid fa-award me-2"></i><%= badge ? 'Edit Badge' : 'Create Badge' %>
+        </h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+          <a href="/dashboard/badges" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-arrow-left me-1"></i>Back to Badges
+          </a>
+        </div>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <div class="row g-4">
+        <div class="col-lg-7">
+          <div class="card shadow-sm">
+            <div class="card-body p-4">
+              <div id="formError" class="alert alert-danger d-none mb-3"></div>
+              <div id="formSuccess" class="alert alert-success d-none mb-3"></div>
+
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Badge Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="inputName" maxlength="100"
+                  placeholder="Build Competition: Gingerbread House - 2022 - 1st Place"
+                  value="<%= badge ? badge.name : '' %>">
+                <div class="form-text">Displayed as the main badge title. Max 100 characters.</div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Description <span class="text-muted small fw-normal">(optional)</span></label>
+                <textarea class="form-control" id="inputDescription" rows="2"
+                  placeholder="Short description of how this badge is earned."><%= badge ? (badge.description || '') : '' %></textarea>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label fw-semibold">Background Colour <span class="text-danger">*</span></label>
+                  <div class="input-group">
+                    <input type="color" class="form-control form-control-color" id="inputColorPicker"
+                      value="<%= badge ? badge.backgroundColor : '#1a1a2e' %>">
+                    <input type="text" class="form-control font-monospace" id="inputBackgroundColor"
+                      placeholder="#1a1a2e" maxlength="7"
+                      value="<%= badge ? badge.backgroundColor : '#1a1a2e' %>">
+                  </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label fw-semibold">Text Colour <span class="text-danger">*</span></label>
+                  <div class="input-group">
+                    <input type="color" class="form-control form-control-color" id="inputTextColorPicker"
+                      value="<%= badge ? badge.textColor : '#ffffff' %>">
+                    <input type="text" class="form-control font-monospace" id="inputTextColor"
+                      placeholder="#ffffff" maxlength="7"
+                      value="<%= badge ? badge.textColor : '#ffffff' %>">
+                  </div>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label fw-semibold">LuckPerms Group <span class="text-muted small fw-normal">(optional)</span></label>
+                <input type="text" class="form-control font-monospace" id="inputLuckpermsGroup"
+                  placeholder="builder"
+                  value="<%= badge ? (badge.luckpermsGroup || '') : '' %>">
+                <div class="form-text">
+                  Users in this LuckPerms group automatically receive this badge. Losing the group revokes it unless manually assigned.
+                </div>
+              </div>
+
+              <div class="d-flex gap-2 mt-4">
+                <button type="button" class="btn btn-primary" id="btnSave">
+                  <i class="fa-solid fa-floppy-disk me-1"></i><%= badge ? 'Save Changes' : 'Create Badge' %>
+                </button>
+                <a href="/dashboard/badges" class="btn btn-outline-secondary">Cancel</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live preview -->
+        <div class="col-lg-5">
+          <div class="card shadow-sm">
+            <div class="card-body p-4">
+              <h6 class="text-muted text-uppercase mb-3">Live Preview</h6>
+              <div class="mc-badge-toast" id="badgePreview"
+                style="background-color: <%= badge ? badge.backgroundColor : '#1a1a2e' %>;">
+                <div class="mc-badge-text">
+                  <span class="mc-badge-achievement" id="previewAchievement"
+                    style="color: <%= badge ? badge.textColor + 'aa' : 'rgba(255,255,255,0.65)' %>;">
+                    Achievement Unlocked
+                  </span>
+                  <span class="mc-badge-name" id="previewName"
+                    style="color: <%= badge ? badge.textColor : '#ffffff' %>;">
+                    <%= badge ? badge.name : 'Badge Name' %>
+                  </span>
+                  <% if (badge && badge.description) { %>
+                    <span class="mc-badge-desc" id="previewDesc"
+                      style="color: <%= badge.textColor + 'cc' %>;">
+                      <%= badge.description %>
+                    </span>
+                  <% } else { %>
+                    <span class="mc-badge-desc d-none" id="previewDesc"></span>
+                  <% } %>
+                </div>
+              </div>
+              <p class="text-muted small mt-2 mb-0">
+                This is how the badge will appear on profiles and in Discord.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+.mc-badge-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 4px;
+  border: 2px solid rgba(255,255,255,0.15);
+  min-height: 60px;
+}
+.mc-badge-text { display: flex; flex-direction: column; }
+.mc-badge-achievement {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.mc-badge-name {
+  font-size: 15px;
+  font-weight: 700;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  line-height: 1.3;
+}
+.mc-badge-desc {
+  font-size: 11px;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+</style>
+
+<script>
+const badgeId = <%= badge ? badge.badgeId : 'null' %>;
+
+function hexWithAlpha(hex, alpha) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function updatePreview() {
+  const name = document.getElementById('inputName').value.trim() || 'Badge Name';
+  const desc = document.getElementById('inputDescription').value.trim();
+  const bg   = document.getElementById('inputBackgroundColor').value.trim() || '#1a1a2e';
+  const tc   = document.getElementById('inputTextColor').value.trim() || '#ffffff';
+
+  document.getElementById('previewName').textContent = name;
+  document.getElementById('previewName').style.color = tc;
+  document.getElementById('badgePreview').style.backgroundColor = bg;
+
+  const achieveEl = document.getElementById('previewAchievement');
+  achieveEl.style.color = hexWithAlpha(tc, 0.65);
+
+  const descEl = document.getElementById('previewDesc');
+  if (desc) {
+    descEl.textContent = desc;
+    descEl.style.color = hexWithAlpha(tc, 0.8);
+    descEl.classList.remove('d-none');
+  } else {
+    descEl.classList.add('d-none');
+  }
+}
+
+// Background colour
+document.getElementById('inputColorPicker').addEventListener('input', e => {
+  document.getElementById('inputBackgroundColor').value = e.target.value;
+  updatePreview();
+});
+document.getElementById('inputBackgroundColor').addEventListener('input', e => {
+  if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
+    document.getElementById('inputColorPicker').value = e.target.value;
+  }
+  updatePreview();
+});
+
+// Text colour
+document.getElementById('inputTextColorPicker').addEventListener('input', e => {
+  document.getElementById('inputTextColor').value = e.target.value;
+  updatePreview();
+});
+document.getElementById('inputTextColor').addEventListener('input', e => {
+  if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
+    document.getElementById('inputTextColorPicker').value = e.target.value;
+  }
+  updatePreview();
+});
+
+document.getElementById('inputName').addEventListener('input', updatePreview);
+document.getElementById('inputDescription').addEventListener('input', updatePreview);
+
+document.getElementById('btnSave').addEventListener('click', async () => {
+  const errEl = document.getElementById('formError');
+  const okEl  = document.getElementById('formSuccess');
+  errEl.classList.add('d-none');
+  okEl.classList.add('d-none');
+
+  const payload = {
+    name:            document.getElementById('inputName').value.trim(),
+    description:     document.getElementById('inputDescription').value.trim() || null,
+    backgroundColor: document.getElementById('inputBackgroundColor').value.trim(),
+    textColor:       document.getElementById('inputTextColor').value.trim(),
+    luckpermsGroup:  document.getElementById('inputLuckpermsGroup').value.trim() || null,
+  };
+
+  const method = badgeId ? 'PUT' : 'POST';
+  const url    = badgeId ? `/dashboard/badges/${badgeId}` : '/dashboard/badges';
+
+  const r    = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await r.json();
+
+  if (data.success) {
+    if (badgeId) {
+      okEl.textContent = 'Badge saved successfully.';
+      okEl.classList.remove('d-none');
+    } else {
+      window.location.href = `/dashboard/badges/${data.data.badgeId}/edit`;
+    }
+  } else {
+    errEl.textContent = data.message || 'Failed to save badge.';
+    errEl.classList.remove('d-none');
+  }
+});
+</script>

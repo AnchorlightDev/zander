@@ -1,0 +1,146 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-right-left fa-fw me-2"></i>Transactions</h1>
+        <div class="btn-toolbar gap-2">
+          <% if (canManage) { %>
+            <a href="/dashboard/finance/transactions/create" class="btn btn-sm btn-primary">
+              <i class="fa-solid fa-plus me-1"></i>New Transaction
+            </a>
+          <% } %>
+        </div>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <%# Filters -%>
+      <form method="get" action="/dashboard/finance/transactions" class="row g-2 mb-3 align-items-end">
+        <div class="col-sm-6 col-md-3 col-lg-2">
+          <label class="form-label form-label-sm mb-1">Type</label>
+          <select name="type" class="form-select form-select-sm">
+            <option value="">All Types</option>
+            <% ['income','expense'].forEach(function(t) { %>
+              <option value="<%= t %>" <%= filters.type === t ? 'selected' : '' %>><%= t.charAt(0).toUpperCase()+t.slice(1) %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-sm-6 col-md-3 col-lg-2">
+          <label class="form-label form-label-sm mb-1">Category</label>
+          <select name="categoryId" class="form-select form-select-sm">
+            <option value="">All Categories</option>
+            <% categories.forEach(function(cat) { %>
+              <option value="<%= cat.categoryId %>" <%= String(filters.categoryId) === String(cat.categoryId) ? 'selected' : '' %>><%= cat.name %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-sm-6 col-md-3 col-lg-2">
+          <label class="form-label form-label-sm mb-1">From</label>
+          <input type="date" name="dateFrom" class="form-control form-control-sm" value="<%= filters.dateFrom || '' %>">
+        </div>
+        <div class="col-sm-6 col-md-3 col-lg-2">
+          <label class="form-label form-label-sm mb-1">To</label>
+          <input type="date" name="dateTo" class="form-control form-control-sm" value="<%= filters.dateTo || '' %>">
+        </div>
+        <div class="col-sm-6 col-md-3 col-lg-2 d-flex gap-1">
+          <button type="submit" class="btn btn-sm btn-secondary flex-fill">Filter</button>
+          <a href="/dashboard/finance/transactions" class="btn btn-sm btn-outline-secondary" title="Clear filters"><i class="fa-solid fa-xmark"></i></a>
+        </div>
+      </form>
+
+      <p class="text-muted small mb-3"><%= totalCount %> transaction<%= totalCount !== 1 ? 's' : '' %> found.</p>
+
+      <% if (!transactions || !transactions.length) { %>
+        <div class="alert alert-info">No transactions found.</div>
+      <% } else { %>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Type</th>
+                <th>Category</th>
+                <th class="text-end">Amount</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% transactions.forEach(function(tx) {
+                const typeColors = { income:'bg-success', expense:'bg-danger', transfer:'bg-info text-dark' };
+                const amtStr = new Intl.NumberFormat('en-US',{style:'currency',currency:tx.currency||'USD'}).format((tx.amountCents||0)/100);
+                const amtColor = tx.type === 'income' ? 'text-success' : tx.type === 'expense' ? 'text-danger' : '';
+                const amtSign = tx.type === 'income' ? '+' : tx.type === 'expense' ? '−' : '';
+              %>
+                <tr>
+                  <td class="text-muted small"><%= tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}) : '—' %></td>
+                  <td>
+                    <span class="fw-semibold"><%= tx.description %></span>
+                    <% if (tx.isLocked) { %><span class="badge bg-secondary ms-1" title="Locked"><i class="fa-solid fa-lock fa-xs"></i></span><% } %>
+                  </td>
+                  <td><span class="badge <%= typeColors[tx.type] || 'bg-secondary' %>"><%= tx.type %></span></td>
+                  <td>
+                    <% if (tx.category) { %>
+                      <span class="badge bg-secondary"><%= tx.category.name %></span>
+                    <% } else { %>
+                      <span class="text-muted">—</span>
+                    <% } %>
+                  </td>
+                  <td class="text-end fw-semibold <%= amtColor %>"><%= amtSign %><%= amtStr %></td>
+                  <td class="text-end">
+                    <% if (canManage && !tx.isLocked) { %>
+                      <a href="/dashboard/finance/transactions/<%= tx.transactionId %>/edit" class="btn btn-sm btn-outline-warning">Edit</a>
+                    <% } %>
+                    <% if (canManage) { %>
+                      <form method="post" action="/dashboard/finance/transactions/<%= tx.transactionId %>/delete" class="d-inline"
+                            onsubmit="return confirm('Delete this transaction?')">
+                        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                      </form>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+
+        <%# Pagination -%>
+        <% if (totalPages > 1) { %>
+          <%
+            const buildPageUrl = function(p) {
+              const q = new URLSearchParams();
+              if (filters.type) q.set('type', filters.type);
+              if (filters.categoryId) q.set('categoryId', filters.categoryId);
+              if (filters.dateFrom) q.set('dateFrom', filters.dateFrom);
+              if (filters.dateTo) q.set('dateTo', filters.dateTo);
+              q.set('page', p);
+              return '?' + q.toString();
+            };
+          %>
+          <nav aria-label="Transaction pagination">
+            <ul class="pagination justify-content-center">
+              <li class="page-item <%= page <= 1 ? 'disabled' : '' %>">
+                <a class="page-link" href="<%= buildPageUrl(page - 1) %>"><i class="fa-solid fa-chevron-left"></i></a>
+              </li>
+              <% for (let i = 1; i <= totalPages; i++) { %>
+                <li class="page-item <%= i === page ? 'active' : '' %>">
+                  <a class="page-link" href="<%= buildPageUrl(i) %>"><%= i %></a>
+                </li>
+              <% } %>
+              <li class="page-item <%= page >= totalPages ? 'disabled' : '' %>">
+                <a class="page-link" href="<%= buildPageUrl(page + 1) %>"><i class="fa-solid fa-chevron-right"></i></a>
+              </li>
+            </ul>
+          </nav>
+        <% } %>
+      <% } %>
+
+    </div>
+  </div>
+  <%- include("../../admin/_footer.ejs") %>
+</div>

@@ -1,0 +1,48 @@
+main: dev.anchorlight.zander.hub.ZanderHubMain
+name: zander-hub
+version: ${project.version}
+author: ModularSoft
+api-version: 1.19
+depend: [PremiumVanish, ProtocolLib]
+
+commands:
+  fly:
+    description: Allows player to fly.
+    usage: /fly
+  connect:
+    description: Connect to a Server.
+    usage: /connect <server>
+  zportal:
+    description: Manage custom Hub portals.
+    usage: /zportal <wand|create|delete|list|info|enable|disable|setserver|setlocation|setpermission|setdisplay|setcooldown|setsound|setstyle|setcolour|reload|tp|send> [args]
+    aliases: [portaladmin]
+
+permissions:
+  zander.fly:
+    default: op
+  zanderhub.administrator:
+    default: op
+  zanderhub.build:
+    default: op
+  zanderhub.nether.bypass:
+    default: op
+  zanderhub.end.bypass:
+    default: op
+  zanderhub.portal.admin:
+    default: op
+  zanderhub.portal.wand:
+    default: op
+  zanderhub.portal.create:
+    default: op
+  zanderhub.portal.delete:
+    default: op
+  zanderhub.portal.edit:
+    default: op
+  zanderhub.portal.list:
+    default: op
+  zanderhub.portal.reload:
+    default: op
+  zanderhub.portal.teleport:
+    default: op
+  zanderhub.portal.send:
+    default: op

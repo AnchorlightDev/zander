@@ -23,6 +23,8 @@ export async function updateAudit_lastMinecraftMessage(auditDateTime, username) 
   const userData = new UserGetter();
   const userAudit = await userData.byUsername(username);
 
+  if (!userAudit) return;
+
   db.query(
     `UPDATE users SET audit_lastMinecraftMessage=? WHERE userId=?;`,
     [auditDateTime, userAudit.userId],
@@ -38,6 +40,8 @@ export async function updateAudit_lastWebsiteLogin(auditDateTime, username) {
   const userData = new UserGetter();
   const userAudit = await userData.byUsername(username);
 
+  if (!userAudit) return;
+
   db.query(
     `UPDATE users SET audit_lastWebsiteLogin=? WHERE userId=?;`,
     [auditDateTime, userAudit.userId],
@@ -52,7 +56,7 @@ export async function updateAudit_lastWebsiteLogin(auditDateTime, username) {
 export async function updateAudit_lastDiscordMessage(auditDateTime, discordId) {
   const userData = new UserGetter();
   const userAudit = await userData.byDiscordId(discordId);
-  
+
   if (userAudit) {
     db.query(
       `UPDATE users SET audit_lastDiscordMessage=? WHERE userId=?;`,
@@ -63,8 +67,8 @@ export async function updateAudit_lastDiscordMessage(auditDateTime, discordId) {
         }
       }
     );
-
-    console.warn(`Discord account for this user is not linked, chat audit ignored.`);
+  } else {
+    // unlinked accounts are expected; no log needed
   }
 }
 
@@ -82,7 +86,7 @@ export async function updateAudit_lastDiscordVoice(auditDateTime, discordId) {
         }
       }
     );
-
-    console.warn(`Discord account for this user is not linked, chat audit ignored.`);
+  } else {
+    // unlinked accounts are expected; no log needed
   }
 }

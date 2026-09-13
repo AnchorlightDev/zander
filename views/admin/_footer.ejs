@@ -1,0 +1,368 @@
+<!-- Admin footer — minimal, no public-site chrome -->
+<div id="wpfooter" role="contentinfo" style="
+  padding: 10px 20px;
+  font-size: 12px;
+  color: #646970;
+  border-top: 1px solid #c3c4c7;
+  background: #f6f7f7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+">
+  <span>
+    &copy; <%= new Date().getFullYear() %>
+    <a href="/" style="color:inherit; text-decoration:none;">
+      <%= config.siteConfiguration.siteName %>
+    </a>
+  </span>
+  <span>
+    <a href="/" style="color:inherit; text-decoration:none;">← Visit Site</a>
+  </span>
+</div>
+
+<!-- ── Reference Drawer ──────────────────────────────────────────────────── -->
+<div id="refDrawer" class="ref-drawer" role="complementary" aria-label="Admin reference" hidden>
+  <div class="ref-drawer-header">
+    <span class="ref-drawer-title"><i class="fas fa-book-open me-2"></i>Reference</span>
+    <button type="button" class="ref-drawer-close" id="refDrawerClose" aria-label="Close reference">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  <div class="ref-drawer-body">
+
+    <!-- Search -->
+    <div class="ref-search-wrap">
+      <i class="fas fa-search ref-search-icon"></i>
+      <input type="search" id="refSearch" class="ref-search" placeholder="Search reference…" autocomplete="off">
+    </div>
+
+    <div class="accordion accordion-flush ref-accordion" id="refAccordion">
+
+      <!-- ── Bridge ──────────────────────────────────────────────────────── -->
+      <div class="accordion-item ref-section">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed ref-section-btn" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#ref-bridge">
+            <i class="fa-solid fa-bridge fa-fw me-2 text-primary"></i>Bridge
+          </button>
+        </h2>
+        <div id="ref-bridge" class="accordion-collapse collapse" data-bs-parent="#refAccordion">
+          <div class="accordion-body ref-body">
+
+            <p class="ref-label">Placeholder syntax — both forms work</p>
+            <div class="ref-code-block">
+<span class="ref-ph">{playerName}</span>  <span class="ref-cm">single brace</span>
+<span class="ref-ph">{{ playerName }}</span>  <span class="ref-cm">double brace</span></div>
+
+            <p class="ref-label mt-3">Task priorities</p>
+            <table class="ref-table">
+              <tr><td><span class="badge bg-danger">5</span></td><td>Webstore / monthly routine</td></tr>
+              <tr><td><span class="badge bg-primary">3</span></td><td>Vote reward commands</td></tr>
+              <tr><td><span class="badge bg-secondary">0</span></td><td>Default (manual queue)</td></tr>
+            </table>
+
+            <p class="ref-label mt-3">Server slug</p>
+            <table class="ref-table">
+              <tr><td><code>any</code></td><td>Claimed by whichever server polls first</td></tr>
+              <tr><td><code>survival</code></td><td>Claimed only by that named server</td></tr>
+            </table>
+
+            <p class="ref-label mt-3">Key API endpoints</p>
+            <div class="ref-code-block">
+<span class="ref-method get">GET</span>  /api/bridge/processor/get
+  ?slug=survival&amp;claim=true
+
+<span class="ref-method post">POST</span> /api/bridge/processor/command/add
+  { slug, command, metadata, priority }
+  { routineSlug, metadata }
+
+<span class="ref-method post">POST</span> /api/bridge/processor/task/:id/report
+  { status, result, executedBy }
+
+<span class="ref-method post">POST</span> /api/bridge/processor/task/:id/reset</div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Bridge Routines ────────────────────────────────────────────── -->
+      <div class="accordion-item ref-section">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed ref-section-btn" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#ref-routines">
+            <i class="fas fa-list-check fa-fw me-2 text-primary"></i>Bridge Routines
+          </button>
+        </h2>
+        <div id="ref-routines" class="accordion-collapse collapse" data-bs-parent="#refAccordion">
+          <div class="accordion-body ref-body">
+
+            <p class="ref-label">Monthly top-voter routine metadata</p>
+            <table class="ref-table">
+              <tr><td><code>{playerName}</code></td><td>Winner's username (comma-sep on tie)</td></tr>
+              <tr><td><code>{username}</code></td><td>Alias for <code>{playerName}</code></td></tr>
+              <tr><td><code>{playerUuid}</code></td><td>First winner's UUID</td></tr>
+              <tr><td><code>{voteCount}</code></td><td>Votes cast that month</td></tr>
+              <tr><td><code>{monthKey}</code></td><td>Month in <code>YYYY-MM</code> format</td></tr>
+            </table>
+
+            <p class="ref-label mt-3">Config key</p>
+            <div class="ref-code-block"><span class="ref-ph">"voting"</span>: {
+  "monthlyRoutineSlug": "monthly-top-voter"
+}</div>
+
+            <p class="ref-label mt-3">Example step command</p>
+            <div class="ref-code-block">give {username} minecraft:diamond 1
+eco give {playerName} 5000
+lp user {username} parent add vip</div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Vote Rewards ───────────────────────────────────────────────── -->
+      <div class="accordion-item ref-section">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed ref-section-btn" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#ref-vote">
+            <i class="fa-solid fa-check-to-slot fa-fw me-2 text-success"></i>Vote Rewards
+          </button>
+        </h2>
+        <div id="ref-vote" class="accordion-collapse collapse" data-bs-parent="#refAccordion">
+          <div class="accordion-body ref-body">
+
+            <p class="ref-label">Per-vote command placeholders</p>
+            <table class="ref-table">
+              <tr><td><code>{player}</code></td><td>Player username</td></tr>
+              <tr><td><code>{uuid}</code></td><td>Player UUID</td></tr>
+            </table>
+
+            <p class="ref-label mt-3">Monthly top-voter command placeholders</p>
+            <table class="ref-table">
+              <tr><td><code>{player}</code></td><td>Player username</td></tr>
+              <tr><td><code>{uuid}</code></td><td>Player UUID</td></tr>
+              <tr><td><code>{month}</code></td><td>Month as <code>YYYY-MM</code></td></tr>
+              <tr><td><code>{voteCount}</code></td><td>Total votes that month</td></tr>
+            </table>
+
+            <p class="ref-label mt-3">Reward types</p>
+            <table class="ref-table">
+              <tr><td><code>vote</code></td><td>Fires on every accepted vote</td></tr>
+              <tr><td><code>monthly_top</code></td><td>Fires for monthly winner(s) on 1st at 00:05 UTC</td></tr>
+            </table>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Announcements ──────────────────────────────────────────────── -->
+      <div class="accordion-item ref-section">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed ref-section-btn" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#ref-ann">
+            <i class="fas fa-bullhorn fa-fw me-2 text-warning"></i>Announcements
+          </button>
+        </h2>
+        <div id="ref-ann" class="accordion-collapse collapse" data-bs-parent="#refAccordion">
+          <div class="accordion-body ref-body">
+
+            <p class="ref-label">MiniMessage — colors</p>
+            <div class="ref-code-block ref-mc-preview"><span style="color:#55FF55">&lt;green&gt;text&lt;/green&gt;</span>
+<span style="color:#FF5555">&lt;red&gt;text&lt;/red&gt;</span>
+<span style="color:#FFFF55">&lt;yellow&gt;text&lt;/yellow&gt;</span>
+<span style="color:#55FFFF">&lt;aqua&gt;text&lt;/aqua&gt;</span>
+<span style="color:#5555FF">&lt;blue&gt;text&lt;/blue&gt;</span>
+<span style="color:#FF55FF">&lt;light_purple&gt;text&lt;/light_purple&gt;</span>
+<span style="color:#FFFFFF">&lt;white&gt;text&lt;/white&gt;</span>
+<span style="color:#AAAAAA">&lt;gray&gt;text&lt;/gray&gt;</span>
+<span style="color:#AAFFAA">&lt;green&gt;&lt;bold&gt;bold&lt;/bold&gt;&lt;/green&gt;</span>
+<span style="color:#FFAA00">&lt;color:#FFAA00&gt;hex&lt;/color&gt;</span></div>
+
+            <p class="ref-label mt-3">MiniMessage — formatting</p>
+            <div class="ref-code-block ref-mc-preview"><span style="font-weight:bold;color:#fff">&lt;bold&gt;</span>  <span style="font-style:italic;color:#fff">&lt;italic&gt;</span>  <span style="text-decoration:underline;color:#fff">&lt;underlined&gt;</span>
+<span style="text-decoration:line-through;color:#fff">&lt;strikethrough&gt;</span>  <span style="color:#fff">&lt;obfuscated&gt;</span>
+<span style="color:#aaa">&lt;reset&gt;</span>  clears all formatting</div>
+
+            <p class="ref-label mt-3">Newlines in Minecraft chat</p>
+            <div class="ref-code-block"><span class="ref-ph">&lt;newline&gt;</span>  or  <span class="ref-ph">\n</span></div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Webstore ───────────────────────────────────────────────────── -->
+      <div class="accordion-item ref-section">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed ref-section-btn" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#ref-webstore">
+            <i class="fas fa-shopping-cart fa-fw me-2 text-info"></i>Webstore
+          </button>
+        </h2>
+        <div id="ref-webstore" class="accordion-collapse collapse" data-bs-parent="#refAccordion">
+          <div class="accordion-body ref-body">
+
+            <p class="ref-label">Command server slug</p>
+            <table class="ref-table">
+              <tr><td><code>any</code></td><td>Run on whichever server claims the task first</td></tr>
+              <tr><td><code>survival</code></td><td>Run only on <em>survival</em> server</td></tr>
+            </table>
+
+            <p class="ref-label mt-3">Command priority</p>
+            <table class="ref-table">
+              <tr><td><span class="badge bg-danger">5</span></td><td>Webstore commands (highest)</td></tr>
+            </table>
+
+            <p class="ref-label mt-3">Webhook events from Tebex</p>
+            <div class="ref-code-block">POST /api/webstore/webhook
+  payment.completed
+  payment.declined
+  payment.refunded
+  recurring-payment.started
+  recurring-payment.renewed</div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Permissions ────────────────────────────────────────────────── -->
+      <div class="accordion-item ref-section">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed ref-section-btn" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#ref-perms">
+            <i class="fas fa-shield-alt fa-fw me-2 text-secondary"></i>Permissions
+          </button>
+        </h2>
+        <div id="ref-perms" class="accordion-collapse collapse" data-bs-parent="#refAccordion">
+          <div class="accordion-body ref-body">
+
+            <p class="ref-label">Dashboard access</p>
+            <div class="ref-code-block">zander.dashboard
+zander.dashboard.bridge
+zander.dashboard.announcements
+zander.dashboard.voting
+zander.dashboard.finance
+zander.dashboard.logs
+zander.dashboard.vault
+zander.dashboard.ranks
+zander.dashboard.scheduler</div>
+
+            <p class="ref-label mt-3">Discord punishments</p>
+            <div class="ref-code-block">zander.discord.punish.warn
+zander.discord.punish.kick
+zander.discord.punish.ban
+zander.discord.punish.mute
+zander.discord.punish.history</div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Config Keys ────────────────────────────────────────────────── -->
+      <div class="accordion-item ref-section">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed ref-section-btn" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#ref-config">
+            <i class="fas fa-cog fa-fw me-2 text-secondary"></i>Config Keys
+          </button>
+        </h2>
+        <div id="ref-config" class="accordion-collapse collapse" data-bs-parent="#refAccordion">
+          <div class="accordion-body ref-body">
+
+            <p class="ref-label">voting</p>
+            <div class="ref-code-block">"announcementChannelId": "...",
+"monthlyRoutineSlug": "monthly-top-voter",
+"tieRule": "all tied players rewarded"</div>
+
+            <p class="ref-label mt-3">discord.roles</p>
+            <div class="ref-code-block">"verified": "ROLE_ID",
+"muted":    "ROLE_ID"</div>
+
+            <p class="ref-label mt-3">discord.webhooks</p>
+            <div class="ref-code-block">welcome
+networkChatLog
+adminLog
+staffChannel
+staffAuditLog
+staffPunishmentNotifications
+webstoreChannel</div>
+
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /accordion -->
+  </div><!-- /ref-drawer-body -->
+</div><!-- /refDrawer -->
+<div id="refDrawerBackdrop" class="ref-drawer-backdrop" hidden></div>
+
+<script>
+(function () {
+  var toggle   = document.getElementById('refDrawerToggle');
+  var drawer   = document.getElementById('refDrawer');
+  var backdrop = document.getElementById('refDrawerBackdrop');
+  var closeBtn = document.getElementById('refDrawerClose');
+  var search   = document.getElementById('refSearch');
+
+  function open() {
+    drawer.hidden   = false;
+    backdrop.hidden = false;
+    requestAnimationFrame(function () {
+      drawer.classList.add('ref-drawer--open');
+    });
+    if (toggle) toggle.setAttribute('aria-expanded', 'true');
+  }
+
+  function close() {
+    drawer.classList.remove('ref-drawer--open');
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    drawer.addEventListener('transitionend', function onEnd() {
+      drawer.hidden   = true;
+      backdrop.hidden = true;
+      drawer.removeEventListener('transitionend', onEnd);
+    }, { once: true });
+  }
+
+  if (toggle)   toggle.addEventListener('click', function () {
+    drawer.hidden ? open() : close();
+  });
+  if (closeBtn) closeBtn.addEventListener('click', close);
+  if (backdrop) backdrop.addEventListener('click', close);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !drawer.hidden) close();
+  });
+
+  // Live search — filter ref sections by text content
+  if (search) {
+    search.addEventListener('input', function () {
+      var q = this.value.toLowerCase().trim();
+      document.querySelectorAll('.ref-section').forEach(function (section) {
+        if (!q) {
+          section.hidden = false;
+          return;
+        }
+        var text = section.textContent.toLowerCase();
+        section.hidden = !text.includes(q);
+      });
+    });
+  }
+}());
+</script>
+
+<!-- Bootstrap 5 JS bundle (includes Popper) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+        crossorigin="anonymous"></script>
+
+<!-- Chart.js (loaded on demand by summary partials) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js" defer></script>
+
+<!-- Relative-time helper reused from public site -->
+<script src="/js/relativeTime.js" defer></script>
+
+<% if (typeof extraScripts !== 'undefined' && extraScripts) { %>
+  <%- extraScripts %>
+<% } %>
+
+</body>
+</html>

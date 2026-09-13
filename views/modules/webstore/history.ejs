@@ -1,0 +1,207 @@
+<%- include("../../modules/header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription
+}) %>
+
+<%- include("../../modules/navigationBar.ejs") %>
+
+<%- include("../../partials/miniHeader.ejs", {
+  headerTitle: "Purchase History",
+  backgroundImage: globalImage
+}) %>
+
+<section class="section">
+  <div class="container">
+
+    <% if (req.cookies.alertType) { %>
+    <%- include("../../partials/alert.ejs", {
+        alertType: req.cookies.alertType,
+        content: req.cookies.alertContent
+    }) %>
+    <% } %>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <div>
+        <h3 class="mb-1">Purchase History</h3>
+        <p class="text-muted mb-0">
+          <%= totalCount %> purchase<%= totalCount !== 1 ? 's' : '' %> on record.
+        </p>
+      </div>
+      <a href="/webstore" class="btn btn-outline-primary btn-sm">Back to Store</a>
+    </div>
+
+    <%# My Purchases -%>
+    <% if (!purchases || !purchases.length) { %>
+      <div class="alert alert-info">
+        You haven't made any purchases yet.
+        <a href="/webstore" class="alert-link ms-1">Visit the webstore</a> to get started.
+      </div>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Recipient</th>
+              <th>Type</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% purchases.forEach(function (p) {
+              const dateStr = p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-AU', {
+                year: 'numeric', month: 'short', day: 'numeric'
+              }) : '—';
+              const amountStr = new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: (p.currency || 'usd').toUpperCase()
+              }).format((p.amountCents || 0) / 100);
+            %>
+              <tr>
+                <td>
+                  <span class="fw-semibold"><%= p.itemName %></span>
+                  <% if (p.isGift) { %>
+                    <span class="badge bg-secondary ms-1" title="This was a gift">Gift</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (p.isGift && p.recipientMinecraftUsername !== p.purchaserMinecraftUsername) { %>
+                    <span title="Gifted to"><%= p.recipientMinecraftUsername %></span>
+                  <% } else { %>
+                    <span class="text-muted">You</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (p.purchaseType === 'subscription') { %>
+                    <span class="badge bg-primary">Monthly</span>
+                  <% } else { %>
+                    <span class="badge bg-success">One-time</span>
+                  <% } %>
+                </td>
+                <td class="fw-semibold"><%= amountStr %></td>
+                <td>
+                  <% if (p.status === 'fulfilled') { %>
+                    <span class="badge bg-success">Fulfilled</span>
+                  <% } else if (p.status === 'paid') { %>
+                    <span class="badge bg-info text-dark">Processing</span>
+                  <% } else if (p.status === 'pending') { %>
+                    <span class="badge bg-warning text-dark">Pending</span>
+                  <% } else if (p.status === 'failed') { %>
+                    <span class="badge bg-danger">Failed</span>
+                  <% } else if (p.status === 'refunded') { %>
+                    <span class="badge bg-secondary">Refunded</span>
+                  <% } else { %>
+                    <span class="badge bg-secondary"><%= p.status %></span>
+                  <% } %>
+                </td>
+                <td class="text-muted small"><%= dateStr %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+
+      <%# My purchases pagination -%>
+      <% if (totalPages > 1) { %>
+        <nav aria-label="Purchase history pagination">
+          <ul class="pagination justify-content-center">
+            <li class="page-item <%= page <= 1 ? 'disabled' : '' %>">
+              <a class="page-link" href="/webstore/history?page=<%= page - 1 %>&giftPage=<%= giftPage %>">&laquo;</a>
+            </li>
+            <% for (let i = 1; i <= totalPages; i++) { %>
+              <li class="page-item <%= i === page ? 'active' : '' %>">
+                <a class="page-link" href="/webstore/history?page=<%= i %>&giftPage=<%= giftPage %>"><%= i %></a>
+              </li>
+            <% } %>
+            <li class="page-item <%= page >= totalPages ? 'disabled' : '' %>">
+              <a class="page-link" href="/webstore/history?page=<%= page + 1 %>&giftPage=<%= giftPage %>">&raquo;</a>
+            </li>
+          </ul>
+        </nav>
+      <% } %>
+    <% } %>
+
+    <%# Gifts Received -%>
+    <% if (receivedGifts && receivedGifts.length) { %>
+      <hr class="my-5">
+      <div class="mb-4">
+        <h4 class="mb-1">Gifts Received</h4>
+        <p class="text-muted mb-0">
+          <%= receivedGiftsTotal %> gift<%= receivedGiftsTotal !== 1 ? 's' : '' %> received from other players.
+        </p>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>From</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% receivedGifts.forEach(function (g) {
+              const dateStr = g.createdAt ? new Date(g.createdAt).toLocaleDateString('en-AU', {
+                year: 'numeric', month: 'short', day: 'numeric'
+              }) : '—';
+            %>
+              <tr>
+                <td class="fw-semibold"><%= g.itemName %></td>
+                <td><%= g.purchaserMinecraftUsername %></td>
+                <td>
+                  <% if (g.purchaseType === 'subscription') { %>
+                    <span class="badge bg-primary">Monthly</span>
+                  <% } else { %>
+                    <span class="badge bg-success">One-time</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (g.status === 'fulfilled') { %>
+                    <span class="badge bg-success">Fulfilled</span>
+                  <% } else if (g.status === 'paid') { %>
+                    <span class="badge bg-info text-dark">Processing</span>
+                  <% } else if (g.status === 'pending') { %>
+                    <span class="badge bg-warning text-dark">Pending</span>
+                  <% } else if (g.status === 'failed') { %>
+                    <span class="badge bg-danger">Failed</span>
+                  <% } else if (g.status === 'refunded') { %>
+                    <span class="badge bg-secondary">Refunded</span>
+                  <% } else { %>
+                    <span class="badge bg-secondary"><%= g.status %></span>
+                  <% } %>
+                </td>
+                <td class="text-muted small"><%= dateStr %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+
+      <%# Gifts received pagination -%>
+      <% if (receivedGiftsTotalPages > 1) { %>
+        <nav aria-label="Gifts received pagination">
+          <ul class="pagination justify-content-center">
+            <li class="page-item <%= giftPage <= 1 ? 'disabled' : '' %>">
+              <a class="page-link" href="/webstore/history?page=<%= page %>&giftPage=<%= giftPage - 1 %>">&laquo;</a>
+            </li>
+            <% for (let i = 1; i <= receivedGiftsTotalPages; i++) { %>
+              <li class="page-item <%= i === giftPage ? 'active' : '' %>">
+                <a class="page-link" href="/webstore/history?page=<%= page %>&giftPage=<%= i %>"><%= i %></a>
+              </li>
+            <% } %>
+            <li class="page-item <%= giftPage >= receivedGiftsTotalPages ? 'disabled' : '' %>">
+              <a class="page-link" href="/webstore/history?page=<%= page %>&giftPage=<%= giftPage + 1 %>">&raquo;</a>
+            </li>
+          </ul>
+        </nav>
+      <% } %>
+    <% } %>
+
+  </div>
+</section>
+
+<%- include("../../modules/footer.ejs") %>

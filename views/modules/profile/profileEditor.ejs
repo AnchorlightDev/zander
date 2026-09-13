@@ -40,6 +40,11 @@
                         <i class="fa-solid fa-hashtag me-2"></i>Social Connections
                     </a>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <a class="nav-link profile-tab-link" id="integrations-tab" data-bs-toggle="tab" href="#integrations" role="tab" aria-controls="integrations" aria-selected="false">
+                        <i class="fa-solid fa-plug me-2"></i>Connected Accounts
+                    </a>
+                </li>
             </ul>
 
             <div class="tab-content pt-4" id="profileEditorTabsContent">
@@ -92,31 +97,6 @@
                 </div>
 
                 <div class="tab-pane fade" id="socialconnections" role="tabpanel" aria-labelledby="socialconnections-tab">
-                    <div class="mb-4">
-                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
-                            <div>
-                                <h5 class="mb-1">Discord</h5>
-                                <% if (profileApiData.discordId) { %>
-                                    <p class="text-muted mb-0">Connected as <strong><%= profileApiData.social_discord || 'Discord user' %></strong>.</p>
-                                <% } else { %>
-                                    <p class="text-muted mb-0">Connect your Discord account to unlock in-game and website integrations.</p>
-                                <% } %>
-                            </div>
-                            <div class="d-flex gap-2">
-                                <% if (profileApiData.discordId) { %>
-                                    <form action="/profile/social/discord/disconnect" method="post">
-                                        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-link-slash me-2"></i>Disconnect</button>
-                                    </form>
-                                <% } else { %>
-                                    <a href="/profile/social/discord/connect" class="btn btn-discord btn-sm"><i class="fa-brands fa-discord me-2"></i>Connect Discord</a>
-                                <% } %>
-                            </div>
-                        </div>
-                        <% if (!profileApiData.discordId) { %>
-                            <small class="text-muted d-block mt-2">We'll take you to Discord to authorise the connection. We never post on your behalf.</small>
-                        <% } %>
-                    </div>
-
                     <form action="<%= process.env.siteAddress %>/redirect/web/user/profile/social" method="post">
                         <div class="row g-4">
                             <div class="col-lg-6">
@@ -128,14 +108,7 @@
                                     <label for="social_steam" class="form-label fw-semibold"><i class="fab fa-steam me-2"></i>Steam</label>
                                     <input type="text" class="form-control" name="social_steam" value="<%= profileApiData.social_steam %>" placeholder="Steam username">
                                 </div>
-                                <div class="mb-3">
-                                    <label for="social_twitch" class="form-label fw-semibold"><i class="fab fa-twitch me-2"></i>Twitch</label>
-                                    <input type="text" class="form-control" name="social_twitch" maxlength="25" value="<%= profileApiData.social_twitch %>" placeholder="Channel name">
-                                </div>
-                                <div class="mb-3">
-                                    <label for="social_youtube" class="form-label fw-semibold"><i class="fab fa-youtube me-2"></i>YouTube</label>
-                                    <input type="text" class="form-control" name="social_youtube" value="<%= profileApiData.social_youtube %>" placeholder="Channel or handle">
-                                </div>
+
                             </div>
                             <div class="col-lg-6">
                                 <div class="mb-3">
@@ -158,6 +131,133 @@
                         </div>
                         <button type="submit" class="btn btn-main">Update Social Connections</button>
                     </form>
+                </div>
+
+                <%
+                    const twitchConn = (platformConnections && platformConnections.twitch && platformConnections.twitch.is_active) ? platformConnections.twitch : null;
+                    const youtubeConn = (platformConnections && platformConnections.youtube && platformConnections.youtube.is_active) ? platformConnections.youtube : null;
+                    const discordConnected = !!profileApiData.discordId;
+                %>
+                <div class="tab-pane fade" id="integrations" role="tabpanel" aria-labelledby="integrations-tab">
+                    <p class="text-muted mb-4">Connect your creator accounts to enable CFC content integrations and appear on the <a href="/watch">/watch</a> page (requires the creator permission).</p>
+
+                    <%# Discord %>
+                    <div class="mb-4 pb-4 border-bottom">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="integration-icon bg-discord rounded-circle d-flex align-items-center justify-content-center" style="width:48px;height:48px;background:#5865F2;">
+                                    <i class="fab fa-discord text-white fs-5"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-0 fw-semibold">Discord</h6>
+                                    <% if (discordConnected) { %>
+                                        <p class="text-muted mb-0 small">Connected as <strong><%= profileApiData.social_discord || 'Discord user' %></strong></p>
+                                    <% } else { %>
+                                        <p class="text-muted mb-0 small">Not connected</p>
+                                    <% } %>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <% if (discordConnected) { %>
+                                    <span class="badge bg-success align-self-center me-1"><i class="fa-solid fa-circle-check me-1"></i>Connected</span>
+                                    <form action="/profile/social/discord/disconnect" method="post">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-link-slash me-2"></i>Disconnect</button>
+                                    </form>
+                                <% } else { %>
+                                    <a href="/profile/social/discord/connect" class="btn btn-sm" style="background:#5865F2;color:#fff;"><i class="fa-brands fa-discord me-2"></i>Connect Discord</a>
+                                <% } %>
+                            </div>
+                        </div>
+                        <% if (!discordConnected) { %>
+                            <small class="text-muted d-block mt-2">We'll take you to Discord to authorise the connection. We never post on your behalf.</small>
+                        <% } %>
+                    </div>
+
+                    <%# Twitch %>
+                    <div class="mb-4 pb-4 border-bottom">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <% if (twitchConn && twitchConn.avatar_url) { %>
+                                    <img src="<%= twitchConn.avatar_url %>" alt="Twitch avatar" class="rounded-circle" width="48" height="48" style="object-fit:cover;">
+                                <% } else { %>
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:48px;height:48px;background:#9146FF;">
+                                        <i class="fab fa-twitch text-white fs-5"></i>
+                                    </div>
+                                <% } %>
+                                <div>
+                                    <h6 class="mb-0 fw-semibold">Twitch</h6>
+                                    <% if (twitchConn) { %>
+                                        <p class="text-muted mb-0 small">Connected as <strong><%= twitchConn.platform_display_name || twitchConn.platform_username %></strong></p>
+                                        <% if (twitchConn.last_sync_error) { %>
+                                            <p class="text-warning mb-0 small"><i class="fa-solid fa-triangle-exclamation me-1"></i>Connection may need refreshing</p>
+                                        <% } else if (twitchConn.last_successful_sync_at) { %>
+                                            <p class="text-muted mb-0 small">Last synced: <%= new Date(twitchConn.last_successful_sync_at).toLocaleString() %></p>
+                                        <% } %>
+                                    <% } else { %>
+                                        <p class="text-muted mb-0 small">Not connected</p>
+                                    <% } %>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <% if (twitchConn) { %>
+                                    <span class="badge bg-success align-self-center me-1"><i class="fa-solid fa-circle-check me-1"></i>Connected</span>
+                                    <a href="/profile/social/twitch/connect" class="btn btn-outline-secondary btn-sm">Reconnect</a>
+                                    <form action="/profile/social/twitch/disconnect" method="post">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-link-slash me-2"></i>Disconnect</button>
+                                    </form>
+                                <% } else { %>
+                                    <a href="/profile/social/twitch/connect" class="btn btn-sm" style="background:#9146FF;color:#fff;"><i class="fab fa-twitch me-2"></i>Connect Twitch</a>
+                                <% } %>
+                            </div>
+                        </div>
+                        <% if (!twitchConn) { %>
+                            <small class="text-muted d-block mt-2">We'll take you to Twitch to authorise the connection. Required for live stream detection on /watch.</small>
+                        <% } %>
+                    </div>
+
+                    <%# YouTube %>
+                    <div class="mb-4 pb-4 border-bottom">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <% if (youtubeConn && youtubeConn.avatar_url) { %>
+                                    <img src="<%= youtubeConn.avatar_url %>" alt="YouTube avatar" class="rounded-circle" width="48" height="48" style="object-fit:cover;">
+                                <% } else { %>
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:48px;height:48px;background:#FF0000;">
+                                        <i class="fab fa-youtube text-white fs-5"></i>
+                                    </div>
+                                <% } %>
+                                <div>
+                                    <h6 class="mb-0 fw-semibold">YouTube</h6>
+                                    <% if (youtubeConn) { %>
+                                        <p class="text-muted mb-0 small">Connected as <strong><%= youtubeConn.platform_display_name || youtubeConn.platform_username %></strong></p>
+                                        <% if (youtubeConn.last_sync_error) { %>
+                                            <p class="text-warning mb-0 small"><i class="fa-solid fa-triangle-exclamation me-1"></i>Connection may need refreshing</p>
+                                        <% } else if (youtubeConn.last_successful_sync_at) { %>
+                                            <p class="text-muted mb-0 small">Last synced: <%= new Date(youtubeConn.last_successful_sync_at).toLocaleString() %></p>
+                                        <% } else { %>
+                                            <p class="text-muted mb-0 small"><i class="fa-solid fa-clock me-1"></i>Sync pending &mdash; check back in up to 15 minutes</p>
+                                        <% } %>
+                                    <% } else { %>
+                                        <p class="text-muted mb-0 small">Not connected</p>
+                                    <% } %>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <% if (youtubeConn) { %>
+                                    <span class="badge bg-success align-self-center me-1"><i class="fa-solid fa-circle-check me-1"></i>Connected</span>
+                                    <a href="/profile/social/youtube/connect" class="btn btn-outline-secondary btn-sm">Reconnect</a>
+                                    <form action="/profile/social/youtube/disconnect" method="post">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fa-solid fa-link-slash me-2"></i>Disconnect</button>
+                                    </form>
+                                <% } else { %>
+                                    <a href="/profile/social/youtube/connect" class="btn btn-sm" style="background:#FF0000;color:#fff;"><i class="fab fa-youtube me-2"></i>Connect YouTube</a>
+                                <% } %>
+                            </div>
+                        </div>
+                        <% if (!youtubeConn) { %>
+                            <small class="text-muted d-block mt-2">We'll take you to Google to authorise the connection. Required for video and live stream detection on /watch.</small>
+                        <% } %>
+                    </div>
                 </div>
             </div>
         </div>

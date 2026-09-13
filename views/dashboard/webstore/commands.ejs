@@ -1,0 +1,208 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-terminal fa-fw me-2"></i>Webstore — Command Config</h1>
+        <a href="/dashboard/webstore" class="btn btn-sm btn-outline-secondary">
+          <i class="fa-solid fa-arrow-left me-1"></i>Back to Purchases
+        </a>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (!stripeItems || !stripeItems.length) { %>
+        <div class="alert alert-warning">
+          No Stripe products found. Make sure <code>STRIPE_SECRET_KEY</code> is configured and you have active products in your Stripe account.
+        </div>
+      <% } else { %>
+        <%
+          // Build a lookup of commands by stripePriceId for fast access
+          const cmdsByPrice = {};
+          (commands || []).forEach(function(cmd) {
+            if (!cmdsByPrice[cmd.stripePriceId]) cmdsByPrice[cmd.stripePriceId] = [];
+            cmdsByPrice[cmd.stripePriceId].push(cmd);
+          });
+        %>
+
+        <% stripeItems.forEach(function(item) {
+          const itemCmds = cmdsByPrice[item.stripePriceId] || [];
+          const grantCmds = itemCmds.filter(c => c.action === 'grant');
+          const revokeCmds = itemCmds.filter(c => c.action === 'revoke');
+        %>
+          <div class="card shadow-sm mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <div>
+                <strong><%= item.displayName %></strong>
+                <span class="text-muted small ms-2"><code><%= item.stripePriceId %></code></span>
+                <% if (item.purchaseType === 'subscription') { %>
+                  <span class="badge bg-info text-dark ms-1" style="font-size:0.7rem;">subscription</span>
+                <% } else { %>
+                  <span class="badge bg-secondary ms-1" style="font-size:0.7rem;">one-time</span>
+                <% } %>
+              </div>
+              <% if (canManage) { %>
+                <a href="/dashboard/webstore/commands/create?priceId=<%= encodeURIComponent(item.stripePriceId) %>"
+                   class="btn btn-sm btn-outline-primary">
+                  <i class="fa-solid fa-plus me-1"></i>Add Command
+                </a>
+              <% } %>
+            </div>
+
+            <% if (!itemCmds.length) { %>
+              <div class="card-body text-muted small py-2">
+                No commands configured for this package.<% if (canManage) { %> Use <strong>Add Command</strong> to set up grant/revoke actions.<% } %>
+              </div>
+            <% } else { %>
+              <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width:90px">Action</th>
+                      <th style="width:130px">Type</th>
+                      <th style="width:55px">Order</th>
+                      <th>Command / Role ID</th>
+                      <% if (canManage) { %><th style="width:80px"></th><% } %>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% itemCmds.forEach(function(cmd) {
+                      const isDiscord = cmd.commandType === 'discord_role';
+                    %>
+                      <tr>
+                        <td>
+                          <span class="badge <%= cmd.action === 'grant' ? 'bg-success' : 'bg-danger' %>">
+                            <%= cmd.action %>
+                          </span>
+                        </td>
+                        <td>
+                          <% if (isDiscord) { %>
+                            <span class="badge bg-primary bg-opacity-75"><i class="fa-brands fa-discord me-1"></i>Discord role</span>
+                          <% } else { %>
+                            <span class="badge bg-secondary"><i class="fa-solid fa-cubes me-1"></i>Minecraft</span>
+                          <% } %>
+                        </td>
+                        <td class="text-muted"><%= cmd.sortOrder %></td>
+                        <td>
+                          <code class="small"><%= cmd.commandTemplate %></code>
+                          <% if (isDiscord) { %>
+                            <span class="text-muted small ms-1">← role ID</span>
+                          <% } %>
+                        </td>
+                        <% if (canManage) { %>
+                          <td class="text-end pe-2">
+                            <a href="/dashboard/webstore/commands/<%= cmd.commandId %>/edit"
+                               class="btn btn-xs btn-outline-secondary py-0 px-1 me-1" style="font-size:0.75rem;">
+                              <i class="fa-solid fa-pencil fa-fw"></i>
+                            </a>
+                            <form method="post" action="/dashboard/webstore/commands/<%= cmd.commandId %>/delete"
+                                  class="d-inline"
+                                  onsubmit="return confirm('Delete this command? This cannot be undone.')">
+                              <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-1" style="font-size:0.75rem;">
+                                <i class="fa-solid fa-trash fa-fw"></i>
+                              </button>
+                            </form>
+                          </td>
+                        <% } %>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </div>
+        <% }) %>
+
+        <%# Show a card for orphaned commands whose price ID is no longer in Stripe %>
+        <%
+          const knownPriceIds = new Set(stripeItems.map(i => i.stripePriceId));
+          const orphanCmds = (commands || []).filter(c => !knownPriceIds.has(c.stripePriceId));
+        %>
+        <% if (orphanCmds.length) { %>
+          <div class="card shadow-sm mb-3 border-warning">
+            <div class="card-header bg-warning bg-opacity-10">
+              <i class="fa-solid fa-triangle-exclamation text-warning me-1"></i>
+              <strong>Orphaned commands</strong>
+              <span class="text-muted small ms-2">— price IDs no longer found in Stripe</span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width:200px">Price ID</th>
+                    <th style="width:90px">Action</th>
+                    <th style="width:130px">Type</th>
+                    <th>Command / Role ID</th>
+                    <% if (canManage) { %><th style="width:80px"></th><% } %>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% orphanCmds.forEach(function(cmd) { %>
+                    <tr>
+                      <td><code class="small text-muted"><%= cmd.stripePriceId %></code></td>
+                      <td>
+                        <span class="badge <%= cmd.action === 'grant' ? 'bg-success' : 'bg-danger' %>">
+                          <%= cmd.action %>
+                        </span>
+                      </td>
+                      <td>
+                        <% if (cmd.commandType === 'discord_role') { %>
+                          <span class="badge bg-primary bg-opacity-75"><i class="fa-brands fa-discord me-1"></i>Discord role</span>
+                        <% } else { %>
+                          <span class="badge bg-secondary"><i class="fa-solid fa-cubes me-1"></i>Minecraft</span>
+                        <% } %>
+                      </td>
+                      <td><code class="small"><%= cmd.commandTemplate %></code></td>
+                      <% if (canManage) { %>
+                        <td class="text-end pe-2">
+                          <a href="/dashboard/webstore/commands/<%= cmd.commandId %>/edit"
+                             class="btn btn-xs btn-outline-secondary py-0 px-1 me-1" style="font-size:0.75rem;">
+                            <i class="fa-solid fa-pencil fa-fw"></i>
+                          </a>
+                          <form method="post" action="/dashboard/webstore/commands/<%= cmd.commandId %>/delete"
+                                class="d-inline"
+                                onsubmit="return confirm('Delete this command? This cannot be undone.')">
+                            <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-1" style="font-size:0.75rem;">
+                              <i class="fa-solid fa-trash fa-fw"></i>
+                            </button>
+                          </form>
+                        </td>
+                      <% } %>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% } %>
+
+      <% } %>
+
+      <%# ── Command placeholder reference ──────────────────────────────────── %>
+      <div class="card shadow-sm mt-2">
+        <div class="card-header fw-semibold">
+          <i class="fa-solid fa-circle-info fa-fw me-1 text-secondary"></i>Available placeholders (Minecraft commands only)
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead class="table-light"><tr><th style="width:220px">Placeholder</th><th>Replaced with</th></tr></thead>
+            <tbody>
+              <tr><td><code>{{ username }}</code></td><td>Recipient's Minecraft username</td></tr>
+              <tr><td><code>{{ purchaserUsername }}</code></td><td>Purchaser's Minecraft username</td></tr>
+              <tr><td><code>{{ purchaseId }}</code></td><td>Internal purchase ID</td></tr>
+              <tr><td><code>{{ itemSlug }}</code></td><td>Stripe price ID</td></tr>
+              <tr><td><code>{{ purchaseType }}</code></td><td><code>one_time</code> or <code>subscription</code></td></tr>
+              <tr><td><code>{{ isGift }}</code></td><td><code>true</code> or <code>false</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <%- include("../../admin/_footer.ejs") %>
+</div>

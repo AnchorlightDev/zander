@@ -25,6 +25,13 @@
     "applicationEdited": "The application has been updated.",
     "applicationDeleted": "The application has been deleted."
   },
+  "forms": {
+    "noFormsFound": "No forms could be found at this time.",
+    "formCreated": "The form has been created.",
+    "formEdited": "The form has been updated.",
+    "formDeleted": "The form has been deleted.",
+    "formSubmitted": "Your response has been submitted successfully."
+  },
   "server": {
     "noServers": "There are currently no Servers that can be displayed at this time.",
     "serverCreated": "The Server has been successfully created!",

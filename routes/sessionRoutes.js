@@ -17,6 +17,8 @@ import {
   updateUserPassword,
   markEmailVerified,
   markAccountRegistered,
+  mergePlaceholderUser,
+  clearPlaceholderFlag,
   UserLinkGetter,
 } from "../controllers/userController.js";
 import { updateAudit_lastWebsiteLogin } from "../controllers/auditController.js";
@@ -99,7 +101,16 @@ export default function sessionSiteRoute(
 
   async function hydrateUserSession(req, userLoginData) {
     const userPermissionData = await getUserPermissions(userLoginData);
-    const userRanks = userPermissionData.userRanks || [];
+    // userPermissionData.userRanks is an array of rank slug strings e.g. ["admin","member"]
+    const rankSlugs = userPermissionData.userRanks || [];
+
+    // Store ranks as objects so callers can do rank.rankSlug (used across support, appeal, profile routes)
+    const userRanks = rankSlugs.map((slug) => ({ rankSlug: slug }));
+
+    // Derive isStaff from whether the user's resolved permissions include meta.staff.1 (set on staff groups in LuckPerms)
+    const isStaff = userPermissionData.some(
+      (p) => p && String(p).trim().toLowerCase().startsWith("meta.staff.")
+    );
 
     req.session.authenticated = true;
     req.session.user = {
@@ -110,7 +121,8 @@ export default function sessionSiteRoute(
       uuid: userLoginData.uuid,
       ranks: userRanks,
       permissions: userPermissionData,
-      isStaff: userRanks.some(rank => rank.isStaff),
+      permissionsRefreshedAt: Date.now(),
+      isStaff,
     };
 
     await updateAudit_lastWebsiteLogin(new Date(), userLoginData.username);
@@ -162,7 +174,7 @@ export default function sessionSiteRoute(
       return res.redirect("/dashboard");
     }
 
-    if (!isFeatureWebRouteEnabled(features.web.login, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
     const discordAuthorizeUrl = buildDiscordAuthorizeUrl();
@@ -171,7 +183,8 @@ export default function sessionSiteRoute(
       return res.redirect(discordAuthorizeUrl);
     }
 
-    return res.view("session/login", {
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("session/login", {
       pageTitle: `Login`,
       config: config,
       req: req,
@@ -179,7 +192,8 @@ export default function sessionSiteRoute(
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
       discordAuthorizeUrl,
-    });
+    }));
+    return;
   });
 
   app.post("/login", async function (req, res) {
@@ -189,7 +203,7 @@ export default function sessionSiteRoute(
       return res.redirect("/dashboard");
     }
 
-    if (!isFeatureWebRouteEnabled(features.web.login, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
     const identifier = req.body.identifier ? req.body.identifier.trim() : "";
@@ -280,7 +294,7 @@ export default function sessionSiteRoute(
   app.get("/login/discord", async function (req, res) {
     if (!checkRateLimit(req, res, { windowMs: 60_000, max: 20 })) return;
 
-    if (!isFeatureWebRouteEnabled(features.web.login, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
     if (req.query.returnTo && typeof req.query.returnTo === "string") {
@@ -297,13 +311,23 @@ export default function sessionSiteRoute(
   });
 
   app.get("/login/callback", async (req, res) => {
-    const { code } = req.query;
+    const { code, error: oauthError } = req.query;
+
+    // Discord sends us back with ?error=access_denied (and no code) when the
+    // user declines the consent screen. That is a normal outcome, not a
+    // failure — don't log it as one.
+    if (oauthError) {
+      setBannerCookie("info", "Discord sign-in was cancelled.", res);
+      return res.redirect("/login");
+    }
+
+    // No code and no error means the callback was hit directly — a bot
+    // probing the URL, or a stale bookmark. Nothing to report.
+    if (!code) {
+      return res.redirect("/login");
+    }
 
     try {
-      if (!code) {
-        throw new Error("Authorization code is missing");
-      }
-
       const tokenParams = {
         client_id: process.env.discordClientId,
         client_secret: process.env.discordClientSecret,
@@ -376,25 +400,27 @@ export default function sessionSiteRoute(
   });
 
   app.get("/forgot-password", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.web.login, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
     if (req.session.user) {
       return res.redirect(`/`);
     }
 
-    return res.view("session/forgotPassword", {
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("session/forgotPassword", {
       pageTitle: `Forgot Password`,
       config: config,
       req: req,
       features: features,
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
-    });
+    }));
+    return;
   });
 
   app.post("/forgot-password", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.web.login, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
     if (req.session.user) {
@@ -468,7 +494,7 @@ export default function sessionSiteRoute(
   });
 
   app.get("/forgot-password/verify", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.web.login, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
     const passwordReset = req.session.passwordReset;
@@ -477,7 +503,8 @@ export default function sessionSiteRoute(
       return res.redirect(`/forgot-password`);
     }
 
-    return res.view("session/forgotPasswordVerify", {
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("session/forgotPasswordVerify", {
       pageTitle: `Verify Reset Code`,
       config: config,
       req: req,
@@ -486,13 +513,14 @@ export default function sessionSiteRoute(
       announcementWeb: await getWebAnnouncement(),
       username: passwordReset.username,
       expiryMinutes: passwordResetExpiryMinutes,
-    });
+    }));
+    return;
   });
 
   app.post("/forgot-password/verify", async function (req, res) {
     if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 10 })) return;
 
-    if (!isFeatureWebRouteEnabled(features.web.login, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
     const passwordReset = req.session.passwordReset;
@@ -557,7 +585,7 @@ export default function sessionSiteRoute(
   });
 
   app.get("/forgot-password/reset", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.web.login, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
     const passwordReset = req.session.passwordReset;
@@ -570,18 +598,20 @@ export default function sessionSiteRoute(
       return res.redirect(`/forgot-password`);
     }
 
-    return res.view("session/resetPassword", {
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("session/resetPassword", {
       pageTitle: `Choose a New Password`,
       config: config,
       req: req,
       features: features,
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
-    });
+    }));
+    return;
   });
 
   app.post("/forgot-password/reset", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.web.login, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
     const passwordReset = req.session.passwordReset;
@@ -645,25 +675,27 @@ export default function sessionSiteRoute(
   });
 
   app.get("/register", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.web.register, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
       return;
 
     if (req.session.user) {
       return res.redirect(`/`);
     }
 
-    return res.view("session/register", {
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("session/register", {
       pageTitle: `Register`,
       config: config,
       req: req,
       features: features,
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
-    });
+    }));
+    return;
   });
 
   app.post("/register", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.web.register, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
       return;
 
     const username = req.body.username ? req.body.username.trim() : "";
@@ -727,17 +759,37 @@ export default function sessionSiteRoute(
         return res.redirect(`/register`);
       }
 
-      const existingUuidUser = await userGetter.byUUID(formattedUuid);
+      const existingUuidUserRaw = await userGetter.byUUID(formattedUuid);
+
+      // Placeholder ("ghost") rows are created by createUnlinkedUser when a
+      // Discord user opens a support ticket before linking a Minecraft
+      // account. They must not block a genuine registration for the same
+      // person — instead we merge them into the real account further down.
+      // A ghost can collide by UUID (rare) or, far more often, by a
+      // case-insensitive username match (the Thylakin bug).
+      const existingUuidUser =
+        existingUuidUserRaw && !existingUuidUserRaw.is_placeholder
+          ? existingUuidUserRaw
+          : null;
+
+      let placeholderUser =
+        existingUuidUserRaw && existingUuidUserRaw.is_placeholder
+          ? existingUuidUserRaw
+          : await userGetter.placeholderMatch(username, formattedUuid);
+
+      // A real (non-placeholder) username row still blocks registration.
+      const blockingUsername =
+        existingUsername && !existingUsername.is_placeholder ? existingUsername : null;
 
       if (
-        existingUsername &&
-        (!existingUuidUser || existingUsername.userId !== existingUuidUser.userId)
+        blockingUsername &&
+        (!existingUuidUser || blockingUsername.userId !== existingUuidUser.userId)
       ) {
         setBannerCookie("danger", "That username is already registered.", res);
         return res.redirect(`/register`);
       }
 
-      if (existingUuidUser && existingUuidUser.account_registered) {
+      if (existingUuidUser && existingUuidUser.account_registered && existingUuidUser.password_hash) {
         setBannerCookie("danger", "An account already exists for this Minecraft player.", res);
         return res.redirect(`/register`);
       }
@@ -780,6 +832,18 @@ export default function sessionSiteRoute(
           username,
         });
         userId = existingUuidUser.userId;
+      } else if (placeholderUser && placeholderUser.uuid === formattedUuid) {
+        // The ghost row already occupies this Minecraft UUID — promote it in
+        // place rather than creating a second row (which would hit the
+        // users.uuid UNIQUE constraint).
+        await updateLocalUserCredentials(placeholderUser.userId, {
+          email,
+          passwordHash,
+          username,
+        });
+        await clearPlaceholderFlag(placeholderUser.userId);
+        userId = placeholderUser.userId;
+        placeholderUser = null;
       } else {
         const newUser = await createLocalUser({
           uuid: formattedUuid,
@@ -788,6 +852,15 @@ export default function sessionSiteRoute(
           passwordHash,
         });
         userId = newUser.userId;
+      }
+
+      if (placeholderUser && placeholderUser.userId !== userId) {
+        try {
+          const mergeSummary = await mergePlaceholderUser(placeholderUser.userId, userId);
+          console.info("[SESSION] Merged placeholder user during registration", mergeSummary);
+        } catch (mergeError) {
+          logRouteError("merge placeholder user during registration", mergeError);
+        }
       }
 
       const verificationCode = await generateVerificationCode();
@@ -823,7 +896,7 @@ export default function sessionSiteRoute(
   });
 
   app.get("/register/verify-email", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.web.register, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
       return;
 
     const pendingRegistration = req.session.pendingRegistration;
@@ -833,7 +906,8 @@ export default function sessionSiteRoute(
       return res.redirect(`/register`);
     }
 
-    return res.view("session/registerVerifyEmail", {
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("session/registerVerifyEmail", {
       pageTitle: `Verify Email`,
       config: config,
       req: req,
@@ -842,13 +916,14 @@ export default function sessionSiteRoute(
       announcementWeb: await getWebAnnouncement(),
       email: pendingRegistration.email,
       expiryMinutes: emailVerificationExpiryMinutes,
-    });
+    }));
+    return;
   });
 
   app.post("/register/verify-email", async function (req, res) {
     if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 10 })) return;
 
-    if (!isFeatureWebRouteEnabled(features.web.register, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
       return;
 
     const pendingRegistration = req.session.pendingRegistration;
@@ -898,7 +973,7 @@ export default function sessionSiteRoute(
   });
 
   app.get("/register/minecraft", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.web.register, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
       return;
 
     const pendingRegistration = req.session.pendingRegistration;
@@ -919,7 +994,8 @@ export default function sessionSiteRoute(
     });
     const apiData = await response.json();
 
-    return res.view("session/registerMinecraft", {
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("session/registerMinecraft", {
       pageTitle: `Verify Minecraft`,
       config: config,
       req: req,
@@ -928,11 +1004,13 @@ export default function sessionSiteRoute(
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
       pendingUserId: pendingRegistration.userId,
-    });
+      pendingUsername: pendingRegistration.username || null,
+    }));
+    return;
   });
 
   app.post("/register/minecraft", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.web.register, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
       return;
 
     const pendingRegistration = req.session.pendingRegistration;
@@ -987,7 +1065,7 @@ export default function sessionSiteRoute(
   });
 
   app.get("/unregistered", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.web.register, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
       return;
 
     const discordId = req.cookies.discordId;
@@ -999,7 +1077,8 @@ export default function sessionSiteRoute(
     });
     const apiData = await response.json();
 
-    res.view("session/unregistered", {
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("session/unregistered", {
       pageTitle: `Unregistered`,
       config: config,
       req: req,
@@ -1008,9 +1087,33 @@ export default function sessionSiteRoute(
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
       discordId: discordId,
-    });
+    }));
+    return;
+  });
 
-    return res;
+  app.get("/auth/refresh-session", async function (req, res) {
+    if (!req.session?.user) {
+      return res.redirect("/login");
+    }
+
+    try {
+      const userGetter = new UserGetter();
+      const userData = await userGetter.byUserId(req.session.user.userId);
+
+      if (!userData) {
+        setBannerCookie("error", "Could not refresh session: user not found.", res);
+        return res.redirect("/dashboard");
+      }
+
+      await hydrateUserSession(req, userData);
+      setBannerCookie("success", "Permissions refreshed successfully.", res);
+    } catch (err) {
+      logRouteError("refresh session", err);
+      setBannerCookie("error", "Failed to refresh permissions. Please try logging out and back in.", res);
+    }
+
+    const returnTo = req.headers.referer || "/dashboard";
+    return res.redirect(returnTo);
   });
 
   app.get("/logout", async function (req, res) {

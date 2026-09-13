@@ -1,0 +1,147 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-pencil fa-fw me-2"></i>Edit Command</h1>
+        <a href="/dashboard/webstore/commands" class="btn btn-sm btn-outline-secondary">
+          <i class="fa-solid fa-arrow-left me-1"></i>Back to Commands
+        </a>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <div class="row justify-content-center">
+        <div class="col-lg-7">
+
+          <div class="card shadow-sm mb-3">
+            <div class="card-header">
+              <span class="text-muted small">Price ID</span>
+              <code class="ms-2 small"><%= command.stripePriceId %></code>
+              <% if (stripeItems && stripeItems.length) {
+                   const match = stripeItems.find(i => i.stripePriceId === command.stripePriceId);
+                   if (match) { %>
+                <span class="text-muted small ms-2">— <%= match.displayName %></span>
+              <%   }
+                 } %>
+            </div>
+          </div>
+
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <form method="post" action="/dashboard/webstore/commands/<%= command.commandId %>/edit">
+
+                <div class="mb-3">
+                  <label for="action" class="form-label fw-semibold">Action <span class="text-danger">*</span></label>
+                  <select class="form-select" id="action" name="action" required>
+                    <option value="grant" <%= command.action === 'grant' ? 'selected' : '' %>>grant — run when purchased / subscription renews</option>
+                    <option value="revoke" <%= command.action === 'revoke' ? 'selected' : '' %>>revoke — run when subscription is cancelled / expires</option>
+                  </select>
+                </div>
+
+                <div class="mb-3">
+                  <label for="commandType" class="form-label fw-semibold">Command Type <span class="text-danger">*</span></label>
+                  <select class="form-select" id="commandType" name="commandType">
+                    <option value="minecraft" <%= (command.commandType || 'minecraft') === 'minecraft' ? 'selected' : '' %>>Minecraft command</option>
+                    <option value="discord_role" <%= command.commandType === 'discord_role' ? 'selected' : '' %>>Discord role</option>
+                  </select>
+                </div>
+
+                <%# Minecraft command field %>
+                <div class="mb-3" id="field-minecraft">
+                  <label for="commandTemplate-mc" class="form-label fw-semibold">Command <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="commandTemplate-mc" name="commandTemplate"
+                         maxlength="1000"
+                         value="<%= command.commandType !== 'discord_role' ? command.commandTemplate : '' %>">
+                  <div class="form-text">
+                    Supports: <code>{{ username }}</code>, <code>{{ purchaserUsername }}</code>, <code>{{ purchaseId }}</code>, <code>{{ itemSlug }}</code>, <code>{{ purchaseType }}</code>, <code>{{ isGift }}</code>
+                  </div>
+                </div>
+
+                <%# Target server slug (Minecraft only) %>
+                <div class="mb-3" id="field-server-slug">
+                  <label for="serverSlug" class="form-label fw-semibold">Target server slug <span class="text-muted fw-normal">(optional)</span></label>
+                  <input type="text" class="form-control" id="serverSlug" name="serverSlug"
+                         maxlength="64" placeholder="e.g. survival"
+                         value="<%= command.serverSlug || '' %>">
+                  <div class="form-text">The bridge executor on this server will claim this task. Leave blank for any server.</div>
+                </div>
+
+                <%# Discord role field %>
+                <div class="mb-3 d-none" id="field-discord">
+                  <label for="commandTemplate-discord" class="form-label fw-semibold">Discord Role <span class="text-danger">*</span></label>
+                  <% if (discordRoles && discordRoles.length) { %>
+                    <select class="form-select" id="commandTemplate-discord" name="commandTemplate" disabled>
+                      <option value="">— Select a role —</option>
+                      <% discordRoles.forEach(function(role) { %>
+                        <option value="<%= role.id %>"
+                                <%= command.commandType === 'discord_role' && command.commandTemplate === role.id ? 'selected' : '' %>>
+                          <%= role.name %> (<%= role.id %>)
+                        </option>
+                      <% }) %>
+                    </select>
+                  <% } else { %>
+                    <input type="text" class="form-control" id="commandTemplate-discord" name="commandTemplate"
+                           maxlength="30"
+                           value="<%= command.commandType === 'discord_role' ? command.commandTemplate : '' %>"
+                           placeholder="Discord role ID" disabled>
+                    <div class="form-text text-warning">
+                      <i class="fa-solid fa-triangle-exclamation me-1"></i>Bot is offline or not in the guild — enter the role ID manually.
+                    </div>
+                  <% } %>
+                </div>
+
+                <div class="mb-4">
+                  <label for="sortOrder" class="form-label fw-semibold">Sort Order</label>
+                  <input type="number" class="form-control" id="sortOrder" name="sortOrder"
+                         value="<%= command.sortOrder %>" min="0" style="max-width:140px;">
+                  <div class="form-text">Commands with a lower sort order run first.</div>
+                </div>
+
+                <div class="d-flex gap-2">
+                  <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-check me-1"></i>Save Changes
+                  </button>
+                  <a href="/dashboard/webstore/commands" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+
+              </form>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <%- include("../../admin/_footer.ejs") %>
+</div>
+
+<script>
+(function () {
+  var typeSelect      = document.getElementById('commandType');
+  var mcField         = document.getElementById('field-minecraft');
+  var discordField    = document.getElementById('field-discord');
+  var serverSlugField = document.getElementById('field-server-slug');
+  var mcInput         = document.getElementById('commandTemplate-mc');
+  var discordInput    = document.getElementById('commandTemplate-discord');
+
+  function toggle() {
+    var isDiscord = typeSelect.value === 'discord_role';
+    mcField.classList.toggle('d-none', isDiscord);
+    discordField.classList.toggle('d-none', !isDiscord);
+    serverSlugField.classList.toggle('d-none', isDiscord);
+    mcInput.disabled = isDiscord;
+    mcInput.required = !isDiscord;
+    discordInput.disabled = !isDiscord;
+    discordInput.required = isDiscord;
+  }
+
+  typeSelect.addEventListener('change', toggle);
+  toggle();
+}());
+</script>

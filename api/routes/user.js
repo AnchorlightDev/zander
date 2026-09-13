@@ -10,6 +10,7 @@ import {
   setProfileUserAboutMe,
   setProfileUserInterests,
 } from "../../controllers/userController.js";
+import { syncMemberRankRoles } from "../../lib/discord/rankRoleSync.mjs";
 import {
   required,
   optional,
@@ -17,6 +18,8 @@ import {
 } from "../common.js";
 import { hasActiveWebBan } from "../../controllers/discordPunishmentController.js";
 import { checkRateLimit } from "../../lib/rateLimiter.mjs";
+import { punishmentsDb } from "../../controllers/databaseController.js";
+import verifyToken from "./verifyToken.js";
 
 export default function userApiRoute(app, config, db, features, lang) {
   const baseEndpoint = "/api/user";
@@ -97,21 +100,59 @@ export default function userApiRoute(app, config, db, features, lang) {
     const discordId = optional(req.query, "discordId");
     const userId = optional(req.query, "userId");
 
+    if (!username && !discordId && !userId) {
+      return res.status(400).send({
+        success: false,
+        message: "One of username, discordId, or userId is required.",
+      });
+    }
+
+    // Explicit column list — deliberately excludes password_hash.
+    const SAFE_COLUMNS = [
+      "userId",
+      "uuid",
+      "username",
+      "discordId",
+      "email",
+      "email_verified",
+      "email_verified_at",
+      "joined",
+      "profilePicture_type",
+      "profilePicture_email",
+      "account_registered",
+      "account_disabled",
+      "social_aboutMe",
+      "social_interests",
+      "social_discord",
+      "social_steam",
+      "social_twitch",
+      "social_youtube",
+      "social_twitter_x",
+      "social_instagram",
+      "social_reddit",
+      "social_spotify",
+      "audit_lastDiscordMessage",
+      "audit_lastDiscordVoice",
+      "audit_lastMinecraftLogin",
+      "audit_lastMinecraftMessage",
+      "audit_lastMinecraftPunishment",
+      "audit_lastDiscordPunishment",
+      "audit_lastWebsiteLogin",
+    ].join(", ");
+
     try {
       let dbQuery;
       let params = [];
 
       if (username) {
-        dbQuery = "SELECT * FROM users WHERE username=?";
+        dbQuery = `SELECT ${SAFE_COLUMNS} FROM users WHERE username=?`;
         params = [username];
       } else if (discordId) {
-        dbQuery = "SELECT * FROM users WHERE discordId=?";
+        dbQuery = `SELECT ${SAFE_COLUMNS} FROM users WHERE discordId=?`;
         params = [discordId];
-      } else if (userId) {
-        dbQuery = "SELECT * FROM users WHERE userId=?";
-        params = [userId];
       } else {
-        dbQuery = "SELECT * FROM users";
+        dbQuery = `SELECT ${SAFE_COLUMNS} FROM users WHERE userId=?`;
+        params = [userId];
       }
 
       const results = await new Promise((resolve, reject) => {
@@ -250,22 +291,82 @@ export default function userApiRoute(app, config, db, features, lang) {
         });
       }
 
-      const punishments = await new Promise((resolve, reject) => {
-        db.query(
-          `SELECT p.*, banner.username AS bannedByUsername, remover.username AS removedByUsername
-           FROM punishments p
-           LEFT JOIN users banner ON p.bannedByUserId = banner.userId
-           LEFT JOIN users remover ON p.removedByUserId = remover.userId
-           WHERE p.bannedUuid = ?
-           ORDER BY p.dateStart DESC
+      const normalizedUuid = resolvedUuid.replace(/-/g, "").toLowerCase();
+      const rawPunishments = await new Promise((resolve, reject) => {
+        punishmentsDb.query(
+          `SELECT litebans.id AS punishmentId,
+                  litebans.uuid AS bannedUuid,
+                  litebans.banned_by_uuid AS bannedByUuid,
+                  litebans.removed_by_uuid AS removedByUuid,
+                  litebans.type,
+                  litebans.active,
+                  litebans.silent,
+                  FROM_UNIXTIME(litebans.time / 1000) AS dateStart,
+                  FROM_UNIXTIME(NULLIF(litebans.until / 1000, 0)) AS dateEnd,
+                  litebans.removed_by_date AS dateRemoved,
+                  litebans.reason,
+                  litebans.removed_by_reason AS reasonRemoved,
+                  litebans.ip,
+                  litebans.ipban,
+                  litebans.ipban_wildcard AS ipBanWildcard
+           FROM (
+             SELECT id, uuid, ip, reason, banned_by_uuid, time,
+                    NULL AS until, NULL AS removed_by_uuid, NULL AS removed_by_reason,
+                    NULL AS removed_by_date, silent, ipban, ipban_wildcard, NULL AS active,
+                    'kick' AS type FROM litebans_kicks
+             UNION ALL
+             SELECT id, uuid, ip, reason, banned_by_uuid, time,
+                    until, removed_by_uuid, removed_by_reason, removed_by_date,
+                    silent, ipban, ipban_wildcard, active, 'ban' AS type FROM litebans_bans
+             UNION ALL
+             SELECT id, uuid, ip, reason, banned_by_uuid, time,
+                    until, removed_by_uuid, removed_by_reason, removed_by_date,
+                    silent, ipban, ipban_wildcard, active, 'mute' AS type FROM litebans_mutes
+             UNION ALL
+             SELECT id, uuid, ip, reason, banned_by_uuid, time,
+                    until, removed_by_uuid, removed_by_reason, removed_by_date,
+                    silent, ipban, ipban_wildcard, active, 'warning' AS type FROM litebans_warnings
+           ) AS litebans
+           WHERE REPLACE(litebans.uuid, '-', '') = ?
+           ORDER BY litebans.time DESC
            LIMIT 50`,
-          [resolvedUuid],
+          [normalizedUuid],
           (error, results) => {
             if (error) return reject(error);
             resolve(results || []);
           }
         );
       });
+
+      // Resolve banner/remover UUIDs → usernames from the main DB.
+      const actorUuids = [...new Set(
+        rawPunishments.flatMap((p) => [p.bannedByUuid, p.removedByUuid].filter(Boolean))
+      )];
+      let usernameByUuid = {};
+      if (actorUuids.length > 0) {
+        const placeholders = actorUuids.map(() => "REPLACE(uuid, '-', '') = ?").join(" OR ");
+        const normalized = actorUuids.map((u) => u.replace(/-/g, "").toLowerCase());
+        const usersRows = await new Promise((resolve, reject) => {
+          db.query(
+            `SELECT uuid, username FROM users WHERE ${placeholders}`,
+            normalized,
+            (err, rows) => { if (err) return reject(err); resolve(rows || []); }
+          );
+        });
+        for (const row of usersRows) {
+          usernameByUuid[row.uuid.replace(/-/g, "").toLowerCase()] = row.username;
+        }
+      }
+
+      const punishments = rawPunishments.map((p) => ({
+        ...p,
+        bannedByUsername: p.bannedByUuid
+          ? usernameByUuid[p.bannedByUuid.replace(/-/g, "").toLowerCase()] || null
+          : null,
+        removedByUsername: p.removedByUuid
+          ? usernameByUuid[p.removedByUuid.replace(/-/g, "").toLowerCase()] || null
+          : null,
+      }));
 
       return res.send({
         success: true,
@@ -316,6 +417,21 @@ export default function userApiRoute(app, config, db, features, lang) {
       const now = new Date();
       const codeExpiry = new Date(now.getTime() + 5 * 60000);
 
+      // Only one valid code should exist per player at a time — drop any
+      // previous (still-unexpired) code for this UUID before issuing a new
+      // one. This also clears the way for the INSERT below, since
+      // userVerifyLink.uuid is UNIQUE.
+      await new Promise((resolve, reject) => {
+        db.query(
+          `DELETE FROM userVerifyLink WHERE uuid = ?`,
+          [uuid],
+          function (error, results) {
+            if (error) return reject(error);
+            resolve(results);
+          }
+        );
+      });
+
       await new Promise((resolve, reject) => {
         db.query(
           `INSERT INTO userVerifyLink (uuid, username, linkCode, codeExpiry) VALUES (?, ?, ?, ?)`,
@@ -337,6 +453,64 @@ export default function userApiRoute(app, config, db, features, lang) {
         return res.status(500).send({
           success: false,
           message: `There was an error in setting your code, try again in 5 minutes.`,
+        });
+      }
+    }
+  });
+
+  app.post(baseEndpoint + "/verify/ingame", { preHandler: verifyToken }, async function (req, res) {
+    const uuid = required(req.body, "uuid", res);
+    if (res.sent) return;
+    const code = required(req.body, "code", res);
+    if (res.sent) return;
+
+    try {
+      const row = await new Promise((resolve, reject) => {
+        db.query(
+          `SELECT verifyId, uuid FROM userVerifyLink WHERE uuid = ? AND linkCode = ? AND codeExpiry > NOW()`,
+          [uuid, code],
+          function (error, results) {
+            if (error) return reject(error);
+            resolve(results && results.length ? results[0] : null);
+          }
+        );
+      });
+
+      if (!row) {
+        // Distinguish "wrong code" from "right code, but too late" so the
+        // player knows whether to re-check for typos or just run /link again.
+        const expiredRow = await new Promise((resolve, reject) => {
+          db.query(
+            `SELECT verifyId FROM userVerifyLink WHERE uuid = ? AND linkCode = ? AND codeExpiry <= NOW()`,
+            [uuid, code],
+            function (error, results) {
+              if (error) return reject(error);
+              resolve(results && results.length ? results[0] : null);
+            }
+          );
+        });
+
+        return res.send({
+          success: false,
+          message: expiredRow
+            ? "That code has expired. Run /link again to get a new one."
+            : "That code doesn't match. Double-check it for typos.",
+        });
+      }
+
+      const userLinkData = new UserLinkGetter();
+      await userLinkData.markWebsiteRegistrationComplete(uuid);
+
+      return res.send({
+        success: true,
+        message: "Your account has been verified and linked successfully.",
+      });
+    } catch (error) {
+      console.error("[user/verify/ingame] Error:", error);
+      if (!res.sent) {
+        return res.status(500).send({
+          success: false,
+          message: `${error}`,
         });
       }
     }
@@ -365,10 +539,24 @@ export default function userApiRoute(app, config, db, features, lang) {
       const linkUser = await userLinkData.getUserByCode(verifyCode);
 
       if (!linkUser) {
+        // Tell an expired code apart from a genuinely wrong one.
+        const expiredRow = await new Promise((resolve, reject) => {
+          db.query(
+            `SELECT verifyId FROM userVerifyLink WHERE linkCode = ? AND codeExpiry <= NOW()`,
+            [verifyCode],
+            function (error, results) {
+              if (error) return reject(error);
+              resolve(results && results.length ? results[0] : null);
+            }
+          );
+        });
+
         return res.send({
           success: false,
           alertType: "warning",
-          alertContent: `No verification code matches, please try again.`,
+          alertContent: expiredRow
+            ? `That code has expired. Run /link in-game again to get a new one.`
+            : `That code doesn't match. Check it for typos and try again.`,
         });
       }
 
@@ -377,6 +565,10 @@ export default function userApiRoute(app, config, db, features, lang) {
       try {
         const success = await userLinkData.link(linkUserUUID, discordId);
         if (success) {
+          const linkedWebUser = await new UserGetter().byUUID(linkUserUUID);
+          if (linkedWebUser) {
+            await syncMemberRankRoles(linkedWebUser.userId);
+          }
           return res.send({
             success: true,
             alertType: "success",
@@ -548,8 +740,6 @@ export default function userApiRoute(app, config, db, features, lang) {
     if (res.sent) return;
     const social_discord = optional(req.body, "social_discord");
     const social_steam = optional(req.body, "social_steam");
-    const social_twitch = optional(req.body, "social_twitch");
-    const social_youtube = optional(req.body, "social_youtube");
     const social_twitter_x = optional(req.body, "social_twitter_x");
     const social_instagram = optional(req.body, "social_instagram");
     const social_reddit = optional(req.body, "social_reddit");
@@ -564,8 +754,6 @@ export default function userApiRoute(app, config, db, features, lang) {
         userId,
         social_discord,
         social_steam,
-        social_twitch,
-        social_youtube,
         social_twitter_x,
         social_instagram,
         social_reddit,

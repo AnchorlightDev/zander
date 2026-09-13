@@ -1,0 +1,71 @@
+compass:
+  enabled: true
+  title: "<dark_aqua>Server Selector</dark_aqua>"
+  hide-inaccessible: true
+  open-on:
+    right-click: true
+    left-click: true
+  locked-icon:
+    material: BARRIER
+    lore: "<red>You do not have access to this server.</red>"
+  servers:
+    build:
+      material: STONE_BRICKS
+      display: Build
+      lore: Click me to join our Build server.
+    survival:
+      material: IRON_PICKAXE
+      display: Survival
+      lore: Click me to join our Survival server.
+    mixed:
+      material: IRON_SWORD
+      display: Mixed
+      lore: Play and Destroy your friends in Minigames.
+    events:
+      material: NETHER_STAR
+      display: Events
+      lore: Click me to join our Events server.
+    creative:
+      material: GRASS_BLOCK
+      display: Creative
+      lore: Click me to join our Creative server.
+messages:
+  join: '&7%p% joined.'
+  leave: '&7%p% left.'
+  portal:
+    disabled: "<red>This portal is currently disabled.</red>"
+    permission-denied: "<red>You do not have permission to use this portal.</red>"
+    server-permission-denied: "<red>You do not have access to that server.</red>"
+    unknown-server: "<red>That server is currently unknown to the network.</red>"
+    server-unavailable: "<red>That server is currently unavailable.</red>"
+    connection-started: "<yellow>Connecting you now...</yellow>"
+    connection-failed: "<red>Failed to connect, please try again.</red>"
+    cooldown: "<gray>Please wait before using this portal again.</gray>"
+    already-connected: "<gray>You are already connected to that server.</gray>"
+    local-teleport-failed: "<red>That destination is currently unavailable.</red>"
+misc:
+  always_first_join: false
+  slot_hub_compass: 4
+velocitymultiplier: 3
+hub:
+  world: world
+  x: 0.5
+  y: 129.0
+  z: 0.5
+  yaw: -180.0
+  pitch: 0.0
+dimensions:
+  nether:
+    blocked: true
+    message: "<red>The Nether is not available from the Hub.</red>"
+    allow-bypass: true
+  end:
+    blocked: false
+    message: "<red>The End is not available from the Hub.</red>"
+    allow-bypass: true
+portals:
+  ignore-spectators: true
+  reentry-delay-ticks: 2
+portal-wand:
+  material: BLAZE_ROD
+  display: "<gold>Portal Wand</gold>"

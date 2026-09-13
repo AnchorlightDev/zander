@@ -36,8 +36,11 @@ export class ShopDirectoryCommand extends Command {
   }
 
   async chatInputRun(interaction) {
-    // Defer the reply immediately to prevent interaction expiration
-    await interaction.deferReply();
+    try {
+      await interaction.deferReply();
+    } catch {
+      return;
+    }
 
     if (!features.shopdirectory) {
       const errorEmbed = new EmbedBuilder()

@@ -1,0 +1,315 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">
+          <i class="fa-solid fa-user-plus me-2"></i>Assign Badge
+        </h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+          <a href="/dashboard/badges" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-arrow-left me-1"></i>Back to Badges
+          </a>
+        </div>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <div class="row g-4">
+        <!-- Badge preview -->
+        <div class="col-lg-4">
+          <div class="card shadow-sm">
+            <div class="card-body p-4">
+              <h6 class="text-muted text-uppercase mb-3">Badge</h6>
+              <div class="mc-badge-toast" style="background-color: <%= badge.backgroundColor %>;">
+                <div class="mc-badge-text">
+                  <span class="mc-badge-achievement" style="color: <%= badge.textColor %>88;">Achievement Unlocked</span>
+                  <span class="mc-badge-name" style="color: <%= badge.textColor %>;"><%= badge.name %></span>
+                  <% if (badge.description) { %>
+                    <span class="mc-badge-desc" style="color: <%= badge.textColor %>cc;"><%= badge.description %></span>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-8">
+          <!-- Assign to user -->
+          <div class="card shadow-sm mb-4">
+            <div class="card-body p-4">
+              <h6 class="text-muted text-uppercase mb-3">Assign to User</h6>
+              <div id="assignError" class="alert alert-danger d-none mb-3"></div>
+              <div id="assignSuccess" class="alert alert-success d-none mb-3"></div>
+
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Minecraft Username</label>
+                <div class="position-relative">
+                  <input type="text" class="form-control" id="assignSearch"
+                    placeholder="Start typing a username…" autocomplete="off">
+                  <div id="assignSuggestions"
+                    class="list-group position-absolute w-100 shadow-sm"
+                    style="z-index:1000;display:none;max-height:220px;overflow-y:auto;top:100%;"></div>
+                </div>
+                <input type="hidden" id="assignUserId">
+              </div>
+
+              <div id="assignUserCard" class="d-none mb-3">
+                <div class="d-flex align-items-center gap-3 p-3 border rounded">
+                  <img id="assignUserAvatar" src="" alt="Avatar" style="width:40px;height:40px;border-radius:4px;">
+                  <div>
+                    <strong id="assignUserName"></strong>
+                    <div class="text-muted small">User ID: <span id="assignUserIdDisplay"></span></div>
+                  </div>
+                </div>
+              </div>
+
+              <button type="button" class="btn btn-success" id="btnAssign" disabled>
+                <i class="fa-solid fa-user-plus me-1"></i>Assign Badge
+              </button>
+            </div>
+          </div>
+
+          <!-- Remove from user -->
+          <div class="card shadow-sm">
+            <div class="card-body p-4">
+              <h6 class="text-muted text-uppercase mb-3">Remove from User</h6>
+              <div id="removeError" class="alert alert-danger d-none mb-3"></div>
+              <div id="removeSuccess" class="alert alert-success d-none mb-3"></div>
+
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Minecraft Username</label>
+                <div class="position-relative">
+                  <input type="text" class="form-control" id="removeSearch"
+                    placeholder="Start typing a username…" autocomplete="off">
+                  <div id="removeSuggestions"
+                    class="list-group position-absolute w-100 shadow-sm"
+                    style="z-index:1000;display:none;max-height:220px;overflow-y:auto;top:100%;"></div>
+                </div>
+                <input type="hidden" id="removeUserId">
+              </div>
+
+              <div id="removeUserCard" class="d-none mb-3">
+                <div class="d-flex align-items-center gap-3 p-3 border rounded">
+                  <img id="removeUserAvatar" src="" alt="Avatar" style="width:40px;height:40px;border-radius:4px;">
+                  <div>
+                    <strong id="removeUserName"></strong>
+                    <div class="text-muted small">User ID: <span id="removeUserIdDisplay"></span></div>
+                  </div>
+                </div>
+              </div>
+
+              <button type="button" class="btn btn-danger" id="btnRemove" disabled>
+                <i class="fa-solid fa-user-minus me-1"></i>Remove Badge
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+.mc-badge-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 4px;
+  border: 2px solid rgba(255,255,255,0.15);
+  min-height: 60px;
+}
+.mc-badge-text { display: flex; flex-direction: column; }
+.mc-badge-achievement {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.mc-badge-name {
+  font-size: 15px;
+  font-weight: 700;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+.mc-badge-desc {
+  font-size: 11px;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+</style>
+
+<script>
+const badgeId = <%= badge.badgeId %>;
+
+// ---------------------------------------------------------------------------
+// Generic autocomplete initialiser — reused for both assign and remove panels
+// ---------------------------------------------------------------------------
+function initUserAutocomplete({ searchInputId, suggestionsId, userIdHiddenId, userCardId, avatarId, nameId, idDisplayId, buttonId, onSelect }) {
+  const searchEl   = document.getElementById(searchInputId);
+  const suggestEl  = document.getElementById(suggestionsId);
+  let searchTimer  = null;
+
+  function clearSuggestions() {
+    suggestEl.innerHTML = '';
+    suggestEl.style.display = 'none';
+  }
+
+  function renderSuggestions(results) {
+    clearSuggestions();
+    if (!results.length) return;
+    results.forEach(user => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'list-group-item list-group-item-action d-flex align-items-center gap-2 py-1 px-2';
+      if (user.avatarUrl) {
+        const img = document.createElement('img');
+        img.src = user.avatarUrl;
+        img.alt = '';
+        img.width = 28; img.height = 28;
+        img.className = 'rounded';
+        btn.appendChild(img);
+      }
+      const span = document.createElement('span');
+      span.textContent = user.username;
+      span.className = 'flex-fill text-start small';
+      btn.appendChild(span);
+      btn.addEventListener('click', () => {
+        searchEl.value = user.username;
+        clearSuggestions();
+        onSelect(user);
+      });
+      suggestEl.appendChild(btn);
+    });
+    suggestEl.style.display = 'block';
+  }
+
+  async function doSearch(term) {
+    if (!term || term.length < 2) { clearSuggestions(); return; }
+    try {
+      const r    = await fetch(`/dashboard/badges/user-search?q=${encodeURIComponent(term)}`, { credentials: 'include' });
+      const data = await r.json();
+      renderSuggestions(data.results || []);
+    } catch { clearSuggestions(); }
+  }
+
+  searchEl.addEventListener('input', e => {
+    document.getElementById(userIdHiddenId).value = '';
+    document.getElementById(buttonId).disabled = true;
+    document.getElementById(userCardId).classList.add('d-none');
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => doSearch(e.target.value.trim()), 200);
+  });
+
+  document.addEventListener('click', e => {
+    if (!searchEl.contains(e.target) && !suggestEl.contains(e.target)) clearSuggestions();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Assign panel
+// ---------------------------------------------------------------------------
+initUserAutocomplete({
+  searchInputId: 'assignSearch',
+  suggestionsId: 'assignSuggestions',
+  userIdHiddenId: 'assignUserId',
+  userCardId: 'assignUserCard',
+  avatarId: 'assignUserAvatar',
+  nameId: 'assignUserName',
+  idDisplayId: 'assignUserIdDisplay',
+  buttonId: 'btnAssign',
+  onSelect(user) {
+    document.getElementById('assignUserId').value = user.userId;
+    document.getElementById('assignUserAvatar').src = user.avatarUrl || '';
+    document.getElementById('assignUserName').textContent = user.username;
+    document.getElementById('assignUserIdDisplay').textContent = user.userId;
+    document.getElementById('assignUserCard').classList.remove('d-none');
+    document.getElementById('btnAssign').disabled = false;
+    document.getElementById('assignError').classList.add('d-none');
+  },
+});
+
+document.getElementById('btnAssign').addEventListener('click', async () => {
+  const userId = document.getElementById('assignUserId').value;
+  const errEl  = document.getElementById('assignError');
+  const okEl   = document.getElementById('assignSuccess');
+  errEl.classList.add('d-none');
+  okEl.classList.add('d-none');
+
+  try {
+    const r = await fetch(`/dashboard/badges/${badgeId}/assign/${userId}`, { method: 'POST', credentials: 'include' });
+    if (r.headers.get('content-type')?.includes('text/html')) {
+      errEl.textContent = `Server error (${r.status}). You may not have permission or your session has expired.`;
+      errEl.classList.remove('d-none');
+      return;
+    }
+    const data = await r.json();
+    if (data.success) {
+      okEl.textContent = `Badge assigned to ${document.getElementById('assignUserName').textContent}.`;
+      okEl.classList.remove('d-none');
+    } else {
+      errEl.textContent = data.message || 'Failed to assign badge.';
+      errEl.classList.remove('d-none');
+    }
+  } catch (e) {
+    errEl.textContent = `Unexpected error: ${e.message}`;
+    errEl.classList.remove('d-none');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Remove panel
+// ---------------------------------------------------------------------------
+initUserAutocomplete({
+  searchInputId: 'removeSearch',
+  suggestionsId: 'removeSuggestions',
+  userIdHiddenId: 'removeUserId',
+  userCardId: 'removeUserCard',
+  avatarId: 'removeUserAvatar',
+  nameId: 'removeUserName',
+  idDisplayId: 'removeUserIdDisplay',
+  buttonId: 'btnRemove',
+  onSelect(user) {
+    document.getElementById('removeUserId').value = user.userId;
+    document.getElementById('removeUserAvatar').src = user.avatarUrl || '';
+    document.getElementById('removeUserName').textContent = user.username;
+    document.getElementById('removeUserIdDisplay').textContent = user.userId;
+    document.getElementById('removeUserCard').classList.remove('d-none');
+    document.getElementById('btnRemove').disabled = false;
+    document.getElementById('removeError').classList.add('d-none');
+  },
+});
+
+document.getElementById('btnRemove').addEventListener('click', async () => {
+  const userId = document.getElementById('removeUserId').value;
+  const errEl  = document.getElementById('removeError');
+  const okEl   = document.getElementById('removeSuccess');
+  errEl.classList.add('d-none');
+  okEl.classList.add('d-none');
+
+  try {
+    const r = await fetch(`/dashboard/badges/${badgeId}/assign/${userId}`, { method: 'DELETE', credentials: 'include' });
+    if (r.headers.get('content-type')?.includes('text/html')) {
+      errEl.textContent = `Server error (${r.status}). You may not have permission or your session has expired.`;
+      errEl.classList.remove('d-none');
+      return;
+    }
+    const data = await r.json();
+    if (data.success) {
+      okEl.textContent = `Badge removed from ${document.getElementById('removeUserName').textContent}.`;
+      okEl.classList.remove('d-none');
+    } else {
+      errEl.textContent = data.message || 'Failed to remove badge.';
+      errEl.classList.remove('d-none');
+    }
+  } catch (e) {
+    errEl.textContent = `Unexpected error: ${e.message}`;
+    errEl.classList.remove('d-none');
+  }
+});
+</script>

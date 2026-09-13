@@ -1,434 +1,407 @@
-<%- include("../../modules/header.ejs", {
-    pageTitle: pageTitle,
-    pageDescription: "List of all Network Announcements"
-}) %>
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
 
-<%- include("../../modules/navigationBar.ejs") %>
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
 
-<%- include("../../partials/miniHeader.ejs", {
-  headerTitle: "Announcements",
-  backgroundImage: globalImage
-}) %>
+      <!-- ── Page header ─────────────────────────────────────────────────── -->
+      <div class="wp-admin-page-header">
+        <h1 class="wp-heading-inline">Announcements</h1>
+        <button type="button" class="page-title-action outline"
+                data-bs-toggle="modal" data-bs-target="#announcementWizardModal">
+          <i class="fas fa-clock" aria-hidden="true"></i> Schedule
+        </button>
+        <a href="/dashboard/announcements/create" class="page-title-action">
+          <i class="fas fa-plus" aria-hidden="true"></i> Add New
+        </a>
+        <a href="https://modularsoft.org/docs/products/zander/features/announcement/"
+           target="_blank" rel="noopener" class="page-title-action outline"
+           title="Documentation">
+          <i class="fas fa-book" aria-hidden="true"></i>
+          <span class="d-none d-md-inline">Docs</span>
+        </a>
+      </div>
+      <hr class="wp-section-divider">
 
-<%- include("../../modules/dashboard/dashboard-header.ejs") %>
+      <%- include("../../admin/_notices.ejs") %>
 
-<div class="container my-4">
-    <div class="row g-4">
-        <div class="col-lg-3">
-            <%- include("../../modules/dashboard/dashboard-sidebar.ejs") %>
+      <!-- ── List table ──────────────────────────────────────────────────── -->
+      <div class="wp-list-wrap">
+
+        <!-- Table nav top -->
+        <div class="tablenav">
+          <div class="bulkactions">
+            <label for="bulk-action-selector" class="visually-hidden">Select bulk action</label>
+            <select id="bulk-action-selector" name="action">
+              <option value="-1">Bulk actions</option>
+            </select>
+            <button type="submit" class="button" disabled>Apply</button>
+          </div>
         </div>
-        <main class="col-lg-9">
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                <h1 class="h2">Announcements</h1>
-                <div class="btn-toolbar mb-2 mb-md-0">
-                    <button type="button" class="btn btn-sm btn-primary me-2" data-bs-toggle="modal" data-bs-target="#announcementWizardModal">
-                        Schedule Announcement
-                    </button>
-                    <a href="/dashboard/announcements/create" class="btn btn-sm btn-info">Create Announcement</a>
-                    <%- include("../../partials/documentationLink.ejs", {
-                        doclink: "https://modularsoft.org/docs/products/zander/features/announcement/"
-                    }) %>
+        <!-- /tablenav top -->
+
+        <div class="table-responsive">
+          <table class="wp-list-table wp-list-table-responsive" aria-label="Announcements">
+            <thead>
+              <tr>
+                <th scope="col">Type</th>
+                <th scope="col">Content</th>
+                <th scope="col">Schedule</th>
+                <th scope="col">Status</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+
+              <% if (!apiData || apiData.success === false) { %>
+                <tr>
+                  <td colspan="5">
+                    <div class="wp-notice wp-notice-error" style="margin:0;">
+                      <span class="wp-notice-icon"><i class="fas fa-times-circle"></i></span>
+                      <p><%= apiData ? apiData.message : 'Failed to load announcements.' %></p>
+                    </div>
+                  </td>
+                </tr>
+
+              <% } else if (!apiData.data || apiData.data.length === 0) { %>
+                <tr>
+                  <td colspan="5">
+                    <div class="wp-empty-state">
+                      <i class="fas fa-bullhorn"></i>
+                      <p>No announcements yet. <a href="/dashboard/announcements/create">Create the first one.</a></p>
+                    </div>
+                  </td>
+                </tr>
+
+              <% } else { %>
+                <% for (const ann of apiData.data) {
+                     const _now     = new Date();
+                     const _end     = ann.endDate   ? new Date(ann.endDate)   : null;
+                     const _start   = ann.startDate ? new Date(ann.startDate) : null;
+                     const _expired = _end   && _end   < _now;
+                     const _sched   = _start && _start > _now;
+                     let _statusCls = (ann.enabled === true || ann.enabled === 1) ? 'active' : 'inactive';
+                     if (_expired)   _statusCls = 'inactive';
+                     if (_sched)     _statusCls = 'pending';
+                     let _statusLbl = (ann.enabled === true || ann.enabled === 1) ? 'Active' : 'Disabled';
+                     if (_expired)   _statusLbl = 'Expired';
+                     if (_sched)     _statusLbl = 'Scheduled';
+                %>
+                  <tr>
+                    <td data-label="Type">
+                      <span class="wp-badge info"><%= ann.announcementType %></span>
+                    </td>
+                    <td data-label="Content" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                      <%= ann.colourMessageFormat || ann.body || '—' %>
+                    </td>
+                    <td data-label="Schedule">
+                      <% if (ann.startDate || ann.endDate) { %>
+                        <small class="text-muted-sm">
+                          <span class="js-datetime" data-iso="<%= ann.startDate ? new Date(ann.startDate).toISOString() : '' %>" data-fallback="Now"></span>
+                          →
+                          <span class="js-datetime" data-iso="<%= ann.endDate ? new Date(ann.endDate).toISOString() : '' %>" data-fallback="No end"></span>
+                        </small>
+                      <% } else { %>
+                        <small class="text-muted-sm">Always active</small>
+                      <% } %>
+                    </td>
+                    <td data-label="Status">
+                      <span class="wp-badge <%= _statusCls %>"><%= _statusLbl %></span>
+                    </td>
+                    <td data-label="Actions">
+                      <div class="row-actions">
+                        <a class="row-action-btn edit"
+                           href="/dashboard/announcements/edit?announcementId=<%= ann.announcementId %>">
+                          <i class="fas fa-pen" aria-hidden="true"></i> Edit
+                        </a>
+                        <form action="<%= process.env.siteAddress %>/redirect/announcement/delete" method="post"
+                              style="display:inline;"
+                              onsubmit="return confirm('Delete this announcement?')">
+                          <input type="hidden" name="announcementId" value="<%= ann.announcementId %>">
+                          <button type="submit" class="row-action-btn danger">
+                            <i class="fas fa-trash" aria-hidden="true"></i> Delete
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                <% } %>
+              <% } %>
+
+            </tbody>
+          </table>
+        </div>
+        <!-- /table-responsive -->
+
+      </div>
+      <!-- /wp-list-wrap -->
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+
+  <%- include("../../admin/_footer.ejs", { extraScripts: `
+    <script>
+      // Parse ISO datetime strings for display
+      document.querySelectorAll('.js-datetime').forEach(function (el) {
+        var iso = el.dataset.iso;
+        if (!iso) { el.textContent = el.dataset.fallback || ''; return; }
+        var normalized = iso.includes(' ') ? iso.replace(' ', 'T') : iso;
+        var withZ = normalized.endsWith('Z') ? normalized : normalized + 'Z';
+        var d = new Date(withZ);
+        el.textContent = isNaN(d) ? (el.dataset.fallback || '') : d.toLocaleString();
+      });
+    </script>
+  ` }) %>
+</div><!-- /#wpcontent -->
+
+
+<!-- ── Schedule Announcement Modal ─────────────────────────────────────── -->
+<div class="modal fade" id="announcementWizardModal" tabindex="-1" aria-labelledby="announcementWizardLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="announcementWizardLabel">Schedule Announcement</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="announcementWizardForm"
+              method="post"
+              action="<%= process.env.siteAddress %>/redirect/announcement/create">
+          <input type="hidden" name="timezoneOffset" value="">
+
+          <!-- Step 1: Content -->
+          <div class="wizard-step" data-step="1">
+            <div class="mb-3">
+              <label for="announcementType" class="form-label fw-semibold">Announcement Type</label>
+              <select name="announcementType" id="announcementType" class="form-select" required>
+                <option value="" disabled selected>Select a type…</option>
+                <option value="motd">Server Ping MOTD</option>
+                <option value="tip">In-Game Tip</option>
+                <option value="web">Website Banner</option>
+                <option value="popup">Website Popup</option>
+              </select>
+            </div>
+
+            <div class="mb-3" data-announcement-field="body">
+              <label for="ann-body" class="form-label fw-semibold">Announcement Text</label>
+              <textarea name="body" id="ann-body" class="form-control" rows="3"></textarea>
+            </div>
+
+            <div class="mb-3 d-none" data-announcement-field="colourMessageFormat">
+              <label for="ann-colour" class="form-label fw-semibold">Colour Message Format</label>
+              <textarea name="colourMessageFormat" id="ann-colour" class="form-control" rows="2"></textarea>
+            </div>
+
+            <div class="mb-3 d-none" data-announcement-field="link">
+              <label for="ann-link" class="form-label fw-semibold">Announcement Link</label>
+              <input type="url" name="link" id="ann-link" class="form-control">
+            </div>
+
+            <div class="mb-3 d-none" data-announcement-field="popupButtonText">
+              <label for="ann-btn" class="form-label fw-semibold">Popup Button Text</label>
+              <input type="text" name="popupButtonText" id="ann-btn" class="form-control">
+              <small class="text-muted">Optional label for the popup call-to-action button.</small>
+            </div>
+
+            <div class="mb-3 d-none" data-announcement-field="popupImageUrl">
+              <label class="form-label fw-semibold">Popup Image</label>
+
+              <div id="modal-img-preview" class="mb-2 d-none">
+                <div class="d-inline-flex align-items-start gap-2 border rounded p-2">
+                  <img id="modal-img-thumb" src="" alt=""
+                       style="max-height:100px;max-width:240px;object-fit:contain;">
+                  <button type="button" id="modal-img-remove"
+                          class="btn btn-sm btn-outline-danger flex-shrink-0" title="Remove">
+                    <i class="fas fa-times"></i>
+                  </button>
                 </div>
-            </div>
+              </div>
 
-            <% if (req.cookies.alertType) { %>
-                <%- include("../../partials/alert.ejs", {
-                  alertType: req.cookies.alertType,
-                  content: req.cookies.alertContent
-                }) %>
-            <% } %>
-
-            <div class="table-responsive">
-                <table class="table align-middle announcements-table">
-                <thead>
-                    <tr>
-                        <th>Type</th>
-                        <th>Format</th>
-                        <th>Schedule</th>
-                        <th>Enabled</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% if (apiData.success == false) { %>
-                        <%- include("../../partials/alert.ejs", {
-                          alertType: "danger",
-                          content: apiData.message
-                        }) %>
-                    <% } else { %>
-                        <% apiData.data.forEach(function (announcement) { %>
-                            <tr>
-                                <td data-label="Type"><span class="badge text-bg-primary"><%= announcement.announcementType %></span></td>
-                                <td data-label="Format"><%= announcement.colourMessageFormat %></td>
-                                <td data-label="Schedule">
-                                    <% if (announcement.startDate || announcement.endDate) { %>
-                                        <small>
-                                            <span class="js-datetime" data-iso="<%= announcement.startDate || '' %>" data-fallback="Now"></span>
-                                            →
-                                            <span class="js-datetime" data-iso="<%= announcement.endDate || '' %>" data-fallback="No end"></span>
-                                        </small>
-                                    <% } else { %>
-                                        <small>Always active</small>
-                                    <% } %>
-                                </td>
-                                <td data-label="Enabled">
-                                    <% if (announcement.enabled === 1) { %>
-                                        <i class="fas fa-check-circle" style="color:green"></i>
-                                    <% } else { %>
-                                        <i class="fas fa-times-circle" style="color: red;"></i>
-                                    <% } %>
-                                </td>
-                                <td data-label="Action">
-                                    <div class="d-flex flex-wrap gap-2">
-                                        <a href="/dashboard/announcements/edit?announcementId=<%= announcement.announcementId %>" class="btn btn-sm btn-warning">Edit</a>
-                                        <form action="<%= process.env.siteAddress %>/redirect/announcement/delete" method="post">
-                                            <input type="hidden" name="announcementId" value="<%= announcement.announcementId %>">
-                                            <button class="btn btn-sm btn-danger" type="submit">Delete</button>
-                                        </form>
-                                    </div>
-                                </td>
-                            </tr>
-                        <% }) %>
-                    <% } %>
-                </tbody>
-                </table>
+              <div class="d-flex gap-2 align-items-center flex-wrap">
+                <label for="modal-img-file" class="btn btn-outline-secondary btn-sm mb-0" style="cursor:pointer">
+                  <i class="fas fa-upload me-1"></i>Upload image
+                </label>
+                <input type="file" id="modal-img-file"
+                       accept="image/png,image/jpeg,image/gif,image/webp" class="d-none">
+                <span class="text-muted small">or paste a URL:</span>
+                <input type="url" name="popupImageUrl" id="ann-img"
+                       class="form-control form-control-sm flex-grow-1"
+                       style="max-width:340px" placeholder="https://...">
+                <span id="modal-img-status" class="small"></span>
+              </div>
+              <small class="text-muted mt-1 d-block">PNG, JPG, GIF or WebP — max 8 MB.</small>
             </div>
-        </main>
+          </div>
+
+          <!-- Step 2: Scheduling -->
+          <div class="wizard-step d-none" data-step="2">
+            <div class="mb-3">
+              <label for="ann-enabled" class="form-label fw-semibold">Visibility</label>
+              <select name="enabled" id="ann-enabled" class="form-select" required>
+                <option value="1" selected>Enabled</option>
+                <option value="0">Disabled</option>
+              </select>
+            </div>
+            <div class="row">
+              <div class="col mb-3">
+                <label for="ann-start" class="form-label fw-semibold">Start Date</label>
+                <input type="datetime-local" name="startDate" id="ann-start" class="form-control">
+              </div>
+              <div class="col mb-3">
+                <label for="ann-end" class="form-label fw-semibold">End Date</label>
+                <input type="datetime-local" name="endDate" id="ann-end" class="form-control">
+              </div>
+            </div>
+            <small class="text-muted">All times are in your local timezone.</small>
+          </div>
+
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary wizard-back" disabled>Back</button>
+        <button type="button" class="btn btn-primary wizard-next">Next</button>
+        <button type="submit" form="announcementWizardForm" class="btn btn-success d-none wizard-submit">Schedule</button>
+      </div>
     </div>
+  </div>
 </div>
-
-<div class="modal fade" id="announcementWizardModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Schedule Announcement</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="announcementWizardForm" method="post" action="<%= process.env.siteAddress %>/redirect/announcement/create">
-                    <input type="hidden" name="timezoneOffset" value="">
-                    <div class="wizard-step" data-step="1">
-                        <div class="mb-3">
-                            <label for="announcementType">Announcement Type</label>
-                            <%- include("../../partials/form/inputSelect.ejs", {
-                                elementName: "announcementType",
-                                elementValue: "null",
-                                required: true,
-                                optionElements: [
-                                    {
-                                        optionName: "Select a Type",
-                                        optionValue: "null",
-                                        selected: true,
-                                        disabled: true
-                                    },
-                                    {
-                                        optionName: "Server Ping MOTD",
-                                        optionValue: "motd",
-                                        selected: false,
-                                        disabled: false
-                                    },
-                                    {
-                                        optionName: "In-Game Tip",
-                                        optionValue: "tip",
-                                        selected: false,
-                                        disabled: false
-                                    },
-                                    {
-                                        optionName: "Website Banner",
-                                        optionValue: "web",
-                                        selected: false,
-                                        disabled: false
-                                    },
-                                    {
-                                        optionName: "Website Popup Announcement",
-                                        optionValue: "popup",
-                                        selected: false,
-                                        disabled: false
-                                    }
-                                ]
-                            }) %>
-                        </div>
-
-                        <div class="mb-3" data-announcement-field="body">
-                            <label for="body">Announcement Text</label>
-                            <%- include("../../partials/form/inputTextArea.ejs", {
-                                elementName: "body",
-                                elementValue: null,
-                                required: false
-                            }) %>
-                        </div>
-
-                        <div class="mb-3" data-announcement-field="colourMessageFormat">
-                            <label for="colourMessageFormat">Colour Message Format</label>
-                            <%- include("../../partials/form/inputTextArea.ejs", {
-                                elementName: "colourMessageFormat",
-                                elementValue: null,
-                                required: false
-                            }) %>
-                        </div>
-
-                        <div class="mb-3" data-announcement-field="link">
-                            <label for="link">Announcement Link</label>
-                            <%- include("../../partials/form/inputText.ejs", {
-                                elementName: "link",
-                                elementValue: null,
-                                required: false
-                            }) %>
-                        </div>
-
-                        <div class="mb-3" data-announcement-field="popupButtonText">
-                            <label for="popupButtonText">Popup Button Text</label>
-                            <%- include("../../partials/form/inputText.ejs", {
-                                elementName: "popupButtonText",
-                                elementValue: null,
-                                required: false
-                            }) %>
-                            <small class="text-muted">Optional label for popup call-to-action button.</small>
-                        </div>
-
-                        <div class="mb-3" data-announcement-field="popupImageUrl">
-                            <label for="popupImageUrl">Popup Image URL</label>
-                            <%- include("../../partials/form/inputText.ejs", {
-                                elementName: "popupImageUrl",
-                                elementValue: null,
-                                required: false
-                            }) %>
-                            <small class="text-muted">Optional banner image for popup announcements.</small>
-                        </div>
-                    </div>
-
-                    <div class="wizard-step d-none" data-step="2">
-                        <div class="mb-3">
-                            <label for="enabled">Announcement Visibility</label>
-                            <%- include("../../partials/form/inputSelect.ejs", {
-                                elementName: "enabled",
-                                elementValue: "1",
-                                required: true,
-                                optionElements: [
-                                    {
-                                        optionName: "Enabled",
-                                        optionValue: "1",
-                                        selected: true,
-                                        disabled: false
-                                    },
-                                    {
-                                        optionName: "Disabled",
-                                        optionValue: "0",
-                                        selected: false,
-                                        disabled: false
-                                    }
-                                ]
-                            }) %>
-                        </div>
-
-                        <div class="row">
-                            <div class="mb-3 col">
-                                <label for="startDate">Start Date</label>
-                                <%- include("../../partials/form/inputDateTime.ejs", {
-                                    elementName: "startDate",
-                                    elementValue: null,
-                                    required: false
-                                }) %>
-                            </div>
-
-                            <div class="mb-3 col">
-                                <label for="endDate">End Date</label>
-                                <%- include("../../partials/form/inputDateTime.ejs", {
-                                    elementName: "endDate",
-                                    elementValue: null,
-                                    required: false
-                                }) %>
-                            </div>
-                        </div>
-                        <small class="text-muted">All times are in your local timezone.</small>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary wizard-back" data-target="announcement">Back</button>
-                <button type="button" class="btn btn-primary wizard-next" data-target="announcement">Next</button>
-                <button type="submit" form="announcementWizardForm" class="btn btn-success d-none wizard-submit">Schedule</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<%- include("../../modules/footer.ejs") %>
-
-<style>
-    .modal-backdrop {
-        z-index: 1040;
-    }
-
-    .modal {
-        z-index: 1050;
-    }
-
-    @media (max-width: 768px) {
-        .announcements-table thead {
-            display: none;
-        }
-
-        .announcements-table tr {
-            display: block;
-            border: 1px solid #e6e6e6;
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 12px;
-        }
-
-        .announcements-table td {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 12px;
-            border: none;
-            padding: 6px 0;
-            font-size: 0.9rem;
-            word-break: break-word;
-        }
-
-        .announcements-table td::before {
-            content: attr(data-label);
-            font-weight: 600;
-            color: #5f6b7a;
-            min-width: 110px;
-        }
-
-        #announcementWizardModal .modal-dialog {
-            margin: 0.75rem;
-        }
-    }
-</style>
 
 <script>
-    const setupWizard = (modalId, onStepReset) => {
-        const modal = document.getElementById(modalId);
-        if (!modal) return;
+(function () {
+  var modal   = document.getElementById('announcementWizardModal');
+  if (!modal) return;
+  var steps   = modal.querySelectorAll('.wizard-step');
+  var nextBtn = modal.querySelector('.wizard-next');
+  var backBtn = modal.querySelector('.wizard-back');
+  var subBtn  = modal.querySelector('.wizard-submit');
+  var step    = 0;
 
-        const steps = modal.querySelectorAll(".wizard-step");
-        const nextButton = modal.querySelector(".wizard-next");
-        const backButton = modal.querySelector(".wizard-back");
-        const submitButton = modal.querySelector(".wizard-submit");
-        let currentStep = 0;
+  function render() {
+    steps.forEach(function (s, i) { s.classList.toggle('d-none', i !== step); });
+    backBtn.disabled = step === 0;
+    nextBtn.classList.toggle('d-none', step === steps.length - 1);
+    subBtn.classList.toggle('d-none', step !== steps.length - 1);
+  }
 
-        const renderStep = () => {
-            steps.forEach((step, index) => {
-                step.classList.toggle("d-none", index !== currentStep);
-            });
+  nextBtn.addEventListener('click', function () { if (step < steps.length - 1) { step++; render(); } });
+  backBtn.addEventListener('click', function () { if (step > 0) { step--; render(); } });
 
-            backButton.disabled = currentStep === 0;
-            nextButton.classList.toggle("d-none", currentStep === steps.length - 1);
-            submitButton.classList.toggle("d-none", currentStep !== steps.length - 1);
-        };
+  modal.addEventListener('hidden.bs.modal', function () {
+    step = 0;
+    render();
+    var f = modal.querySelector('form');
+    if (f) f.reset();
+    setMinDates();
+    syncTimezone();
+    updateFields();
+  });
 
-        nextButton.addEventListener("click", () => {
-            if (currentStep < steps.length - 1) {
-                currentStep += 1;
-                renderStep();
-            }
-        });
+  // Field visibility by type
+  var typeSelect = modal.querySelector('select[name="announcementType"]');
+  var fieldGroups = modal.querySelectorAll('[data-announcement-field]');
 
-        backButton.addEventListener("click", () => {
-            if (currentStep > 0) {
-                currentStep -= 1;
-                renderStep();
-            }
-        });
+  function updateFields() {
+    var type = typeSelect ? typeSelect.value : '';
+    fieldGroups.forEach(function (g) {
+      var field = g.dataset.announcementField;
+      var show  = true;
+      if (field === 'colourMessageFormat') show = type === 'motd' || type === 'tip';
+      if (field === 'link')               show = type === 'web'  || type === 'popup';
+      if (field === 'popupButtonText' || field === 'popupImageUrl') show = type === 'popup';
+      g.classList.toggle('d-none', !show);
+    });
+  }
 
-        modal.addEventListener("hidden.bs.modal", () => {
-            currentStep = 0;
-            renderStep();
-            const form = modal.querySelector("form");
-            if (form) {
-                form.reset();
-            }
-            if (onStepReset) {
-                onStepReset();
-            }
-            applyDateInputMinimums();
-            updateTimezoneOffsets();
-        });
+  if (typeSelect) {
+    typeSelect.addEventListener('change', updateFields);
+    updateFields();
+  }
 
-        renderStep();
-    };
+  // Date minimums
+  function setMinDates() {
+    var now    = new Date();
+    var offset = now.getTimezoneOffset();
+    var local  = new Date(now.getTime() - offset * 60000).toISOString().slice(0, 16);
+    modal.querySelectorAll('input[type="datetime-local"]').forEach(function (inp) { inp.min = local; });
+  }
 
-    const announcementTypeSelect = document.querySelector("#announcementWizardForm select[name='announcementType']");
-    const announcementFieldGroups = document.querySelectorAll("#announcementWizardForm [data-announcement-field]");
+  function syncTimezone() {
+    var off = String(new Date().getTimezoneOffset());
+    modal.querySelectorAll('input[name="timezoneOffset"]').forEach(function (inp) { inp.value = off; });
+  }
 
-    const updateAnnouncementWizardFields = () => {
-        const type = announcementTypeSelect?.value || "";
+  setMinDates();
+  syncTimezone();
+  render();
 
-        announcementFieldGroups.forEach((group) => {
-            const field = group.dataset.announcementField;
-            let visible = true;
+  // ── Modal popup image upload widget ──────────────────────────────────────
+  (function () {
+    var fileInput = document.getElementById("modal-img-file");
+    var urlInput  = document.getElementById("ann-img");
+    var preview   = document.getElementById("modal-img-preview");
+    var thumb     = document.getElementById("modal-img-thumb");
+    var removeBtn = document.getElementById("modal-img-remove");
+    var statusEl  = document.getElementById("modal-img-status");
+    if (!fileInput || !urlInput) return;
 
-            if (field === "popupButtonText" || field === "popupImageUrl") {
-                visible = type === "popup";
-            }
-
-            if (field === "colourMessageFormat") {
-                visible = type === "motd" || type === "tip";
-            }
-
-            if (field === "link") {
-                visible = type === "web" || type === "popup";
-            }
-
-            group.classList.toggle("d-none", !visible);
-        });
-    };
-
-    if (announcementTypeSelect) {
-        announcementTypeSelect.addEventListener("change", updateAnnouncementWizardFields);
-        announcementTypeSelect.addEventListener("input", updateAnnouncementWizardFields);
-        updateAnnouncementWizardFields();
+    function showPreview(url) {
+      if (url) {
+        thumb.src = url;
+        preview.classList.remove("d-none");
+      } else {
+        preview.classList.add("d-none");
+        thumb.src = "";
+      }
     }
 
-    const applyDateInputMinimums = () => {
-        const now = new Date();
-        const offset = now.getTimezoneOffset();
-        const local = new Date(now.getTime() - offset * 60000).toISOString().slice(0, 16);
-        document.querySelectorAll("#announcementWizardForm input[type='datetime-local']").forEach((input) => {
-            input.min = local;
-        });
-    };
+    urlInput.addEventListener("input", function () { showPreview(urlInput.value.trim()); });
 
-    const updateTimezoneOffsets = () => {
-        const offset = String(new Date().getTimezoneOffset());
-        document.querySelectorAll("#announcementWizardForm input[name='timezoneOffset']").forEach((input) => {
-            input.value = offset;
-        });
-    };
-
-    applyDateInputMinimums();
-    updateTimezoneOffsets();
-
-    setupWizard("announcementWizardModal", () => {
-        updateAnnouncementWizardFields();
-        applyDateInputMinimums();
-        updateTimezoneOffsets();
+    removeBtn.addEventListener("click", function () {
+      urlInput.value = "";
+      showPreview("");
+      statusEl.textContent = "";
+      statusEl.className = "small";
     });
 
-    const parseDateValue = (value) => {
-        if (!value) return null;
-        const normalized = value.includes(" ") ? value.replace(" ", "T") : value;
-        const withTimezone = normalized.endsWith("Z") ? normalized : `${normalized}Z`;
-        const date = new Date(withTimezone);
-        if (Number.isNaN(date.getTime())) {
-            return null;
-        }
-        return date;
-    };
-
-    document.querySelectorAll(".js-datetime").forEach((element) => {
-        const isoValue = element.dataset.iso;
-        const date = parseDateValue(isoValue);
-        if (!date) {
-            element.textContent = element.dataset.fallback || "";
-            return;
-        }
-
-        element.textContent = date.toLocaleString();
+    // Reset the widget when the modal closes
+    modal.addEventListener("hidden.bs.modal", function () {
+      urlInput.value = "";
+      showPreview("");
+      statusEl.textContent = "";
+      statusEl.className = "small";
     });
+
+    fileInput.addEventListener("change", async function () {
+      var file = fileInput.files[0];
+      if (!file) return;
+      fileInput.value = "";
+
+      statusEl.textContent = "Uploading…";
+      statusEl.className = "small text-muted";
+
+      var fd = new FormData();
+      fd.append("file", file, file.name);
+      fd.append("folder", "announcements");
+
+      try {
+        var res  = await fetch("/dashboard/upload/image", { method: "POST", body: fd });
+        var data = await res.json();
+        if (data.success) {
+          urlInput.value = data.data.url;
+          showPreview(data.data.url);
+          statusEl.textContent = "Uploaded ✓";
+          statusEl.className = "small text-success";
+        } else {
+          statusEl.textContent = data.message || "Upload failed.";
+          statusEl.className = "small text-danger";
+        }
+      } catch {
+        statusEl.textContent = "Upload failed.";
+        statusEl.className = "small text-danger";
+      }
+    });
+  }());
+}());
 </script>

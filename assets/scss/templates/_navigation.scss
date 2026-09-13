@@ -26,6 +26,13 @@
 
 .navbar-brand{
   margin-top: 10px;
+
+  // Portrait wordmark (264x372) — bound by height so the header keeps its size.
+  img{
+    height: 52px;
+    width: auto;
+    max-width: none;
+  }
 }
 
 

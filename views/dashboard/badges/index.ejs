@@ -1,0 +1,184 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-award me-2"></i>Badges</h1>
+        <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+          <a href="/dashboard/badges/create" class="btn btn-sm btn-primary">
+            <i class="fa-solid fa-plus me-1"></i>Create Badge
+          </a>
+        </div>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (!badgesData.success || !badgesData.data || !badgesData.data.length) { %>
+        <div class="alert alert-info">
+          No badges configured yet. <a href="/dashboard/badges/create">Create your first badge</a>.
+        </div>
+      <% } else { %>
+        <div class="row g-3 mb-4">
+          <% badgesData.data.forEach(function(badge) { %>
+            <div class="col-12 col-sm-6 col-xl-4">
+              <div class="card shadow-sm h-100">
+                <div class="card-body">
+                  <!-- Minecraft-style achievement toast preview -->
+                  <div class="mc-badge-toast mb-3" style="background-color: <%= badge.backgroundColor %>;">
+                    <div class="mc-badge-text">
+                      <span class="mc-badge-achievement" style="color: <%= badge.textColor %>88;">Achievement Unlocked</span>
+                      <span class="mc-badge-name" style="color: <%= badge.textColor %>;"><%= badge.name %></span>
+                      <% if (badge.description) { %>
+                        <span class="mc-badge-desc" style="color: <%= badge.textColor %>cc;"><%= badge.description %></span>
+                      <% } %>
+                    </div>
+                  </div>
+
+                  <% if (badge.description) { %>
+                    <p class="text-muted small mb-2"><%= badge.description %></p>
+                  <% } %>
+
+                  <div class="d-flex flex-wrap gap-1 mb-3">
+                    <span class="badge" style="background-color:<%= badge.backgroundColor %>;color:#fff;">
+                      <%= badge.backgroundColor %>
+                    </span>
+                    <% if (badge.luckpermsGroup) { %>
+                      <span class="badge text-bg-info">LP: <%= badge.luckpermsGroup %></span>
+                    <% } %>
+                  </div>
+
+                  <div class="d-flex gap-2 flex-wrap">
+                    <a href="/dashboard/badges/<%= badge.badgeId %>/edit" class="btn btn-sm btn-warning">
+                      <i class="fa-solid fa-pen me-1"></i>Edit
+                    </a>
+                    <a href="/dashboard/badges/<%= badge.badgeId %>/assign" class="btn btn-sm btn-success">
+                      <i class="fa-solid fa-user-plus me-1"></i>Assign
+                    </a>
+                    <button class="btn btn-sm btn-outline-secondary btn-duplicate"
+                      data-id="<%= badge.badgeId %>"
+                      data-name="<%= badge.name %>">
+                      <i class="fa-solid fa-copy me-1"></i>Duplicate
+                    </button>
+                    <button class="btn btn-sm btn-danger btn-delete"
+                      data-id="<%= badge.badgeId %>"
+                      data-name="<%= badge.name %>">
+                      <i class="fa-solid fa-trash me-1"></i>Delete
+                    </button>
+                  </div>
+                </div>
+                <div class="card-footer text-muted small">
+                  ID #<%= badge.badgeId %> &middot; Created <%= new Date(badge.createdAt).toLocaleDateString() %>
+                </div>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+
+<!-- Delete Badge Modal -->
+<div class="modal fade" id="deleteBadgeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Delete Badge</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete <strong id="deleteBadgeName"></strong>?</p>
+        <p class="text-muted small">This will remove the badge from all users who have earned it.</p>
+        <div id="deleteBadgeError" class="alert alert-danger d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <input type="hidden" id="deleteBadgeId">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="deleteBadgeConfirm">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+.mc-badge-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 2px solid rgba(255,255,255,0.15);
+  min-height: 56px;
+}
+.mc-badge-text {
+  display: flex;
+  flex-direction: column;
+}
+.mc-badge-achievement {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.mc-badge-name {
+  font-size: 14px;
+  font-weight: 700;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  line-height: 1.2;
+}
+.mc-badge-desc {
+  font-size: 11px;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+</style>
+
+<script>
+// Delete modal
+document.querySelectorAll('.btn-delete').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('deleteBadgeId').value = btn.dataset.id;
+    document.getElementById('deleteBadgeName').textContent = btn.dataset.name;
+    document.getElementById('deleteBadgeError').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('deleteBadgeModal')).show();
+  });
+});
+
+document.getElementById('deleteBadgeConfirm').addEventListener('click', async () => {
+  const id = document.getElementById('deleteBadgeId').value;
+  const errEl = document.getElementById('deleteBadgeError');
+  errEl.classList.add('d-none');
+
+  const r = await fetch(`/dashboard/badges/${id}`, { method: 'DELETE' });
+  const data = await r.json();
+
+  if (data.success) {
+    location.reload();
+  } else {
+    errEl.textContent = data.message || 'Failed to delete badge.';
+    errEl.classList.remove('d-none');
+  }
+});
+
+// Duplicate
+document.querySelectorAll('.btn-duplicate').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    if (!confirm(`Duplicate badge "${btn.dataset.name}"?`)) return;
+
+    const r = await fetch(`/dashboard/badges/${btn.dataset.id}/duplicate`, { method: 'POST' });
+    const data = await r.json();
+
+    if (data.success) {
+      location.reload();
+    } else {
+      alert(data.message || 'Failed to duplicate badge.');
+    }
+  });
+});
+</script>

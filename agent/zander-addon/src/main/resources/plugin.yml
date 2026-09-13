@@ -1,0 +1,17 @@
+main: dev.anchorlight.zander.addon.ZanderAddonMain
+name: zander-addon
+version: ${project.version}
+author: ModularSoft
+api-version: 1.21
+
+commands:
+  policy:
+    description: View server policies.
+    usage: /policy <tos|rules|privacy|refund>
+  social:
+    description: View our social media platforms.
+    usage: /social
+  freeze:
+    description: Freeze a player.
+    usage: /freeze <player>
+    permission: zander.command.freeze

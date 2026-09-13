@@ -1,0 +1,184 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-gear fa-fw me-2"></i>Finance Settings</h1>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="fw-semibold"><i class="fa-solid fa-tags me-1"></i>Categories</span>
+          <% if (canManage) { %>
+            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+              <i class="fa-solid fa-plus me-1"></i>Add
+            </button>
+          <% } %>
+        </div>
+        <div class="card-body p-0">
+          <% if (!categories || !categories.length) { %>
+            <div class="p-3 text-muted small">No categories configured.</div>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Parent</th>
+                    <th>Public</th>
+                    <th>Public Label</th>
+                    <% if (canManage) { %><th></th><% } %>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% categories.forEach(function(cat) { %>
+                    <tr>
+                      <td class="fw-semibold"><%= cat.name %></td>
+                      <td><span class="badge <%= cat.type === 'income' ? 'bg-success' : cat.type === 'expense' ? 'bg-danger' : 'bg-info text-dark' %>"><%= cat.type || '—' %></span></td>
+                      <td class="text-muted small"><%= cat.parent ? cat.parent.name : '—' %></td>
+                      <td><span class="badge <%= cat.isPublic ? 'bg-primary' : 'bg-secondary' %>"><%= cat.isPublic ? 'Public' : 'Private' %></span></td>
+                      <td class="text-muted small">
+                        <% if (cat.publicName) { %>
+                          <div class="fw-semibold text-body"><%= cat.publicName %></div>
+                        <% } %>
+                        <div><%= cat.publicDescription || '—' %></div>
+                      </td>
+                      <% if (canManage) { %>
+                        <td class="text-end">
+                          <button type="button" class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="modal" data-bs-target="#editCategoryModal-<%= cat.categoryId %>">
+                            <i class="fa-solid fa-pen"></i>
+                          </button>
+                          <form method="post" action="/dashboard/finance/settings/categories/<%= cat.categoryId %>/delete" class="d-inline"
+                                onsubmit="return confirm('Delete category <%= (cat.name||'').replace(/'/g,'&#39;') %>?')">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                          </form>
+                        </td>
+                      <% } %>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <%- include("../../admin/_footer.ejs") %>
+</div>
+
+<% if (canManage) { %>
+<div class="modal fade" id="addCategoryModal" tabindex="-1" aria-labelledby="addCategoryModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/dashboard/finance/settings/categories/create">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addCategoryModalLabel">Add Category</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="catName" class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="catName" name="name" required maxlength="150" placeholder="e.g. Hosting, Marketing">
+          </div>
+          <div class="mb-3">
+            <label for="catType" class="form-label fw-semibold">Type <span class="text-danger">*</span></label>
+            <select class="form-select" id="catType" name="type" required>
+              <option value="">— Select —</option>
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="catParentId" class="form-label fw-semibold">Parent Category</label>
+            <select class="form-select" id="catParentId" name="parentId">
+              <option value="">— None (top-level) —</option>
+              <% categories.forEach(function(cat) { %>
+                <option value="<%= cat.categoryId %>"><%= cat.name %> (<%= cat.type %>)</option>
+              <% }) %>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-1"></i>Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<% categories.forEach(function(cat) { %>
+  <div class="modal fade" id="editCategoryModal-<%= cat.categoryId %>" tabindex="-1" aria-labelledby="editCategoryModalLabel-<%= cat.categoryId %>" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <form method="post" action="/dashboard/finance/settings/categories/<%= cat.categoryId %>/edit">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editCategoryModalLabel-<%= cat.categoryId %>">Edit Category</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Name</label>
+                <input type="text" class="form-control" name="name" maxlength="150" value="<%= cat.name %>" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Type</label>
+                <select class="form-select" name="type" required>
+                  <option value="expense" <%= cat.type === 'expense' ? 'selected' : '' %>>Expense</option>
+                  <option value="income" <%= cat.type === 'income' ? 'selected' : '' %>>Income</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Parent Category</label>
+                <select class="form-select" name="parentId">
+                  <option value="">— None (top-level) —</option>
+                  <% categories.filter(function(other) { return other.categoryId !== cat.categoryId; }).forEach(function(other) { %>
+                    <option value="<%= other.categoryId %>" <%= cat.parentId === other.categoryId ? 'selected' : '' %>><%= other.name %> (<%= other.type %>)</option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Sort Order</label>
+                <input type="number" class="form-control" name="publicSortOrder" value="<%= cat.publicSortOrder || 0 %>">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Public Label</label>
+                <input type="text" class="form-control" name="publicName" maxlength="100" value="<%= cat.publicName || '' %>" placeholder="e.g. Hosting &amp; Infrastructure">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Status</label>
+                <div class="form-check mt-2">
+                  <input class="form-check-input" type="checkbox" value="1" id="catActive-<%= cat.categoryId %>" name="isActive" <%= cat.isActive ? 'checked' : '' %>>
+                  <label class="form-check-label" for="catActive-<%= cat.categoryId %>">Active</label>
+                </div>
+                <div class="form-check mt-2">
+                  <input class="form-check-input" type="checkbox" value="1" id="catPublic-<%= cat.categoryId %>" name="isPublic" <%= cat.isPublic ? 'checked' : '' %>>
+                  <label class="form-check-label" for="catPublic-<%= cat.categoryId %>">Visible in public Finance Centre</label>
+                </div>
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-semibold">Public Description</label>
+                <textarea class="form-control" name="publicDescription" rows="3" maxlength="255" placeholder="Short public explanation of what this category covers."><%= cat.publicDescription || '' %></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-1"></i>Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+<% }) %>
+<% } %>

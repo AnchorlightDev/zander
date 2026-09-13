@@ -22,7 +22,8 @@
               content: apiData.message
             }) %>
           <% } else { %>
-            <% apiData.data.forEach(function (application) { %>              
+            <% apiData.data.forEach(function (application) { %>
+              <% const applicationOpen = Number(application.applicationStatus) === 1; %>
               <!-- <%= application.displayName %> Application Item -->
               <div class="col-lg-4 col-md-6 col-sm-6">
                 <div class="service-item mb-4">
@@ -34,7 +35,7 @@
                     <p><%= application.description %></p>
 
                     <!-- <%= application.displayName %> Modal -->
-                    <% if (application.applicationStatus === 0) { %>
+                    <% if (!applicationOpen) { %>
                       <a href="#" target="_blank"><button type="button" class="btn btn-danger" disabled>Closed</button></a>
                     <% } else { %>
                       <!-- Updated data-target with unique ID -->
@@ -52,8 +53,11 @@
                                 <zero-md src="<%= application.requirementsMarkdown %>"></zero-md>
                               <br><br>
 
-                              <% if (application.applicationStatus === '0') { %>
+                              <% if (!applicationOpen) { %>
                                 <a href="#" target="_blank"><button type="button" class="btn btn-danger" disabled>Applications Closed</button></a>
+                              <% } else if (application.applicationType === 'linked_form' && application.linkedFormSlug) { %>
+                                <a href="/forms/<%= application.linkedFormSlug %>"><button type="button" class="btn btn-info">Apply</button></a>
+                                <small>Upon clicking Apply, you will be taken to the application form.</small>
                               <% } else { %>
                                 <a href="<%= application.redirectUrl %>" target="_blank"><button type="button" class="btn btn-info">Apply</button></a>
                                 <small>Upon clicking Apply, you will be redirected to an external site.</small>
@@ -74,4 +78,4 @@
 </section>
 
 
-<%- include("modules/footer.ejs") %>  
+<%- include("modules/footer.ejs") %>

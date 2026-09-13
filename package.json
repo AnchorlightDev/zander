@@ -1,11 +1,12 @@
 {
   "name": "modularsoft-zander-web",
-  "version": "1.0",
+  "version": "2.0.0",
   "description": "The web component of the Zander project that contains database, API and website.",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "npm install",
+    "test": "vitest run",
+    "repair:luckperms-contexts": "node admin/repair-luckperms-contexts.mjs",
+    "build": "npm install && (npx prisma migrate resolve --rolled-back 0005_add_vote_site_id_to_votes 2>/dev/null || true) && npx prisma migrate deploy && npx prisma generate",
     "prod": "node --experimental-modules --experimental-json-modules --experimental-specifier-resolution=node --max-old-space-size=512 app.js",
     "dev": "nodemon  --experimental-modules --experimental-json-modules --experimental-specifier-resolution=node"
   },
@@ -32,19 +33,25 @@
     "@fastify/session": "^10.5.0",
     "@fastify/static": "^6.11.2",
     "@fastify/view": "^8.2.0",
+    "@prisma/client": "^5.22.0",
+    "@quixo3/prisma-session-store": "^3.1.19",
     "@sapphire/framework": "^4.7.2",
+    "@sentry/node": "^10.69.0",
+    "@sentry/profiling-node": "^10.69.0",
     "bcrypt": "^5.0.1",
+    "cloudinary": "^2.10.0",
     "crypto": "^1.0.1",
     "discord-webhook-node": "^1.1.8",
     "discord.js": "^14.13.0",
     "dotenv": "^16.0.1",
     "ejs": "^3.1.7",
-    "express-mysql-session": "^3.0.3",
+    "express-session": "^1.19.0",
+    "fast-xml-parser": "^5.9.3",
     "fastify": "^4.25.2",
     "imgur": "^2.2.0",
     "mailtrap": "^3.2.0",
     "moment": ">=2.29.2",
-    "mysql": "^2.18.1",
+    "mysql2": "^3.11.3",
     "node-cron": "^3.0.3",
     "node-fetch": "^3.3.2",
     "nodemailer": "^6.9.7",
@@ -52,7 +59,12 @@
     "p-limit": "^6.1.0",
     "path": "^0.12.7",
     "querystring": "^0.2.1",
+    "sanitize-html": "^2.17.6",
     "web-push": "^3.6.7",
     "zero-md": "^2.3.1"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "vitest": "^4.1.8"
   }
 }

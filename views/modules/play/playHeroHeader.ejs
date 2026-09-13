@@ -8,7 +8,29 @@
 					<span class="text-uppercase text-sm letter-spacing "><%= config.siteConfiguration.tagline %></span>
 					<h1 class="mb-3 mt-3"><%= config.siteConfiguration.siteName %></h1>
 					<br>
-					
+
+					<%# GEO/SEO: an answer-first "how to join" block rendered in the HTML
+					    (not only inside disabled inputs) so search + AI engines can
+					    extract the server address and the steps. %>
+					<div class="how-to-join text-start mx-auto mb-4" style="max-width: 720px;">
+						<h2 class="h4 mb-3">How to join <%= config.siteConfiguration.siteName %></h2>
+						<% if (typeof servers !== 'undefined' && servers && servers.length) { %>
+						<ul class="list-unstyled mb-3">
+							<% servers.forEach(function (srv) { %>
+							<li class="mb-1"><strong><%= srv.name %>:</strong> <code><%= srv.address %></code></li>
+							<% }) %>
+						</ul>
+						<% } %>
+						<ol class="mb-0">
+							<li>Open Minecraft (Java or Bedrock Edition) and choose <em>Multiplayer &rarr; Add Server</em>.</li>
+							<li>Enter the server address<% if (typeof servers !== 'undefined' && servers && servers.length) { %> shown above<% } %>.</li>
+							<li>Save, then select the server and click <em>Join</em>.</li>
+							<% if (config.discord && config.siteConfiguration.platforms && config.siteConfiguration.platforms.discord) { %>
+							<li>Optional: join the <a href="<%= config.siteConfiguration.platforms.discord %>">community Discord</a> for help and announcements.</li>
+							<% } %>
+						</ol>
+					</div>
+
 					<div class="container">
 						<div class="row">
 							<div class="col-lg-12">

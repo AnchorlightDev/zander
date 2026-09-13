@@ -1,0 +1,186 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <h1 class="h2">Review Queue</h1>
+                <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+                    <a href="/dashboard/events" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-calendar fa-fw me-1"></i>Calendar
+                    </a>
+                    <a href="/dashboard/events/list" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-list fa-fw me-1"></i>All Events
+                    </a>
+                    <%- include("../../partials/documentationLink.ejs", {
+                        doclink: "https://modularsoft.org/docs/products/zander/features/events/"
+                    }) %>
+                </div>
+            </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+            <% if (!apiData.success) { %>
+                <%- include("../../partials/alert.ejs", { alertType: "danger", content: apiData.message }) %>
+            <% } else if (!apiData.data || apiData.data.length === 0) { %>
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>No events pending review. All caught up!
+                </div>
+            <% } else { %>
+                <p class="text-muted"><%= apiData.data.length %> event(s) awaiting review.</p>
+                <div class="row g-3">
+                    <% apiData.data.forEach(ev => { %>
+                    <div class="col-12">
+                        <div class="card border-warning">
+                            <div class="card-header d-flex justify-content-between align-items-center bg-warning bg-opacity-10">
+                                <div>
+                                    <strong><%= ev.title %></strong>
+                                    <span class="badge bg-secondary ms-2"><%= ev.eventType %></span>
+                                </div>
+                                <small class="text-muted">Submitted <span class="js-datetime" data-iso="<%= ev.updatedAt ? new Date(ev.updatedAt).toISOString() : '' %>"></span></small>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <small class="text-muted d-block">Start</small>
+                                        <span class="js-datetime" data-iso="<%= ev.startAt ? new Date(ev.startAt).toISOString() : '' %>"></span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted d-block">End</small>
+                                        <span class="js-datetime" data-iso="<%= ev.endAt ? new Date(ev.endAt).toISOString() : '' %>"></span>
+                                    </div>
+                                    <% if (ev.locationLabel) { %>
+                                    <div class="col-md-6">
+                                        <small class="text-muted d-block">Location</small>
+                                        <span><%= ev.locationLabel %></span>
+                                    </div>
+                                    <% } %>
+                                </div>
+                                <% if (ev.description) { %>
+                                    <p class="mt-2 mb-0 text-muted small"><%= ev.description.replace(/<[^>]+>/g,'').slice(0,200) %>…</p>
+                                <% } %>
+                            </div>
+                            <div class="card-footer d-flex gap-2">
+                                <a href="/dashboard/events/view?eventId=<%= ev.eventId %>" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-eye me-1"></i>View Details
+                                </a>
+                                <button class="btn btn-sm btn-success btn-approve" data-event-id="<%= ev.eventId %>" data-title="<%= ev.title %>">
+                                    <i class="fas fa-check me-1"></i>Approve
+                                </button>
+                                <button class="btn btn-sm btn-danger btn-reject" data-event-id="<%= ev.eventId %>" data-title="<%= ev.title %>">
+                                    <i class="fas fa-times me-1"></i>Reject
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <% }) %>
+                </div>
+            <% } %>
+
+
+<!-- Approve Confirmation Modal -->
+<div class="modal fade" id="approveModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Approve Event</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Approve <strong id="approveEventTitle"></strong>?</p>
+                <p class="text-muted small">After approval, the event can be published.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="confirmApprove">Approve</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reject Event</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Reject <strong id="rejectEventTitle"></strong>?</p>
+                <div class="mb-3">
+                    <label for="rejectionNote" class="form-label">Rejection Note <small class="text-muted">(optional — will be shown to the coordinator)</small></label>
+                    <textarea class="form-control" id="rejectionNote" rows="3" placeholder="Explain why this event was rejected…"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmReject">Reject</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<script>
+document.querySelectorAll('.js-datetime').forEach(el => {
+    const d = el.dataset.iso ? new Date(el.dataset.iso) : null;
+    el.textContent = d && !isNaN(d) ? d.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
+    }) : '—';
+});
+
+let currentEventId = null;
+
+// Approve
+document.querySelectorAll('.btn-approve').forEach(btn => {
+    btn.addEventListener('click', () => {
+        currentEventId = btn.dataset.eventId;
+        document.getElementById('approveEventTitle').textContent = btn.dataset.title;
+        new bootstrap.Modal(document.getElementById('approveModal')).show();
+    });
+});
+
+document.getElementById('confirmApprove').addEventListener('click', async () => {
+    if (!currentEventId) return;
+    const res = await fetch('/api/events/approve', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+        body: JSON.stringify({ eventId: currentEventId }),
+    });
+    const data = await res.json();
+    if (data.success) window.location.reload();
+    else alert('Failed: ' + data.message);
+});
+
+// Reject
+document.querySelectorAll('.btn-reject').forEach(btn => {
+    btn.addEventListener('click', () => {
+        currentEventId = btn.dataset.eventId;
+        document.getElementById('rejectEventTitle').textContent = btn.dataset.title;
+        document.getElementById('rejectionNote').value = '';
+        new bootstrap.Modal(document.getElementById('rejectModal')).show();
+    });
+});
+
+document.getElementById('confirmReject').addEventListener('click', async () => {
+    if (!currentEventId) return;
+    const note = document.getElementById('rejectionNote').value;
+    const res = await fetch('/api/events/reject', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+        body: JSON.stringify({ eventId: currentEventId, rejectionNote: note }),
+    });
+    const data = await res.json();
+    if (data.success) window.location.reload();
+    else alert('Failed: ' + data.message);
+});
+</script>

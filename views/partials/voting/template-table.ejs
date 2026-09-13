@@ -1,0 +1,61 @@
+<%
+  // templates — array of vote_reward_templates rows
+%>
+<% if (!templates || !templates.length) { %>
+    <div class="alert alert-secondary py-2">No templates configured for this reward type.</div>
+<% } else { %>
+<div class="table-responsive mb-3">
+    <table class="table table-sm align-middle reward-template-table">
+        <thead>
+            <tr>
+                <th>Order</th>
+                <th>Command</th>
+                <th>Execute As</th>
+                <th>Scope</th>
+                <th>Active</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% templates.forEach(function(tpl) { %>
+            <tr class="<%= tpl.is_active ? '' : 'table-secondary text-muted' %>">
+                <td data-label="Order"><%= tpl.display_order %></td>
+                <td data-label="Command"><code class="small"><%= tpl.command_template %></code></td>
+                <td data-label="Execute As"><span class="badge text-bg-<%= tpl.execute_as === 'console' ? 'dark' : 'info' %>"><%= tpl.execute_as %></span></td>
+                <td data-label="Scope"><small><%= tpl.server_scope %></small></td>
+                <td data-label="Active">
+                    <% if (tpl.is_active) { %>
+                        <i class="fas fa-check-circle text-success"></i>
+                    <% } else { %>
+                        <i class="fas fa-times-circle text-danger"></i>
+                    <% } %>
+                </td>
+                <td data-label="Actions">
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-warning"
+                            data-bs-toggle="modal"
+                            data-bs-target="#editTemplateModal"
+                            data-id="<%= tpl.id %>"
+                            data-reward-type="<%= tpl.reward_type %>"
+                            data-command-template="<%= tpl.command_template %>"
+                            data-execute-as="<%= tpl.execute_as %>"
+                            data-server-scope="<%= tpl.server_scope %>"
+                            data-display-order="<%= tpl.display_order %>"
+                            data-is-active="<%= tpl.is_active %>">
+                            Edit
+                        </button>
+                        <button class="btn btn-sm btn-danger"
+                            data-bs-toggle="modal"
+                            data-bs-target="#deleteTemplateModal"
+                            data-id="<%= tpl.id %>"
+                            data-command-template="<%= tpl.command_template %>">
+                            Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            <% }) %>
+        </tbody>
+    </table>
+</div>
+<% } %>

@@ -13,21 +13,34 @@ export default function applicationApiRoute(app, config, db, features, lang) {
     const applicationId = optional(req.query, "id");
 
     try {
-      const results = await new Promise((resolve, reject) => {
-        let dbQuery;
-        let params = [];
-        if (applicationId) {
-          dbQuery = "SELECT * FROM applications WHERE applicationId=?;";
-          params = [applicationId];
-        } else {
-          dbQuery = "SELECT * FROM applications ORDER BY position ASC;";
-        }
-
-        db.query(dbQuery, params, (error, results) => {
-          if (error) return reject(error);
-          resolve(results);
+      let results;
+      try {
+        results = await new Promise((resolve, reject) => {
+          let dbQuery;
+          let params = [];
+          if (applicationId) {
+            dbQuery = `SELECT a.*, f.name as linkedFormName, f.slug as linkedFormSlug, f.status as linkedFormStatus FROM applications a LEFT JOIN forms f ON a.linkedFormId = f.formId WHERE a.applicationId=?;`;
+            params = [applicationId];
+          } else {
+            dbQuery = `SELECT a.*, f.name as linkedFormName, f.slug as linkedFormSlug, f.status as linkedFormStatus FROM applications a LEFT JOIN forms f ON a.linkedFormId = f.formId ORDER BY a.position ASC;`;
+          }
+          db.query(dbQuery, params, (error, results) => {
+            if (error) return reject(error);
+            resolve(results);
+          });
         });
-      });
+      } catch (joinError) {
+        results = await new Promise((resolve, reject) => {
+          const dbQuery = applicationId
+            ? `SELECT * FROM applications WHERE applicationId=?;`
+            : `SELECT * FROM applications ORDER BY position ASC;`;
+          const params = applicationId ? [applicationId] : [];
+          db.query(dbQuery, params, (error, results) => {
+            if (error) return reject(error);
+            resolve(results);
+          });
+        });
+      }
 
       if (!results || !results.length) {
         return res.send({
@@ -68,12 +81,21 @@ export default function applicationApiRoute(app, config, db, features, lang) {
       res
     );
     if (res.sent) return;
-    const redirectUrl = required(req.body, "redirectUrl", res);
-    if (res.sent) return;
     const position = required(req.body, "position", res);
     if (res.sent) return;
     const applicationStatus = required(req.body, "applicationStatus", res);
     if (res.sent) return;
+
+    const applicationType = optional(req.body, "applicationType") || "external";
+    const redirectUrl = optional(req.body, "redirectUrl");
+    const rawLinkedFormId = optional(req.body, "linkedFormId");
+    const linkedFormId =
+      rawLinkedFormId === "" ||
+      rawLinkedFormId === null ||
+      rawLinkedFormId === undefined ||
+      Number.isNaN(Number(rawLinkedFormId))
+        ? null
+        : Number(rawLinkedFormId);
 
     let applicationCreatedLang = lang.applications.applicationCreated;
 
@@ -81,8 +103,8 @@ export default function applicationApiRoute(app, config, db, features, lang) {
       await new Promise((resolve, reject) => {
         db.query(
           `INSERT INTO applications
-              (displayName, description, displayIcon, requirementsMarkdown, redirectUrl, position, applicationStatus)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              (displayName, description, displayIcon, requirementsMarkdown, redirectUrl, position, applicationStatus, applicationType, linkedFormId)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             displayName,
             description,
@@ -91,6 +113,8 @@ export default function applicationApiRoute(app, config, db, features, lang) {
             redirectUrl,
             position,
             applicationStatus,
+            applicationType,
+            linkedFormId,
           ],
           (error, results) => {
             if (error) return reject(error);
@@ -143,12 +167,21 @@ export default function applicationApiRoute(app, config, db, features, lang) {
       res
     );
     if (res.sent) return;
-    const redirectUrl = required(req.body, "redirectUrl", res);
-    if (res.sent) return;
     const position = required(req.body, "position", res);
     if (res.sent) return;
     const applicationStatus = required(req.body, "applicationStatus", res);
     if (res.sent) return;
+
+    const applicationType = optional(req.body, "applicationType") || "external";
+    const redirectUrl = optional(req.body, "redirectUrl");
+    const rawLinkedFormId = optional(req.body, "linkedFormId");
+    const linkedFormId =
+      rawLinkedFormId === "" ||
+      rawLinkedFormId === null ||
+      rawLinkedFormId === undefined ||
+      Number.isNaN(Number(rawLinkedFormId))
+        ? null
+        : Number(rawLinkedFormId);
 
     let applicationEditedLang = lang.applications.applicationEdited;
 
@@ -165,7 +198,9 @@ export default function applicationApiRoute(app, config, db, features, lang) {
                       requirementsMarkdown=?,
                       redirectUrl=?,
                       position=?,
-                      applicationStatus=?
+                      applicationStatus=?,
+                      applicationType=?,
+                      linkedFormId=?
                   WHERE applicationId=?;`,
           [
             displayName,
@@ -175,6 +210,8 @@ export default function applicationApiRoute(app, config, db, features, lang) {
             redirectUrl,
             position,
             applicationStatus,
+            applicationType,
+            linkedFormId,
             applicationId,
           ],
           (error, results) => {

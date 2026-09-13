@@ -39,7 +39,8 @@ export default function dashboardWebPunishmentsRoute(
       getWebAnnouncement(),
     ]);
 
-    return res.view("dashboard/web-punishments", {
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("dashboard/web-punishments", {
       pageTitle: `Dashboard - Web Punishments`,
       config,
       features,
@@ -52,7 +53,8 @@ export default function dashboardWebPunishmentsRoute(
       moment,
       globalImage,
       announcementWeb,
-    });
+    }));
+    return;
   });
 
   // Issue a new web punishment
@@ -66,20 +68,20 @@ export default function dashboardWebPunishmentsRoute(
     const duration = (req.body.duration || "").trim();
 
     if (!username || !type || !reason) {
-      await setBannerCookie("danger", "Username, type, and reason are required.", res);
+      setBannerCookie("danger", "Username, type, and reason are required.", res);
       return res.redirect("/dashboard/web-punishments");
     }
 
     const validTypes = ["WARN", "TEMP_BAN", "PERM_BAN"];
     if (!validTypes.includes(type)) {
-      await setBannerCookie("danger", "Invalid punishment type.", res);
+      setBannerCookie("danger", "Invalid punishment type.", res);
       return res.redirect("/dashboard/web-punishments");
     }
 
     // Look up the target user
     const targetUser = await getUserByUsername(username);
     if (!targetUser) {
-      await setBannerCookie("danger", `User "${username}" not found.`, res);
+      setBannerCookie("danger", `User "${username}" not found.`, res);
       return res.redirect("/dashboard/web-punishments");
     }
 
@@ -87,12 +89,12 @@ export default function dashboardWebPunishmentsRoute(
     let expiresAt = null;
     if (type === "TEMP_BAN") {
       if (!duration) {
-        await setBannerCookie("danger", "Duration is required for temporary bans (e.g. 1h, 7d, 2w).", res);
+        setBannerCookie("danger", "Duration is required for temporary bans (e.g. 1h, 7d, 2w).", res);
         return res.redirect("/dashboard/web-punishments");
       }
       const ms = parseDurationString(duration);
       if (!ms) {
-        await setBannerCookie("danger", "Invalid duration format. Use e.g. 30m, 1h, 7d, 2w.", res);
+        setBannerCookie("danger", "Invalid duration format. Use e.g. 30m, 1h, 7d, 2w.", res);
         return res.redirect("/dashboard/web-punishments");
       }
       expiresAt = new Date(Date.now() + ms);
@@ -150,10 +152,10 @@ export default function dashboardWebPunishmentsRoute(
         }
       }
 
-      await setBannerCookie("success", `${type.replace("_", " ")} issued to ${targetUser.username}.`, res);
+      setBannerCookie("success", `${type.replace("_", " ")} issued to ${targetUser.username}.`, res);
     } catch (error) {
       console.error("[WEB PUNISHMENTS] Failed to create punishment:", error);
-      await setBannerCookie("danger", "Failed to create punishment. Please try again.", res);
+      setBannerCookie("danger", "Failed to create punishment. Please try again.", res);
     }
 
     return res.redirect("/dashboard/web-punishments");
@@ -168,21 +170,21 @@ export default function dashboardWebPunishmentsRoute(
     const punishment = await getPunishmentById(id);
 
     if (!punishment || punishment.platform !== "WEB") {
-      await setBannerCookie("danger", "Punishment not found.", res);
+      setBannerCookie("danger", "Punishment not found.", res);
       return res.redirect("/dashboard/web-punishments");
     }
 
     if (punishment.status !== "ACTIVE") {
-      await setBannerCookie("danger", "This punishment is not currently active.", res);
+      setBannerCookie("danger", "This punishment is not currently active.", res);
       return res.redirect("/dashboard/web-punishments");
     }
 
     try {
       await liftPunishment(id);
-      await setBannerCookie("success", "Punishment has been lifted.", res);
+      setBannerCookie("success", "Punishment has been lifted.", res);
     } catch (error) {
       console.error("[WEB PUNISHMENTS] Failed to lift punishment:", error);
-      await setBannerCookie("danger", "Failed to lift punishment.", res);
+      setBannerCookie("danger", "Failed to lift punishment.", res);
     }
 
     return res.redirect("/dashboard/web-punishments");

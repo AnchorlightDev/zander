@@ -1,5 +1,6 @@
 import { hashEmail } from "../api/common.js";
-import db from "./databaseController.js";
+import db, { luckpermsDb } from "./databaseController.js";
+import { sanitizeForumHtml } from "../lib/htmlSanitize.js";
 
 export function UserGetter() {
   this.byUsername = function (username) {
@@ -90,6 +91,31 @@ export function UserGetter() {
     });
   };
 
+  // Find a placeholder ("ghost") row that collides with a registration
+  // attempt. Placeholder rows are created by createUnlinkedUser with a
+  // lowercased Discord username and a random non-Mojang UUID, so the
+  // realistic collision is a case-insensitive username match; a UUID
+  // match is also honoured for completeness.
+  this.placeholderMatch = function (username, uuid = null) {
+    return new Promise((resolve, reject) => {
+      db.query(
+        `SELECT * FROM users
+          WHERE is_placeholder = 1
+            AND (LOWER(username) = LOWER(?) OR (? IS NOT NULL AND uuid = ?))
+          LIMIT 1;`,
+        [username, uuid, uuid],
+        function (error, results) {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve(results && results.length ? results[0] : null);
+        }
+      );
+    });
+  };
+
   this.byDiscordId = function (discordId) {
     return new Promise((resolve, reject) => {
       db.query(
@@ -153,15 +179,22 @@ export function UserGetter() {
 
     const luckPermsParams = [trimmedUsername];
     let luckPermsQuery =
-      `SELECT 1 FROM luckPermsPlayers WHERE LOWER(username) = LOWER(?) LIMIT 1`;
+      `SELECT 1 FROM luckperms_players WHERE LOWER(username) = LOWER(?) LIMIT 1`;
 
     if (trimmedUuid) {
+      // LuckPerms MySQL stores uuid as VARCHAR(36) with dashes — compare
+      // directly, no UNHEX() (which would produce binary that never matches).
       luckPermsQuery =
-        `SELECT 1 FROM luckPermsPlayers WHERE LOWER(username) = LOWER(?) OR uuid = UNHEX(REPLACE(?, '-', '')) LIMIT 1`;
+        `SELECT 1 FROM luckperms_players WHERE LOWER(username) = LOWER(?) OR LOWER(uuid) = LOWER(?) LIMIT 1`;
       luckPermsParams.push(trimmedUuid);
     }
 
-    const luckPermsMatch = await runQuery(luckPermsQuery, luckPermsParams);
+    const luckPermsMatch = await new Promise((resolve, reject) => {
+      luckpermsDb.query(luckPermsQuery, luckPermsParams, (error, results) => {
+        if (error) return reject(error);
+        resolve(results || []);
+      });
+    });
 
     return luckPermsMatch.length > 0;
   };
@@ -187,16 +220,20 @@ export function UserGetter() {
       return userRows[0].uuid;
     }
 
-    // Check luckPermsPlayers table
-    const luckPermsRows = await runQuery(
-      `SELECT HEX(uuid) AS hexUuid FROM luckPermsPlayers WHERE LOWER(username) = LOWER(?) LIMIT 1`,
-      [trimmedUsername]
-    );
-    if (luckPermsRows.length && luckPermsRows[0].hexUuid) {
-      const hex = luckPermsRows[0].hexUuid;
-      if (hex.length === 32) {
-        return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}`.toLowerCase();
-      }
+    // Check luckperms_players table. LuckPerms MySQL stores uuid as
+    // VARCHAR(36) with dashes already — select it as-is, no HEX() needed.
+    const luckPermsRows = await new Promise((resolve, reject) => {
+      luckpermsDb.query(
+        `SELECT LOWER(uuid) AS uuid FROM luckperms_players WHERE LOWER(username) = LOWER(?) LIMIT 1`,
+        [trimmedUsername],
+        (error, results) => {
+          if (error) return reject(error);
+          resolve(results || []);
+        }
+      );
+    });
+    if (luckPermsRows.length && luckPermsRows[0].uuid) {
+      return luckPermsRows[0].uuid;
     }
 
     return null;
@@ -376,6 +413,22 @@ export function markEmailVerified(userId) {
   });
 }
 
+export function clearPlaceholderFlag(userId) {
+  return new Promise((resolve, reject) => {
+    db.query(
+      `UPDATE users SET is_placeholder = 0 WHERE userId = ?`,
+      [userId],
+      function (error) {
+        if (error) {
+          return reject(error);
+        }
+
+        resolve(true);
+      }
+    );
+  });
+}
+
 export function markAccountRegistered(userId) {
   return new Promise((resolve, reject) => {
     db.query(
@@ -454,20 +507,16 @@ export async function setProfileSocialConnections(
   userId,
   social_discord,
   social_steam,
-  social_twitch,
-  social_youtube,
   social_twitter_x,
   social_instagram,
   social_reddit,
   social_spotify
 ) {
   db.query(
-    `UPDATE users SET social_discord=?, social_steam=?, social_twitch=?, social_youtube=?, social_twitter_x=?, social_instagram=?, social_reddit=?, social_spotify=? WHERE userId=?;`,
+    `UPDATE users SET social_discord=?, social_steam=?, social_twitter_x=?, social_instagram=?, social_reddit=?, social_spotify=? WHERE userId=?;`,
     [
       social_discord,
       social_steam,
-      social_twitch,
-      social_youtube,
       social_twitter_x,
       social_instagram,
       social_reddit,
@@ -486,6 +535,7 @@ export async function setProfileUserAboutMe(
   userId,
   social_aboutMe
 ) {
+  social_aboutMe = sanitizeForumHtml(social_aboutMe);
   db.query(
     `UPDATE users SET social_aboutMe=? WHERE userId=?;`,
     [social_aboutMe, userId],
@@ -513,10 +563,9 @@ export function updateUserPassword(userId, passwordHash) {
   });
 }
 
-const LUCKPERMS_USER_PERMISSIONS_TABLE =
-  "cfcdev_luckperms.luckperms_user_permissions";
-const LUCKPERMS_GROUP_PERMISSIONS_TABLE =
-  "cfcdev_luckperms.luckperms_group_permissions";
+const LUCKPERMS_USER_PERMISSIONS_TABLE = "luckperms_user_permissions";
+const LUCKPERMS_GROUP_PERMISSIONS_TABLE = "luckperms_group_permissions";
+const LUCKPERMS_PLAYERS_TABLE = "luckperms_players";
 
 function normaliseUuid(uuid) {
   if (!uuid) return null;
@@ -530,10 +579,16 @@ function normaliseUuid(uuid) {
 function runQuery(query, params = []) {
   return new Promise((resolve, reject) => {
     db.query(query, params, (error, results) => {
-      if (error) {
-        return reject(error);
-      }
+      if (error) return reject(error);
+      resolve(results || []);
+    });
+  });
+}
 
+function runLuckPermsQuery(query, params = []) {
+  return new Promise((resolve, reject) => {
+    luckpermsDb.query(query, params, (error, results) => {
+      if (error) return reject(error);
       resolve(results || []);
     });
   });
@@ -547,9 +602,13 @@ export async function getUserPermissions(userData = {}) {
   const queuedRankSet = new Set();
 
   const userId = userData?.userId || null;
-  const rawUuid = userData?.uuid || null;
+  // rawUuid is the LP-native UUID string (VARCHAR with dashes, e.g. "550e8400-e29b-41d4-a716-446655440000").
+  // LuckPerms MySQL stores uuid as VARCHAR(36) with dashes, so LP queries must use this value
+  // directly rather than UNHEX(hex-without-dashes), which would produce binary that never matches.
+  let rawUuid = userData?.uuid || null;
   const username = userData?.username || null;
 
+  // uuidHex is kept only as a non-null sentinel for the "do we have a UUID?" guards below.
   let uuidHex = normaliseUuid(rawUuid);
 
   const ensureUuid = async () => {
@@ -564,24 +623,22 @@ export async function getUserPermissions(userData = {}) {
       );
 
       if (rows.length && rows[0].uuid) {
+        rawUuid = rows[0].uuid;
         uuidHex = normaliseUuid(rows[0].uuid);
         return;
       }
     }
 
     if (username) {
-      const rows = await runQuery(
-        `SELECT uuid FROM luckPermsPlayers WHERE LOWER(username) = LOWER(?) LIMIT 1`,
+      // LP stores uuid as VARCHAR(36) with dashes — select it as-is, no HEX() conversion.
+      const rows = await runLuckPermsQuery(
+        `SELECT uuid FROM ${LUCKPERMS_PLAYERS_TABLE} WHERE LOWER(username) = LOWER(?) LIMIT 1`,
         [username]
       );
 
-      if (rows.length) {
-        const candidate = rows[0].uuid;
-        if (Buffer.isBuffer(candidate)) {
-          uuidHex = candidate.toString("hex");
-        } else {
-          uuidHex = normaliseUuid(candidate);
-        }
+      if (rows.length && rows[0].uuid) {
+        rawUuid = rows[0].uuid;
+        uuidHex = normaliseUuid(rows[0].uuid);
       }
     }
   };
@@ -617,14 +674,14 @@ export async function getUserPermissions(userData = {}) {
 
   if (uuidHex) {
     try {
-      const directPermissions = await runQuery(
+      const directPermissions = await runLuckPermsQuery(
         `SELECT permission
            FROM ${LUCKPERMS_USER_PERMISSIONS_TABLE}
-          WHERE uuid = UNHEX(?)
+          WHERE uuid = ?
             AND permission NOT LIKE 'group.%'
             AND value = 1
             AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
-        [uuidHex]
+        [rawUuid]
       );
 
       directPermissions.forEach(({ permission }) => pushPermission(permission));
@@ -633,15 +690,15 @@ export async function getUserPermissions(userData = {}) {
     }
 
     try {
-      const rankRows = await runQuery(
+      const rankRows = await runLuckPermsQuery(
         `SELECT SUBSTRING_INDEX(permission, '.', -1) AS rankSlug
            FROM ${LUCKPERMS_USER_PERMISSIONS_TABLE}
-          WHERE uuid = UNHEX(?)
+          WHERE uuid = ?
             AND permission LIKE 'group.%'
             AND value = 1
             AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())
           ORDER BY permission`,
-        [uuidHex]
+        [rawUuid]
       );
 
       rankRows.forEach(({ rankSlug }) => queueRank(rankSlug, { direct: true }));
@@ -650,29 +707,21 @@ export async function getUserPermissions(userData = {}) {
     }
   }
 
-  if (!directRankOrder.length && userId) {
-    try {
-      const fallbackRanks = await runQuery(
-        `SELECT rankSlug
-           FROM userRanks
-          WHERE userId = ?`,
-        [userId]
-      );
-
-      fallbackRanks.forEach(({ rankSlug }) => queueRank(rankSlug, { direct: true }));
-    } catch (error) {
-      console.error("[PERMISSIONS] Failed to fetch fallback ranks from userRanks:", error);
-    }
-  }
+  // Note: no further fallback here — ensureUuid() above already tried
+  // resolving this user's uuid via the `users` table (and via LuckPerms'
+  // own players table by username), which is the only source the old
+  // `userRanks` view fallback could ever have matched against anyway (it
+  // joined luckperms_user_permissions.uuid = users.uuid). If uuidHex is
+  // still unset here, there's genuinely no uuid to resolve ranks from.
 
   if (!queuedRanks.length && uuidHex) {
     try {
-      const primaryGroupRows = await runQuery(
+      const primaryGroupRows = await runLuckPermsQuery(
         `SELECT primary_group AS rankSlug
-           FROM luckPermsPlayers
-          WHERE uuid = UNHEX(?)
+           FROM ${LUCKPERMS_PLAYERS_TABLE}
+          WHERE uuid = ?
           LIMIT 1`,
-        [uuidHex]
+        [rawUuid]
       );
 
       primaryGroupRows.forEach(({ rankSlug }) => queueRank(rankSlug, { direct: true }));
@@ -682,26 +731,27 @@ export async function getUserPermissions(userData = {}) {
   }
 
   while (queuedRanks.length) {
-    const currentRank = queuedRanks.shift();
+    const currentBatch = queuedRanks.splice(0, queuedRanks.length);
+    const placeholders = currentBatch.map(() => "?").join(", ");
 
     try {
-      const groupPermissions = await runQuery(
-        `SELECT permission
+      const groupPermissions = await runLuckPermsQuery(
+        `SELECT name, permission
            FROM ${LUCKPERMS_GROUP_PERMISSIONS_TABLE}
-          WHERE name = ?
+          WHERE name IN (${placeholders})
             AND value = 1
             AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
-        [currentRank]
+        currentBatch
       );
 
-      groupPermissions.forEach(({ permission }) => {
+      groupPermissions.forEach(({ name, permission }) => {
         if (!permission) {
           return;
         }
 
         if (permission.startsWith("group.")) {
           const inherited = permission.substring("group.".length).trim();
-          if (inherited && inherited !== currentRank) {
+          if (inherited && inherited !== name) {
             queueRank(inherited);
           }
           return;
@@ -710,43 +760,22 @@ export async function getUserPermissions(userData = {}) {
         pushPermission(permission);
       });
     } catch (error) {
-      console.error(`[PERMISSIONS] Failed to fetch permissions for group '${currentRank}':`, error);
-    }
-  }
-
-  if (userId) {
-    try {
-      const fallbackPermissions = await runQuery(
-        `SELECT DISTINCT permission
-           FROM userPermissions
-          WHERE userId = ?`,
-        [userId]
+      console.error(
+        `[PERMISSIONS] Failed to fetch permissions for groups [${currentBatch.join(", ")}]:`,
+        error
       );
-
-      fallbackPermissions.forEach(({ permission }) => pushPermission(permission));
-    } catch (error) {
-      console.error("[PERMISSIONS] Failed to fetch fallback user permissions:", error);
     }
   }
 
-  // Fallback: also resolve group permissions via the rankPermissions view
-  // for all known groups, in case the direct group_permissions query missed any
-  if (queuedRankSet.size > 0) {
-    try {
-      const groupSlugs = Array.from(queuedRankSet);
-      const placeholders = groupSlugs.map(() => "?").join(", ");
-      const fallbackGroupPerms = await runQuery(
-        `SELECT DISTINCT permission
-           FROM rankPermissions
-          WHERE rankSlug IN (${placeholders})`,
-        groupSlugs
-      );
-
-      fallbackGroupPerms.forEach(({ permission }) => pushPermission(permission));
-    } catch (error) {
-      console.error("[PERMISSIONS] Failed to fetch fallback rank permissions:", error);
-    }
-  }
+  // Note: no further fallbacks here. Both the old `userPermissions` view
+  // fallback (keyed on users.uuid — the same uuid ensureUuid() already
+  // resolved, or failed to, above) and the old `rankPermissions` view
+  // fallback (the same luckperms_group_permissions data the while-loop
+  // above already fetches directly, minus the expiry filter it correctly
+  // applies) were redundant with — and, for the expiry case, actively less
+  // correct than — the direct LuckPerms queries already run above. LuckPerms
+  // lives on a separate MySQL server from the main app DB, so those views
+  // couldn't be joined cross-server reliably anyway.
 
   const permissions = Array.from(permissionSet);
   permissions.userRanks = directRankOrder;
@@ -755,27 +784,32 @@ export async function getUserPermissions(userData = {}) {
 }
 
 export async function getUserStats(userId) {
-  return new Promise((resolve) => {
+  const playtimeResult = await new Promise((resolve, reject) => {
     db.query(
-      `SELECT SUM(TIME_TO_SEC(TIMEDIFF(COALESCE(sessionEnd, NOW()), sessionStart))) AS totalSeconds FROM gameSessions WHERE userId=?; SELECT COUNT(*) AS totalLogins FROM gameSessions WHERE userId = ?;`,
-      [userId, userId],
-      async function (err, results) {
-        if (err) {
-          throw err;
-        }
-
-        const seconds = results[0][0].totalSeconds;
-        const logins = results[1][0].totalLogins;
-
-        const userStats = {
-          totalPlaytime: convertSecondsToDuration(seconds),
-          totalLogins: logins,
-        };
-
-        resolve(userStats);
+      `SELECT SUM(TIME_TO_SEC(TIMEDIFF(COALESCE(sessionEnd, NOW()), sessionStart))) AS totalSeconds FROM gameSessions WHERE userId=?`,
+      [userId],
+      function (err, results) {
+        if (err) return reject(err);
+        resolve(results);
       }
     );
   });
+
+  const loginsResult = await new Promise((resolve, reject) => {
+    db.query(
+      `SELECT COUNT(*) AS totalLogins FROM gameSessions WHERE userId = ?`,
+      [userId],
+      function (err, results) {
+        if (err) return reject(err);
+        resolve(results);
+      }
+    );
+  });
+
+  return {
+    totalPlaytime: convertSecondsToDuration(playtimeResult[0].totalSeconds),
+    totalLogins: loginsResult[0].totalLogins,
+  };
 }
 
 export function convertSecondsToDuration(seconds) {
@@ -784,80 +818,153 @@ export function convertSecondsToDuration(seconds) {
   const DAY = 24 * HOUR;
   const MONTH = 30 * DAY;
 
-  if (seconds < MINUTE) {
-    return `${seconds} seconds`;
-  } else if (seconds < HOUR) {
-    return `${Math.floor(seconds / MINUTE)} minutes`;
-  } else if (seconds < DAY) {
-    return `${Math.floor(seconds / HOUR)} hours`;
-  } else if (seconds < MONTH) {
-    return `${Math.floor(seconds / DAY)} days`;
-  } else {
-    return `${Math.floor(seconds / MONTH)} months`;
-  }
+  const s = Math.max(0, Number(seconds) || 0);
+
+  if (s === 0) return "None yet";
+  if (s < MINUTE) return `${s} seconds`;
+  if (s < HOUR) return `${Math.floor(s / MINUTE)} minutes`;
+  if (s < DAY) return `${Math.floor(s / HOUR)} hours`;
+  if (s < MONTH) return `${Math.floor(s / DAY)} days`;
+  return `${Math.floor(s / MONTH)} months`;
 }
 
+// LuckPerms lives on a separate MySQL server from the main app DB, so this
+// can't be read via the (cross-server, unreliable) `rankPermissions` view —
+// query luckpermsDb directly.
 export async function getRankPermissions(allRanks) {
-  return new Promise((resolve) => {
-    db.query(
-      `SELECT DISTINCT permission FROM rankPermissions WHERE FIND_IN_SET(rankSlug, ?)`,
-      [allRanks.join()],
-      async function (err, results) {
-        if (err) {
-          throw err;
-        }
+  if (!Array.isArray(allRanks) || allRanks.length === 0) {
+    return [];
+  }
 
-        let rankPermissions = results.map((a) => a.permission);
-        resolve(rankPermissions);
-      }
-    );
-  });
+  const placeholders = allRanks.map(() => "?").join(", ");
+  const results = await runLuckPermsQuery(
+    `SELECT DISTINCT permission
+       FROM ${LUCKPERMS_GROUP_PERMISSIONS_TABLE}
+      WHERE name IN (${placeholders})
+        AND permission NOT LIKE 'group.%'
+        AND value = 1
+        AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
+    allRanks
+  );
+
+  return results.map((row) => row.permission).filter(Boolean);
 }
 
 export async function getUserRanks(userData, userRanks = null) {
-  return new Promise((resolve) => {
-    // Call with just userData only get directly assigned Ranks
-    if (userRanks === null) {
-      db.query(
-        `SELECT rankSlug, title FROM userRanks WHERE userId = ?`,
-        [userData.userId],
-        async function (err, results) {
-          if (err) {
-            throw err;
-          }
+  const resolveLuckPermsUuid = async (input) => {
+    if (typeof input === "string") {
+      const username = input.trim();
+      if (!username) return null;
 
-          let userRanks = results.map((a) => ({
-            ["rankSlug"]: a.rankSlug,
-            ["title"]: a.title,
-          }));
-          resolve(userRanks);
-        }
+      const localUsers = await runQuery(
+        `SELECT uuid FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1`,
+        [username]
       );
-      // Ranks were passed in meaning we are looking for nested ranks
-    } else {
-      db.query(
-        `SELECT rankSlug FROM rankRanks WHERE FIND_IN_SET(parentRankSlug, ?)`,
-        [userRanks.join()],
-        async function (err, results) {
-          if (err) {
-            throw err;
-          }
+      if (localUsers.length && localUsers[0].uuid) {
+        return localUsers[0].uuid;
+      }
 
-          let childRanks = results.map((a) => a.rankSlug);
-          let allRanks = userRanks.concat(childRanks);
-          // Using a set of the array removes duplicates and prevents infinite loops
-          let removeDuplicates = [...new Set(allRanks)];
-
-          // If after removing duplicates the length of the new list is not longer than the old list we are done simply resolve
-          if (userRanks.length <= removeDuplicates.length) {
-            resolve(removeDuplicates);
-          } else {
-            resolve(getUserRanks(userData, removeDuplicates));
-          }
-        }
+      const lpUsers = await runLuckPermsQuery(
+        `SELECT uuid FROM ${LUCKPERMS_PLAYERS_TABLE} WHERE LOWER(username) = LOWER(?) LIMIT 1`,
+        [username]
       );
+      return lpUsers[0]?.uuid || null;
     }
-  });
+
+    if (input?.uuid) {
+      return input.uuid;
+    }
+
+    if (input?.userId) {
+      const users = await runQuery(
+        `SELECT uuid FROM users WHERE userId = ? LIMIT 1`,
+        [input.userId]
+      );
+      return users[0]?.uuid || null;
+    }
+
+    if (input?.username) {
+      return resolveLuckPermsUuid(input.username);
+    }
+
+    return null;
+  };
+
+  // Call with just userData only get directly assigned ranks.
+  if (userRanks === null) {
+    const rawUuid = await resolveLuckPermsUuid(userData);
+    if (!rawUuid) {
+      return [];
+    }
+
+    const [groupRows, titleRows] = await Promise.all([
+      runLuckPermsQuery(
+        `SELECT SUBSTRING_INDEX(permission, '.', -1) AS rankSlug
+           FROM ${LUCKPERMS_USER_PERMISSIONS_TABLE}
+          WHERE uuid = ?
+            AND permission LIKE 'group.%'
+            AND value = 1
+            AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())
+          ORDER BY permission`,
+        [rawUuid]
+      ),
+      runLuckPermsQuery(
+        `SELECT permission
+           FROM ${LUCKPERMS_USER_PERMISSIONS_TABLE}
+          WHERE uuid = ?
+            AND permission LIKE 'meta.group.%.title.%'
+            AND value = 1
+            AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
+        [rawUuid]
+      ),
+    ]);
+
+    const titleByRankSlug = {};
+    for (const { permission } of titleRows) {
+      const [rankSlug, title] = String(permission || "")
+        .replace(/^meta\.group\./, "")
+        .split(/\.title\./);
+
+      if (rankSlug && title) {
+        titleByRankSlug[rankSlug] = title;
+      }
+    }
+
+    return groupRows.map((row) => ({
+      rankSlug: row.rankSlug,
+      title: titleByRankSlug[row.rankSlug] || null,
+    }));
+  }
+
+  if (!Array.isArray(userRanks) || userRanks.length === 0) {
+    return [];
+  }
+
+  const seen = new Set(userRanks.filter(Boolean));
+  const queue = [...seen];
+
+  while (queue.length) {
+    const batch = queue.splice(0, queue.length);
+    const placeholders = batch.map(() => "?").join(", ");
+    const childRows = await runLuckPermsQuery(
+      `SELECT SUBSTRING_INDEX(permission, '.', -1) AS rankSlug
+         FROM ${LUCKPERMS_GROUP_PERMISSIONS_TABLE}
+        WHERE name IN (${placeholders})
+          AND permission LIKE 'group.%'
+          AND value = 1
+          AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
+      batch
+    );
+
+    for (const { rankSlug } of childRows) {
+      if (rankSlug && !seen.has(rankSlug)) {
+        seen.add(rankSlug);
+        queue.push(rankSlug);
+      }
+    }
+  }
+
+  return [...seen];
 }
 
 export async function checkPermissions(username, permissionNode) {
@@ -948,6 +1055,84 @@ export async function linkDiscordAccount(userId, discordId, discordHandle = null
       }
     );
   });
+}
+
+// Repoint the rows that reference a soon-to-be-deleted user row onto the
+// surviving row. supportTickets.userId / supportTicketMessages.userId are
+// ON DELETE CASCADE, so this MUST run before the placeholder row is deleted
+// or the ticket that triggered the ghost account gets destroyed with it.
+// supportTicketParticipants has a UNIQUE(ticketId, userId), hence UPDATE IGNORE
+// plus a follow-up delete of any rows that could not be moved.
+async function repointUserReferences(fromUserId, toUserId) {
+  await runQuery(`UPDATE supportTickets SET userId = ? WHERE userId = ?`, [toUserId, fromUserId]);
+  await runQuery(`UPDATE supportTicketMessages SET userId = ? WHERE userId = ?`, [toUserId, fromUserId]);
+  await runQuery(`UPDATE userNotifications SET userId = ? WHERE userId = ?`, [toUserId, fromUserId]);
+  await runQuery(
+    `UPDATE IGNORE supportTicketParticipants SET userId = ? WHERE userId = ?`,
+    [toUserId, fromUserId]
+  );
+  await runQuery(`DELETE FROM supportTicketParticipants WHERE userId = ?`, [fromUserId]);
+}
+
+/*
+    Merge a placeholder ("ghost") user row into a real account row.
+
+    A placeholder row is created by createUnlinkedUser when a Discord user
+    opens a support ticket before linking a Minecraft account. When that
+    person later registers with their real Minecraft username we want to
+    keep the real account and fold the placeholder's Discord link and
+    ticket history into it rather than blocking registration.
+
+    - Transfers discordId from the placeholder onto the surviving row when
+      the surviving row does not already have one.
+    - Repoints ticket / notification foreign keys onto the surviving row.
+    - Drops the placeholder's pending verify-link rows (keyed by uuid).
+    - Deletes the placeholder row.
+
+    Returns a summary object describing what was moved (for logging).
+*/
+export async function mergePlaceholderUser(placeholderUserId, survivingUserId) {
+  if (!placeholderUserId || !survivingUserId || placeholderUserId === survivingUserId) {
+    throw new Error("mergePlaceholderUser requires two distinct user ids");
+  }
+
+  const [placeholder] = await runQuery(`SELECT * FROM users WHERE userId = ? LIMIT 1`, [
+    placeholderUserId,
+  ]);
+  const [surviving] = await runQuery(`SELECT * FROM users WHERE userId = ? LIMIT 1`, [
+    survivingUserId,
+  ]);
+
+  if (!placeholder) throw new Error(`Placeholder user ${placeholderUserId} not found`);
+  if (!surviving) throw new Error(`Surviving user ${survivingUserId} not found`);
+
+  const summary = {
+    placeholderUserId,
+    survivingUserId,
+    discordIdTransferred: false,
+  };
+
+  if (placeholder.discordId && !surviving.discordId) {
+    await runQuery(`UPDATE users SET discordId = ? WHERE userId = ?`, [
+      placeholder.discordId,
+      survivingUserId,
+    ]);
+    summary.discordIdTransferred = true;
+  }
+
+  // Clear the placeholder's discordId first so the users.discordId lookups
+  // (and any unique expectations callers have) never see it on two rows.
+  await runQuery(`UPDATE users SET discordId = NULL WHERE userId = ?`, [placeholderUserId]);
+
+  await repointUserReferences(placeholderUserId, survivingUserId);
+
+  if (placeholder.uuid) {
+    await runQuery(`DELETE FROM userVerifyLink WHERE uuid = ?`, [placeholder.uuid]);
+  }
+
+  await runQuery(`DELETE FROM users WHERE userId = ?`, [placeholderUserId]);
+
+  return summary;
 }
 
 export async function unlinkDiscordAccount(userId) {

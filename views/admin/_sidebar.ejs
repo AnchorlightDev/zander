@@ -1,0 +1,156 @@
+<%
+  /**
+   * _sidebar.ejs — Admin sidebar generated from the page registry.
+   *
+   * Reads from:
+   *   adminMenuGroups  (array of { group, items[] })  — preferred, set via
+   *                    adminViewData() helper or the dashboard preHandler hook.
+   *   req              (Fastify request)               — req.adminMenuGroups
+   *                    used as a fallback.
+   *
+   * Active-state detection compares each page's path against the current URL.
+   */
+  const _menuGroups = (typeof adminMenuGroups !== 'undefined' ? adminMenuGroups : null)
+                   || (req && req.adminMenuGroups)
+                   || [];
+
+  const _currentPath = (typeof adminCurrentPath !== 'undefined' ? adminCurrentPath : null)
+                    || (req && req.url ? req.url.split('?')[0] : '/dashboard');
+
+  const _allPages = _menuGroups.flatMap(group => group.items);
+  const _activePage = _allPages
+    .filter(page => page.path === '/dashboard'
+      ? _currentPath === '/dashboard'
+      : _currentPath === page.path || _currentPath.startsWith(`${page.path}/`))
+    .sort((a, b) => b.path.length - a.path.length)[0];
+
+  // Keep the current module immediately below the primary dashboard links.
+  const _activeGroup = _menuGroups.find(group =>
+    group.group && group.items.some(page => page === _activePage)
+  );
+  const _orderedMenuGroups = [
+    ..._menuGroups.filter(group => !group.group),
+    ...(_activeGroup ? [_activeGroup] : []),
+    ..._menuGroups.filter(group => group.group && group !== _activeGroup),
+  ];
+
+  function _isActive(pagePath) {
+    return Boolean(_activePage && _activePage.path === pagePath);
+  }
+%>
+
+<!-- ── Admin Sidebar ────────────────────────────────────────────────────── -->
+<div id="adminmenuback" role="navigation" aria-label="Admin menu">
+  <ul id="adminmenu" role="menubar">
+
+    <% for (const _group of _orderedMenuGroups) { %>
+
+      <% if (_group.group) { %>
+        <!-- Section heading -->
+        <li class="wp-menu-heading" role="presentation" aria-hidden="true">
+          <%= _group.group %>
+        </li>
+      <% } %>
+
+      <% for (const _page of _group.items) { %>
+        <li class="wp-menu-item <%= _isActive(_page.path) ? 'current' : '' %>"
+            role="none">
+          <a href="<%= _page.path %>"
+             role="menuitem"
+             aria-current="<%= _isActive(_page.path) ? 'page' : 'false' %>"
+             title="<%= _page.title %>">
+            <span class="wp-menu-icon" aria-hidden="true"><i class="<%= _page.icon %>"></i></span>
+            <span class="wp-menu-label"><%= _page.menuTitle %></span>
+          </a>
+        </li>
+      <% } %>
+
+    <% } %>
+
+    <% if (_menuGroups.length === 0) { %>
+      <!-- Fallback: no menu items available (insufficient permissions or no features enabled) -->
+      <li class="wp-menu-item">
+        <a href="/dashboard">
+          <span class="wp-menu-icon"><i class="fas fa-home"></i></span>
+          <span class="wp-menu-label">Overview</span>
+        </a>
+      </li>
+    <% } %>
+
+  </ul>
+</div>
+
+<!-- Overlay backdrop (mobile only — closes the sidebar when tapped) -->
+<div id="wp-admin-overlay" aria-hidden="true"></div>
+
+<script>
+  (function () {
+    var toggle  = document.getElementById('ab-mobile-toggle');
+    var sidebar = document.getElementById('adminmenuback');
+    var overlay = document.getElementById('wp-admin-overlay');
+
+    if (!toggle || !sidebar || !overlay) return;
+
+    // iOS Safari requires locking both <html> and <body> to prevent background scroll
+    function lockScroll() {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    }
+    function unlockScroll() {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }
+
+    function isMobile() {
+      return window.innerWidth < 992;
+    }
+
+    function openSidebar() {
+      sidebar.classList.add('mobile-open');
+      overlay.classList.add('visible');
+      toggle.setAttribute('aria-expanded', 'true');
+      lockScroll();
+    }
+
+    function closeSidebar() {
+      sidebar.classList.remove('mobile-open');
+      overlay.classList.remove('visible');
+      toggle.setAttribute('aria-expanded', 'false');
+      unlockScroll();
+    }
+
+    // Toggle on hamburger click
+    toggle.addEventListener('click', function (e) {
+      e.preventDefault();
+      sidebar.classList.contains('mobile-open') ? closeSidebar() : openSidebar();
+    });
+
+    // Close when tapping the overlay backdrop
+    overlay.addEventListener('click', closeSidebar);
+
+    // On mobile: close the sidebar when a nav link is tapped so scroll is
+    // unlocked before the new page loads (prevents stuck body-overflow:hidden)
+    sidebar.addEventListener('click', function (e) {
+      if (!isMobile()) return;
+      var target = e.target.closest('a[href]');
+      if (target && !target.getAttribute('href').startsWith('#')) {
+        closeSidebar();
+      }
+    });
+
+    // Close on ESC key
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && sidebar.classList.contains('mobile-open')) {
+        closeSidebar();
+        toggle.focus();
+      }
+    });
+
+    // When viewport resizes from mobile → desktop, clean up any stuck state
+    window.addEventListener('resize', function () {
+      if (!isMobile() && sidebar.classList.contains('mobile-open')) {
+        closeSidebar();
+      }
+    });
+  }());
+</script>

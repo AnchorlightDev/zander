@@ -90,59 +90,83 @@
 
       <div class="forums-thread">
         <% posts.forEach(function(post) { %>
+          <% const isAuthor = currentUserId && post.user && currentUserId === post.user.userId; %>
           <article id="post-<%= post.postId %>" class="forums-post card shadow-sm mb-4 <%= post.isOriginal ? 'original-post' : '' %>">
             <div class="card-body">
-              <div class="forums-post-layout">
-                <div class="forums-post-author mb-2">
+              <div class="forums-post-header">
+                <div class="forums-post-author">
                   <% if (post.user) { %>
-                    <div class="d-flex align-items-center gap-2">
-                      <img src="<%= post.user.avatarUrl %>" alt="<%= post.user.username %> avatar" class="forums-avatar-inline rounded-circle" loading="lazy">
-                      <div>
-                        <div class="fw-semibold"><a href="/profile/<%= post.user.username %>"><%= post.user.username %></a></div>
+                    <img src="<%= post.user.avatarUrl %>" alt="<%= post.user.username %> avatar" class="forums-avatar-inline rounded-circle" loading="lazy">
+                    <div class="forums-post-author-details">
+                      <div class="forums-post-author-line">
+                        <a class="forums-post-username" href="/profile/<%= post.user.username %>"><%= post.user.username %></a>
                         <% if (post.user.ranks && post.user.ranks.length) { %>
-                          <div class="d-flex flex-wrap gap-1 mt-1">
+                          <div class="forums-post-ranks">
                             <% post.user.ranks.forEach(function(rank) { %>
-                              <span class="badge rounded-pill" style="background-color: <%= rank.badgeColour || '#1f2937' %>; color: <%= rank.textColour || '#ffffff' %>; font-size: 0.7rem;"><%= rank.displayName %></span>
+                              <span class="forums-post-rank" style="background-color: <%= rank.badgeColour || '#1f2937' %>; color: <%= rank.textColour || '#ffffff' %>;"><%= rank.displayName %></span>
                             <% }); %>
                           </div>
                         <% } %>
                       </div>
+                      <div class="forums-post-date">
+                        Posted <span data-relative-time="<%= new Date(post.createdAt).toISOString() %>"></span>
+                        <% if (post.updatedAt && new Date(post.updatedAt).getTime() !== new Date(post.createdAt).getTime()) { %>
+                          · <span class="edited-indicator" data-edited-time="<%= new Date(post.updatedAt).toISOString() %>">edited</span>
+                        <% } %>
+                      </div>
                     </div>
                   <% } else { %>
-                    <div class="fw-semibold">Unknown</div>
+                    <div class="forums-post-author-details"><span class="forums-post-username">Unknown</span></div>
                   <% } %>
                 </div>
-                <div class="forums-post-content">
-                  <div class="forums-post-meta d-flex justify-content-between align-items-start flex-wrap gap-2">
-                    <div class="text-muted small">
-                      Posted <span data-relative-time="<%= new Date(post.createdAt).toISOString() %>"></span>
-                      <% if (post.updatedAt && new Date(post.updatedAt).getTime() !== new Date(post.createdAt).getTime()) { %>
-                        · <span class="edited-indicator" data-edited-time="<%= new Date(post.updatedAt).toISOString() %>">edited</span>
+              </div>
+              <div class="forums-post-content">
+                <% if (post.replyTo && post.replyTo.user) { %>
+                  <a href="#post-<%= post.replyTo.postId %>" class="forums-reply-context">
+                    <i class="fa-solid fa-reply" aria-hidden="true"></i>
+                    <span>Replying to <strong><%= post.replyTo.user.username %></strong></span>
+                    <i class="fa-solid fa-arrow-up-right-from-square forums-reply-context-link" aria-hidden="true"></i>
+                  </a>
+                <% } %>
+                <div class="forums-post-body">
+                  <%- post.content %>
+                </div>
+
+                <div class="forums-post-actions" aria-label="Post actions">
+                  <div class="forums-post-actions-primary">
+                      <% if (canReply && post.user) { %>
+                        <button type="button" class="forums-post-action forums-reply-action"
+                                data-reply-mode="reply" data-post-id="<%= post.postId %>" data-username="<%= post.user.username %>">
+                          <i class="fa-solid fa-reply"></i> Reply
+                        </button>
+                        <button type="button" class="forums-post-action forums-reply-action"
+                                data-reply-mode="quote" data-post-id="<%= post.postId %>" data-username="<%= post.user.username %>">
+                          <i class="fa-solid fa-quote-left"></i> Quote
+                        </button>
                       <% } %>
-                    </div>
-                    <div class="d-flex gap-2">
-                      <% const isAuthor = currentUserId && post.user && currentUserId === post.user.userId; %>
+                  </div>
+                  <div class="forums-post-actions-secondary">
                       <% if (canModerate && post.revisions && post.revisions.length) { %>
-                        <a class="btn btn-sm btn-outline-secondary" href="/forums/post/<%= post.postId %>/revisions"><i class="fa-solid fa-clock-rotate-left"></i> History (<%= post.revisions.length %>)</a>
+                        <a class="forums-post-action" href="/forums/post/<%= post.postId %>/revisions"><i class="fa-solid fa-clock-rotate-left"></i> History (<%= post.revisions.length %>)</a>
                       <% } %>
                       <% if (post.isOriginal) { %>
                         <% if (canModerate || (currentUserId && currentUserId === discussion.createdBy)) { %>
-                          <a class="btn btn-sm btn-outline-secondary" href="/forums/discussion/<%= discussion.discussionId %>/edit"><i class="fa-solid fa-pen"></i> Edit</a>
+                          <a class="forums-post-action" href="/forums/discussion/<%= discussion.discussionId %>/edit"><i class="fa-solid fa-pen"></i> Edit</a>
                         <% } %>
                       <% } else { %>
                         <% if (canModerate || isAuthor) { %>
-                          <a class="btn btn-sm btn-outline-secondary" href="/forums/post/<%= post.postId %>/edit"><i class="fa-solid fa-pen"></i> Edit</a>
+                          <a class="forums-post-action" href="/forums/post/<%= post.postId %>/edit"><i class="fa-solid fa-pen"></i> Edit</a>
                         <% } %>
                         <% if (canModerate || isAuthor || canDeleteAnyPost) { %>
                           <form action="/forums/post/<%= post.postId %>/delete" method="post" class="d-inline" onsubmit="return confirm('Delete this reply?');">
-                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i> Delete</button>
+                            <button type="submit" class="forums-post-action is-danger"><i class="fa-solid fa-trash"></i> Delete</button>
                           </form>
                         <% } %>
                       <% } %>
                       <% if (canReportContent && post.user) { %>
                         <button
                           type="button"
-                          class="btn btn-sm btn-outline-danger forums-report-button"
+                          class="forums-post-action is-danger forums-report-button"
                           data-bs-toggle="modal"
                           data-bs-target="#reportPostModal"
                           data-post-id="<%= post.postId %>"
@@ -153,14 +177,233 @@
                           <i class="fa-solid fa-flag"></i> Report
                         </button>
                       <% } %>
-                    </div>
-                  </div>
-                  <div class="forums-post-body mt-3">
-                    <%- post.content %>
                   </div>
                 </div>
+
+                  <% if (post.isOriginal && typeof poll !== 'undefined' && poll) { %>
+                    <div class="forums-poll mt-4">
+                      <div class="forums-poll-header">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                          <h6 class="mb-0"><i class="fa-solid fa-chart-bar me-1"></i>Poll</h6>
+                          <span class="forums-poll-badge <%= poll.isOpen ? 'open' : 'closed' %>">
+                            <i class="fa-solid fa-circle" style="font-size:0.5rem;"></i>
+                            <%= poll.isOpen ? 'Open' : 'Closed' %>
+                          </span>
+                        </div>
+                        <p class="forums-poll-question mt-2 mb-0"><%= poll.question %></p>
+                      </div>
+
+                      <% const isPicturePoll = poll.options.some(function(o) { return !!o.imageUrl; }); %>
+                      <div class="forums-poll-body">
+
+                        <% if (isPicturePoll) { %>
+                          <%/* ── Picture poll results grid ── */%>
+                          <div class="forums-poll-pic-grid">
+                            <% poll.options.forEach(function(opt) { %>
+                              <div class="forums-poll-pic-card <%= opt.votedByViewer ? 'voted' : '' %>">
+                                <div class="forums-poll-pic-img-wrap">
+                                  <% if (opt.imageUrl) { %>
+                                    <img src="<%= opt.imageUrl %>" alt="<%= opt.label %>" class="forums-poll-pic-img">
+                                    <button type="button" class="forums-poll-pic-enlarge" data-img-src="<%= opt.imageUrl %>" data-img-alt="<%= opt.label %>" data-bs-toggle="modal" data-bs-target="#pollImageModal" title="Enlarge image"><i class="fa-solid fa-expand"></i></button>
+                                  <% } else { %>
+                                    <div class="forums-poll-pic-img-placeholder"><i class="fa-regular fa-image"></i></div>
+                                  <% } %>
+                                  <% if (opt.votedByViewer) { %>
+                                    <span class="forums-poll-pic-check"><i class="fa-solid fa-circle-check"></i></span>
+                                  <% } %>
+                                  <span class="forums-poll-pic-pct-badge"><%= opt.percentage %>%</span>
+                                </div>
+                                <div class="forums-poll-pic-card-body">
+                                  <div class="forums-poll-pic-label"><%= opt.label %></div>
+                                  <div class="forums-poll-bar-track" style="margin-bottom:0.3rem;">
+                                    <div class="forums-poll-bar-fill <%= opt.votedByViewer ? 'voted' : '' %>"
+                                         style="width:<%= opt.percentage %>%"></div>
+                                  </div>
+                                  <div class="forums-poll-pic-meta">
+                                    <span><%= opt.voteCount %> vote<%= opt.voteCount !== 1 ? 's' : '' %></span>
+                                    <% if (poll.showVoters && opt.voters && opt.voters.length > 0) { %>
+                                      <span class="forums-poll-voters-inline">
+                                        <% opt.voters.forEach(function(voter) { %>
+                                          <a href="/profile/<%= voter.username %>" title="<%= voter.username %>">
+                                            <img src="<%= voter.avatarUrl %>" alt="<%= voter.username %>" class="forums-poll-voter-avatar">
+                                          </a>
+                                        <% }); %>
+                                      </span>
+                                    <% } %>
+                                  </div>
+                                </div>
+                              </div>
+                            <% }); %>
+                          </div>
+                        <% } else { %>
+                          <%/* ── Standard text poll results ── */%>
+                          <% poll.options.forEach(function(opt) { %>
+                            <div class="forums-poll-option">
+                              <div class="d-flex justify-content-between align-items-center mb-1">
+                                <div class="forums-poll-option-label-group">
+                                  <span class="forums-poll-option-label <%= opt.votedByViewer ? 'voted' : '' %>">
+                                    <% if (opt.votedByViewer) { %>
+                                      <i class="fa-solid fa-circle-check" style="color:#2f508c;font-size:0.85rem;"></i>
+                                    <% } %>
+                                    <%= opt.label %>
+                                  </span>
+                                  <% if (poll.showVoters && opt.voters && opt.voters.length > 0) { %>
+                                    <span class="forums-poll-voters-inline">
+                                      <% opt.voters.forEach(function(voter) { %>
+                                        <a href="/profile/<%= voter.username %>" title="<%= voter.username %>">
+                                          <img src="<%= voter.avatarUrl %>" alt="<%= voter.username %>" class="forums-poll-voter-avatar">
+                                        </a>
+                                      <% }); %>
+                                    </span>
+                                  <% } %>
+                                </div>
+                                <span class="forums-poll-bar-pct"><%= opt.voteCount %> · <%= opt.percentage %>%</span>
+                              </div>
+                              <div class="forums-poll-bar-track">
+                                <div class="forums-poll-bar-fill <%= opt.votedByViewer ? 'voted' : '' %>"
+                                     style="width:<%= opt.percentage %>%"></div>
+                              </div>
+                            </div>
+                          <% }); %>
+                        <% } %>
+
+                        <% if (currentUser && poll.isOpen) { %>
+                          <% if (poll.viewerCanVote) { %>
+                            <div class="forums-poll-vote-controls">
+                              <form action="/forums/discussion/<%= discussion.discussionId %>/poll/vote" method="post">
+                                <% if (isPicturePoll) { %>
+                                  <p class="small text-muted mb-2">Cast your vote<% if (poll.allowMultiple) { %> — multiple choices allowed<% } %>:</p>
+                                  <div class="forums-poll-pic-vote-grid">
+                                    <% poll.options.forEach(function(opt) { %>
+                                      <label class="forums-poll-pic-vote-card" for="voteOpt-<%= opt.optionId %>">
+                                        <input class="forums-poll-pic-vote-input"
+                                               type="<%= poll.allowMultiple ? 'checkbox' : 'radio' %>"
+                                               name="optionId" value="<%= opt.optionId %>"
+                                               id="voteOpt-<%= opt.optionId %>">
+                                        <div class="forums-poll-pic-img-wrap">
+                                          <% if (opt.imageUrl) { %>
+                                            <img src="<%= opt.imageUrl %>" alt="<%= opt.label %>" class="forums-poll-pic-img">
+                                            <button type="button" class="forums-poll-pic-enlarge" data-img-src="<%= opt.imageUrl %>" data-img-alt="<%= opt.label %>" data-bs-toggle="modal" data-bs-target="#pollImageModal" title="Enlarge image" onclick="event.preventDefault();event.stopPropagation();"><i class="fa-solid fa-expand"></i></button>
+                                          <% } else { %>
+                                            <div class="forums-poll-pic-img-placeholder"><i class="fa-regular fa-image"></i></div>
+                                          <% } %>
+                                          <span class="forums-poll-pic-vote-check-overlay"><i class="fa-solid fa-circle-check"></i></span>
+                                        </div>
+                                        <div class="forums-poll-pic-vote-label"><%= opt.label %></div>
+                                      </label>
+                                    <% }); %>
+                                  </div>
+                                <% } else { %>
+                                  <p class="small text-muted mb-2">Cast your vote<% if (poll.allowMultiple) { %> — multiple choices allowed<% } %>:</p>
+                                  <% poll.options.forEach(function(opt) { %>
+                                    <div class="form-check mb-1">
+                                      <input class="form-check-input"
+                                             type="<%= poll.allowMultiple ? 'checkbox' : 'radio' %>"
+                                             name="optionId" value="<%= opt.optionId %>"
+                                             id="voteOpt-<%= opt.optionId %>">
+                                      <label class="form-check-label" for="voteOpt-<%= opt.optionId %>"><%= opt.label %></label>
+                                    </div>
+                                  <% }); %>
+                                <% } %>
+                                <button type="submit" class="btn btn-main btn-sm mt-2">
+                                  <i class="fa-solid fa-check me-1"></i>Submit Vote
+                                </button>
+                              </form>
+                            </div>
+                          <% } else if (poll.viewerCanChange) { %>
+                            <div class="forums-poll-vote-controls">
+                              <form action="/forums/discussion/<%= discussion.discussionId %>/poll/vote/change" method="post">
+                                <% if (isPicturePoll) { %>
+                                  <p class="small text-muted mb-2">Change your vote<% if (poll.allowMultiple) { %> — multiple choices allowed<% } %>:</p>
+                                  <div class="forums-poll-pic-vote-grid">
+                                    <% poll.options.forEach(function(opt) { %>
+                                      <label class="forums-poll-pic-vote-card" for="changeOpt-<%= opt.optionId %>">
+                                        <input class="forums-poll-pic-vote-input"
+                                               type="<%= poll.allowMultiple ? 'checkbox' : 'radio' %>"
+                                               name="optionId" value="<%= opt.optionId %>"
+                                               id="changeOpt-<%= opt.optionId %>"
+                                               <%= opt.votedByViewer ? 'checked' : '' %>>
+                                        <div class="forums-poll-pic-img-wrap">
+                                          <% if (opt.imageUrl) { %>
+                                            <img src="<%= opt.imageUrl %>" alt="<%= opt.label %>" class="forums-poll-pic-img">
+                                            <button type="button" class="forums-poll-pic-enlarge" data-img-src="<%= opt.imageUrl %>" data-img-alt="<%= opt.label %>" data-bs-toggle="modal" data-bs-target="#pollImageModal" title="Enlarge image" onclick="event.preventDefault();event.stopPropagation();"><i class="fa-solid fa-expand"></i></button>
+                                          <% } else { %>
+                                            <div class="forums-poll-pic-img-placeholder"><i class="fa-regular fa-image"></i></div>
+                                          <% } %>
+                                          <span class="forums-poll-pic-vote-check-overlay"><i class="fa-solid fa-circle-check"></i></span>
+                                        </div>
+                                        <div class="forums-poll-pic-vote-label"><%= opt.label %></div>
+                                      </label>
+                                    <% }); %>
+                                  </div>
+                                <% } else { %>
+                                  <p class="small text-muted mb-2">Change your vote<% if (poll.allowMultiple) { %> — multiple choices allowed<% } %>:</p>
+                                  <% poll.options.forEach(function(opt) { %>
+                                    <div class="form-check mb-1">
+                                      <input class="form-check-input"
+                                             type="<%= poll.allowMultiple ? 'checkbox' : 'radio' %>"
+                                             name="optionId" value="<%= opt.optionId %>"
+                                             id="changeOpt-<%= opt.optionId %>"
+                                             <%= opt.votedByViewer ? 'checked' : '' %>>
+                                      <label class="form-check-label" for="changeOpt-<%= opt.optionId %>"><%= opt.label %></label>
+                                    </div>
+                                  <% }); %>
+                                <% } %>
+                                <button type="submit" class="btn btn-outline-primary btn-sm mt-2">
+                                  <i class="fa-solid fa-rotate-right me-1"></i>Update Vote
+                                </button>
+                              </form>
+                            </div>
+                          <% } else if (poll.viewerHasVoted) { %>
+                            <div class="forums-poll-vote-controls">
+                              <p class="small text-muted mb-0">
+                                <i class="fa-solid fa-check me-1 text-success"></i>
+                                You have voted.<% if (!poll.allowVoteChange) { %> Vote changes are not allowed for this poll.<% } %>
+                              </p>
+                            </div>
+                          <% } %>
+                        <% } else if (!currentUser) { %>
+                          <div class="forums-poll-vote-controls">
+                            <a href="/login?returnTo=<%= encodeURIComponent(req.url) %>"
+                               class="btn btn-outline-primary btn-sm">
+                              <i class="fa-solid fa-right-to-bracket me-1"></i>Log in to vote
+                            </a>
+                          </div>
+                        <% } else if (!poll.isOpen) { %>
+                          <div class="forums-poll-vote-controls">
+                            <p class="small text-muted mb-0">
+                              <i class="fa-solid fa-lock me-1"></i>This poll is closed.
+                            </p>
+                          </div>
+                        <% } %>
+                      </div>
+
+                      <div class="forums-poll-footer d-flex flex-wrap gap-3">
+                        <span>
+                          <i class="fa-solid fa-users me-1"></i>
+                          <%= poll.totalVotes %> vote<%= poll.totalVotes !== 1 ? 's' : '' %>
+                        </span>
+                        <% if (poll.allowMultiple) { %>
+                          <span><i class="fa-solid fa-list-check me-1"></i>Multiple choices allowed</span>
+                        <% } %>
+                        <% if (poll.showVoters) { %>
+                          <span><i class="fa-solid fa-eye me-1"></i>Voters are public</span>
+                        <% } %>
+                        <% if (poll.expiresAt) { %>
+                          <span>
+                            <i class="fa-solid fa-clock me-1"></i>
+                            <% if (poll.isOpen) { %>
+                              Closes <span data-relative-time="<%= new Date(poll.expiresAt).toISOString() %>" data-relative-format="datetime"></span>
+                            <% } else { %>
+                              Closed <span data-relative-time="<%= new Date(poll.expiresAt).toISOString() %>" data-relative-format="datetime"></span>
+                            <% } %>
+                          </span>
+                        <% } %>
+                      </div>
+                    </div>
+                  <% } %>
+                </div>
               </div>
-            </div>
           </article>
         <% }); %>
       </div>
@@ -172,10 +415,15 @@
       <% } %>
 
       <% if (canReply) { %>
-        <div class="forums-card card shadow-sm mt-4">
+        <div class="forums-card card shadow-sm mt-4" id="forum-reply-composer">
           <div class="card-body">
-            <h5 class="mb-3">Post a reply</h5>
+            <h5 class="mb-3" id="forum-reply-heading">Post a reply</h5>
             <form action="/forums/discussion/<%= discussion.discussionId %>/<%= discussion.slug %>/reply" method="post">
+              <input type="hidden" name="replyToPostId" id="forum-reply-to-post-id" value="">
+              <div class="alert alert-light border d-none align-items-center justify-content-between gap-2 py-2 mb-3" id="forum-reply-target">
+                <span></span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="forum-reply-target-clear">Cancel</button>
+              </div>
               <%- include("../../partials/summerNoteEditor.ejs", {
                 editorElementName: "discussionReply",
                 editorPOSTElementName: "content",
@@ -447,6 +695,72 @@
 
 <script>
   (() => {
+    const composer = document.getElementById('forum-reply-composer');
+    const replyToInput = document.getElementById('forum-reply-to-post-id');
+    const replyHeading = document.getElementById('forum-reply-heading');
+    const replyTarget = document.getElementById('forum-reply-target');
+    const replyTargetText = replyTarget?.querySelector('span');
+    const replyEditor = document.getElementById('discussionReply');
+
+    const escapeHtml = (value) => String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    const appendToReplyEditor = (html) => {
+      if (!replyEditor) return;
+      const $editor = window.jQuery ? window.jQuery(replyEditor) : null;
+      if ($editor?.data('summernote')) {
+        const existing = $editor.summernote('isEmpty') ? '' : $editor.summernote('code');
+        $editor.summernote('code', existing + html);
+        $editor.summernote('focus');
+      } else {
+        replyEditor.value = (replyEditor.value || '') + html;
+        replyEditor.focus();
+      }
+    };
+
+    const clearReplyTarget = () => {
+      if (!replyToInput) return;
+      replyToInput.value = '';
+      replyHeading.textContent = 'Post a reply';
+      replyTarget.classList.add('d-none');
+      replyTarget.classList.remove('d-flex');
+    };
+
+    document.querySelectorAll('.forums-reply-action').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (!composer || !replyToInput) return;
+        const postId = button.dataset.postId;
+        const username = button.dataset.username || 'this user';
+        const mode = button.dataset.replyMode;
+        replyToInput.value = postId;
+        replyHeading.textContent = mode === 'quote' ? `Quote ${username}` : `Reply to ${username}`;
+        replyTargetText.textContent = `${mode === 'quote' ? 'Quoting' : 'Replying to'} ${username}'s post`;
+        replyTarget.classList.remove('d-none');
+        replyTarget.classList.add('d-flex');
+
+        if (mode === 'quote') {
+          const body = document.querySelector(`#post-${postId} .forums-post-body`);
+          const copy = body?.cloneNode(true);
+          copy?.querySelectorAll('blockquote, img, iframe, video, table').forEach((element) => element.remove());
+          let excerpt = (copy?.innerText || copy?.textContent || '').replace(/\s+/g, ' ').trim();
+          if (excerpt.length > 1000) excerpt = excerpt.slice(0, 997).trimEnd() + '...';
+          appendToReplyEditor(
+            `<blockquote class="forums-quoted-post"><p><strong>${escapeHtml(username)} wrote:</strong></p><p>${escapeHtml(excerpt)}</p></blockquote><p><br></p>`
+          );
+        } else {
+          appendToReplyEditor(`<p><strong>@${escapeHtml(username)}</strong>&nbsp;</p>`);
+        }
+
+        composer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+
+    document.getElementById('forum-reply-target-clear')?.addEventListener('click', clearReplyTarget);
+
     document.querySelectorAll('form[method="post"]:not([data-async])').forEach(form => {
       form.addEventListener('submit', () => {
         const btn = form.querySelector('button[type="submit"]');
@@ -458,7 +772,41 @@
         }, 0);
       });
     });
+
+    // Reload when the browser restores this page from the back-forward cache
+    // (bfcache). Without this, submitting a form and being redirected back to
+    // the same URL can result in the browser displaying the stale cached page
+    // (with disabled buttons and old content) instead of the fresh response.
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    });
   })();
+</script>
+
+<!-- Poll Image Enlarge Modal -->
+<div class="modal fade" id="pollImageModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content bg-transparent border-0 shadow-none">
+      <div class="modal-body p-0 text-center position-relative">
+        <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3" data-bs-dismiss="modal" aria-label="Close" style="z-index:1;"></button>
+        <img id="pollImageModalImg" src="" alt="" class="img-fluid rounded" style="max-height:80vh;">
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  var modal = document.getElementById('pollImageModal');
+  if (!modal) return;
+  modal.addEventListener('show.bs.modal', function(e) {
+    var trigger = e.relatedTarget;
+    if (!trigger) return;
+    document.getElementById('pollImageModalImg').src = trigger.dataset.imgSrc || '';
+    document.getElementById('pollImageModalImg').alt = trigger.dataset.imgAlt || '';
+  });
+})();
 </script>
 
 <%- include("../../modules/footer.ejs") %>

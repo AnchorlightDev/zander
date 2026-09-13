@@ -6,14 +6,17 @@
 <%- include("../modules/navigationBar.ejs") %>
 
 <%- include("../partials/miniHeader.ejs", {
-  headerTitle: "Minecraft Verification",
+  headerTitle: "Link Your Minecraft Account",
   backgroundImage: globalImage
 }) %>
 
 <section class="section">
   <div class="container">
     <div class="row justify-content-center">
-      <div class="col-12 col-md-6" style="margin-top: 10px;">
+
+      <!-- ── Steps column ───────────────────────────────────────────── -->
+      <div class="col-12 col-md-7" style="margin-top:10px;">
+
         <% if (req.cookies.alertType) { %>
           <%- include("../partials/alert.ejs", {
             alertType: req.cookies.alertType,
@@ -21,76 +24,228 @@
           }) %>
         <% } %>
 
-        <p>Join one of the verification servers below using the Minecraft account you registered with. The server will give you a secret 6 digit code. Enter it here to finish verifying your account.</p>
-
-        <% if (apiData.success == false) { %>
-          <%- include("../partials/alert.ejs", {
-            alertType: "danger",
-            content: apiData.message
-          }) %>
-        <% } else { %>
-          <% apiData.data.forEach(function (verifyServer) { %>
-            <div class="feature-item mb-4">
-              <h4 class="mb-2"><%= verifyServer.displayName %></h4>
-              <input type="text" class="form-control input-default text-center" value="<%= verifyServer.serverConnectionAddress %>" disabled>
-            </div>
-          <% }) %>
+        <% if (pendingUsername) { %>
+          <div class="alert alert-info d-flex align-items-center gap-2 mb-4 py-2">
+            <i class="fas fa-user-circle fa-lg"></i>
+            <span>Linking account: <strong><%= pendingUsername %></strong></span>
+          </div>
         <% } %>
 
-        <form id="verificationForm" method="post" action="<%= process.env.siteAddress %>/register/minecraft">
-          <div id="otp" class="inputs d-flex flex-row justify-content-center mt-4">
-            <input class="m-2 text-center form-control rounded" type="text" name="first" maxlength="1" autocomplete="off" required />
-            <input class="m-2 text-center form-control rounded" type="text" name="second" maxlength="1" autocomplete="off" required />
-            <input class="m-2 text-center form-control rounded" type="text" name="third" maxlength="1" autocomplete="off" required />
-            <input class="m-2 text-center form-control rounded" type="text" name="fourth" maxlength="1" autocomplete="off" required />
-            <input class="m-2 text-center form-control rounded" type="text" name="fifth" maxlength="1" autocomplete="off" required />
-            <input class="m-2 text-center form-control rounded" type="text" name="sixth" maxlength="1" autocomplete="off" required />
+        <!-- ── Step 1 ────────────────────────────────────────────────── -->
+        <div class="d-flex align-items-start gap-3 mb-4">
+          <div class="flex-shrink-0 d-flex align-items-center justify-content-center rounded-circle bg-primary text-white fw-bold"
+               style="width:36px;height:36px;font-size:16px;margin-top:2px;">1</div>
+          <div class="flex-fill">
+            <h5 class="mb-2">Get your code in Minecraft</h5>
+
+            <div class="alert alert-info d-flex gap-2 align-items-start py-2 px-3 mb-3" style="font-size:.875rem;">
+              <i class="fas fa-bolt mt-1 flex-shrink-0"></i>
+              <span><strong>Quickest way:</strong> join the main server as normal and run <code>/link</code> in chat. It replies with your 6-digit code straight away — skip to step&nbsp;3. The code lasts 5 minutes; run <code>/link</code> again for a new one.</span>
+            </div>
+
+            <p class="text-muted small mb-2"><strong>Banned from the main server?</strong> Use a verification server below instead — you'll be kicked with your code.</p>
+
+            <div class="alert alert-warning d-flex gap-2 align-items-start py-2 px-3 mb-3" style="font-size:.875rem;">
+              <i class="fas fa-exclamation-triangle mt-1 flex-shrink-0"></i>
+              <span><strong>This is not a website link.</strong> You need to open the <strong>Minecraft game</strong> and add this as a server — do not paste it into your browser.</span>
+            </div>
+
+            <p class="text-muted small mb-2 fw-semibold">How to connect:</p>
+            <ol class="text-muted small mb-3 ps-3">
+              <li class="mb-1">Open <strong>Minecraft</strong> on your device</li>
+              <li class="mb-1">Go to <strong>Multiplayer</strong> (Java) or <strong>Play → Servers</strong> (Bedrock)</li>
+              <li class="mb-1">Click <strong>Add Server</strong>, paste the address below, then join</li>
+            </ol>
+
+            <% if (apiData.success === false) { %>
+              <%- include("../partials/alert.ejs", {
+                alertType: "danger",
+                content: apiData.message
+              }) %>
+            <% } else { %>
+              <div class="d-flex flex-column gap-2">
+                <% apiData.data.forEach(function (verifyServer) {
+                     var isBedrock = verifyServer.displayName && verifyServer.displayName.toLowerCase().includes('bedrock');
+                     var isJava    = verifyServer.displayName && verifyServer.displayName.toLowerCase().includes('java');
+                     var icon      = isBedrock ? 'fa-mobile-alt' : isJava ? 'fa-desktop' : 'fa-server';
+                     var badge     = isBedrock ? 'bg-warning text-dark' : isJava ? 'bg-success' : 'bg-secondary';
+                     var label     = verifyServer.displayName || 'Verification Server';
+                     var inputId   = 'srv-' + verifyServer.serverConnectionAddress.replace(/[^a-z0-9]/gi,'');
+                     var hint      = isBedrock ? 'For Minecraft Bedrock (mobile, console, Windows 10/11 edition)'
+                                   : isJava    ? 'For Minecraft Java Edition (PC/Mac)'
+                                   : '';
+                %>
+                  <div class="card border">
+                    <div class="card-body py-2 px-3">
+                      <div class="d-flex align-items-center gap-2 mb-1">
+                        <i class="fas <%= icon %> text-muted"></i>
+                        <span class="fw-semibold small"><%= label %></span>
+                        <% if (isBedrock || isJava) { %>
+                          <span class="badge <%= badge %> ms-auto"><%= isBedrock ? 'Bedrock' : 'Java' %></span>
+                        <% } %>
+                      </div>
+                      <% if (hint) { %><p class="text-muted mb-2" style="font-size:.78rem;"><%= hint %></p><% } %>
+                      <div class="d-flex align-items-center gap-2">
+                        <input type="text" class="form-control form-control-sm font-monospace flex-fill"
+                               value="<%= verifyServer.serverConnectionAddress %>"
+                               id="<%= inputId %>" readonly>
+                        <button type="button" class="btn btn-sm btn-outline-secondary copy-btn flex-shrink-0"
+                                data-target="<%= inputId %>" title="Copy address">
+                          <i class="fas fa-copy"></i> Copy
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
           </div>
-          <div class="text-center mt-3">
-            <button id="submitButton" type="submit" class="btn btn-primary" disabled>Verify Minecraft Account</button>
+        </div>
+
+        <!-- ── Step 2 ────────────────────────────────────────────────── -->
+        <div class="d-flex align-items-start gap-3 mb-4">
+          <div class="flex-shrink-0 d-flex align-items-center justify-content-center rounded-circle bg-primary text-white fw-bold"
+               style="width:36px;height:36px;font-size:16px;margin-top:2px;">2</div>
+          <div class="flex-fill">
+            <h5 class="mb-1">Get your code from chat</h5>
+            <p class="text-muted small mb-2">Once you join, you'll see a message like this in your Minecraft chat:</p>
+            <div class="rounded p-2 mb-0" style="background:#1d1d1d;font-family:'Courier New',monospace;font-size:13px;">
+              <span style="color:#55FF55;">[CraftingForChrist]</span>
+              <span style="color:#FFFFFF;"> Your verification code is: </span>
+              <span style="color:#FFFF55;font-weight:bold;">483920</span>
+            </div>
+            <p class="text-muted small mt-2 mb-0"><i class="fas fa-info-circle me-1"></i>Keep Minecraft open — you'll need that 6-digit number in the next step.</p>
           </div>
-        </form>
+        </div>
 
-        <script>
-          function moveToNextInput(currentInput) {
-            var maxLength = parseInt(currentInput.getAttribute('maxlength'));
-            if (currentInput.value.length >= maxLength) {
-              var nextInput = currentInput.nextElementSibling;
-              if (nextInput !== null) {
-                nextInput.focus();
-              }
-            }
-            validateInputs();
-          }
+        <!-- ── Step 3 ────────────────────────────────────────────────── -->
+        <div class="d-flex align-items-start gap-3">
+          <div class="flex-shrink-0 d-flex align-items-center justify-content-center rounded-circle bg-primary text-white fw-bold"
+               style="width:36px;height:36px;font-size:16px;margin-top:2px;">3</div>
+          <div class="flex-fill">
+            <h5 class="mb-3">Enter your code to verify</h5>
 
-          function validateInputs() {
-            var inputs = document.querySelectorAll('#otp input');
-            var isFilled = true;
-            inputs.forEach(function(input) {
-              if (input.value === '') {
-                isFilled = false;
-              }
-            });
-            document.getElementById('submitButton').disabled = !isFilled;
-          }
+            <!-- Method A: enter code on this page -->
+            <div class="card mb-3 border-primary">
+              <div class="card-header d-flex align-items-center gap-2 py-2 bg-primary bg-opacity-10">
+                <i class="fas fa-keyboard text-primary"></i>
+                <span class="fw-semibold">Option A — Enter code on this page</span>
+              </div>
+              <div class="card-body py-3">
+                <p class="text-muted small mb-3">Type your 6-digit code in the boxes below, then press <strong>Verify</strong>.</p>
+                <form id="verificationForm" method="post" action="<%= process.env.siteAddress %>/register/minecraft">
+                  <div id="otp" class="inputs d-flex flex-row justify-content-center gap-1 mb-3">
+                    <input class="text-center form-control rounded otp-input" type="text" name="first"  maxlength="1" autocomplete="off" inputmode="numeric" required style="width:44px;height:50px;font-size:20px;font-weight:bold;" />
+                    <input class="text-center form-control rounded otp-input" type="text" name="second" maxlength="1" autocomplete="off" inputmode="numeric" required style="width:44px;height:50px;font-size:20px;font-weight:bold;" />
+                    <input class="text-center form-control rounded otp-input" type="text" name="third"  maxlength="1" autocomplete="off" inputmode="numeric" required style="width:44px;height:50px;font-size:20px;font-weight:bold;" />
+                    <input class="text-center form-control rounded otp-input" type="text" name="fourth" maxlength="1" autocomplete="off" inputmode="numeric" required style="width:44px;height:50px;font-size:20px;font-weight:bold;" />
+                    <input class="text-center form-control rounded otp-input" type="text" name="fifth"  maxlength="1" autocomplete="off" inputmode="numeric" required style="width:44px;height:50px;font-size:20px;font-weight:bold;" />
+                    <input class="text-center form-control rounded otp-input" type="text" name="sixth"  maxlength="1" autocomplete="off" inputmode="numeric" required style="width:44px;height:50px;font-size:20px;font-weight:bold;" />
+                  </div>
+                  <div class="text-center">
+                    <button id="submitButton" type="submit" class="btn btn-primary px-4" disabled>
+                      <i class="fas fa-check me-1"></i> Verify Minecraft Account
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
 
-          document.addEventListener('DOMContentLoaded', function() {
-            var inputs = document.querySelectorAll('#otp input');
-            inputs.forEach(function(input) {
-              input.addEventListener('input', function() {
-                moveToNextInput(this);
-              });
-            });
-          });
-        </script>
+            <!-- Divider -->
+            <div class="d-flex align-items-center gap-2 my-3">
+              <hr class="flex-fill"><span class="text-muted small">or</span><hr class="flex-fill">
+            </div>
+
+            <!-- Method B: /verify in-game -->
+            <div class="card border-secondary">
+              <div class="card-header d-flex align-items-center gap-2 py-2">
+                <i class="fas fa-gamepad text-secondary"></i>
+                <span class="fw-semibold">Option B — Type a command in Minecraft</span>
+              </div>
+              <div class="card-body py-3">
+                <p class="text-muted small mb-2">While still on the server, type this in chat (swap <code>123456</code> for your actual code):</p>
+                <div class="rounded p-2 mb-2" style="background:#1a1a1a;font-family:'Courier New',monospace;font-size:15px;">
+                  <span style="color:#55FF55;">/verify </span><span style="color:#FFFF55;">123456</span>
+                </div>
+                <p class="text-muted small mb-0">
+                  <i class="fas fa-check-circle text-success me-1"></i>
+                  Your account will link automatically — you can close this page once you run the command.
+                </p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
       </div>
-      <div class="col-12 col-md-6" style="min-height:500px; display: flex; align-items: center;">
-        <div class="text-center">
-          <img class="floating" style="max-width: 100%; height: auto; margin-top:10px;" src="/images/session/registerImage.png" draggable="false" alt="Minecraft verification illustration">
+
+      <!-- ── Right column: illustration ─────────────────────────────── -->
+      <div class="col-12 col-md-5 d-none d-md-flex" style="min-height:400px;align-items:center;">
+        <div class="text-center w-100">
+          <img class="floating" style="max-width:100%;height:auto;margin-top:10px;"
+               src="/images/session/registerImage.png" draggable="false"
+               alt="Minecraft verification illustration">
         </div>
       </div>
+
     </div>
   </div>
 </section>
 
 <%- include("../modules/footer.ejs") %>
+
+<script>
+  (function () {
+    var inputs = document.querySelectorAll('#otp .otp-input');
+    var submitBtn = document.getElementById('submitButton');
+
+    function validate() {
+      var filled = true;
+      inputs.forEach(function (inp) { if (!inp.value) filled = false; });
+      submitBtn.disabled = !filled;
+    }
+
+    inputs.forEach(function (input, idx) {
+      input.addEventListener('input', function () {
+        this.value = this.value.replace(/\D/g, '').slice(-1);
+        if (this.value && idx < inputs.length - 1) inputs[idx + 1].focus();
+        validate();
+      });
+
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Backspace' && !this.value && idx > 0) inputs[idx - 1].focus();
+      });
+
+      input.addEventListener('paste', function (e) {
+        e.preventDefault();
+        var text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, inputs.length);
+        if (text.length >= 1) {
+          inputs.forEach(function (inp, i) { inp.value = text[i] || ''; });
+          inputs[Math.min(inputs.length - 1, text.length - 1)].focus();
+          validate();
+        }
+      });
+    });
+
+    validate();
+  }());
+
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var target = document.getElementById(btn.dataset.target);
+      if (!target) return;
+      navigator.clipboard.writeText(target.value).then(function () {
+        var icon = btn.querySelector('i');
+        if (icon) icon.className = 'fas fa-check';
+        btn.classList.replace('btn-outline-secondary', 'btn-outline-success');
+        setTimeout(function () {
+          if (icon) icon.className = 'fas fa-copy';
+          btn.classList.replace('btn-outline-success', 'btn-outline-secondary');
+        }, 1500);
+      }).catch(function () {
+        target.select();
+        document.execCommand('copy');
+      });
+    });
+  });
+</script>

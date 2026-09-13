@@ -1,0 +1,467 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <div>
+                    <h1 class="h2 mb-0"><%= ev.title %></h1>
+                    <span class="badge bg-<%= badgeClass %> <%= badgeClass === 'warning' || badgeClass === 'info' ? 'text-dark' : '' %> mt-1">
+                        <%= ev.status.replace(/_/g,' ') %>
+                    </span>
+                    <span class="badge bg-secondary ms-1"><%= ev.eventType %></span>
+                    <% if (ev.featured) { %><span class="badge bg-warning text-dark ms-1"><i class="fas fa-star me-1"></i>Featured</span><% } %>
+                </div>
+                <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+                    <a href="/dashboard/events/list" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-arrow-left fa-fw me-1"></i>Back
+                    </a>
+                    <% if (canEdit) { %>
+                        <a href="/dashboard/events/edit?eventId=<%= ev.eventId %>" class="btn btn-sm btn-warning">
+                            <i class="fas fa-edit fa-fw me-1"></i>Edit
+                        </a>
+                    <% } %>
+                    <% if (ev.status === 'draft' || ev.status === 'rejected') { %>
+                        <button class="btn btn-sm btn-primary btn-submit-review" data-event-id="<%= ev.eventId %>">
+                            <i class="fas fa-paper-plane me-1"></i>Submit for Review
+                        </button>
+                    <% } %>
+                    <% if (ev.status === 'approved' && isReviewer) { %>
+                        <button class="btn btn-sm btn-success btn-publish" data-event-id="<%= ev.eventId %>">
+                            <i class="fas fa-globe me-1"></i>Publish
+                        </button>
+                    <% } %>
+                    <% if (ev.status === 'pending_review' && isReviewer) { %>
+                        <button class="btn btn-sm btn-success btn-approve" data-event-id="<%= ev.eventId %>">
+                            <i class="fas fa-check me-1"></i>Approve
+                        </button>
+                        <button class="btn btn-sm btn-danger btn-reject-view" data-event-id="<%= ev.eventId %>">
+                            <i class="fas fa-times me-1"></i>Reject
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary btn-revert-draft" data-event-id="<%= ev.eventId %>">
+                            <i class="fas fa-rotate-left me-1"></i>Revert to Draft
+                        </button>
+                    <% } %>
+                    <% if (['pending_review', 'approved'].includes(ev.status) && isReviewer) { %>
+                        <button class="btn btn-sm btn-outline-warning btn-revert-draft" data-event-id="<%= ev.eventId %>">
+                            <i class="fas fa-undo me-1"></i>Revert to Draft
+                        </button>
+                    <% } %>
+                    <%
+                      // Draft/pending: creator or reviewer can cancel their own event; approved/published: reviewer only
+                      const canCancel = ['draft','pending_review'].includes(ev.status) ||
+                                        (['approved','published'].includes(ev.status) && isReviewer);
+                    %>
+                    <% if (canCancel) { %>
+                        <button class="btn btn-sm btn-outline-danger btn-cancel" data-event-id="<%= ev.eventId %>">
+                            <i class="fas fa-ban me-1"></i>Cancel
+                        </button>
+                    <% } %>
+                    <button class="btn btn-sm btn-outline-secondary btn-duplicate" data-event-id="<%= ev.eventId %>">
+                        <i class="fas fa-copy me-1"></i>Duplicate
+                    </button>
+                    <a href="/dashboard/events/preview?eventId=<%= ev.eventId %>" target="_blank" class="btn btn-sm btn-outline-info">
+                        <i class="fas fa-eye me-1"></i>Preview
+                    </a>
+                    <% if (ev.status === 'published') { %>
+                        <a href="/events/<%= ev.slug %>" target="_blank" class="btn btn-sm btn-outline-success">
+                            <i class="fas fa-external-link-alt me-1"></i>Public Page
+                        </a>
+                    <% } %>
+                </div>
+            </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+            <% if (ev.rejectionNote) { %>
+                <div class="alert alert-danger">
+                    <strong><i class="fas fa-times-circle me-2"></i>Rejected:</strong> <%= ev.rejectionNote %>
+                </div>
+            <% } %>
+
+            <% if (ev.status === 'approved' && isReviewer) { %>
+                <div class="alert alert-info d-flex justify-content-between align-items-center mb-3">
+                    <span>
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>This event is approved</strong> and ready to publish. If it won't proceed, cancel it before publishing.
+                    </span>
+                    <button class="btn btn-sm btn-outline-danger btn-cancel ms-3 flex-shrink-0" data-event-id="<%= ev.eventId %>">
+                        <i class="fas fa-ban me-1"></i>Cancel Event
+                    </button>
+                </div>
+            <% } %>
+
+            <% if (['approved','published','pending_review'].includes(ev.status) && !isReviewer) { %>
+                <div class="alert alert-warning mb-3">
+                    <i class="fas fa-lock me-2"></i>
+                    This event is <strong><%= ev.status.replace(/_/g,' ') %></strong> — only approvers can make changes from this point.
+                </div>
+            <% } %>
+
+            <div class="row g-3">
+                <!-- Main Info -->
+                <div class="col-lg-8">
+                    <div class="card mb-3">
+                        <div class="card-header">Event Details</div>
+                        <div class="card-body">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-3">Start</dt>
+                                <dd class="col-sm-9"><span class="js-datetime" data-iso="<%= ev.startAt ? new Date(ev.startAt).toISOString() : '' %>"></span></dd>
+                                <dt class="col-sm-3">End</dt>
+                                <dd class="col-sm-9"><span class="js-datetime" data-iso="<%= ev.endAt ? new Date(ev.endAt).toISOString() : '' %>"></span></dd>
+                                <% if (ev.locationLabel) { %>
+                                <dt class="col-sm-3">Location</dt>
+                                <dd class="col-sm-9">
+                                    <%= ev.locationLabel %>
+                                    <% if (ev.locationType === 'discord' && ev.locationDiscordChannelId && config.discord?.guildId) { %>
+                                    <a href="https://discord.com/channels/<%= config.discord.guildId %>/<%= ev.locationDiscordChannelId %>" target="_blank" rel="noopener" class="btn btn-xs btn-outline-primary ms-2">
+                                        <i class="fab fa-discord me-1"></i>Join Channel
+                                    </a>
+                                    <% } %>
+                                </dd>
+                                <% } %>
+                                <% if (ev.serverName) { %>
+                                <dt class="col-sm-3">Server</dt>
+                                <dd class="col-sm-9"><%= ev.serverName %><% if (ev.serverIp) { %> — <code><%= ev.serverIp %></code><% } %></dd>
+                                <% } %>
+                                <% if (ev.templateId) { %>
+                                <dt class="col-sm-3">Template</dt>
+                                <dd class="col-sm-9">
+                                    <a href="/dashboard/events/templates/edit?templateId=<%= ev.templateId %>">
+                                        <%= ev.template ? ev.template.title : `#${ev.templateId}` %>
+                                    </a>
+                                </dd>
+                                <% } %>
+                            </dl>
+
+                            <% if (ev.description) { %>
+                                <hr>
+                                <div class="event-description"><%- ev.description %></div>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <!-- Hosts -->
+                    <% if (ev.hosts && ev.hosts.length > 0) { %>
+                    <div class="card mb-3">
+                        <div class="card-header">Event Team</div>
+                        <div class="card-body">
+                            <div class="d-flex flex-wrap gap-2">
+                                <% ev.hosts.forEach(h => { %>
+                                    <div class="d-flex align-items-center gap-2 border rounded px-3 py-2">
+                                        <div>
+                                            <div class="fw-semibold"><%= h.displayName || 'Unknown' %></div>
+                                            <small class="text-muted"><%= h.role.replace('_',' ') %></small>
+                                            <% if (h.discordUserId) { %><small class="text-muted d-block"><i class="fab fa-discord me-1"></i><%= h.discordUserId %></small><% } %>
+                                        </div>
+                                    </div>
+                                <% }) %>
+                            </div>
+                        </div>
+                    </div>
+                    <% } %>
+
+                    <!-- Announcements -->
+                    <% if (ev.announcements && ev.announcements.length > 0) { %>
+                    <div class="card mb-3">
+                        <div class="card-header">Announcements</div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm mb-0">
+                                <thead><tr><th>Label</th><th>Type</th><th>Trigger</th><th>Scheduled</th><th>Status</th></tr></thead>
+                                <tbody>
+                                    <% ev.announcements.forEach(a => { %>
+                                    <tr>
+                                        <td><%= a.label || '—' %></td>
+                                        <td><span class="badge bg-secondary"><%= a.announcementType %></span></td>
+                                        <td><%= a.triggerType %><% if (a.offsetMinutes) { %> (<%= a.offsetMinutes %>m)<% } %></td>
+                                        <td><small class="js-datetime" data-iso="<%= a.scheduledFor ? new Date(a.scheduledFor).toISOString() : '' %>" data-fallback="Not scheduled"></small></td>
+                                        <td>
+                                            <% if (a.status === 'sent') { %><span class="badge bg-success">Sent</span><% } %>
+                                            <% if (a.status === 'pending') { %><span class="badge bg-warning text-dark">Pending</span><% } %>
+                                            <% if (a.status === 'failed') { %><span class="badge bg-danger" title="<%= a.lastError || '' %>">Failed</span><% } %>
+                                            <% if (a.status === 'cancelled') { %><span class="badge bg-secondary">Cancelled</span><% } %>
+                                        </td>
+                                    </tr>
+                                    <% }) %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <% } %>
+                </div>
+
+                <!-- Sidebar Info -->
+                <div class="col-lg-4">
+                    <!-- Branding -->
+                    <% if (ev.bannerUrl || ev.logoUrl) { %>
+                    <div class="card mb-3">
+                        <div class="card-header">Branding</div>
+                        <div class="card-body">
+                            <% if (ev.bannerUrl) { %><img src="<%= ev.bannerUrl %>" class="img-fluid rounded mb-2" alt="Banner"><% } %>
+                            <% if (ev.logoUrl) { %><img src="<%= ev.logoUrl %>" class="rounded" style="max-height:60px" alt="Logo"><% } %>
+                        </div>
+                    </div>
+                    <% } %>
+
+                    <!-- Sync Status -->
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            Sync Status
+                            <% if (ev.status === 'published' && isReviewer) { %>
+                            <button class="btn btn-xs btn-outline-primary btn-resync-discord" data-event-id="<%= ev.eventId %>">
+                                <i class="fas fa-sync-alt me-1"></i>Resync
+                            </button>
+                            <% } %>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row mb-0 small">
+                                <dt class="col-6">Discord Msg</dt>
+                                <dd class="col-6">
+                                    <% if (ev.discordMessageId) { %><span class="text-success"><i class="fas fa-check me-1"></i><%= ev.discordMessageId %></span>
+                                    <% } else { %><span class="text-muted">—</span><% } %>
+                                </dd>
+                                <dt class="col-6">Guild Event</dt>
+                                <dd class="col-6">
+                                    <% if (ev.discordGuildEventId) { %><span class="text-success"><i class="fas fa-check me-1"></i><%= ev.discordGuildEventId %></span>
+                                    <% } else { %><span class="text-muted">—</span><% } %>
+                                </dd>
+                                <dt class="col-6">Discord Status</dt>
+                                <dd class="col-6">
+                                    <% if (ev.discordSyncStatus === 'ok') { %><span class="badge bg-success">OK</span>
+                                    <% } else if (ev.discordSyncStatus === 'failed') { %><span class="badge bg-danger" title="<%= ev.discordSyncError || '' %>">Failed</span>
+                                    <% } else { %><span class="text-muted">—</span><% } %>
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <!-- Resync Modal -->
+                    <% if (ev.status === 'published' && isReviewer) { %>
+                    <div class="modal fade" id="resyncModal" tabindex="-1">
+                        <div class="modal-dialog modal-sm">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Resync Discord</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p class="small text-muted mb-3">Select what to resend or recreate on Discord.</p>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="resyncMsgCheck" checked>
+                                        <label class="form-check-label" for="resyncMsgCheck">
+                                            <% if (ev.discordMessageId) { %>Update announcement message<% } else { %>Post announcement message<% } %>
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="resyncGuildCheck" checked>
+                                        <label class="form-check-label" for="resyncGuildCheck">
+                                            <% if (ev.discordGuildEventId) { %>Update guild event<% } else { %>Create guild event<% } %>
+                                        </label>
+                                    </div>
+                                    <div id="resyncResult" class="mt-3 d-none small"></div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="button" class="btn btn-sm btn-primary" id="confirmResync">
+                                        <i class="fas fa-sync-alt me-1"></i>Resync
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <% } %>
+
+                    <!-- Metadata -->
+                    <div class="card mb-3">
+                        <div class="card-header">Metadata</div>
+                        <div class="card-body">
+                            <dl class="row mb-0 small">
+                                <dt class="col-5">Created</dt>
+                                <dd class="col-7"><span class="js-datetime" data-iso="<%= ev.createdAt ? new Date(ev.createdAt).toISOString() : '' %>"></span></dd>
+                                <dt class="col-5">Updated</dt>
+                                <dd class="col-7"><span class="js-datetime" data-iso="<%= ev.updatedAt ? new Date(ev.updatedAt).toISOString() : '' %>"></span></dd>
+                                <% if (ev.approvedAt) { %>
+                                <dt class="col-5">Approved</dt>
+                                <dd class="col-7"><span class="js-datetime" data-iso="<%= new Date(ev.approvedAt).toISOString() %>"></span></dd>
+                                <% } %>
+                                <% if (ev.publishedAt) { %>
+                                <dt class="col-5">Published</dt>
+                                <dd class="col-7"><span class="js-datetime" data-iso="<%= new Date(ev.publishedAt).toISOString() %>"></span></dd>
+                                <% } %>
+                                <dt class="col-5">Slug</dt>
+                                <dd class="col-7"><code class="small"><%= ev.slug %></code></dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audit Log -->
+            <% if (ev.auditLogs && ev.auditLogs.length > 0) { %>
+            <div class="card mt-2">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Audit Log</span>
+                    <small class="text-muted">Last <%= ev.auditLogs.length %> entries</small>
+                </div>
+                <div class="card-body p-0" style="max-height:300px;overflow-y:auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <tbody>
+                            <% ev.auditLogs.forEach(log => { %>
+                            <tr>
+                                <td class="text-nowrap" style="width:160px;"><small class="js-datetime text-muted" data-iso="<%= log.createdAt ? new Date(log.createdAt).toISOString() : '' %>"></small></td>
+                                <td style="width:120px;"><span class="badge bg-secondary small"><%= log.action %></span></td>
+                                <td><small><%= log.actorName || 'System' %></small></td>
+                                <td><small class="text-muted"><%= log.details || '' %></small></td>
+                            </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <% } %>
+
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reject Event</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Rejection Note</label>
+                    <textarea class="form-control" id="rejectionNote" rows="3" placeholder="Why is this event being rejected?"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmReject">Reject</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<script>
+document.querySelectorAll('.js-datetime').forEach(el => {
+    const d = el.dataset.iso ? new Date(el.dataset.iso) : null;
+    el.textContent = d && !isNaN(d) ? d.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
+    }) : (el.dataset.fallback || '—');
+});
+
+async function eventAction(endpoint, body, redirect) {
+    const res = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+        body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.success) window.location.href = redirect;
+    else alert('Error: ' + data.message);
+}
+
+document.querySelector('.btn-submit-review')?.addEventListener('click', e => {
+    if (!confirm('Submit for review?')) return;
+    eventAction('/api/events/submit-review', { eventId: e.target.dataset.eventId }, window.location.href);
+});
+
+document.querySelector('.btn-approve')?.addEventListener('click', e => {
+    if (!confirm('Approve this event?')) return;
+    eventAction('/api/events/approve', { eventId: e.target.dataset.eventId }, window.location.href);
+});
+
+let rejectEventId = null;
+document.querySelector('.btn-reject-view')?.addEventListener('click', e => {
+    rejectEventId = e.target.dataset.eventId;
+    new bootstrap.Modal(document.getElementById('rejectModal')).show();
+});
+document.getElementById('confirmReject')?.addEventListener('click', async () => {
+    if (!rejectEventId) return;
+    const note = document.getElementById('rejectionNote').value;
+    eventAction('/api/events/reject', { eventId: rejectEventId, rejectionNote: note }, window.location.href);
+});
+
+document.querySelector('.btn-revert-draft')?.addEventListener('click', e => {
+    if (!confirm('Revert this event to draft? The submitter will need to re-submit for review.')) return;
+    eventAction('/api/events/revert-to-draft', { eventId: e.target.dataset.eventId }, window.location.href);
+});
+
+document.querySelector('.btn-publish')?.addEventListener('click', e => {
+    if (!confirm('Publish this event? This will trigger Discord and website sync.')) return;
+    eventAction('/api/events/publish', { eventId: e.target.dataset.eventId }, window.location.href);
+});
+
+document.querySelector('.btn-cancel')?.addEventListener('click', e => {
+    const reason = prompt('Reason for cancellation (optional):');
+    if (reason === null) return;
+    eventAction('/api/events/cancel', { eventId: e.target.dataset.eventId, reason }, window.location.href);
+});
+
+document.querySelector('.btn-resync-discord')?.addEventListener('click', () => {
+    document.getElementById('resyncResult')?.classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('resyncModal')).show();
+});
+
+document.getElementById('confirmResync')?.addEventListener('click', async () => {
+    const btn = document.getElementById('confirmResync');
+    const resultEl = document.getElementById('resyncResult');
+    const eventId = document.querySelector('.btn-resync-discord')?.dataset.eventId;
+    const resyncMessage = document.getElementById('resyncMsgCheck')?.checked ?? true;
+    const resyncGuildEvent = document.getElementById('resyncGuildCheck')?.checked ?? true;
+
+    if (!resyncMessage && !resyncGuildEvent) {
+        resultEl.textContent = 'Select at least one option.';
+        resultEl.className = 'mt-3 small text-warning';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Resyncing…';
+
+    const res = await fetch('/api/events/resync-discord', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+        body: JSON.stringify({ eventId, resyncMessage, resyncGuildEvent }),
+    });
+    const data = await res.json();
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Resync';
+    resultEl.classList.remove('d-none');
+
+    if (data.success) {
+        const parts = [];
+        if (data.results?.message) parts.push('Message: ' + data.results.message);
+        if (data.results?.guildEvent) parts.push('Guild event: ' + data.results.guildEvent);
+        resultEl.textContent = parts.join(' · ') || 'Done.';
+        resultEl.className = 'mt-3 small text-success';
+        setTimeout(() => window.location.reload(), 1500);
+    } else {
+        resultEl.textContent = 'Error: ' + data.message;
+        resultEl.className = 'mt-3 small text-danger';
+    }
+});
+
+document.querySelector('.btn-duplicate')?.addEventListener('click', async e => {
+    const res = await fetch('/api/events/duplicate', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+        body: JSON.stringify({ eventId: e.target.dataset.eventId }),
+    });
+    const data = await res.json();
+    if (data.success) window.location.href = `/dashboard/events/view?eventId=${data.data.eventId}`;
+    else alert('Error: ' + data.message);
+});
+</script>

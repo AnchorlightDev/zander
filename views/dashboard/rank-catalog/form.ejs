@@ -1,0 +1,380 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">
+          <i class="fa-solid fa-layer-group fa-fw me-2"></i>
+          <%= entry ? 'Edit Entry' : 'New Entry' %>
+        </h1>
+        <a href="/dashboard/rank-catalog" class="btn btn-sm btn-outline-secondary">
+          <i class="fa-solid fa-arrow-left me-1"></i>Back
+        </a>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <form method="post" action="<%= formAction %>">
+        <div class="row g-4">
+
+          <%# Left column — main fields %>
+          <div class="col-lg-8">
+
+            <div class="card shadow-sm mb-3">
+              <div class="card-header fw-semibold">Details</div>
+              <div class="card-body">
+
+                <div class="mb-3">
+                  <label for="displayName" class="form-label fw-semibold">Display name <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="displayName" name="displayName"
+                         value="<%= entry ? entry.displayName : '' %>" required maxlength="128">
+                </div>
+
+                <div class="mb-3">
+                  <label for="description" class="form-label fw-semibold">Description <span class="text-muted fw-normal">(optional)</span></label>
+                  <textarea class="form-control" id="description" name="description" rows="3" maxlength="1000"><%= entry ? (entry.description || '') : '' %></textarea>
+                  <div class="form-text">Short tagline shown under the rank name on the public page.</div>
+                </div>
+
+                <div class="mb-0">
+                  <label class="form-label fw-semibold">Rank Image <span class="text-muted fw-normal">(optional)</span></label>
+
+                  <div id="rank-img-preview" class="mb-2 <%= (entry && entry.imageUrl) ? '' : 'd-none' %>">
+                    <div class="d-inline-flex align-items-start gap-2 border rounded p-2">
+                      <img id="rank-img-thumb" src="<%= entry ? (entry.imageUrl || '') : '' %>" alt="Rank image preview"
+                           style="max-height:80px;max-width:200px;object-fit:contain;">
+                      <button type="button" id="rank-img-remove" class="btn btn-sm btn-outline-danger flex-shrink-0" title="Remove image">
+                        <i class="fas fa-times"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="d-flex gap-2 align-items-center flex-wrap">
+                    <label for="rank-img-file" class="btn btn-outline-secondary btn-sm mb-0" style="cursor:pointer">
+                      <i class="fas fa-upload me-1"></i>Upload image
+                    </label>
+                    <input type="file" id="rank-img-file"
+                           accept="image/png,image/jpeg,image/gif,image/webp" class="d-none">
+                    <span id="rank-img-status" class="small"></span>
+                  </div>
+                  <div class="form-text">Upload PNG, JPG, GIF or WebP (max 8 MB).</div>
+                  <input type="hidden" name="imageUrl" id="imageUrl"
+                         value="<%= entry ? (entry.imageUrl || '') : '' %>">
+                </div>
+
+              </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+              <div class="card-header fw-semibold">Stripe Prices</div>
+              <div class="card-body">
+                <p class="text-muted small mb-3">
+                  Link one or more Stripe prices — e.g. a monthly subscription <em>and</em> a one-time permanent purchase.
+                  Each linked price gets its own button on the public ranks page.
+                </p>
+
+                <div id="prices-list" class="mb-2"></div>
+
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="add-price">
+                  <i class="fa-solid fa-plus me-1"></i>Add price
+                </button>
+
+                <input type="hidden" name="stripePriceIds" id="stripePriceIds-json">
+              </div>
+            </div>
+
+            <div class="card shadow-sm">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">Perks</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="add-perk-group">
+                  <i class="fa-solid fa-plus me-1"></i>Add section
+                </button>
+              </div>
+              <div class="card-body">
+                <p class="text-muted small mb-3">
+                  Organise perks into sections (e.g. <em>Global</em>, <em>Survival</em>, <em>Discord</em>).
+                  Each section gets its own heading on the public ranks page.
+                </p>
+                <div id="perk-groups"></div>
+                <input type="hidden" name="perks" id="perks-json">
+              </div>
+            </div>
+
+          </div>
+
+          <%# Right column — meta %>
+          <div class="col-lg-4">
+
+            <div class="card shadow-sm mb-3">
+              <div class="card-header fw-semibold">Category</div>
+              <div class="card-body">
+                <div class="mb-3">
+                  <label for="category" class="form-label fw-semibold small">Category name</label>
+                  <input type="text" class="form-control form-control-sm" id="category" name="category"
+                         value="<%= entry ? entry.category : 'Ranks' %>" maxlength="64" required>
+                  <div class="form-text">Group heading on the ranks page (e.g. "Ranks", "Donate").</div>
+                </div>
+                <div class="mb-0">
+                  <label for="categorySortOrder" class="form-label fw-semibold small">Category order</label>
+                  <input type="number" class="form-control form-control-sm" id="categorySortOrder" name="categorySortOrder"
+                         value="<%= entry ? entry.categorySortOrder : 0 %>" min="0">
+                  <div class="form-text">Lower numbers appear first. Shared across all entries in this category.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+              <div class="card-header fw-semibold">Sort order</div>
+              <div class="card-body">
+                <label for="sortOrder" class="form-label fw-semibold small">Position within category</label>
+                <input type="number" class="form-control form-control-sm" id="sortOrder" name="sortOrder"
+                       value="<%= entry ? entry.sortOrder : 0 %>" min="0">
+                <div class="form-text">Lower numbers appear first within their category.</div>
+              </div>
+            </div>
+
+            <div class="d-grid gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="fa-solid fa-floppy-disk me-1"></i><%= entry ? 'Save changes' : 'Create entry' %>
+              </button>
+              <a href="/dashboard/rank-catalog" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+
+          </div>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // ── Stripe price multi-select ────────────────────────────────────────────
+  var stripeOptions = <%- JSON.stringify(stripeOptions) %>;
+  var selectedPriceIds = <%- JSON.stringify(entry && entry.stripePriceIds ? entry.stripePriceIds : []) %>;
+
+  function syncPriceJson() {
+    var selects = document.querySelectorAll('#prices-list .price-select');
+    selectedPriceIds = Array.from(selects).map(function(s) { return s.value; }).filter(Boolean);
+    document.getElementById('stripePriceIds-json').value = JSON.stringify(selectedPriceIds);
+  }
+
+  function buildPriceSelect(selectedId) {
+    var select = document.createElement('select');
+    select.className = 'form-select form-select-sm flex-grow-1 price-select';
+
+    var blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = '— Choose a Stripe price —';
+    select.appendChild(blank);
+
+    stripeOptions.forEach(function(opt) {
+      var option = document.createElement('option');
+      option.value = opt.id;
+      option.textContent = opt.label;
+      if (opt.id === selectedId) option.selected = true;
+      select.appendChild(option);
+    });
+
+    select.addEventListener('change', syncPriceJson);
+    return select;
+  }
+
+  function renderPrices() {
+    var list = document.getElementById('prices-list');
+    list.innerHTML = '';
+
+    selectedPriceIds.forEach(function(priceId, i) {
+      var row = document.createElement('div');
+      row.className = 'd-flex gap-2 mb-2 align-items-center';
+
+      var select = buildPriceSelect(priceId);
+      row.appendChild(select);
+
+      var removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn btn-sm btn-outline-danger flex-shrink-0';
+      removeBtn.innerHTML = '<i class="fa-solid fa-times"></i>';
+      removeBtn.addEventListener('click', function() {
+        selectedPriceIds.splice(i, 1);
+        renderPrices();
+      });
+      row.appendChild(removeBtn);
+
+      list.appendChild(row);
+    });
+
+    syncPriceJson();
+  }
+
+  document.getElementById('add-price').addEventListener('click', function() {
+    syncPriceJson();
+    selectedPriceIds.push('');
+    renderPrices();
+    var selects = document.querySelectorAll('#prices-list .price-select');
+    if (selects.length) selects[selects.length - 1].focus();
+  });
+
+  renderPrices();
+
+  // ── Grouped perks builder ────────────────────────────────────────────────
+  var rawPerks = <%- JSON.stringify(entry && entry.perks ? entry.perks : []) %>;
+  // Support both legacy flat string[] and new grouped [{group, perks}]
+  var groups = (Array.isArray(rawPerks) && rawPerks.length && typeof rawPerks[0] === 'string')
+    ? [{ group: '', perks: rawPerks }]
+    : (Array.isArray(rawPerks) ? rawPerks.map(function(g) {
+        return { group: g.group || '', perks: Array.isArray(g.perks) ? g.perks : [] };
+      }) : []);
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function syncPerksJson() {
+    var container = document.getElementById('perk-groups');
+    var groupEls = container.querySelectorAll('.perk-group');
+    groups = Array.from(groupEls).map(function(el) {
+      var groupName = el.querySelector('.group-name-input').value.trim();
+      var perkInputs = el.querySelectorAll('.perk-input');
+      var perks = Array.from(perkInputs).map(function(i) { return i.value.trim(); }).filter(Boolean);
+      return { group: groupName, perks: perks };
+    }).filter(function(g) { return g.group || g.perks.length; });
+    document.getElementById('perks-json').value = JSON.stringify(groups);
+  }
+
+  function buildPerkRow(perk) {
+    var row = document.createElement('div');
+    row.className = 'd-flex gap-1 mb-1 align-items-center perk-row';
+    row.innerHTML =
+      '<span class="text-muted" style="font-size:0.8rem;"><i class="fa-solid fa-grip-vertical"></i></span>' +
+      '<input type="text" class="form-control form-control-sm perk-input" value="' + escHtml(perk) + '" placeholder="Perk description">' +
+      '<button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0 perk-remove"><i class="fa-solid fa-times"></i></button>';
+    row.querySelector('.perk-remove').addEventListener('click', function() {
+      row.remove();
+      syncPerksJson();
+    });
+    row.querySelector('.perk-input').addEventListener('input', syncPerksJson);
+    return row;
+  }
+
+  function buildGroupEl(groupData, groupIndex) {
+    var el = document.createElement('div');
+    el.className = 'perk-group border rounded p-3 mb-3';
+
+    var header = document.createElement('div');
+    header.className = 'd-flex gap-2 mb-2 align-items-center';
+    header.innerHTML =
+      '<input type="text" class="form-control form-control-sm group-name-input fw-semibold" ' +
+        'value="' + escHtml(groupData.group) + '" placeholder="Section name (e.g. Global, Survival, Discord)">' +
+      '<button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0 remove-group">Remove section</button>';
+    header.querySelector('.remove-group').addEventListener('click', function() {
+      el.remove();
+      syncPerksJson();
+    });
+    header.querySelector('.group-name-input').addEventListener('input', syncPerksJson);
+    el.appendChild(header);
+
+    var itemsDiv = document.createElement('div');
+    itemsDiv.className = 'perk-items ps-1 mb-2';
+    (groupData.perks || []).forEach(function(perk) {
+      itemsDiv.appendChild(buildPerkRow(perk));
+    });
+    el.appendChild(itemsDiv);
+
+    var addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-sm btn-outline-secondary';
+    addBtn.innerHTML = '<i class="fa-solid fa-plus me-1"></i>Add perk';
+    addBtn.addEventListener('click', function() {
+      var row = buildPerkRow('');
+      itemsDiv.appendChild(row);
+      row.querySelector('.perk-input').focus();
+      syncPerksJson();
+    });
+    el.appendChild(addBtn);
+
+    return el;
+  }
+
+  function renderGroups() {
+    var container = document.getElementById('perk-groups');
+    container.innerHTML = '';
+    groups.forEach(function(g, i) {
+      container.appendChild(buildGroupEl(g, i));
+    });
+    syncPerksJson();
+  }
+
+  document.getElementById('add-perk-group').addEventListener('click', function() {
+    syncPerksJson();
+    var container = document.getElementById('perk-groups');
+    var el = buildGroupEl({ group: '', perks: [] }, groups.length);
+    container.appendChild(el);
+    el.querySelector('.group-name-input').focus();
+    syncPerksJson();
+  });
+
+  renderGroups();
+  syncPerksJson();
+})();
+</script>
+
+<script>
+(function () {
+  var fileInput = document.getElementById('rank-img-file');
+  var hiddenUrl = document.getElementById('imageUrl');
+  var preview   = document.getElementById('rank-img-preview');
+  var thumb     = document.getElementById('rank-img-thumb');
+  var removeBtn = document.getElementById('rank-img-remove');
+  var statusEl  = document.getElementById('rank-img-status');
+  if (!fileInput) return;
+
+  function showPreview(url) {
+    if (url) { thumb.src = url; preview.classList.remove('d-none'); }
+    else { preview.classList.add('d-none'); thumb.src = ''; }
+  }
+
+  removeBtn.addEventListener('click', function () {
+    hiddenUrl.value = '';
+    showPreview('');
+    statusEl.textContent = '';
+    statusEl.className = 'small';
+  });
+
+  fileInput.addEventListener('change', async function () {
+    var file = fileInput.files[0];
+    if (!file) return;
+    fileInput.value = '';
+    statusEl.textContent = 'Uploading…';
+    statusEl.className = 'small text-muted';
+    var fd = new FormData();
+    fd.append('file', file, file.name);
+    fd.append('folder', 'rank-catalog');
+    try {
+      var res  = await fetch('/dashboard/upload/image', { method: 'POST', body: fd });
+      var data = await res.json();
+      if (data.success) {
+        hiddenUrl.value = data.data.url;
+        showPreview(data.data.url);
+        statusEl.textContent = 'Uploaded ✓';
+        statusEl.className = 'small text-success';
+      } else {
+        statusEl.textContent = data.message || 'Upload failed.';
+        statusEl.className = 'small text-danger';
+      }
+    } catch {
+      statusEl.textContent = 'Upload failed.';
+      statusEl.className = 'small text-danger';
+    }
+  });
+}());
+</script>
+
+<%- include("../../admin/_footer.ejs") %>

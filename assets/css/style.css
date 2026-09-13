@@ -358,6 +358,252 @@ input[type="email"]:focus, input[type="password"]:focus, input[type="text"]:focu
   text-decoration: underline;
 }
 
+.mixed-section-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #6f8ba4;
+}
+
+.mixed-tabs {
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.mixed-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.mixed-tab-link {
+  border-radius: 999px;
+  background-color: rgba(47, 80, 140, 0.08);
+  color: #2f508c;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.mixed-tab-link:hover,
+.mixed-tab-link.active {
+  background-color: #2f508c;
+  color: #fff;
+}
+
+.mixed-stat {
+  background: rgba(47, 80, 140, 0.08);
+  border-radius: 1rem;
+  padding: 1.25rem;
+}
+
+.mixed-stat-number {
+  font-size: clamp(1.75rem, 3.5vw, 2.25rem);
+  font-weight: 700;
+  color: #2f508c;
+}
+
+.mixed-stat-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6f8ba4;
+}
+
+.mixed-list-item {
+  transition: background-color 0.15s ease;
+}
+
+.mixed-list-item:hover {
+  background-color: rgba(47, 80, 140, 0.06);
+}
+
+.mixed-map-card {
+  border: 1px solid rgba(47, 80, 140, 0.14);
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.mixed-map-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(47, 80, 140, 0.28);
+  box-shadow: 0 18px 36px rgba(34, 58, 102, 0.08);
+}
+
+.mixed-map-link {
+  display: block;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.mixed-map-link:hover,
+.mixed-map-link:focus {
+  color: inherit;
+  text-decoration: none;
+}
+
+.mixed-map-image {
+  height: 170px;
+  object-fit: cover;
+  object-position: center;
+  background: linear-gradient(180deg, rgba(47, 80, 140, 0.12), rgba(47, 80, 140, 0.04));
+}
+
+.mixed-map-placeholder {
+  min-height: 170px;
+  background:
+    linear-gradient(135deg, rgba(47, 80, 140, 0.08), rgba(47, 80, 140, 0.02)),
+    repeating-linear-gradient(135deg, rgba(47, 80, 140, 0.05) 0, rgba(47, 80, 140, 0.05) 14px, transparent 14px, transparent 28px);
+}
+
+.mixed-map-title {
+  color: #223a66;
+}
+
+.mixed-map-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  color: #5f7892;
+  font-size: 0.92rem;
+}
+
+.mixed-map-mode {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(47, 80, 140, 0.08);
+  color: #2f508c;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.mixed-map-author {
+  min-width: 0;
+}
+
+.mixed-map-stats {
+  padding-top: 0.85rem;
+  margin-top: auto;
+  border-top: 1px solid rgba(47, 80, 140, 0.08);
+  color: #223a66;
+}
+
+.mixed-map-source {
+  margin-top: 0.85rem;
+  color: #6f8ba4;
+  font-size: 0.85rem;
+}
+
+.mixed-map-detail-card {
+  border: 1px solid rgba(47, 80, 140, 0.14);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.mixed-map-detail-image {
+  max-height: 360px;
+  object-fit: cover;
+  object-position: center;
+}
+
+.mixed-map-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  color: #5f7892;
+}
+
+.mixed-map-detail-section {
+  border-top: 1px solid rgba(47, 80, 140, 0.08);
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+}
+
+.mixed-map-detail-source {
+  margin-top: 1.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.9rem;
+  background: rgba(47, 80, 140, 0.05);
+  color: #5f7892;
+}
+
+.mixed-table-card {
+  border: 1px solid rgba(47, 80, 140, 0.12);
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 12px 28px rgba(34, 58, 102, 0.05);
+  margin-bottom: 1.5rem;
+}
+
+.mixed-table-card .table {
+  margin-bottom: 0;
+}
+
+.mixed-table-card .table thead th {
+  background: #f8fbff;
+  border-bottom: 1px solid rgba(47, 80, 140, 0.12);
+  color: #223a66;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mixed-table-card .table tbody td {
+  vertical-align: middle;
+}
+
+.mixed-table-card .table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.mixed-table-card .table tbody tr:hover {
+  background-color: rgba(47, 80, 140, 0.04);
+}
+
+.mixed-table-card .dataTables_wrapper {
+  padding: 0;
+}
+
+.mixed-table-card .dataTables_filter,
+.mixed-table-card .dataTables_length,
+.mixed-table-card .dataTables_info {
+  display: none;
+}
+
+.mixed-table-card .dataTables_paginate {
+  padding: 0.9rem 1rem 1rem;
+  float: none !important;
+  text-align: center !important;
+}
+
+.mixed-table-card .paginate_button {
+  border-radius: 999px !important;
+  border: 0 !important;
+  margin: 0 0.15rem !important;
+}
+
+.mixed-table-card .paginate_button.current,
+.mixed-table-card .paginate_button.current:hover {
+  background: #2f508c !important;
+  color: #fff !important;
+}
+
+.mixed-table-card .paginate_button:hover {
+  background: rgba(47, 80, 140, 0.08) !important;
+  color: #2f508c !important;
+}
+
+.mixed-table-nav {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
 .badge-soft-success {
   background-color: rgba(25, 135, 84, 0.18);
   color: #198754;
@@ -561,7 +807,7 @@ input[type="email"]:focus, input[type="password"]:focus, input[type="text"]:focu
   right: 0;
   bottom: 0;
   background-color: #2f508c;
-  opacity: 0.9;
+  opacity: 0.72;
   z-index: -1;
   pointer-events: none;
 }
@@ -732,6 +978,18 @@ a:focus {
   margin-top: 10px;
 }
 
+.navbar-brand img {
+  height: 45px;
+  width: auto;
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  .navbar-brand img {
+    height: 36px;
+  }
+}
+
 .dropdown .dropdown-menu {
   position: absolute;
   display: block;
@@ -816,19 +1074,22 @@ a:focus {
 .banner {
   position: relative;
   overflow: hidden;
-  background: #fff;
-  background-size: cover;
+  background: #1c2f53;
   min-height: 550px;
 }
 
-.banner:before{
-  content: '';
+.banner-video-bg {
   position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.8);
+  top: 50%;
+  left: 50%;
+  min-width: 100%;
+  min-height: 100%;
+  width: auto;
+  height: auto;
+  transform: translate(-50%, -50%);
+  object-fit: cover;
+  z-index: -2;
+  pointer-events: none;
 }
 
 .banner .block {
@@ -839,7 +1100,14 @@ a:focus {
   font-size: 60px;
   line-height: 1.2;
   letter-spacing: -1.2px;
-  color: #2f508c;
+  color: #ffffff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+}
+
+.banner .block p,
+.banner .block span {
+  color: #ffffff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 
 .letter-spacing {
@@ -886,6 +1154,64 @@ a:focus {
     line-height: 60px;
   }
 }
+
+/* ── Homepage hero additions ─────────────────────────────────────────── */
+
+.banner-scripture {
+  border-left: 3px solid rgba(255, 255, 255, 0.45);
+  padding: 0.5rem 0 0.5rem 1rem;
+  margin: 0;
+  font-style: italic;
+}
+
+.banner-scripture p {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  margin-bottom: 0.25rem;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+.banner-scripture cite {
+  font-style: normal;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: none;
+}
+
+.btn-hero-secondary {
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  color: #ffffff;
+  background: transparent;
+  padding: 12px 28px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-hero-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+.youtube-embed-wrapper {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.youtube-home-player {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
+.section-spacer {
+  height: 3rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────── */
 
 .about-img img {
   border-radius: 5px;
@@ -975,6 +1301,76 @@ a:focus {
 
 .feature-section.border-top {
   border-top: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Finance Centre - follows the public site's feature-card visual language. */
+.finance-page.section {
+  padding-top: 60px;
+}
+
+.finance-page .finance-intro {
+  margin-bottom: 48px !important;
+}
+
+.finance-page .finance-intro .lead {
+  color: #6f8ba4;
+  line-height: 1.65;
+}
+
+.finance-page h3,
+.finance-page h4 {
+  color: #2f508c;
+}
+
+.finance-page .card,
+.finance-page .list-group {
+  border-radius: 15px;
+  box-shadow: 0 0 30px rgba(0, 42, 106, 0.1) !important;
+  overflow: hidden;
+}
+
+.finance-page .card-body {
+  padding: 28px;
+}
+
+.finance-page .finance-stat-card {
+  border-top: 4px solid #2f508c !important;
+}
+
+.finance-page .list-group-item {
+  border-color: rgba(0, 42, 106, 0.1);
+  color: #6f8ba4;
+}
+
+.finance-page .list-group-item h4 {
+  color: #222;
+}
+
+.finance-page .list-group-item .bg-light {
+  background: #f4f9fc !important;
+  color: #2f508c !important;
+}
+
+.finance-page .progress {
+  background: #e8f0f7;
+}
+
+.finance-page .progress-bar {
+  background-color: #2f508c !important;
+}
+
+@media (max-width: 575.98px) {
+  .finance-page.section {
+    padding-top: 42px;
+  }
+
+  .finance-page .finance-intro {
+    margin-bottom: 36px !important;
+  }
+
+  .finance-page .card-body {
+    padding: 22px;
+  }
 }
 
 .w-hours li {
@@ -2198,16 +2594,82 @@ a:focus {
 
 .forums-thread .forums-post {
   border: none;
-  border-radius: 14px;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.08) !important;
 }
 
 .forums-thread .forums-post.original-post {
   border-left: 4px solid #2f508c;
 }
 
+.forums-post .card-body {
+  padding: 0;
+}
+
+.forums-post-header {
+  background: linear-gradient(135deg, #f8fafc 0%, #f4f7fb 100%);
+  border-bottom: 1px solid #e5eaf1;
+  padding: 1rem 1.2rem;
+}
+
+.forums-post-author {
+  align-items: center;
+  display: flex;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.forums-post-author-details {
+  min-width: 0;
+}
+
+.forums-post-author-line,
+.forums-post-ranks {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.forums-post-username {
+  color: #172033;
+  font-size: 1rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.forums-post-username:hover {
+  color: #2f508c;
+  text-decoration: underline;
+}
+
+.forums-post-rank {
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.32rem 0.55rem;
+}
+
+.forums-post-date {
+  color: #6b7280;
+  font-size: 0.78rem;
+  margin-top: 0.25rem;
+}
+
+.forums-post-content {
+  padding: 1.2rem;
+}
+
 .forums-post-body {
-  font-size: 0.96rem;
-  line-height: 1.7;
+  color: #202938;
+  font-size: 1rem;
+  line-height: 1.72;
+}
+
+.forums-post-body > :last-child {
+  margin-bottom: 0;
 }
 
 .forums-post-body img {
@@ -2220,6 +2682,116 @@ a:focus {
   padding-left: 1rem;
   color: #475569;
   font-style: italic;
+}
+
+.forums-reply-context {
+  align-items: center;
+  background: #f2f6fc;
+  border: 1px solid #dce6f4;
+  border-radius: 8px;
+  color: #2f508c;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 600;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+  padding: 0.45rem 0.65rem;
+  text-decoration: none;
+}
+
+.forums-reply-context:hover {
+  background: #e9f0fa;
+  color: #1c2f53;
+}
+
+.forums-reply-context-link {
+  font-size: 0.65rem;
+  opacity: 0.6;
+}
+
+.forums-post-actions {
+  align-items: center;
+  border-top: 1px solid #e8ecf2;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+}
+
+.forums-post-actions-primary,
+.forums-post-actions-secondary {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.forums-post-action {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #526075;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 700;
+  gap: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  text-decoration: none;
+}
+
+.forums-post-action:hover {
+  background: #edf3fb;
+  color: #24477f;
+}
+
+.forums-post-action.is-danger {
+  color: #b42335;
+}
+
+.forums-post-action.is-danger:hover {
+  background: #fff0f1;
+  color: #971c2c;
+}
+
+@media (max-width: 575.98px) {
+  .forums-post-header,
+  .forums-post-content {
+    padding: 1rem;
+  }
+
+  .forums-post-author-line {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .forums-post-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .forums-post-actions-secondary {
+    border-top: 1px dashed #e1e6ed;
+    padding-top: 0.35rem;
+    width: 100%;
+  }
+}
+}
+
+.forums-post-body blockquote.forums-quoted-post,
+.note-editable blockquote.forums-quoted-post {
+  background: #f4f9fc;
+  border-left-color: #2f508c;
+  border-radius: 0 8px 8px 0;
+  font-style: normal;
+  margin: 1rem 0;
+  padding: 0.8rem 1rem;
+}
+
+.forums-post-body blockquote.forums-quoted-post p:last-child,
+.note-editable blockquote.forums-quoted-post p:last-child {
+  margin-bottom: 0;
 }
 
 /* Summernote wraps <li> content in <p> tags; Bootstrap's p margin-bottom
@@ -2344,4 +2916,408 @@ a:focus {
   font-size: 1.2rem;
   background: rgba(0, 0, 0, 0.04);
   flex-shrink: 0;
+}
+
+/* ============================================================
+   Forum Polls
+   ============================================================ */
+
+.forums-poll {
+  border: 1px solid rgba(47, 80, 140, 0.2);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.forums-poll-header {
+  background: rgba(47, 80, 140, 0.05);
+  padding: 0.9rem 1.2rem 0.75rem;
+  border-bottom: 1px solid rgba(47, 80, 140, 0.12);
+}
+
+.forums-poll-header h6 {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2f508c;
+  margin: 0;
+}
+
+.forums-poll-question {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.forums-poll-body {
+  padding: 1.1rem 1.2rem;
+}
+
+.forums-poll-option {
+  margin-bottom: 0.8rem;
+}
+
+.forums-poll-option:last-child {
+  margin-bottom: 0;
+}
+
+.forums-poll-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.92rem;
+  color: #374151;
+}
+
+.forums-poll-option-label.voted {
+  font-weight: 600;
+  color: #1e3a6e;
+}
+
+.forums-poll-bar-track {
+  height: 7px;
+  background: rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.forums-poll-bar-fill {
+  height: 100%;
+  background: rgba(47, 80, 140, 0.45);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+  min-width: 0;
+}
+
+.forums-poll-bar-fill.voted {
+  background: #2f508c;
+}
+
+.forums-poll-bar-pct {
+  font-size: 0.78rem;
+  color: rgba(15, 23, 42, 0.5);
+  white-space: nowrap;
+}
+
+.forums-poll-vote-controls {
+  margin-top: 1.1rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+.forums-poll-footer {
+  padding: 0.6rem 1.2rem;
+  background: rgba(15, 23, 42, 0.025);
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  font-size: 0.8rem;
+  color: rgba(15, 23, 42, 0.5);
+}
+
+.forums-poll-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.forums-poll-badge.open {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
+.forums-poll-badge.closed {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+}
+
+/* Poll creator form in newDiscussion */
+.forums-poll-creator {
+  border: 1px solid rgba(47, 80, 140, 0.18);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-top: 0.75rem;
+  background: rgba(47, 80, 140, 0.02);
+}
+
+.forums-poll-option-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.forums-poll-option-row .form-control {
+  flex: 1;
+}
+
+/* Poll voter chips */
+.forums-poll-voters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.forums-poll-voter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem 0.15rem 0.25rem;
+  border-radius: 999px;
+  background: rgba(47, 80, 140, 0.07);
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.75rem;
+  transition: background 0.15s;
+}
+
+.forums-poll-voter-chip:hover {
+  background: rgba(47, 80, 140, 0.15);
+  color: inherit;
+}
+
+.forums-poll-voter-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+/* Inline option thumbnail (picture polls) */
+.forums-poll-option-thumb {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-right: 0.25rem;
+  flex-shrink: 0;
+}
+
+/* Label group: label text + inline voter avatars side by side */
+.forums-poll-option-label-group {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.forums-poll-voters-inline {
+  display: flex;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+
+.forums-poll-voters-inline a {
+  display: block;
+  line-height: 0;
+}
+
+.forums-poll-voters-inline .forums-poll-voter-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+/* Poll option creation form — stacked label + image url inputs */
+.forums-poll-option-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+}
+
+.forums-poll-option-image-url {
+  font-size: 0.8rem;
+}
+
+/* ── Picture poll results grid ── */
+.forums-poll-pic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+}
+
+.forums-poll-pic-card {
+  border: 2px solid rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  transition: border-color 0.15s;
+}
+
+.forums-poll-pic-card.voted {
+  border-color: #2f508c;
+}
+
+.forums-poll-pic-img-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.forums-poll-pic-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.forums-poll-pic-enlarge {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  width: 1.7rem;
+  height: 1.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 2;
+}
+.forums-poll-pic-enlarge:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+.forums-poll-pic-img-wrap:hover .forums-poll-pic-enlarge {
+  opacity: 1;
+}
+
+.forums-poll-pic-img-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(15, 23, 42, 0.25);
+  font-size: 1.75rem;
+}
+
+.forums-poll-pic-check {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  background: #2f508c;
+  color: #fff;
+  border-radius: 50%;
+  width: 1.6rem;
+  height: 1.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+}
+
+.forums-poll-pic-pct-badge {
+  position: absolute;
+  bottom: 0.35rem;
+  right: 0.4rem;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.forums-poll-pic-card-body {
+  padding: 0.5rem 0.65rem 0.55rem;
+}
+
+.forums-poll-pic-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.forums-poll-pic-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: rgba(15, 23, 42, 0.5);
+  margin-top: 0.25rem;
+}
+
+/* ── Picture poll vote grid (clickable cards) ── */
+.forums-poll-pic-vote-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.forums-poll-pic-vote-card {
+  border: 2px solid rgba(15, 23, 42, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  display: block;
+  background: #fff;
+}
+
+.forums-poll-pic-vote-card:hover {
+  border-color: rgba(47, 80, 140, 0.4);
+  box-shadow: 0 0 0 3px rgba(47, 80, 140, 0.08);
+}
+
+.forums-poll-pic-vote-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.forums-poll-pic-vote-card:has(.forums-poll-pic-vote-input:checked) {
+  border-color: #2f508c;
+  box-shadow: 0 0 0 3px rgba(47, 80, 140, 0.15);
+}
+
+.forums-poll-pic-vote-check-overlay {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  background: #2f508c;
+  color: #fff;
+  border-radius: 50%;
+  width: 1.6rem;
+  height: 1.6rem;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+}
+
+.forums-poll-pic-vote-card:has(.forums-poll-pic-vote-input:checked) .forums-poll-pic-vote-check-overlay {
+  display: flex;
+}
+
+.forums-poll-pic-vote-label {
+  padding: 0.45rem 0.65rem 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

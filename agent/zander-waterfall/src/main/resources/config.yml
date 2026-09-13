@@ -1,0 +1,6 @@
+BaseAPIURL: "http://localhost:8080/api"
+APIKey: "KEY"
+
+announcementMOTDTopLine: "&e&lMy &2&nMinecraft&r &6&oServer"
+announcementTipPrefix: "&7&l[&6&lTIP&7&l]&r "
+announcementTipInterval: 10

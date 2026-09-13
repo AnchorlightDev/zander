@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= pageTitle %> — <%= config.siteConfiguration.siteName %> Admin</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="shortcut icon" type="image/x-icon" href="/images/favicon.ico">
+  <link rel="icon" type="image/png" href="/images/siteLogo.png">
+  <link rel="apple-touch-icon" href="/images/siteLogo.png">
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+
+  <!-- jQuery (required by Summernote) -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+          integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+          crossorigin="anonymous"></script>
+
+  <!-- Summernote rich-text editor -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/summernote/0.8.20/summernote-bs5.min.css"
+        integrity="sha384-hqv27sxmxAI2L4eughLkUpjS75/Z3/hg9DOWIl0PJWE4B6GJqM2Kx72ZPoQzsUpF" crossorigin="anonymous">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/summernote/0.8.20/summernote-bs5.min.js"
+          integrity="sha384-VuY5PEOHfx/+RyPd+UmHCqDU8d9IM8bhIrXbbli+OpDD0A9G/YaovME4NwAzOyxt" crossorigin="anonymous"></script>
+
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css"
+        integrity="sha512-MV7K8+y+gLIBoVD59lQIYicR65iaqukzvf/nwasF0nqhPay5w/9lJmVM2hMDcnK1OnMGCdVK+iQrJ7lzPJQd1w=="
+        crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <!-- Admin skin (WordPress-inspired) -->
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    html { overflow-x: hidden; }
+    /* Dashboard loading gate — stays up until the page has loaded and any
+       background API fetches have settled. */
+    #dash-loading {
+      position: fixed; inset: 0; z-index: 200000;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; background: #f6f7f7; color: #50575e;
+      transition: opacity .35s ease;
+    }
+    #dash-loading.dl-hidden { opacity: 0; pointer-events: none; }
+    #dash-loading .dl-spinner {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 3px solid rgba(0,0,0,.12); border-top-color: #2271b1;
+      animation: dlspin .9s linear infinite;
+    }
+    #dash-loading .dl-text { font-size: 13px; letter-spacing: .3px; }
+    @keyframes dlspin { to { transform: rotate(360deg); } }
+    @media (prefers-color-scheme: dark) {
+      #dash-loading { background: #1d2327; color: #c3c4c7; }
+      #dash-loading .dl-spinner { border-color: rgba(255,255,255,.14); border-top-color: #72aee6; }
+    }
+  </style>
+
+  <% if (typeof extraHead !== 'undefined' && extraHead) { %>
+    <%- extraHead %>
+  <% } %>
+</head>
+<body class="wp-admin">
+<div id="dash-loading" class="dl-hidden" role="status" aria-live="polite" aria-hidden="true">
+  <div class="dl-spinner"></div>
+  <div class="dl-text">Loading…</div>
+</div>
+<script>
+(function () {
+  var el = document.getElementById("dash-loading");
+  if (!el) return;
+
+  // The gate is HIDDEN by default. It only appears if a page fires a background
+  // fetch before it has finished loading, and it always tears itself down once
+  // those fetches settle (or after a short hard cap). It must never be able to
+  // leave the user staring at a blank screen.
+  var inflight = 0, domReady = false, killed = false, settle = null, hardCap = null;
+
+  function hide() {
+    if (killed) return;
+    killed = true;
+    clearTimeout(settle);
+    clearTimeout(hardCap);
+    el.classList.add("dl-hidden");
+    el.setAttribute("aria-hidden", "true");
+    setTimeout(function () { if (el.parentNode) el.remove(); }, 400);
+  }
+  function show() {
+    if (killed) return;
+    el.classList.remove("dl-hidden");
+    el.setAttribute("aria-hidden", "false");
+    // Whenever the gate is shown, guarantee it comes back down.
+    clearTimeout(hardCap);
+    hardCap = setTimeout(hide, 3500);
+  }
+  function maybeHide() {
+    if (killed || !domReady || inflight > 0) return;
+    clearTimeout(settle);
+    settle = setTimeout(hide, 250);
+  }
+
+  // Track background API calls. Only reveal the gate if one is still in flight
+  // before the page has settled — a page that fetches nothing never sees it.
+  var _fetch = window.fetch;
+  if (typeof _fetch === "function") {
+    window.fetch = function () {
+      inflight++;
+      if (!domReady) show();
+      var p;
+      try { p = _fetch.apply(this, arguments); }
+      catch (e) { inflight = Math.max(0, inflight - 1); maybeHide(); throw e; }
+      var settled = function () { inflight = Math.max(0, inflight - 1); maybeHide(); };
+      Promise.resolve(p).then(settled, settled);
+      return p;
+    };
+  }
+
+  function onReady() { domReady = true; maybeHide(); }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", onReady);
+  } else {
+    onReady();
+  }
+  window.addEventListener("load", onReady);
+
+  // Absolute backstop, independent of any event firing.
+  setTimeout(function () { domReady = true; maybeHide(); }, 3500);
+
+  // Let pages drive it explicitly if they need to.
+  window.dashLoading = {
+    show: show,
+    hide: hide,
+    during: function (promise) {
+      show();
+      var end = function () { maybeHide(); };
+      Promise.resolve(promise).then(end, end);
+      return promise;
+    },
+  };
+})();
+</script>

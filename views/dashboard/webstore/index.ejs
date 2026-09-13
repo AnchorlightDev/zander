@@ -1,0 +1,138 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-store fa-fw me-2"></i>Webstore</h1>
+        <div class="btn-toolbar gap-2">
+          <a href="/dashboard/webstore/commands" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-terminal me-1"></i>Command Config
+          </a>
+          <a href="/webstore" target="_blank" class="btn btn-sm btn-outline-primary">
+            <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>View Store
+          </a>
+        </div>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <%# Stat cards %>
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-xl-3">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-1">Total Purchases</div>
+              <div class="fs-4 fw-bold"><%= totalCount %></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-xl-3">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-1">Total Revenue</div>
+              <div class="fs-4 fw-bold text-success"><%= formatPrice(totalRevenueCents, 'aud') %></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-xl-3">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-1">Active Subscriptions</div>
+              <div class="fs-4 fw-bold text-primary"><%= activeSubscriptions %></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-xl-3">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-1">Pending</div>
+              <div class="fs-4 fw-bold text-warning"><%= purchases.filter(p => p.status === 'pending').length %></div>
+              <div class="text-muted" style="font-size:11px;">on this page</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <%# Purchases table %>
+      <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="fw-semibold">All Purchases</span>
+          <span class="text-muted small"><%= totalCount %> total</span>
+        </div>
+        <% if (!purchases || !purchases.length) { %>
+          <div class="card-body">
+            <div class="alert alert-info mb-0">No purchases yet.</div>
+          </div>
+        <% } else { %>
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>#</th>
+                  <th>Item</th>
+                  <th>Player</th>
+                  <th>Amount</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% purchases.forEach(function(p) { %>
+                  <%
+                    const statusClass = {
+                      pending:   'warning',
+                      paid:      'info',
+                      fulfilled: 'success',
+                      failed:    'danger',
+                      refunded:  'secondary',
+                    }[p.status] || 'secondary';
+                  %>
+                  <tr>
+                    <td class="text-muted small"><%= p.purchaseId %></td>
+                    <td>
+                      <%= p.itemName %>
+                      <% if (p.isGift) { %>
+                        <span class="badge bg-info ms-1">Gift</span>
+                      <% } %>
+                    </td>
+                    <td>
+                      <span class="fw-semibold"><%= p.recipientMinecraftUsername %></span>
+                      <% if (p.isGift) { %>
+                        <br><span class="text-muted small">from <%= p.purchaserMinecraftUsername %></span>
+                      <% } %>
+                    </td>
+                    <td><%= formatPrice(p.amountCents, p.currency) %></td>
+                    <td><span class="badge bg-secondary"><%= p.purchaseType === 'subscription' ? 'Sub' : 'One-time' %></span></td>
+                    <td><span class="badge bg-<%= statusClass %>"><%= p.status %></span></td>
+                    <td class="text-muted small"><%= new Date(p.createdAt).toLocaleDateString() %></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+
+          <% if (totalPages > 1) { %>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+              <span class="text-muted small">Page <%= page %> of <%= totalPages %></span>
+              <div class="btn-group btn-group-sm">
+                <% if (page > 1) { %>
+                  <a href="?page=<%= page - 1 %>" class="btn btn-outline-secondary">← Prev</a>
+                <% } %>
+                <% if (page < totalPages) { %>
+                  <a href="?page=<%= page + 1 %>" class="btn btn-outline-secondary">Next →</a>
+                <% } %>
+              </div>
+            </div>
+          <% } %>
+        <% } %>
+      </div>
+
+    </div>
+  </div>
+  <%- include("../../admin/_footer.ejs") %>
+</div>

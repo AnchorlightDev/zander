@@ -15,6 +15,11 @@
 
 
 .logo{
+  // Portrait wordmark (264x372) — cap its height in the footer widget.
+  img{
+    max-height: 88px;
+    width: auto;
+  }
   h3{
     color: $primary-color;
   }

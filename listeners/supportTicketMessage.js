@@ -17,9 +17,10 @@ export class SupportTicketMessageListener extends Listener {
   async run(message) {
     if (message.author.bot) return;
 
-    const ticket = await getTicketByChannelId(message.channel.id);
+    try {
+      const ticket = await getTicketByChannelId(message.channel.id);
+      if (!ticket) return;
 
-    if (ticket) {
       let userId = await getUserIdByDiscordId(message.author.id);
       if (!userId) {
         userId = await createUnlinkedUser(message.author.id, message.author.username);
@@ -39,6 +40,8 @@ export class SupportTicketMessageListener extends Listener {
         userId,
         discordRoleIds: memberRoleIds,
       });
+    } catch (error) {
+      console.error("[TICKET] Failed to process message in ticket channel", error);
     }
   }
 }

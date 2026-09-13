@@ -324,16 +324,17 @@ export async function hasActiveWebBan(playerId) {
 
 /**
  * Get all web punishments (paginated, for dashboard).
+ * actor_player_id is a v1.10.0 column that may not exist yet — use the
+ * actor_name_snapshot column (always present) for actor identification.
  */
 export async function getWebPunishments({ page = 1, limit = 25 } = {}) {
   const offset = (page - 1) * limit;
 
   const [rows, countRows] = await Promise.all([
     executeQuery(
-      `SELECT dp.*, u.username AS target_username, actor.username AS actor_username
+      `SELECT dp.*, u.username AS target_username
        FROM discord_punishments dp
        LEFT JOIN users u ON dp.target_player_id = u.userId
-       LEFT JOIN users actor ON dp.actor_player_id = actor.userId
        WHERE dp.platform = 'WEB'
        ORDER BY dp.created_at DESC
        LIMIT ? OFFSET ?`,

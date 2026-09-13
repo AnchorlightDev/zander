@@ -1,0 +1,221 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-users me-2"></i>Users</h1>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (stats) { %>
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card shadow-sm h-100 text-center">
+            <div class="card-body py-3">
+              <div class="fs-4 fw-bold"><%= stats.totalPlayers %></div>
+              <div class="text-muted small">Total Players</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card shadow-sm h-100 text-center">
+            <div class="card-body py-3">
+              <div class="fs-4 fw-bold text-success"><%= stats.websiteRegistered %></div>
+              <div class="text-muted small">Website Registered</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card shadow-sm h-100 text-center">
+            <div class="card-body py-3">
+              <div class="fs-4 fw-bold text-secondary"><%= stats.profileOnly %></div>
+              <div class="text-muted small">Profile Only</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card shadow-sm h-100 text-center">
+            <div class="card-body py-3">
+              <div class="fs-4 fw-bold text-info"><%= stats.discordLinked %></div>
+              <div class="text-muted small">Discord Linked</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card shadow-sm h-100 text-center">
+            <div class="card-body py-3">
+              <div class="fs-4 fw-bold text-danger"><%= stats.disabled %></div>
+              <div class="text-muted small">Disabled</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <% } %>
+
+      <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+          <form method="get" action="/dashboard/users" class="row g-2 align-items-end">
+            <div class="col-12 col-md-3">
+              <label class="form-label small">Search</label>
+              <input type="text" class="form-control" name="search" value="<%= filters.search %>"
+                     placeholder="Username, UUID, email, Discord ID">
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label small">Platform</label>
+              <select class="form-select" name="platform">
+                <option value="" <%= !filters.platform ? "selected" : "" %>>All</option>
+                <option value="JAVA" <%= filters.platform === "JAVA" ? "selected" : "" %>>Java</option>
+                <option value="BEDROCK" <%= filters.platform === "BEDROCK" ? "selected" : "" %>>Bedrock</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label small">Website Account</label>
+              <select class="form-select" name="accountState">
+                <option value="" <%= !filters.accountState ? "selected" : "" %>>All</option>
+                <option value="REGISTERED" <%= filters.accountState === "REGISTERED" ? "selected" : "" %>>Registered</option>
+                <option value="REGISTRATION_INCOMPLETE" <%= filters.accountState === "REGISTRATION_INCOMPLETE" ? "selected" : "" %>>Registration incomplete</option>
+                <option value="MINECRAFT_PROFILE_ONLY" <%= filters.accountState === "MINECRAFT_PROFILE_ONLY" ? "selected" : "" %>>Profile only</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label small">Email</label>
+              <select class="form-select" name="emailStatus">
+                <option value="" <%= !filters.emailStatus ? "selected" : "" %>>All</option>
+                <option value="VERIFIED" <%= filters.emailStatus === "VERIFIED" ? "selected" : "" %>>Verified</option>
+                <option value="UNVERIFIED" <%= filters.emailStatus === "UNVERIFIED" ? "selected" : "" %>>Unverified</option>
+                <option value="MISSING" <%= filters.emailStatus === "MISSING" ? "selected" : "" %>>Missing</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label small">Discord</label>
+              <select class="form-select" name="discordStatus">
+                <option value="" <%= !filters.discordStatus ? "selected" : "" %>>All</option>
+                <option value="LINKED" <%= filters.discordStatus === "LINKED" ? "selected" : "" %>>Linked</option>
+                <option value="UNLINKED" <%= filters.discordStatus === "UNLINKED" ? "selected" : "" %>>Not linked</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-1">
+              <label class="form-label small">Status</label>
+              <select class="form-select" name="disabledStatus">
+                <option value="" <%= !filters.disabledStatus ? "selected" : "" %>>All</option>
+                <option value="ACTIVE" <%= filters.disabledStatus === "ACTIVE" ? "selected" : "" %>>Active</option>
+                <option value="DISABLED" <%= filters.disabledStatus === "DISABLED" ? "selected" : "" %>>Disabled</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-auto">
+              <button type="submit" class="btn btn-primary"><i class="fa-solid fa-filter me-1"></i>Filter</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">Players</h5>
+          <span class="badge bg-secondary"><%= total %> total</span>
+        </div>
+        <div class="card-body p-0">
+          <% if (!rows.length) { %>
+            <div class="p-4 text-center text-muted">No users match your search or filters.</div>
+          <% } else { %>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>User</th>
+                  <th>Platform</th>
+                  <th>Website</th>
+                  <th>Email</th>
+                  <th>Discord</th>
+                  <th>Minecraft Activity</th>
+                  <th>Website Activity</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% rows.forEach((u) => { %>
+                <tr>
+                  <td>
+                    <img src="https://crafthead.net/avatar/<%= u.uuid %>/24" width="24" height="24" class="rounded me-2" alt="">
+                    <%= u.username %>
+                  </td>
+                  <td>
+                    <% if (u.platform === "BEDROCK") { %>
+                      <span class="badge text-bg-info">Bedrock</span>
+                    <% } else { %>
+                      <span class="badge text-bg-secondary">Java</span>
+                    <% } %>
+                  </td>
+                  <td>
+                    <% if (u.accountState === "REGISTERED") { %>
+                      <span class="badge text-bg-success">Registered</span>
+                    <% } else if (u.accountState === "REGISTRATION_INCOMPLETE") { %>
+                      <span class="badge text-bg-warning text-dark">Registration Incomplete</span>
+                    <% } else { %>
+                      <span class="badge text-bg-secondary">Profile Only</span>
+                    <% } %>
+                  </td>
+                  <td>
+                    <% if (u.maskedEmail) { %>
+                      <%= u.maskedEmail %>
+                      <% if (u.email_verified) { %><i class="fa-solid fa-circle-check text-success ms-1" title="Verified"></i><% } %>
+                    <% } else { %>
+                      <span class="text-muted">Missing</span>
+                    <% } %>
+                  </td>
+                  <td>
+                    <% if (u.discordId) { %>
+                      <span class="badge text-bg-primary">Linked</span>
+                    <% } else { %>
+                      <span class="badge text-bg-light text-muted">Not linked</span>
+                    <% } %>
+                  </td>
+                  <td><%= u.audit_lastMinecraftLogin ? new Date(u.audit_lastMinecraftLogin).toLocaleDateString() : "Never" %></td>
+                  <td><%= u.audit_lastWebsiteLogin ? new Date(u.audit_lastWebsiteLogin).toLocaleDateString() : "Never" %></td>
+                  <td>
+                    <% if (u.account_disabled) { %>
+                      <span class="badge text-bg-danger">Disabled</span>
+                    <% } else { %>
+                      <span class="badge text-bg-success">Active</span>
+                    <% } %>
+                  </td>
+                  <td>
+                    <a href="/dashboard/users/<%= u.userId %>" class="btn btn-sm btn-outline-primary">View</a>
+                  </td>
+                </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+          <% } %>
+        </div>
+
+        <% if (totalPages > 1) { %>
+        <div class="card-footer bg-white">
+          <nav>
+            <ul class="pagination justify-content-center mb-0">
+              <li class="page-item <%= page <= 1 ? 'disabled' : '' %>">
+                <a class="page-link" href="?page=<%= page - 1 %>&search=<%= encodeURIComponent(filters.search) %>&platform=<%= filters.platform %>&accountState=<%= filters.accountState %>&emailStatus=<%= filters.emailStatus %>&discordStatus=<%= filters.discordStatus %>&disabledStatus=<%= filters.disabledStatus %>">Previous</a>
+              </li>
+              <% for (let i = 1; i <= totalPages; i++) { %>
+                <li class="page-item <%= i === page ? 'active' : '' %>">
+                  <a class="page-link" href="?page=<%= i %>&search=<%= encodeURIComponent(filters.search) %>&platform=<%= filters.platform %>&accountState=<%= filters.accountState %>&emailStatus=<%= filters.emailStatus %>&discordStatus=<%= filters.discordStatus %>&disabledStatus=<%= filters.disabledStatus %>"><%= i %></a>
+                </li>
+              <% } %>
+              <li class="page-item <%= page >= totalPages ? 'disabled' : '' %>">
+                <a class="page-link" href="?page=<%= page + 1 %>&search=<%= encodeURIComponent(filters.search) %>&platform=<%= filters.platform %>&accountState=<%= filters.accountState %>&emailStatus=<%= filters.emailStatus %>&discordStatus=<%= filters.discordStatus %>&disabledStatus=<%= filters.disabledStatus %>">Next</a>
+              </li>
+            </ul>
+          </nav>
+        </div>
+        <% } %>
+      </div>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->

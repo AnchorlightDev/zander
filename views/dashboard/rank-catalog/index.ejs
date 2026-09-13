@@ -1,0 +1,95 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-layer-group fa-fw me-2"></i>Rank Catalog</h1>
+        <div class="btn-toolbar gap-2">
+          <a href="/ranks" target="_blank" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>View Page
+          </a>
+          <a href="/dashboard/rank-catalog/create" class="btn btn-sm btn-primary">
+            <i class="fa-solid fa-plus me-1"></i>Add Entry
+          </a>
+        </div>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (!entries || !entries.length) { %>
+        <div class="alert alert-info">
+          No rank catalog entries yet.
+          <a href="/dashboard/rank-catalog/create" class="alert-link">Add your first entry</a> to populate the public ranks page.
+        </div>
+      <% } else { %>
+
+        <% categoryGroups.forEach(function(group) { %>
+          <div class="card shadow-sm mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><%= group.name %></span>
+              <span class="badge bg-secondary"><%= group.items.length %> <%= group.items.length === 1 ? 'entry' : 'entries' %></span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width:32px">#</th>
+                    <th>Name</th>
+                    <th>Stripe Prices</th>
+                    <th>Perks</th>
+                    <th style="width:110px"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% group.items.forEach(function(entry) { %>
+                    <tr>
+                      <td class="text-muted"><%= entry.sortOrder %></td>
+                      <td>
+                        <% if (entry.imageUrl) { %>
+                          <img src="<%= entry.imageUrl %>" alt="" style="height:24px; object-fit:contain;" class="me-2">
+                        <% } %>
+                        <strong><%= entry.displayName %></strong>
+                        <% if (entry.description) { %>
+                          <div class="text-muted" style="font-size:0.78rem;"><%= entry.description %></div>
+                        <% } %>
+                      </td>
+                      <td>
+                        <% if (entry.stripePriceIds && entry.stripePriceIds.length) { %>
+                          <% entry.stripePriceIds.forEach(function(pid) { %>
+                            <code class="small d-block"><%= pid %></code>
+                          <% }) %>
+                        <% } else { %>
+                          <span class="text-muted small">— none</span>
+                        <% } %>
+                      </td>
+                      <td class="text-muted small"><%= entry.perks ? entry.perks.length : 0 %> perks</td>
+                      <td class="text-end">
+                        <a href="/dashboard/rank-catalog/<%= entry.id %>/edit" class="btn btn-sm btn-outline-secondary me-1">
+                          <i class="fa-solid fa-pencil fa-fw"></i>
+                        </a>
+                        <form method="post" action="/dashboard/rank-catalog/<%= entry.id %>/delete" class="d-inline"
+                              onsubmit="return confirm('Delete <%= entry.displayName %>?')">
+                          <button type="submit" class="btn btn-sm btn-outline-danger">
+                            <i class="fa-solid fa-trash fa-fw"></i>
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% }) %>
+
+      <% } %>
+
+    </div>
+  </div>
+</div>
+
+<%- include("../../admin/_footer.ejs") %>

@@ -22,40 +22,55 @@
             <div class="collapse navbar-collapse" id="navbarmain">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
-                    <% if (features.server) { %>
-                        <li class="nav-item"><a class="nav-link" href="/play">Play</a></li>
-                    <% } %>
-                    <% if (features.report) { %>
-                        <li class="nav-item"><a class="nav-link" href="/report">Report</a></li>
-                    <% } %>
-                    <% if (features.applications) { %>
-                        <li class="nav-item"><a class="nav-link" href="/apply">Apply</a></li>
-                    <% } %>
-                    <% if (features.ranks) { %>
-                        <li class="nav-item"><a class="nav-link" href="/ranks">Ranks</a></li>
-                    <% } %>
-                    <% if (features.forums) { %>
-                        <li class="nav-item"><a class="nav-link" href="/forums">Forums</a></li>
-                    <% } %>
-                    <li class="nav-item"><a class="nav-link" href="/webstore">Webstore</a></li>
-                    <% if (req.session?.user?.permissions?.includes('zander.web.dashboard') || req.session?.user?.permissions?.includes('zander.web.*') || req.session?.user?.permissions?.includes('*')) { %>
+
+                    <% if (features.server || features.ranks) { %>
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="dashboardDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                Dashboard
-                            </a>
-                            <div class="dropdown-menu" aria-labelledby="dashboardDropdown">
-                                <a class="dropdown-item" href="/dashboard">Overview</a>
-                                <a class="dropdown-item" href="/dashboard/announcements">Announcements</a>
-                                <a class="dropdown-item" href="/dashboard/servers">Servers</a>
-                                <a class="dropdown-item" href="/dashboard/applications">Applications</a>
-                                <a class="dropdown-item" href="/dashboard/support">Support</a>
-                                <a class="dropdown-item" href="/dashboard/vault">Vault</a>
-                                <a class="dropdown-item" href="/dashboard/logs">Logs</a>
-                                <a class="dropdown-item" href="/dashboard/bridge">Bridge</a>
-                                <a class="dropdown-item" href="/dashboard/ranks">Ranks</a>
-                                <a class="dropdown-item" href="/dashboard/scheduler">Scheduler</a>
+                            <a class="nav-link dropdown-toggle" href="#" id="navPlayDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Play</a>
+                            <div class="dropdown-menu" aria-labelledby="navPlayDropdown">
+                                <% if (features.server) { %>
+                                    <a class="dropdown-item" href="/play">Play</a>
+                                <% } %>
+                                <% if (features.ranks) { %>
+                                    <a class="dropdown-item" href="/ranks">Ranks</a>
+                                <% } %>
                             </div>
                         </li>
+                    <% } %>
+
+                    <% if (features.forums || features.events || features.applications) { %>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="navCommunityDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Community</a>
+                            <div class="dropdown-menu" aria-labelledby="navCommunityDropdown">
+                                <% if (features.forums) { %>
+                                    <a class="dropdown-item" href="/forums">Forums</a>
+                                <% } %>
+                                <% if (features.events) { %>
+                                    <a class="dropdown-item" href="/events">Events</a>
+                                <% } %>
+                                <% if (features.applications) { %>
+                                    <a class="dropdown-item" href="/apply">Apply</a>
+                                <% } %>
+                            </div>
+                        </li>
+                    <% } %>
+
+                    <li class="nav-item"><a class="nav-link" href="/webstore">Webstore</a></li>
+
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navHelpDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Help</a>
+                        <div class="dropdown-menu" aria-labelledby="navHelpDropdown">
+                            <a class="dropdown-item" href="/rules">Rules</a>
+                            <% if (features.report) { %>
+                                <a class="dropdown-item" href="/report">Report</a>
+                            <% } %>
+                            <% if (features.support) { %>
+                                <a class="dropdown-item" href="/support">Support</a>
+                            <% } %>
+                        </div>
+                    </li>
+
+                    <% if (req.session?.user?.permissions?.includes('zander.web.dashboard') || req.session?.user?.permissions?.includes('zander.web.*') || req.session?.user?.permissions?.includes('*')) { %>
+                        <li class="nav-item"><a class="nav-link" href="/dashboard">Dashboard</a></li>
                     <% } %>
                     <% if (req.session?.user) { %>
                         <li class="nav-item dropdown">

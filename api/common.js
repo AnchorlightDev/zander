@@ -78,22 +78,21 @@ export function optional(body, field) {
     @param res Passing through res
     @param features Passing through features
 */
-export async function isFeatureWebRouteEnabled(
-  isFeatureEnabled,
-  req,
-  res,
-  features
-) {
+export async function isFeatureWebRouteEnabled(app, isFeatureEnabled, req, res, features) {
   if (!isFeatureEnabled) {
-    res.view("session/featureDisabled", {
-      pageTitle: `Feature Disabled`,
-      config: config,
-      req: req,
-      res: res,
-      features: features,
-      globalImage: await getGlobalImage(),
-      announcementWeb: await getWebAnnouncement(),
-    });
+    const [globalImage, announcementWeb] = await Promise.all([getGlobalImage(), getWebAnnouncement()]);
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("session/featureDisabled", {
+        pageTitle: "Feature Disabled",
+        config,
+        req,
+        res,
+        features,
+        globalImage,
+        announcementWeb,
+      })
+    );
+    return false;
   }
   return true;
 }
@@ -157,8 +156,8 @@ function hasSpecificPermission(permissionArray, node) {
     }
 
     if (candidate.endsWith(".*")) {
-      const base = candidate.slice(0, -1);
-      return target.startsWith(base);
+      const base = candidate.slice(0, -2);
+      return target === base || target.startsWith(base + ".");
     }
 
     return false;
@@ -249,14 +248,27 @@ export async function postAPIRequest(
     then selects a random file from the list using the Math.random() function.
     Finally, the function returns the path of the chosen file by concatenating the file name with the relative path to the directory.
 */
-export async function getGlobalImage() {
-  var path = "./assets/images/globalImages/";
-  var files = await readdirSync(path);
+export function getGlobalImage() {
+  try {
+    const files = readdirSync("./assets/images/globalImages/");
+    if (!files.length) return null;
+    const chosenFile = files[Math.floor(Math.random() * files.length)];
+    return "../../../images/globalImages/" + chosenFile;
+  } catch {
+    return null;
+  }
+}
 
-  // Now files is an Array of the name of the files in the folder and you can pick a random name inside of that array.
-  let chosenFile = await files[Math.floor(Math.random() * files.length)];
-
-  return "../../../images/globalImages/" + chosenFile;
+export function getJumboVideo() {
+  try {
+    const files = readdirSync("./assets/videos/").filter((f) =>
+      /\.(mp4|webm|ogg)$/i.test(f)
+    );
+    if (files.length === 0) return null;
+    return "/videos/" + files[Math.floor(Math.random() * files.length)];
+  } catch {
+    return null;
+  }
 }
 
 /*
@@ -267,27 +279,22 @@ export async function getGlobalImage() {
     @param alertContent The alert content text.
     @param res Passing through res
 */
-export async function setBannerCookie(alertType, alertContent, res) {
+export function setBannerCookie(alertType, alertContent, res) {
   try {
     var expiryTime = new Date();
     expiryTime.setSeconds(expiryTime.getSeconds() + 2);
 
-    // Set Alert Type
     res.setCookie("alertType", alertType, {
       path: "/",
       expires: expiryTime,
       httpOnly: true,
     });
 
-    // Set Content Type
     res.setCookie("alertContent", alertContent, {
       path: "/",
       expires: expiryTime,
       httpOnly: true,
     });
-
-    // Make sure to send the res
-    return res;
   } catch (error) {
     console.log(error);
   }
@@ -369,7 +376,39 @@ export function removeHtmlTags(html) {
   return html.replace(/<(?!\/?(a)\b)[^<]*?>/gi, "");
 }
 
+function verifyCodeIsActive(code) {
+  return new Promise((resolve, reject) => {
+    db.query(
+      `SELECT 1 FROM userVerifyLink WHERE linkCode = ? AND codeExpiry > NOW() LIMIT 1`,
+      [String(code)],
+      (error, results) => {
+        if (error) return reject(error);
+        resolve(Array.isArray(results) && results.length > 0);
+      }
+    );
+  });
+}
+
 export async function generateVerifyCode() {
-  const code = Math.floor(Math.random() * 900000) + 100000;
-  return code;
+  // 6-digit code space is 900,000 wide and only a handful are ever active
+  // at once, so a collision is very unlikely — but an active duplicate would
+  // let one player's code verify another's account, so retry a few times if
+  // the generated code is already in use.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const code = Math.floor(Math.random() * 900000) + 100000;
+
+    try {
+      if (!(await verifyCodeIsActive(code))) {
+        return code;
+      }
+    } catch (error) {
+      // If we can't check for collisions, fall back to the raw code rather
+      // than failing the whole verification request.
+      console.error("generateVerifyCode: collision check failed", error);
+      return code;
+    }
+  }
+
+  // Extremely unlikely: 10 straight collisions. Return a fresh code anyway.
+  return Math.floor(Math.random() * 900000) + 100000;
 }

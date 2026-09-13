@@ -39,7 +39,8 @@
       "adminLog": "WEBHOOKURL",
       "staffChannel": "WEBHOOKURL",
       "staffAuditLog": "WEBHOOKURL",
-      "staffPunishmentNotifications": "WEBHOOKURL"
+      "staffPunishmentNotifications": "WEBHOOKURL",
+      "webstoreChannel": "WEBHOOKURL"
     },
     "nicknameReportChannelId": "786042085937643540",
     "roles": {
@@ -59,11 +60,75 @@
       "requireDmSuccess": false
     }
   },
+  "watch": {
+    "contentChannelId": "CHANNELID",
+    "contentPingRoleId": null,
+    "filters": {
+      "twitch": {
+        "titleMarkers": ["#cfc", "[cfc]"],
+        "tags": ["cfc"]
+      },
+      "youtube": {
+        "tags": ["cfc"],
+        "descriptionMarkers": ["#cfc"]
+      }
+    }
+  },
+  "events": {
+    "discordChannelId": "CHANNELID",
+    "reviewChannelId": "CHANNELID"
+  },
   "staffAuditReport": {
     "enabled": true,
     "dayOfWeek": "Monday",
     "time": "12:00",
     "timezone": "Australia/Sydney",
     "webhookUrl": "WEBHOOKURL"
+  },
+  "voting": {
+    "announcementChannelId": "CHANNELID",
+    "monthlyRoutineSlug": "monthly-top-voter",
+    "monthlyProcessingNote": "Monthly rewards run automatically at 00:05 UTC on the 1st of each month. Use POST /admin/vote/monthly/process to trigger manually.",
+    "tieRule": "All players sharing the highest vote count in a month are rewarded. Within a tie group, earliest last_vote_at wins positional priority."
+  },
+  "mixed": {
+    "mapSync": {
+      "enabled": false,
+      "provider": "github",
+      "githubOrg": "CraftingForChrist",
+      "githubTokenEnv": "MIXED_GITHUB_TOKEN",
+      "duplicateMapKeyStrategy": "conflict",
+      "assetUrlMode": "raw",
+      "cronSchedule": "0 * * * *",
+      "sources": [
+        {
+          "sourceKey": "primary",
+          "displayName": "Primary Maps",
+          "repo": "mixed-maps-primary",
+          "branch": "main",
+          "mapsPath": "maps",
+          "enabled": true,
+          "priority": 1
+        },
+        {
+          "sourceKey": "secondary",
+          "displayName": "Secondary Maps",
+          "repo": "mixed-maps-secondary",
+          "branch": "main",
+          "mapsPath": "maps",
+          "enabled": true,
+          "priority": 2
+        }
+      ]
+    }
+  },
+  "wrapped": {
+    "//": "The Wrapped period (enabled / start / end / rolling length) is configured in the dashboard (Dashboard > Wrapped), NOT here.",
+    "minemonitor": {
+      "//": "baseUrl of the MineMonitor deployment. Auth uses a MineMonitor 'Connections' token (scope: wrapped.read) set in .env as MINEMONITOR_CONNECTION_TOKEN.",
+      "baseUrl": "https://monitor.craftingforchrist.net",
+      "//dateFormat": "How start/end are sent to MineMonitor: 'date' (YYYY-MM-DD, default), 'iso', 'epoch' (seconds), or 'epochms'.",
+      "dateFormat": "date"
+    }
   }
 }

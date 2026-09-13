@@ -13,6 +13,12 @@
       <li><a href="/dashboard" class="dashboard-nav-link <%= isActive('/dashboard') ? 'active' : '' %>"><i class="fas fa-home fa-fw me-2"></i>Overview</a></li>
       <li><a href="/dashboard/announcements" class="dashboard-nav-link <%= isActive('/dashboard/announcements') ? 'active' : '' %>"><i class="fas fa-bullhorn fa-fw me-2"></i>Announcements</a></li>
       <li><a href="/dashboard/forums/categories" class="dashboard-nav-link <%= isActive('/dashboard/forums') ? 'active' : '' %>"><i class="fa-solid fa-comments fa-fw me-2"></i>Forums</a></li>
+
+      <li class="dashboard-nav-heading">Events</li>
+      <li><a href="/dashboard/events" class="dashboard-nav-link <%= isActive('/dashboard/events') && !currentPath.includes('/templates') && !currentPath.includes('/review') && !currentPath.includes('/list') ? 'active' : '' %>"><i class="fas fa-calendar-alt fa-fw me-2"></i>Calendar</a></li>
+      <li><a href="/dashboard/events/list" class="dashboard-nav-link <%= currentPath.includes('/events/list') ? 'active' : '' %>"><i class="fas fa-list fa-fw me-2"></i>All Events</a></li>
+      <li><a href="/dashboard/events/review" class="dashboard-nav-link <%= currentPath.includes('/events/review') ? 'active' : '' %>"><i class="fas fa-clock fa-fw me-2"></i>Review Queue</a></li>
+      <li><a href="/dashboard/events/templates" class="dashboard-nav-link <%= currentPath.includes('/events/templates') ? 'active' : '' %>"><i class="fas fa-copy fa-fw me-2"></i>Templates</a></li>
       <li><a href="/dashboard/servers" class="dashboard-nav-link <%= isActive('/dashboard/servers') ? 'active' : '' %>"><i class="fas fa-server fa-fw me-2"></i>Servers</a></li>
       <li><a href="/dashboard/applications" class="dashboard-nav-link <%= isActive('/dashboard/applications') ? 'active' : '' %>"><i class="fas fa-file-alt fa-fw me-2"></i>Applications</a></li>
 
@@ -24,12 +30,19 @@
       <li><a href="/dashboard/support/explorer" class="dashboard-nav-link <%= currentPath.includes('/support/explorer') ? 'active' : '' %>"><i class="fas fa-search fa-fw me-2"></i>Ticket Explorer</a></li>
       <li><a href="/dashboard/support/categories" class="dashboard-nav-link <%= currentPath.includes('/support/categories') ? 'active' : '' %>"><i class="fas fa-folder fa-fw me-2"></i>Categories</a></li>
 
+
       <li class="dashboard-nav-heading">System</li>
       <li><a href="/dashboard/vault" class="dashboard-nav-link <%= isActive('/dashboard/vault') ? 'active' : '' %>"><i class="fa-solid fa-vault fa-fw me-2"></i>Vault</a></li>
       <li><a href="/dashboard/logs" class="dashboard-nav-link <%= isActive('/dashboard/logs') ? 'active' : '' %>"><i class="fa-solid fa-terminal fa-fw me-2"></i>Logs</a></li>
       <li><a href="/dashboard/bridge" class="dashboard-nav-link <%= isActive('/dashboard/bridge') ? 'active' : '' %>"><i class="fa-solid fa-bridge fa-fw me-2"></i>Bridge</a></li>
       <li><a href="/dashboard/ranks" class="dashboard-nav-link <%= isActive('/dashboard/ranks') ? 'active' : '' %>"><i class="fa-solid fa-medal fa-fw me-2"></i>Ranks</a></li>
       <li><a href="/dashboard/scheduler" class="dashboard-nav-link <%= isActive('/dashboard/scheduler') ? 'active' : '' %>"><i class="fa-solid fa-clock fa-fw me-2"></i>Scheduler</a></li>
+
+      <li class="dashboard-nav-heading">Finance</li>
+      <li><a href="/dashboard/finance" class="dashboard-nav-link <%= currentPath === '/dashboard/finance' ? 'active' : '' %>"><i class="fa-solid fa-chart-line fa-fw me-2"></i>Overview</a></li>
+      <li><a href="/dashboard/finance/reports" class="dashboard-nav-link <%= isActive('/dashboard/finance/reports') ? 'active' : '' %>"><i class="fa-solid fa-file-invoice-dollar fa-fw me-2"></i>Reports</a></li>
+      <li><a href="/dashboard/finance/settings" class="dashboard-nav-link <%= isActive('/dashboard/finance/settings') ? 'active' : '' %>"><i class="fa-solid fa-gear fa-fw me-2"></i>Settings</a></li>
+
     </ul>
   </nav>
 </div>
@@ -47,6 +60,12 @@
         <li><a href="/dashboard/announcements" class="dashboard-nav-link <%= isActive('/dashboard/announcements') ? 'active' : '' %>"><i class="fas fa-bullhorn fa-fw me-2"></i>Announcements</a></li>
         <li><a href="/dashboard/forums/categories" class="dashboard-nav-link <%= isActive('/dashboard/forums') ? 'active' : '' %>"><i class="fa-solid fa-comments fa-fw me-2"></i>Forums</a></li>
         <li><a href="/dashboard/servers" class="dashboard-nav-link <%= isActive('/dashboard/servers') ? 'active' : '' %>"><i class="fas fa-server fa-fw me-2"></i>Servers</a></li>
+
+        <li class="dashboard-nav-heading">Events</li>
+        <li><a href="/dashboard/events" class="dashboard-nav-link <%= isActive('/dashboard/events') && !currentPath.includes('/templates') && !currentPath.includes('/review') && !currentPath.includes('/list') ? 'active' : '' %>"><i class="fas fa-calendar-alt fa-fw me-2"></i>Calendar</a></li>
+        <li><a href="/dashboard/events/list" class="dashboard-nav-link <%= currentPath.includes('/events/list') ? 'active' : '' %>"><i class="fas fa-list fa-fw me-2"></i>All Events</a></li>
+        <li><a href="/dashboard/events/review" class="dashboard-nav-link <%= currentPath.includes('/events/review') ? 'active' : '' %>"><i class="fas fa-clock fa-fw me-2"></i>Review Queue</a></li>
+        <li><a href="/dashboard/events/templates" class="dashboard-nav-link <%= currentPath.includes('/events/templates') ? 'active' : '' %>"><i class="fas fa-copy fa-fw me-2"></i>Templates</a></li>
         <li><a href="/dashboard/applications" class="dashboard-nav-link <%= isActive('/dashboard/applications') ? 'active' : '' %>"><i class="fas fa-file-alt fa-fw me-2"></i>Applications</a></li>
 
         <li class="dashboard-nav-heading">Moderation</li>
@@ -57,12 +76,19 @@
         <li><a href="/dashboard/support/explorer" class="dashboard-nav-link <%= currentPath.includes('/support/explorer') ? 'active' : '' %>"><i class="fas fa-search fa-fw me-2"></i>Ticket Explorer</a></li>
         <li><a href="/dashboard/support/categories" class="dashboard-nav-link <%= currentPath.includes('/support/categories') ? 'active' : '' %>"><i class="fas fa-folder fa-fw me-2"></i>Categories</a></li>
 
+
         <li class="dashboard-nav-heading">System</li>
         <li><a href="/dashboard/vault" class="dashboard-nav-link <%= isActive('/dashboard/vault') ? 'active' : '' %>"><i class="fa-solid fa-vault fa-fw me-2"></i>Vault</a></li>
         <li><a href="/dashboard/logs" class="dashboard-nav-link <%= isActive('/dashboard/logs') ? 'active' : '' %>"><i class="fa-solid fa-terminal fa-fw me-2"></i>Logs</a></li>
         <li><a href="/dashboard/bridge" class="dashboard-nav-link <%= isActive('/dashboard/bridge') ? 'active' : '' %>"><i class="fa-solid fa-bridge fa-fw me-2"></i>Bridge</a></li>
         <li><a href="/dashboard/ranks" class="dashboard-nav-link <%= isActive('/dashboard/ranks') ? 'active' : '' %>"><i class="fa-solid fa-medal fa-fw me-2"></i>Ranks</a></li>
         <li><a href="/dashboard/scheduler" class="dashboard-nav-link <%= isActive('/dashboard/scheduler') ? 'active' : '' %>"><i class="fa-solid fa-clock fa-fw me-2"></i>Scheduler</a></li>
+
+        <li class="dashboard-nav-heading">Finance</li>
+        <li><a href="/dashboard/finance" class="dashboard-nav-link <%= currentPath === '/dashboard/finance' ? 'active' : '' %>"><i class="fa-solid fa-chart-line fa-fw me-2"></i>Overview</a></li>
+        <li><a href="/dashboard/finance/reports" class="dashboard-nav-link <%= isActive('/dashboard/finance/reports') ? 'active' : '' %>"><i class="fa-solid fa-file-invoice-dollar fa-fw me-2"></i>Reports</a></li>
+        <li><a href="/dashboard/finance/settings" class="dashboard-nav-link <%= isActive('/dashboard/finance/settings') ? 'active' : '' %>"><i class="fa-solid fa-gear fa-fw me-2"></i>Settings</a></li>
+
       </ul>
     </nav>
   </div>

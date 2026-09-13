@@ -2,8 +2,7 @@ import { Listener } from "@sapphire/framework";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const config = require("../config.json");
-import { Colors, EmbedBuilder } from "discord.js";
-import { MessageBuilder, Webhook } from "discord-webhook-node";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Colors, EmbedBuilder, WebhookClient } from "discord.js";
 import { sendWebhookMessage } from "../lib/discord/webhooks.mjs";
 
 export class GuildMessageUpdateListener extends Listener {
@@ -19,28 +18,30 @@ export class GuildMessageUpdateListener extends Listener {
     // Check if the author is a bot and stop if true.
     if (newMessage.author.bot) return;
 
-    const adminLogHook = new Webhook(
-      config.discord.webhooks.adminLog
-    );
+    const webhookUrl = config.discord.webhooks.adminLog;
+    if (!webhookUrl) return;
 
-    const embed = new MessageBuilder()
+    const webhook = new WebhookClient({ url: webhookUrl });
+
+    const embed = new EmbedBuilder()
       .setTitle("Message Edit")
       .setColor(Colors.Yellow)
       .setDescription(
         `Message edit from \`${oldMessage.author.username}\` in \`#${oldMessage.channel.name}\``
       )
-      .addField(
-        "Old Message",
-        `${oldMessage.content}`,
-        false
-      )
-      .addField(
-        "Edited Message",
-        `${newMessage.content}`,
-        false,
+      .addFields(
+        { name: "Old Message", value: (oldMessage.content || "[empty]").slice(0, 1024), inline: false },
+        { name: "Edited Message", value: (newMessage.content || "[empty]").slice(0, 1024), inline: false }
       );
 
-    await sendWebhookMessage(adminLogHook, embed, {
+    const jumpButton = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel("Jump to Message")
+        .setStyle(ButtonStyle.Link)
+        .setURL(newMessage.url)
+    );
+
+    await sendWebhookMessage(webhook, { embeds: [embed], components: [jumpButton] }, {
       context: "listeners/messageUpdate",
     });
   }

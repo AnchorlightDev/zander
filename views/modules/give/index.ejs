@@ -1,0 +1,131 @@
+<%- include("../../modules/header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription
+}) %>
+
+<%- include("../../modules/navigationBar.ejs") %>
+
+<%- include("../../partials/miniHeader.ejs", {
+  headerTitle: "Support the Server",
+  backgroundImage: globalImage
+}) %>
+
+<section class="section">
+  <div class="container">
+
+    <% if (req.cookies.alertType) { %>
+    <%- include("../../partials/alert.ejs", {
+        alertType: req.cookies.alertType,
+        content: req.cookies.alertContent
+    }) %>
+    <% } %>
+    <%# Hero -%>
+    <div class="text-center mb-5">
+      <h2 class="mb-3">Support <%= config.siteConfiguration.siteName %></h2>
+      <p class="text-muted lead mx-auto" style="max-width: 600px;">
+        Running a Minecraft server takes time and money.
+        Your support helps keep the network running, the community thriving, and new features coming.
+      </p>
+      <div class="d-flex justify-content-center gap-2 flex-wrap mt-3">
+        <a href="/webstore" class="btn btn-primary">Visit the Webstore</a>
+        <a href="/ranks" class="btn btn-outline-secondary">View Ranks</a>
+      </div>
+    </div>
+
+    <%# Monthly goal bar -%>
+    <div class="card mb-5 shadow-sm">
+      <div class="card-body">
+        <h4 class="card-title mb-3">This Month's Server Goal</h4>
+        <p class="text-muted">
+          We set a monthly goal to cover our hosting and operational costs.
+          Every purchase through the webstore counts towards this.
+        </p>
+        <div class="progress mb-2" style="height: 24px; border-radius: 12px;">
+          <div
+            class="progress-bar progress-bar-striped bg-success"
+            role="progressbar"
+            style="width: <%= progressPercent %>%;"
+            aria-valuenow="<%= progressPercent %>"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <% if (progressPercent >= 10) { %>
+              <%= progressPercent %>%
+            <% } %>
+          </div>
+        </div>
+        <div class="d-flex justify-content-between text-muted small">
+          <span>
+            <strong>
+              <%= new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(raisedCents / 100) %>
+            </strong> raised
+          </span>
+          <span>Goal:
+            <strong>
+              <%= new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(monthlyGoalCents / 100) %>
+            </strong>
+          </span>
+        </div>
+        <% if (progressPercent >= 100) { %>
+          <div class="alert alert-success mt-3 mb-0">
+            This month's goal has been reached! Thank you to everyone who contributed.
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <%# Ways to support -%>
+    <div class="row g-4 mb-5">
+      <div class="col-md-6">
+        <div class="card h-100 border-0 shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title">Rank Purchases</h5>
+            <p class="card-text text-muted">
+              Pick up a rank from the webstore for yourself or gift one to a friend.
+              Ranks come with in-game perks and help fund the server.
+            </p>
+            <a href="/webstore" class="btn btn-primary btn-sm">Browse Webstore</a>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card h-100 border-0 shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title">Monthly Subscriptions</h5>
+            <p class="card-text text-muted">
+              Some ranks offer a monthly subscription — a great way to support the server
+              long-term. You can cancel at any time, no questions asked.
+            </p>
+            <a href="/webstore" class="btn btn-outline-primary btn-sm">See Options</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%# Gift section -%>
+    <div class="card mb-5 border-0 shadow-sm">
+      <div class="card-body">
+        <h5 class="card-title">Gifting</h5>
+        <p class="card-text text-muted">
+          Want to bless a fellow player? You can gift any item in the webstore to another
+          Minecraft player. Just select <em>"Gift to another player"</em> at checkout and enter
+          their username.
+        </p>
+        <ul class="text-muted mb-3">
+          <li>The rank is applied to the recipient's account, not yours.</li>
+          <li>For gifted subscriptions, the recipient keeps the rank for as long as the subscription is active.</li>
+          <li>The purchaser is responsible for managing and cancelling the subscription.</li>
+        </ul>
+        <a href="/webstore" class="btn btn-outline-secondary btn-sm">Send a Gift</a>
+      </div>
+    </div>
+
+    <%# Thank you -%>
+    <div class="text-center text-muted pb-3">
+      <p class="mb-0">Thank you for being part of <%= config.siteConfiguration.siteName %>.</p>
+    </div>
+
+  </div>
+</section>
+
+<%- include("../../modules/footer.ejs") %>

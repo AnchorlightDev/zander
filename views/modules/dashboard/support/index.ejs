@@ -1,33 +1,38 @@
-<%- include('../../../modules/header.ejs', {
-  pageTitle: pageTitle,
-  pageDescription: "Manage Support Tickets"
-}) %>
+<%- include("../../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../../admin/_topbar.ejs") %>
+<%- include("../../../admin/_sidebar.ejs") %>
 
-<%- include('../../../modules/navigationBar.ejs') %>
-
-<%- include('../../../partials/miniHeader.ejs', {
-  headerTitle: "Manage Support Tickets",
-  globalImage,
-}) %>
-
-<%- include('../dashboard-header.ejs') %>
-
-<div class="container my-4">
-  <div class="row g-4">
-    <div class="col-lg-3">
-      <%- include('../dashboard-sidebar.ejs') %>
-    </div>
-    <main class="col-lg-9">
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
       <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between pt-3 pb-2 mb-4 border-bottom">
         <div>
           <h1 class="h2 mb-1">Manage Support Tickets</h1>
           <p class="text-muted mb-0">Review every ticket in one place and jump directly into the conversation.</p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
           <a href="/dashboard/support/explorer" class="btn btn-outline-primary">Open explorer</a>
           <a href="/support" class="btn btn-primary">Customer view</a>
+          <form method="post" action="/dashboard/support/repair-channel-names" class="d-inline">
+            <button type="submit" class="btn btn-outline-secondary" title="Renames any Discord ticket channels still stuck showing &quot;ticket-pending&quot; to their correct ticket-&lt;id&gt; name.">
+              Repair channel names
+            </button>
+          </form>
+          <%- include("../../../partials/documentationLink.ejs", {
+              doclink: "https://modularsoft.org/docs/products/zander/features/support/"
+          }) %>
         </div>
       </div>
+
+      <%- include("../../../admin/_notices.ejs") %>
+
+      <%- include("../../../partials/permissionsInfo.ejs", { permissions: [
+          { node: "zander.web.tickets",          description: "Access the support dashboard and view assigned ticket categories" },
+          { node: "zander.web.tickets.{slug}",   description: "Access a specific category — slug is derived from the category name (e.g. general-support)" },
+          { node: "zander.web.tickets.*",         description: "Access all ticket categories (wildcard)" },
+          { node: "zander.web.ticket.escalate",              description: "Escalate or deescalate tickets" },
+          { node: "zander.web.tickets.manageparticipants",   description: "Add or remove users and role groups from any ticket" },
+      ]}) %>
 
       <div class="card shadow-sm">
         <div class="card-header d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
@@ -77,8 +82,9 @@
           </div>
         </div>
       </div>
-    </main>
-  </div>
-</div>
 
-<%- include('../../../modules/footer.ejs') %>
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->

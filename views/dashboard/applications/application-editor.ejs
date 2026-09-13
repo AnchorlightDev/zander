@@ -1,23 +1,10 @@
-<%- include("../../modules/header.ejs", {
-    pageTitle: pageTitle,
-    pageDescription: "Editor for Network Applications"
-}) %>
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
 
-<%- include("../../modules/navigationBar.ejs") %>
-
-<%- include("../../partials/miniHeader.ejs", {
-  headerTitle: type === 'create' ? 'Create Application' : 'Edit Application',
-  backgroundImage: globalImage
-}) %>
-
-<%- include("../../modules/dashboard/dashboard-header.ejs") %>
-
-<div class="container my-4">
-    <div class="row g-4">
-        <div class="col-lg-3">
-            <%- include("../../modules/dashboard/dashboard-sidebar.ejs") %>
-        </div>
-        <main class="col-lg-9">
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
             <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                 <h1 class="h2"><%= type === 'create' ? 'Create' : 'Edit' %> Application</h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
@@ -101,6 +88,31 @@
                       <% } %>
                   </div>
 
+                  <!-- Application Type -->
+                  <div class="mb-3">
+                      <label for="applicationType">Application Type</label>
+                      <%- include("../../partials/form/inputSelect.ejs", {
+                          elementName: "applicationType",
+                          elementValue: type === 'edit' ? (applicationApiData.applicationType || 'external') : 'external',
+                          required: true,
+                          optionElements: [
+                              {
+                                  optionName: "External URL",
+                                  optionValue: "external",
+                                  selected: false,
+                                  disabled: false
+                              },
+                              {
+                                  optionName: "Linked Form",
+                                  optionValue: "linked_form",
+                                  selected: false,
+                                  disabled: false
+                              }
+                          ]
+                      }) %>
+                      <small class="form-text text-muted">External: redirects to a URL. Linked Form: opens a built-in form.</small>
+                  </div>
+
                   <div class="row">
                       <!-- Application Requirements Markdown Link -->
                       <div class="mb-3 col">
@@ -122,24 +134,45 @@
                           <% } %>
                       </div>
 
-                      <!-- Application URL Redirect -->
-                      <div class="mb-3 col">
+                      <!-- Application URL Redirect (for external type) -->
+                      <div class="mb-3 col" id="redirectUrlField">
                           <label for="redirectUrl">Application URL Redirect</label>
 
                           <% if (type === 'create') { %>
                               <%- include("../../partials/form/inputText.ejs", {
                                   elementName: "redirectUrl",
                                   elementValue: null,
-                                  required: true
+                                  required: false
                               }) %>
                           <% } %>
                           <% if (type === 'edit') { %>
                               <%- include("../../partials/form/inputText.ejs", {
                                   elementName: "redirectUrl",
                                   elementValue: applicationApiData.redirectUrl,
-                                  required: true
+                                  required: false
                               }) %>
                           <% } %>
+                      </div>
+
+                      <!-- Linked Form ID (for linked_form type) -->
+                      <div class="mb-3 col" id="linkedFormField">
+                          <label for="linkedFormId">Linked Form ID</label>
+
+                          <% if (type === 'create') { %>
+                              <%- include("../../partials/form/inputText.ejs", {
+                                  elementName: "linkedFormId",
+                                  elementValue: null,
+                                  required: false
+                              }) %>
+                          <% } %>
+                          <% if (type === 'edit') { %>
+                              <%- include("../../partials/form/inputText.ejs", {
+                                  elementName: "linkedFormId",
+                                  elementValue: applicationApiData.linkedFormId,
+                                  required: false
+                              }) %>
+                          <% } %>
+                          <small class="form-text text-muted">Enter the Form ID from Dashboard > Forms.</small>
                       </div>
                   </div>
 
@@ -234,8 +267,31 @@
                   <% } %>
                 </form>
             </div>
-        </main>
-    </div>
-</div>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
 
-<%- include("../../modules/footer.ejs") %>
+<script>
+(function() {
+    var typeSelect = document.getElementById('applicationTypeSel');
+    var redirectField = document.getElementById('redirectUrlField');
+    var linkedFormField = document.getElementById('linkedFormField');
+
+    function toggleFields() {
+        if (!typeSelect || !redirectField || !linkedFormField) return;
+        if (typeSelect.value === 'linked_form') {
+            redirectField.style.display = 'none';
+            linkedFormField.style.display = 'block';
+        } else {
+            redirectField.style.display = 'block';
+            linkedFormField.style.display = 'none';
+        }
+    }
+
+    if (typeSelect) {
+        typeSelect.addEventListener('change', toggleFields);
+        toggleFields();
+    }
+})();
+</script>

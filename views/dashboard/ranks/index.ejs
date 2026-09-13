@@ -1,23 +1,10 @@
-<%- include("../../modules/header.ejs", {
-  pageTitle: pageTitle,
-  pageDescription: "Review rank metadata and manage player permissions."
-}) %>
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
 
-<%- include("../../modules/navigationBar.ejs") %>
-
-<%- include("../../partials/miniHeader.ejs", {
-  headerTitle: "Ranks",
-  backgroundImage: globalImage
-}) %>
-
-<%- include("../../modules/dashboard/dashboard-header.ejs") %>
-
-<div class="container my-4">
-    <div class="row g-4">
-        <div class="col-lg-3">
-            <%- include("../../modules/dashboard/dashboard-sidebar.ejs") %>
-        </div>
-        <main class="col-lg-9">
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
             <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                 <h1 class="h2">Rank Management</h1>
             </div>
@@ -81,7 +68,7 @@
                                       <span class="badge bg-danger">Staff</span>
                                     <% } %>
                                     <% if (Number(rank.isDonator) === 1) { %>
-                                      <span class="badge bg-warning text-dark">Donator</span>
+                                      <span class="badge bg-warning text-dark">Supporter</span>
                                     <% } %>
                                     <% if (!Number(rank.isStaff) && !Number(rank.isDonator)) { %>
                                       <span class="text-muted small">None</span>
@@ -126,15 +113,20 @@
                       <form id="rankUserLookupForm" class="row g-3 align-items-end">
                         <div class="col-md-6">
                           <label for="rankLookupUsername" class="form-label">Minecraft username</label>
-                          <input
-                            type="text"
-                            class="form-control"
-                            id="rankLookupUsername"
-                            name="username"
-                            placeholder="Enter a username"
-                            autocomplete="off"
-                            required
-                          >
+                          <div class="position-relative">
+                            <input
+                              type="text"
+                              class="form-control"
+                              id="rankLookupUsername"
+                              name="username"
+                              placeholder="Start typing a username…"
+                              autocomplete="off"
+                              required
+                            >
+                            <div id="rankLookupSuggestions"
+                              class="list-group position-absolute w-100 shadow-sm"
+                              style="z-index:1000;display:none;max-height:220px;overflow-y:auto;top:100%;"></div>
+                          </div>
                         </div>
                         <div class="col-md-auto">
                           <button type="submit" class="btn btn-primary">Load profile</button>
@@ -194,6 +186,23 @@
                                     placeholder="Custom staff title or leave blank"
                                   >
                                 </div>
+                                <div class="col-12">
+                                  <label for="rankAssignExpiry" class="form-label">Expires</label>
+                                  <select class="form-select" id="rankAssignExpiry" disabled>
+                                    <option value="" selected>Never</option>
+                                    <option value="1">After 1 day</option>
+                                    <option value="7">After 7 days</option>
+                                    <option value="30">After 30 days</option>
+                                    <option value="90">After 90 days</option>
+                                    <option value="custom">Custom date…</option>
+                                  </select>
+                                  <input
+                                    type="datetime-local"
+                                    class="form-control mt-2 d-none"
+                                    id="rankAssignExpiryDate"
+                                    disabled
+                                  >
+                                </div>
                                 <div class="col-12 d-flex justify-content-between">
                                   <button type="submit" class="btn btn-primary" id="rankAssignSubmit" disabled>Assign rank</button>
                                   <button type="button" class="btn btn-outline-secondary" id="rankAssignReset" disabled>Reset</button>
@@ -230,10 +239,52 @@
                     </div>
                   </div>
                 </div>
+                <div class="col-12">
+                  <div class="card shadow-sm">
+                    <div class="card-header">
+                      <h5 class="card-title mb-1">Rank targeting &amp; CSV export</h5>
+                      <p class="card-subtitle text-muted mb-0">
+                        Select one or more ranks to export a CSV of all players currently holding those ranks.
+                      </p>
+                    </div>
+                    <div class="card-body">
+                      <form id="rankExportForm" class="row g-3 align-items-end">
+                        <div class="col-12">
+                          <label class="form-label">Select ranks to target</label>
+                          <div id="rankExportCheckboxes" class="d-flex flex-wrap gap-2">
+                            <% ranks.forEach(function(rank) { %>
+                              <div class="form-check">
+                                <input
+                                  class="form-check-input rank-export-check"
+                                  type="checkbox"
+                                  value="<%= rank.rankSlug %>"
+                                  id="exportRank_<%= rank.rankSlug %>"
+                                >
+                                <label class="form-check-label d-flex align-items-center gap-1" for="exportRank_<%= rank.rankSlug %>">
+                                  <span
+                                    class="rank-pill rank-pill-xs"
+                                    style="--rank-pill-bg: <%= rank.rankBadgeColour || '#1f2937' %>; --rank-pill-text: <%= rank.rankTextColour || '#ffffff' %>"
+                                  ><%= rank.displayName %></span>
+                                </label>
+                              </div>
+                            <% }) %>
+                          </div>
+                          <div id="rankExportNone" class="text-muted small mt-2 d-none">No ranks available.</div>
+                        </div>
+                        <div class="col-12 d-flex gap-2 align-items-center flex-wrap">
+                          <button type="submit" class="btn btn-primary" id="rankExportSubmit" disabled>
+                            <i class="fas fa-download me-1"></i>Export CSV
+                          </button>
+                          <button type="button" class="btn btn-outline-secondary" id="rankExportSelectAll">Select all</button>
+                          <button type="button" class="btn btn-outline-secondary" id="rankExportClearAll">Clear</button>
+                          <span id="rankExportCount" class="text-muted small"></span>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
               </div>
-        </main>
-    </div>
-</div>
+
 
 <div
   class="modal fade"
@@ -297,7 +348,7 @@
                 </div>
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" value="1" id="rankConfigIsDonator" name="isDonator">
-                  <label class="form-check-label" for="rankConfigIsDonator">Donator</label>
+                  <label class="form-check-label" for="rankConfigIsDonator">Supporter</label>
                 </div>
               </div>
             </div>
@@ -365,7 +416,7 @@
       if (Number(rank.isDonator) === 1) {
         const badge = document.createElement('span');
         badge.className = 'badge bg-warning text-dark';
-        badge.textContent = 'Donator';
+        badge.textContent = 'Supporter';
         badges.push(badge);
       }
 
@@ -526,6 +577,8 @@
     const assignForm = document.getElementById('rankAssignForm');
     const assignSelect = document.getElementById('rankAssignSelect');
     const assignTitle = document.getElementById('rankAssignTitle');
+    const assignExpiry = document.getElementById('rankAssignExpiry');
+    const assignExpiryDate = document.getElementById('rankAssignExpiryDate');
     const assignSubmit = document.getElementById('rankAssignSubmit');
     const assignReset = document.getElementById('rankAssignReset');
     const permissionForm = document.getElementById('rankPermissionForm');
@@ -538,6 +591,17 @@
       summaryContainer.querySelector('[data-summary="username"]').textContent = user.username;
       summaryContainer.querySelector('[data-summary="uuid"]').textContent = user.uuid || 'Unavailable';
       summaryContainer.querySelector('[data-summary="web-account"]').textContent = user.userId ? 'Linked' : 'Not linked';
+    }
+
+    function formatExpiryLabel(expiresAt) {
+      if (!expiresAt) return null;
+      const diffMs = expiresAt - Date.now();
+      if (diffMs <= 0) return 'expired';
+      const days = Math.round(diffMs / 86400000);
+      if (days < 1) return 'expires <1d';
+      if (days === 1) return 'expires in 1d';
+      if (days <= 60) return `expires in ${days}d`;
+      return `expires ${new Date(expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
     }
 
     function renderUserRanks(rankPayload) {
@@ -553,24 +617,39 @@
       rankCount.textContent = `${rankPayload.length} ${rankPayload.length === 1 ? 'rank' : 'ranks'}`;
 
       rankPayload.forEach((rank) => {
-        const pill = document.createElement('div');
-        pill.className = 'rank-pill d-flex align-items-center gap-2';
-        pill.style.setProperty('--rank-pill-bg', rank.rankBadgeColour || '#1f2937');
-        pill.style.setProperty('--rank-pill-text', rank.rankTextColour || '#ffffff');
-        pill.textContent = rank.displayName;
+        const isDefault = rank.rankSlug === 'default';
 
-        const removeButton = document.createElement('button');
-        removeButton.type = 'button';
-        removeButton.className = 'btn btn-sm btn-outline-danger ms-2';
-        removeButton.textContent = 'Remove';
-        removeButton.addEventListener('click', () => handleRankRemoval(rank.rankSlug));
+        const chip = document.createElement('div');
+        chip.className = 'rank-chip';
+        chip.style.setProperty('--rank-pill-bg', rank.rankBadgeColour || '#1f2937');
+        chip.style.setProperty('--rank-pill-text', rank.rankTextColour || '#ffffff');
 
-        const wrapper = document.createElement('div');
-        wrapper.className = 'd-flex align-items-center gap-2';
-        wrapper.appendChild(pill);
-        wrapper.appendChild(removeButton);
+        const name = document.createElement('span');
+        name.className = 'rank-chip-name';
+        name.textContent = rank.title ? `${rank.displayName} — ${rank.title}` : rank.displayName;
+        chip.appendChild(name);
 
-        rankList.appendChild(wrapper);
+        const expiryLabel = formatExpiryLabel(rank.expiresAt);
+        if (expiryLabel) {
+          const expiry = document.createElement('span');
+          expiry.className = 'rank-chip-expiry';
+          expiry.textContent = expiryLabel;
+          expiry.title = new Date(rank.expiresAt).toLocaleString();
+          chip.appendChild(expiry);
+        }
+
+        if (!isDefault) {
+          const removeButton = document.createElement('button');
+          removeButton.type = 'button';
+          removeButton.className = 'rank-chip-remove';
+          removeButton.setAttribute('aria-label', `Remove ${rank.displayName}`);
+          removeButton.title = `Remove ${rank.displayName}`;
+          removeButton.innerHTML = '&times;';
+          removeButton.addEventListener('click', () => handleRankRemoval(rank.rankSlug));
+          chip.appendChild(removeButton);
+        }
+
+        rankList.appendChild(chip);
       });
     }
 
@@ -596,6 +675,8 @@
       assignTitle.disabled = !hasAvailable;
       assignSubmit.disabled = !hasAvailable;
       assignReset.disabled = !hasAvailable;
+      if (assignExpiry) assignExpiry.disabled = !hasAvailable;
+      if (assignExpiryDate) assignExpiryDate.disabled = !hasAvailable;
     }
 
     function enablePermissionTools(enabled) {
@@ -637,6 +718,7 @@
 
     async function handleRankRemoval(rankSlug) {
       if (!activeUser) return;
+      if (rankSlug === 'default') return;
       if (!confirm(`Remove ${rankSlug} from ${activeUser.user.username}?`)) return;
 
       try {
@@ -657,6 +739,21 @@
       }
     }
 
+    function computeExpiresAt() {
+      if (!assignExpiry || !assignExpiry.value) return null;
+      if (assignExpiry.value === 'custom') {
+        if (!assignExpiryDate || !assignExpiryDate.value) return { error: 'Pick an expiry date.' };
+        const parsed = new Date(assignExpiryDate.value);
+        if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+          return { error: 'Expiry date must be in the future.' };
+        }
+        return { value: parsed.toISOString() };
+      }
+      const days = parseInt(assignExpiry.value, 10);
+      if (!days) return null;
+      return { value: new Date(Date.now() + days * 86400000).toISOString() };
+    }
+
     async function handleAssignSubmit(event) {
       event.preventDefault();
       if (!activeUser) return;
@@ -669,6 +766,13 @@
         alert('Select a rank to assign.');
         return;
       }
+
+      const expiry = computeExpiresAt();
+      if (expiry?.error) {
+        alert(expiry.error);
+        return;
+      }
+      if (expiry?.value) payload.expiresAt = expiry.value;
 
       assignSubmit.disabled = true;
 
@@ -696,6 +800,19 @@
     function resetAssignForm() {
       if (!assignForm) return;
       assignForm.reset();
+      if (assignExpiryDate) {
+        assignExpiryDate.value = '';
+        assignExpiryDate.classList.add('d-none');
+      }
+    }
+
+    if (assignExpiry) {
+      assignExpiry.addEventListener('change', () => {
+        if (!assignExpiryDate) return;
+        const isCustom = assignExpiry.value === 'custom';
+        assignExpiryDate.classList.toggle('d-none', !isCustom);
+        if (!isCustom) assignExpiryDate.value = '';
+      });
     }
 
     async function handlePermissionSubmit(event) {
@@ -764,6 +881,64 @@
       }
     }
 
+    // Username autocomplete
+    (function () {
+      const searchEl = document.getElementById('rankLookupUsername');
+      const suggestEl = document.getElementById('rankLookupSuggestions');
+      let searchTimer = null;
+
+      function clearSuggestions() {
+        suggestEl.innerHTML = '';
+        suggestEl.style.display = 'none';
+      }
+
+      function renderSuggestions(results) {
+        clearSuggestions();
+        if (!results.length) return;
+        results.forEach(user => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'list-group-item list-group-item-action d-flex align-items-center gap-2 py-1 px-2';
+          if (user.avatarUrl) {
+            const img = document.createElement('img');
+            img.src = user.avatarUrl;
+            img.alt = '';
+            img.width = 28; img.height = 28;
+            img.className = 'rounded';
+            btn.appendChild(img);
+          }
+          const span = document.createElement('span');
+          span.textContent = user.username;
+          span.className = 'flex-fill text-start small';
+          btn.appendChild(span);
+          btn.addEventListener('click', () => {
+            searchEl.value = user.username;
+            clearSuggestions();
+            loadUser(user.username);
+          });
+          suggestEl.appendChild(btn);
+        });
+        suggestEl.style.display = 'block';
+      }
+
+      searchEl.addEventListener('input', e => {
+        const q = e.target.value.trim();
+        clearTimeout(searchTimer);
+        if (q.length < 2) { clearSuggestions(); return; }
+        searchTimer = setTimeout(async () => {
+          try {
+            const r = await fetch(`/dashboard/ranks/user-search?q=${encodeURIComponent(q)}`);
+            const data = await r.json();
+            renderSuggestions(data.results || []);
+          } catch { clearSuggestions(); }
+        }, 200);
+      });
+
+      document.addEventListener('click', e => {
+        if (!searchEl.contains(e.target) && !suggestEl.contains(e.target)) clearSuggestions();
+      });
+    })();
+
     if (lookupForm) {
       lookupForm.addEventListener('submit', (event) => {
         event.preventDefault();
@@ -788,11 +963,118 @@
       permissionForm.addEventListener('submit', handlePermissionSubmit);
     }
   })();
+
+  // Rank export
+  (function () {
+    const form = document.getElementById('rankExportForm');
+    const submitBtn = document.getElementById('rankExportSubmit');
+    const selectAllBtn = document.getElementById('rankExportSelectAll');
+    const clearBtn = document.getElementById('rankExportClearAll');
+    const countLabel = document.getElementById('rankExportCount');
+
+    function getChecked() {
+      return Array.from(document.querySelectorAll('.rank-export-check:checked')).map(el => el.value);
+    }
+
+    function updateState() {
+      const checked = getChecked();
+      submitBtn.disabled = checked.length === 0;
+      countLabel.textContent = checked.length > 0 ? `${checked.length} rank${checked.length === 1 ? '' : 's'} selected` : '';
+    }
+
+    document.querySelectorAll('.rank-export-check').forEach(el => el.addEventListener('change', updateState));
+
+    selectAllBtn?.addEventListener('click', () => {
+      document.querySelectorAll('.rank-export-check').forEach(el => { el.checked = true; });
+      updateState();
+    });
+
+    clearBtn?.addEventListener('click', () => {
+      document.querySelectorAll('.rank-export-check').forEach(el => { el.checked = false; });
+      updateState();
+    });
+
+    form?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const checked = getChecked();
+      if (!checked.length) return;
+      window.location.href = `/dashboard/ranks/export-csv?ranks=${encodeURIComponent(checked.join(','))}`;
+    });
+  })();
 </script>
 
-<%- include("../../modules/footer.ejs") %>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
 
 <style>
+  .rank-pill {
+    display: inline-flex;
+    align-items: center;
+    background: var(--rank-pill-bg, #1f2937);
+    color: var(--rank-pill-text, #ffffff);
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .rank-pill-xs {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+  }
+
+  /* "Direct ranks" chips — a rank pill with an attached remove button */
+  .rank-chip {
+    display: inline-flex;
+    align-items: stretch;
+    background: var(--rank-pill-bg, #1f2937);
+    color: var(--rank-pill-text, #ffffff);
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    overflow: hidden;
+  }
+
+  .rank-chip-name {
+    padding: 4px 12px;
+    white-space: nowrap;
+  }
+
+  .rank-chip-expiry {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px 4px 0;
+    margin-left: -8px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    opacity: 0.85;
+    white-space: nowrap;
+  }
+
+  .rank-chip-remove {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 700;
+    background: rgba(0, 0, 0, 0.15);
+    transition: background-color 0.15s ease;
+  }
+
+  .rank-chip-remove:hover,
+  .rank-chip-remove:focus-visible {
+    background: rgba(220, 53, 69, 0.75);
+    outline: none;
+  }
+
   @media (max-width: 768px) {
     #rankConfigModal .modal-body {
       max-height: 70vh;

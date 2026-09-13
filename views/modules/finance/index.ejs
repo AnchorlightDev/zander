@@ -1,0 +1,303 @@
+<%- include("../../modules/header.ejs", {
+  pageTitle,
+  pageDescription
+}) %>
+
+<%- include("../../modules/navigationBar.ejs") %>
+
+<%- include("../../partials/miniHeader.ejs", {
+  headerTitle: "Finance Centre",
+  backgroundImage: globalImage
+}) %>
+
+<%
+  const fmtMoney = function(cents, currency = "USD") {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format((cents || 0) / 100);
+  };
+  const progressBarPercent = Math.max(0, Math.min(currentMonth.fundingProgressPercent || 0, 100));
+  const hasOperatingCosts = (currentMonth.operatingCostsCents || 0) > 0;
+  const hasPublicCategories = Array.isArray(currentMonth.categories) && currentMonth.categories.length > 0;
+%>
+
+<section class="section finance-page">
+  <div class="container">
+    <% if (req.cookies.alertType) { %>
+      <%- include("../../partials/alert.ejs", {
+        alertType: req.cookies.alertType,
+        content: req.cookies.alertContent
+      }) %>
+    <% } %>
+
+    <div class="finance-intro text-center mb-4">
+      <p class="lead mx-auto mb-0" style="max-width: 680px;">
+        Community support helps cover Crafting For Christ's hosting, infrastructure and software costs.
+        Here you can see our current funding position and where that support goes.
+      </p>
+    </div>
+
+    <section class="mb-5" aria-labelledby="finance-current-month-heading">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-2 mb-3">
+        <div>
+          <h3 id="finance-current-month-heading" class="mb-1"><%= currentMonth.monthLabel %></h3>
+          <p class="text-muted mb-0">A simple snapshot of current community support and operating costs.</p>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-sm-6 col-lg-3">
+          <div class="card finance-stat-card h-100 border-0">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-2">Community Support</div>
+              <div class="fs-3 fw-bold"><%= fmtMoney(currentMonth.communitySupportCents) %></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <div class="card finance-stat-card h-100 border-0">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-2">Monthly Funding Goal</div>
+              <div class="fs-3 fw-bold"><%= fmtMoney(currentMonth.fundingGoalCents) %></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <div class="card finance-stat-card h-100 border-0">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-2">Funding Progress</div>
+              <div class="fs-3 fw-bold"><%= currentMonth.fundingProgressPercent %>%</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <div class="card finance-stat-card h-100 border-0">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-2">Operating Costs</div>
+              <div class="fs-3 fw-bold"><%= hasOperatingCosts ? fmtMoney(currentMonth.operatingCostsCents, currentMonth.operatingCostsCurrency) : "Preparing" %></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-5" aria-labelledby="finance-goal-heading">
+      <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+          <h3 id="finance-goal-heading" class="h4 mb-3">Monthly Funding Progress</h3>
+          <p class="text-muted mb-3">
+            Every webstore purchase helps support the network and counts toward this month's funding goal.
+          </p>
+          <div class="progress mb-3" style="height: 24px; border-radius: 12px;" aria-label="Monthly funding progress">
+            <div
+              class="progress-bar progress-bar-striped bg-success"
+              role="progressbar"
+              style="width: <%= progressBarPercent %>%;"
+              aria-valuenow="<%= progressBarPercent %>"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuetext="<%= fmtMoney(currentMonth.communitySupportCents) %> of <%= fmtMoney(currentMonth.fundingGoalCents) %> raised"
+            >
+              <% if (progressBarPercent >= 12) { %><%= currentMonth.fundingProgressPercent %>%<% } %>
+            </div>
+          </div>
+          <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
+            <div class="fw-semibold"><%= fmtMoney(currentMonth.communitySupportCents) %> / <%= fmtMoney(currentMonth.fundingGoalCents) %></div>
+            <div class="text-muted"><%= currentMonth.fundingProgressPercent %>% funded</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-5" aria-labelledby="finance-position-heading">
+      <h3 id="finance-position-heading" class="h4 mb-3">Current Financial Position</h3>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-2">Community Funded</div>
+              <div class="fs-4 fw-bold"><%= fmtMoney(currentMonth.communitySupportCents) %></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-2">Operating Costs</div>
+              <div class="fs-4 fw-bold"><%= hasOperatingCosts ? fmtMoney(currentMonth.operatingCostsCents, currentMonth.operatingCostsCurrency) : "Preparing" %></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+              <% if (currentMonth.aboveOperatingCostsCents > 0) { %>
+                <div class="text-muted small text-uppercase fw-semibold mb-2">Above Current Operating Costs</div>
+                <div class="fs-4 fw-bold text-success">+<%= fmtMoney(currentMonth.aboveOperatingCostsCents) %></div>
+              <% } else { %>
+                <div class="text-muted small text-uppercase fw-semibold mb-2">Remaining Funded by CFC</div>
+                <div class="fs-4 fw-bold"><%= hasOperatingCosts ? fmtMoney(currentMonth.remainingFundedByCfcCents) : "Preparing" %></div>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-5" aria-labelledby="finance-breakdown-heading">
+      <h3 id="finance-breakdown-heading" class="h4 mb-3">Where Your Support Goes</h3>
+      <% if (hasPublicCategories) { %>
+        <div class="list-group shadow-sm mb-3">
+          <% currentMonth.categories.forEach(function(category) { %>
+            <div class="list-group-item d-flex flex-column flex-sm-row align-items-sm-center gap-3 p-3">
+              <div class="d-flex align-items-center justify-content-center rounded bg-light text-primary flex-shrink-0" style="width:56px;height:56px;">
+                <% if (category.iconImageUrl) { %>
+                  <img src="<%= category.iconImageUrl %>" alt="" class="rounded" style="width:56px;height:56px;object-fit:cover;">
+                <% } else { %>
+                  <i class="fa-solid fa-<%= category.iconName || 'receipt' %> fa-xl" aria-hidden="true"></i>
+                <% } %>
+              </div>
+              <div class="flex-grow-1">
+                  <h4 class="h5 mb-1"><%= category.name %></h4>
+                  <% if (category.description) { %>
+                    <p class="text-muted mb-0"><%= category.description %></p>
+                  <% } %>
+              </div>
+              <div class="fw-semibold text-sm-end text-nowrap">
+                <%= fmtMoney(category.totalCents, category.currency) %>
+                <%= category.cadence === 'annual' ? '/ year' : '/ month' %>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+        <div class="card shadow-sm border-0">
+          <div class="card-body d-flex flex-column flex-md-row justify-content-between gap-2">
+            <div>
+              <h4 class="h5 mb-1">Total Operating Costs</h4>
+              <p class="text-muted mb-0">Calculated from this month's operations budget, including any annual costs billed this month.</p>
+            </div>
+            <div class="fs-4 fw-bold"><%= fmtMoney(currentMonth.operatingCostsCents, currentMonth.operatingCostsCurrency) %> <span class="fs-6 fw-normal text-muted">this month</span></div>
+          </div>
+        </div>
+      <% } else if (hasOperatingCosts) { %>
+        <div class="card shadow-sm border-0">
+          <div class="card-body">
+            <p class="text-muted mb-0">Public category breakdowns are being prepared.</p>
+          </div>
+        </div>
+      <% } else { %>
+        <div class="card shadow-sm border-0">
+          <div class="card-body">
+            <p class="text-muted mb-0">Operating cost information is being prepared.</p>
+          </div>
+        </div>
+      <% } %>
+    </section>
+
+    <section id="support" class="mb-5" aria-labelledby="finance-support-heading">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-2 mb-3">
+        <div>
+          <h3 id="finance-support-heading" class="h4 mb-1">Support the Network</h3>
+          <p class="text-muted mb-0">Financial support is one practical way to help keep Crafting For Christ running.</p>
+        </div>
+        <a href="/webstore" class="btn btn-main">Visit the Webstore</a>
+      </div>
+
+      <div class="row g-4">
+        <div class="col-lg-4">
+          <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+              <h4 class="h5">Webstore &amp; Ranks</h4>
+              <p class="text-muted">
+                Rank purchases help support ongoing network operation while also unlocking in-game perks and extras.
+              </p>
+              <div class="d-flex gap-2 flex-wrap">
+                <a href="/webstore" class="btn btn-main btn-sm">Browse Webstore</a>
+                <a href="/ranks" class="btn btn-solid-border btn-sm">View Ranks</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+              <h4 class="h5">Monthly Support</h4>
+              <p class="text-muted">
+                Some ranks offer a monthly subscription, which is a simple way to support the network over time.
+                You can cancel whenever you need to.
+              </p>
+              <a href="/webstore" class="btn btn-solid-border btn-sm">See Subscription Options</a>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+              <h4 class="h5">Gifting</h4>
+              <p class="text-muted">
+                You can gift any webstore item to another Minecraft player by selecting <em>Gift to another player</em> at checkout and entering their username.
+              </p>
+              <ul class="text-muted mb-3">
+                <li>The rank is applied to the recipient's account, not yours.</li>
+                <li>Gifted subscriptions stay active for as long as the subscription remains active.</li>
+                <li>The purchaser manages any subscription changes or cancellations.</li>
+              </ul>
+              <a href="/webstore" class="btn btn-solid-border btn-sm">Send a Gift</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-5" aria-labelledby="finance-reports-heading">
+      <h3 id="finance-reports-heading" class="h4 mb-2">Financial Reports</h3>
+      <p class="text-muted mb-3">
+        Each month, we publish a summary showing community support received, operating expenses and the overall financial position of the network.
+      </p>
+
+      <% if (reports && reports.length) { %>
+        <div class="row g-3">
+          <% reports.forEach(function(report) { const snapshot = report.snapshot; %>
+            <div class="col-lg-6">
+              <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                  <h4 class="h5 mb-3"><%= snapshot.monthLabel %></h4>
+                  <div class="row g-3 mb-3">
+                    <div class="col-4">
+                      <div class="text-muted small text-uppercase fw-semibold mb-1">Support</div>
+                      <div class="fw-semibold"><%= fmtMoney(snapshot.communitySupportCents) %></div>
+                    </div>
+                    <div class="col-4">
+                      <div class="text-muted small text-uppercase fw-semibold mb-1">Expenses</div>
+                      <div class="fw-semibold"><%= fmtMoney(snapshot.operatingCostsCents) %></div>
+                    </div>
+                    <div class="col-4">
+                      <div class="text-muted small text-uppercase fw-semibold mb-1">Position</div>
+                      <div class="fw-semibold <%= snapshot.netPositionCents >= 0 ? 'text-success' : 'text-danger' %>">
+                        <%= snapshot.netPositionCents >= 0 ? '+' : '-' %><%= fmtMoney(Math.abs(snapshot.netPositionCents)) %>
+                      </div>
+                    </div>
+                  </div>
+                  <a href="/finance/reports/<%= snapshot.year %>/<%= String(snapshot.month).padStart(2, '0') %>" class="btn btn-solid-border btn-sm">View Report</a>
+                </div>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      <% } else { %>
+        <div class="card shadow-sm border-0">
+          <div class="card-body">
+            <p class="text-muted mb-0">Our first financial report will appear here once it has been published.</p>
+          </div>
+        </div>
+      <% } %>
+    </section>
+
+    <section class="text-center pb-3" aria-labelledby="finance-thanks-heading">
+      <h3 id="finance-thanks-heading" class="h4 mb-2">Thank you for supporting Crafting For Christ</h3>
+      <p class="text-muted mb-0 mx-auto" style="max-width: 760px;">
+        Financial support is only one way people contribute to the network. We also appreciate everyone who volunteers their time, helps other players, participates in the community, invites friends, builds amazing things, or simply calls CFC home.
+      </p>
+    </section>
+  </div>
+</section>
+
+<%- include("../../modules/footer.ejs") %>

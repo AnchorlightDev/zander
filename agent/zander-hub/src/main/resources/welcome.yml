@@ -1,0 +1,9 @@
+welcome:
+  - "&e Welcome to My Server!"
+welcome_newplayer:
+  - "&e&l ========== My Server ========== &r"
+  - "&9&l Website:&r http://myserver.net"
+  - "&9&l Discord:&r http://myserver.net/discord"
+  -  " "
+  - "By joining My Server you agree to our Rules, TOS, and Privacy Policy."
+  - "Make sure you read the rules. &cUse /rules to read the rules.&r"

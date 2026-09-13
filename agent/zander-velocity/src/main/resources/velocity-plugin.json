@@ -1,0 +1,19 @@
+{
+  "id": "zander-velocity",
+  "name": "zander-velocity",
+  "version": "1.2.0",
+  "main": "dev.anchorlight.zander.velocity.ZanderVelocityMain",
+  "authors": [
+    "ModularSoft"
+  ],
+  "dependencies": [
+    {
+      "id": "luckperms",
+      "optional": false
+    },
+    {
+      "id": "signedvelocity",
+      "optional": true
+    }
+  ]
+}

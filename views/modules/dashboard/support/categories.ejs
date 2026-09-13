@@ -1,26 +1,22 @@
-<%- include('../../../modules/header.ejs', {
-    pageTitle: "Manage Support Categories",
-    pageDescription: "Create, edit, and delete support ticket categories"
-}) %>
+<%- include("../../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../../admin/_topbar.ejs") %>
+<%- include("../../../admin/_sidebar.ejs") %>
 
-<%- include('../../../modules/navigationBar.ejs') %>
-
-<%- include('../../../partials/miniHeader.ejs', {
-    headerTitle: "Manage Support Categories",
-    globalImage,
-}) %>
-
-<%- include('../dashboard-header.ejs') %>
-
-<div class="container my-4">
-    <div class="row g-4">
-        <div class="col-lg-3">
-            <%- include('../dashboard-sidebar.ejs') %>
-        </div>
-        <main class="col-lg-9">
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
             <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                 <h1 class="h2">Manage Support Categories</h1>
+                <%- include("../../../partials/documentationLink.ejs", {
+                    doclink: "https://modularsoft.org/docs/products/zander/features/support/"
+                }) %>
             </div>
+
+            <%- include("../../../partials/permissionsInfo.ejs", { permissions: [
+                { node: "zander.web.tickets",        description: "Required base permission to access the ticket system" },
+                { node: "zander.web.tickets.{slug}", description: "Grants staff access to a category — slug is auto-generated from the category name" },
+                { node: "zander.web.tickets.*",       description: "Grants access to all categories at once (wildcard)" },
+            ]}) %>
 
             <div class="card">
                 <div class="card-header">
@@ -75,8 +71,9 @@
                     </div>
                 </div>
             </div>
-        </main>
-    </div>
-</div>
 
-<%- include('../../../modules/footer.ejs') %>
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->

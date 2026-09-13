@@ -1,0 +1,104 @@
+server:
+  id: "mixed-1"
+  displayName: "Mixed Server 1"
+  environment: "production"
+
+api:
+  baseUrl: "https://craftingforchrist.net/api" # Accepts either https://host or https://host/api.
+  websocketUrl: "wss://example.com/ws/mixed"
+  token: "change-me" # Must match the zander API token.
+  connectTimeoutSeconds: 10
+  requestTimeoutSeconds: 15
+
+logging:
+  # Verbose logging for match lifecycle, stat/leaderboard sync and API calls.
+  # Turn on if matches/players/leaderboards aren't showing up on zander-web.
+  debug: false
+
+sync:
+  heartbeatSeconds: 30
+  retryFailedEvents: true
+  retrySeconds: 30
+  maxQueueSize: 10000
+  batchEvents: true
+  maxBatchSize: 100
+
+features:
+  matchLifecycle: true
+  playerStats: true
+  mapStats: true
+  objectiveStats: true
+  killstreaks: true
+  bigStats: true
+  xp: true
+  levels: true
+  achievements: true
+  liveFeed: true
+  discordHooks: true
+  websocket: true
+  mapTokens: true
+  mapVoting: true
+  mapRatings: true
+  moderation: false
+  chatTags: false
+
+stats:
+  saveIntervalSeconds: 60
+  includeDamageStats: true
+  includeBlockStats: true
+  includeBowStats: true
+  includeObjectiveStats: true
+  includeSessionStats: true
+
+xp:
+  win: 100
+  loss: 25
+  kill: 10
+  assist: 5
+  objectiveCapture: 50
+  objectiveDefend: 20
+  firstBlood: 25
+  killstreakBonus: 10
+
+liveFeed:
+  includeDeaths: true
+  includeObjectives: true
+  includeMatchEvents: true
+  includeTeamChanges: true
+
+mapTokens:
+  enabled: true
+  allowPaidTokens: true
+  applyMode: "NEXT_MATCH"
+  allowMidMatchChange: false
+  playerCooldownMinutes: 60
+  mapCooldownMatches: 5
+  minimumPlayersOnline: 4
+  refundIfFailed: true
+  requireMapEnabled: true
+
+mapVoting:
+  enabled: true
+  voteDurationSeconds: 45
+  optionsPerVote: 4
+  allowWebVoting: true
+  allowInGameVoting: true
+  allowTokenNominations: true
+  allowTokenBoosts: true
+  tokenBoostWeight: 2
+  mapCooldownMatches: 5
+  playerVoteWeight: 1
+  showLiveResults: true
+  applyWinnerToNextMatch: true
+
+mapRatings:
+  enabled: true
+  promptAfterMatch: true
+  ratingWindowSeconds: 180
+  requirePlayedMatch: true
+  allowInGameRatings: true
+  allowWebRatings: true
+  allowFeedback: true
+  feedbackMaxLength: 300
+  showFeedbackPublicly: true
+  allowRatingUpdatesDuringWindow: true

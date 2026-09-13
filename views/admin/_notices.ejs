@@ -1,0 +1,57 @@
+<%
+  /**
+   * _notices.ejs — Inline admin notices / flash messages.
+   *
+   * Reads alert data from cookies (same pattern used by the existing dashboard
+   * views).  Cookie keys:  alertType  (success|warning|danger|info)
+   *                        alertContent (message string)
+   *
+   * Also renders any notices passed as the `notices` template variable, e.g.:
+   *   notices: [{ type: 'success', message: 'Server created.' }]
+   */
+
+  const _alertType    = req.cookies?.alertType;
+  const _alertContent = req.cookies?.alertContent;
+
+  const _cookieTypeMap = {
+    success : 'wp-notice-success',
+    warning : 'wp-notice-warning',
+    danger  : 'wp-notice-error',
+    error   : 'wp-notice-error',
+    info    : 'wp-notice-info',
+  };
+
+  const _iconMap = {
+    success : 'fas fa-check-circle',
+    warning : 'fas fa-exclamation-triangle',
+    danger  : 'fas fa-times-circle',
+    error   : 'fas fa-times-circle',
+    info    : 'fas fa-info-circle',
+  };
+%>
+
+<% if (_alertType && _alertContent) { %>
+  <div class="wp-notice <%= _cookieTypeMap[_alertType] || 'wp-notice-info' %>" role="alert">
+    <span class="wp-notice-icon" aria-hidden="true">
+      <i class="<%= _iconMap[_alertType] || 'fas fa-info-circle' %>"></i>
+    </span>
+    <p><%= _alertContent %></p>
+    <button type="button" class="wp-notice-dismiss" onclick="this.parentElement.remove()" aria-label="Dismiss notice">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+<% } %>
+
+<% if (typeof notices !== 'undefined' && Array.isArray(notices)) { %>
+  <% for (const _n of notices) { %>
+    <div class="wp-notice <%= _cookieTypeMap[_n.type] || 'wp-notice-info' %>" role="alert">
+      <span class="wp-notice-icon" aria-hidden="true">
+        <i class="<%= _iconMap[_n.type] || 'fas fa-info-circle' %>"></i>
+      </span>
+      <p><%= _n.message %></p>
+      <button type="button" class="wp-notice-dismiss" onclick="this.parentElement.remove()" aria-label="Dismiss notice">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  <% } %>
+<% } %>

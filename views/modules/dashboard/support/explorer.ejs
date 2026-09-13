@@ -1,29 +1,21 @@
-<%- include('../../../modules/header.ejs', {
-    pageTitle: "Support Ticket Explorer",
-    pageDescription: "Browse and manage support tickets by category",
-}) %>
+<%- include("../../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../../admin/_topbar.ejs") %>
+<%- include("../../../admin/_sidebar.ejs") %>
 
-<%- include('../../../modules/navigationBar.ejs') %>
-
-<%- include('../../../partials/miniHeader.ejs', {
-    headerTitle: "Support Ticket Explorer",
-    globalImage,
-}) %>
-
-<%- include('../dashboard-header.ejs') %>
-
-<div class="container my-4">
-    <div class="row g-4">
-        <div class="col-lg-3">
-            <%- include('../dashboard-sidebar.ejs') %>
-        </div>
-        <main class="col-lg-9">
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
             <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between pt-3 pb-2 mb-4 border-bottom">
                 <div>
                     <h1 class="h2 mb-1">Support Ticket Explorer</h1>
                     <p class="text-muted mb-0">Filter tickets by category and jump directly into the right thread.</p>
                 </div>
-                <a href="/dashboard/support" class="btn btn-outline-secondary">Back to manager</a>
+                <div class="d-flex gap-2">
+                    <a href="/dashboard/support" class="btn btn-outline-secondary">Back to manager</a>
+                    <%- include("../../../partials/documentationLink.ejs", {
+                        doclink: "https://modularsoft.org/docs/products/zander/features/support/"
+                    }) %>
+                </div>
             </div>
 
             <div class="card shadow-sm">
@@ -70,7 +62,7 @@
                                         <td>
                                             <span class="badge <%= ticket.status === 'open' ? 'bg-success' : ticket.status === 'closed' ? 'bg-secondary' : 'bg-warning text-dark' %>"><%= ticket.status %></span>
                                         </td>
-                                        <td><span class="text-muted"><%= ticket.username %></span></td>
+                                        <td><a href="/dashboard/users/<%= ticket.userId %>" class="text-muted text-decoration-none"><%= ticket.username %></a></td>
                                         <td class="text-muted"><span data-relative-time="<%= new Date(ticket.createdAt).toISOString() %>" data-relative-format="both"></span></td>
                                         <td class="text-end">
                                             <a href="/support/ticket/<%= ticket.ticketId %>" class="btn btn-sm btn-outline-primary">View ticket</a>
@@ -82,9 +74,7 @@
                     </div>
                 </div>
             </div>
-        </main>
-    </div>
-</div>
+
 
 <script>
     (() => {
@@ -106,4 +96,7 @@
     })();
 </script>
 
-<%- include('../../../modules/footer.ejs') %>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->

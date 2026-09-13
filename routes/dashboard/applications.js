@@ -30,72 +30,96 @@ export default function dashboardApplicationsSiteRoute(
   // Applications
   //
   app.get("/dashboard/applications", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.applications, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.applications, req, res, features))
       return;
 
-    if (!hasPermission("zander.web.application", req, res, features)) return;
+    if (!await hasPermission("zander.web.application", req, res, features)) return;
 
-    const fetchURL = `${process.env.siteAddress}/api/application/get`;
-    const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
-    });
-    const apiData = await parseApiResponse(response);
+    const [response, globalImage, announcementWeb] = await Promise.all([
+      fetch(`${process.env.siteAddress}/api/application/get`, {
+        headers: { "x-access-token": process.env.apiKey },
+      }).catch(() => null),
+      getGlobalImage(),
+      getWebAnnouncement(),
+    ]);
 
-    return res.view("dashboard/applications/application-list", {
-      pageTitle: `Dashboard - Applications`,
-      config: config,
-      apiData: apiData,
-      features: features,
-      req: req,
-      globalImage: await getGlobalImage(),
-      announcementWeb: await getWebAnnouncement(),
-    });
+    const apiData = response ? await parseApiResponse(response) : { data: [] };
+
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("dashboard/applications/application-list", {
+        pageTitle: `Dashboard - Applications`,
+        config: config,
+        apiData: apiData,
+        features: features,
+        req: req,
+        globalImage,
+        announcementWeb,
+      })
+    );
+    return;
   });
 
   app.get("/dashboard/applications/create", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.applications, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.applications, req, res, features))
       return;
 
-    if (!hasPermission("zander.web.application", req, res, features)) return;
+    if (!await hasPermission("zander.web.application", req, res, features)) return;
 
-    return res.view("dashboard/applications/application-editor", {
-      pageTitle: `Dashboard - Application Creator`,
-      config: config,
-      type: "create",
-      features: features,
-      req: req,
-      globalImage: await getGlobalImage(),
-      announcementWeb: await getWebAnnouncement(),
-    });
+    const [globalImage, announcementWeb] = await Promise.all([
+      getGlobalImage(),
+      getWebAnnouncement(),
+    ]);
+
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("dashboard/applications/application-editor", {
+        pageTitle: `Dashboard - Application Creator`,
+        config: config,
+        type: "create",
+        features: features,
+        req: req,
+        globalImage,
+        announcementWeb,
+      })
+    );
+    return;
   });
 
   app.get("/dashboard/applications/edit", async function (req, res) {
-    if (!isFeatureWebRouteEnabled(features.applications, req, res, features))
+    if (!await isFeatureWebRouteEnabled(app, features.applications, req, res, features))
       return;
 
-    if (!hasPermission("zander.web.application", req, res, features)) return;
+    if (!await hasPermission("zander.web.application", req, res, features)) return;
 
     const applicationId = req.query.applicationId;
     const fetchURL = `${process.env.siteAddress}/api/application/get?id=${applicationId}`;
-    const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
-    });
-    const applicationApiData = await parseApiResponse(response);
+
+    const [response, globalImage, announcementWeb] = await Promise.all([
+      fetch(fetchURL, {
+        headers: { "x-access-token": process.env.apiKey },
+      }).catch(() => null),
+      getGlobalImage(),
+      getWebAnnouncement(),
+    ]);
+
+    const applicationApiData = response ? await parseApiResponse(response) : { success: false };
 
     if (!applicationApiData.success || !applicationApiData.data?.length) {
       setBannerCookie("danger", "Application not found.", res);
       return res.redirect("/dashboard/applications");
     }
 
-    return res.view("dashboard/applications/application-editor", {
-      pageTitle: `Dashboard - Application Editor`,
-      config: config,
-      applicationApiData: applicationApiData.data[0],
-      type: "edit",
-      features: features,
-      req: req,
-      globalImage: await getGlobalImage(),
-      announcementWeb: await getWebAnnouncement(),
-    });
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("dashboard/applications/application-editor", {
+        pageTitle: `Dashboard - Application Editor`,
+        config: config,
+        applicationApiData: applicationApiData.data[0],
+        type: "edit",
+        features: features,
+        req: req,
+        globalImage,
+        announcementWeb,
+      })
+    );
+    return;
   });
 }

@@ -1,0 +1,33 @@
+<div class="host-row border rounded p-3 mb-2 position-relative">
+    <button type="button" class="btn btn-xs btn-danger position-absolute top-0 end-0 m-2 remove-host">×</button>
+    <div class="row g-2">
+        <div class="col-md-5">
+            <label class="form-label small">Player <span class="text-muted">(linked accounts only)</span></label>
+            <div class="position-relative">
+                <input type="text" class="form-control form-control-sm host-userSearch" placeholder="Search by username…" autocomplete="off" value="<%= host.displayName || '' %>">
+                <div class="host-suggestions list-group position-absolute w-100" style="z-index:1000;top:100%;left:0;display:none;"></div>
+            </div>
+            <input type="hidden" class="host-userId" value="<%= host.userId || '' %>">
+            <input type="hidden" class="host-discordUserId" value="<%= host.discordUserId || '' %>">
+            <input type="hidden" class="host-displayName" value="<%= host.displayName || '' %>">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small">Role</label>
+            <select class="form-select form-select-sm host-role">
+                <option value="host" <%= host.role === 'host' ? 'selected' : '' %>>Host</option>
+                <option value="co_host" <%= host.role === 'co_host' ? 'selected' : '' %>>Co-Host</option>
+                <option value="coordinator" <%= host.role === 'coordinator' ? 'selected' : '' %>>Coordinator</option>
+            </select>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    const row = document.querySelector('#hostsContainer .host-row:last-child');
+    if (!row) return;
+    row.querySelector('.remove-host').addEventListener('click', () => row.remove());
+    // initHostRowSearch is defined in the page's main script block and called via
+    // "document.querySelectorAll('#hostsContainer .host-row').forEach(initHostRowSearch)"
+    // after all partials have rendered. Nothing extra needed here.
+})();
+</script>

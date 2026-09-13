@@ -15,6 +15,10 @@ import punishmentsApiRoute from "./punishments.js";
 import configApiRoute from "./config.js";
 import discordPunishmentsApiRoute from "./discordPunishments.js";
 import schedulerApiRoute from "./scheduler.js";
+import eventsApiRoute from "./events.js";
+import badgeApiRoute from "./badges.js";
+import financeApiRoute from "./finance.js";
+import adminUsersRoute from "./adminUsers.js";
 
 export default (app, client, moment, config, db, features, lang) => {
   announcementApiRoute(app, config, db, features, lang);
@@ -33,5 +37,10 @@ export default (app, client, moment, config, db, features, lang) => {
   punishmentsApiRoute(app, config, db, features, lang);
   schedulerApiRoute(app, client, config, db, features, lang);
   discordPunishmentsApiRoute(app, config, db, features, lang);
+  configApiRoute(app, config, db, features, lang);
+  eventsApiRoute(app, config, db, features, lang);
+  badgeApiRoute(app, config, db, features, lang);
+  financeApiRoute(app, config, db, features, lang);
+  adminUsersRoute(app, config, db, features, lang);
 
 };

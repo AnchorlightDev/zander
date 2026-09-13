@@ -1,0 +1,953 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-chart-line fa-fw me-2"></i>Finance</h1>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <%# Monthly Summary Cards -%>
+      <%
+        const fmtMoney = function(cents, currency) {
+          return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format((cents || 0) / 100);
+        };
+        const currencyOptions = ['USD', 'AUD', 'EUR', 'GBP', 'CAD'];
+        const budgetIconOptions = [
+          ['server','Server'], ['cloud','Cloud'], ['globe','Website'], ['database','Database'],
+          ['shield-halved','Security'], ['code','Software'], ['plug','Services'], ['wifi','Network'],
+          ['hard-drive','Storage'], ['people-group','Community'], ['tools','Maintenance'], ['receipt','Billing']
+        ];
+        const now = new Date();
+        const monthLabel = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      %>
+      <div class="row g-3 mb-4">
+        <div class="col-sm-4">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-1">Income</div>
+              <div class="fs-4 fw-bold text-success"><%= fmtMoney(totalIncomeCents) %></div>
+              <div class="text-muted small mt-1"><%= monthLabel %></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-1">Expenses</div>
+              <div class="fs-4 fw-bold text-danger"><%= fmtMoney(totalExpensesCents) %></div>
+              <div class="text-muted small mt-1"><%= monthLabel %></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <div class="text-muted small text-uppercase fw-semibold mb-1">Net</div>
+              <div class="fs-4 fw-bold <%= netAmountCents >= 0 ? 'text-success' : 'text-danger' %>"><%= fmtMoney(netAmountCents) %></div>
+              <div class="text-muted small mt-1"><%= monthLabel %></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <%# Account Balances & Reconciliation -%>
+      <%
+        const reconcileAsOfLabel = reconcileAsOf
+          ? new Date(reconcileAsOf).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+          : '';
+        const accountTypeLabels = {
+          bank: 'Bank', stripe: 'Stripe', paypal: 'PayPal',
+          credit_card: 'Credit card', crypto: 'Crypto', other: 'Other'
+        };
+        const accountTypeOptions = Object.keys(accountTypeLabels);
+        const isoDate = function (d) {
+          const dt = d ? new Date(d) : new Date();
+          return dt.toISOString().slice(0, 10);
+        };
+      %>
+      <div class="row g-3 mb-4" id="accounts">
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <span class="fw-semibold">
+                <i class="fa-solid fa-scale-balanced fa-fw me-2 text-primary"></i>Account Balances &amp; Reconciliation
+              </span>
+              <div class="d-flex align-items-center gap-2">
+                <span class="text-muted small">Ledger as of <%= reconcileAsOfLabel %></span>
+                <% if (canManage) { %>
+                  <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addAccountModal">
+                    <i class="fa-solid fa-plus me-1"></i>Add account
+                  </button>
+                <% } %>
+              </div>
+            </div>
+            <div class="card-body p-0">
+              <% if (!accountReconciliation || !accountReconciliation.length) { %>
+                <div class="p-3 text-muted small">
+                  No accounts yet. Add your Stripe and bank accounts to start reconciling balances for the monthly report.
+                </div>
+              <% } else { %>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Account</th>
+                        <th class="text-end">Ledger balance</th>
+                        <th class="text-end">Recorded balance</th>
+                        <th class="text-end">Variance</th>
+                        <th class="text-end">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <% accountReconciliation.forEach(function (acc) {
+                        const cur = acc.currency || 'USD';
+                        const hasRecorded = acc.recordedBalanceCents !== null && acc.recordedBalanceCents !== undefined;
+                        const variance = acc.varianceCents;
+                        const reconciled = hasRecorded && variance === 0;
+                      %>
+                        <tr>
+                          <td>
+                            <div class="fw-semibold">
+                              <%= acc.name %>
+                              <% if (!acc.isActive) { %><span class="badge bg-secondary ms-1">Inactive</span><% } %>
+                            </div>
+                            <div class="text-muted" style="font-size:0.75rem;">
+                              <%= accountTypeLabels[acc.accountType] || acc.accountType %> · <%= cur %>
+                            </div>
+                          </td>
+                          <td class="text-end"><%= fmtMoney(acc.ledgerBalanceCents, cur) %></td>
+                          <td class="text-end">
+                            <% if (hasRecorded) { %>
+                              <div><%= fmtMoney(acc.recordedBalanceCents, cur) %></div>
+                              <div class="text-muted" style="font-size:0.75rem;">
+                                as of <%= new Date(acc.recordedAsOfDate).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' }) %>
+                              </div>
+                            <% } else { %>
+                              <span class="text-muted small">Not recorded</span>
+                            <% } %>
+                          </td>
+                          <td class="text-end">
+                            <% if (!hasRecorded) { %>
+                              <span class="text-muted">—</span>
+                            <% } else if (reconciled) { %>
+                              <span class="badge bg-success"><i class="fa-solid fa-check me-1"></i>Reconciled</span>
+                            <% } else { %>
+                              <span class="fw-semibold <%= variance > 0 ? 'text-success' : 'text-danger' %>">
+                                <%= variance > 0 ? '+' : '−' %><%= fmtMoney(Math.abs(variance), cur) %>
+                              </span>
+                            <% } %>
+                          </td>
+                          <td class="text-end text-nowrap">
+                            <% if (canManage) { %>
+                              <button type="button" class="btn btn-sm btn-primary js-set-balance"
+                                      data-bs-toggle="modal" data-bs-target="#setBalanceModal"
+                                      data-account-id="<%= acc.accountId %>"
+                                      data-account-name="<%= acc.name %>"
+                                      data-currency="<%= cur %>"
+                                      data-ledger="<%= (acc.ledgerBalanceCents / 100).toFixed(2) %>">
+                                <i class="fa-solid fa-pen-to-square me-1"></i>Set balance
+                              </button>
+                              <button type="button" class="btn btn-sm btn-outline-secondary js-edit-account"
+                                      data-bs-toggle="modal" data-bs-target="#editAccountModal"
+                                      data-account-id="<%= acc.accountId %>"
+                                      data-name="<%= acc.name %>"
+                                      data-account-type="<%= acc.accountType %>"
+                                      data-currency="<%= cur %>"
+                                      data-opening="<%= (acc.openingBalanceCents / 100).toFixed(2) %>"
+                                      data-notes="<%= acc.notes || '' %>"
+                                      data-active="<%= acc.isActive ? 1 : 0 %>">
+                                <i class="fa-solid fa-gear"></i>
+                              </button>
+                            <% } else { %>
+                              <span class="text-muted small">—</span>
+                            <% } %>
+                          </td>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="p-2 px-3 text-muted" style="font-size:0.75rem;">
+                  Ledger balance = opening balance + income − expenses ± transfers, up to <%= reconcileAsOfLabel %>.
+                  Record the balance shown by Stripe / the bank to reconcile before publishing the monthly report.
+                </div>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4 mb-4">
+
+        <%# Recent Transactions -%>
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><i class="fa-solid fa-arrows-left-right fa-fw me-2 text-primary"></i>Recent Transactions</span>
+            </div>
+            <div class="card-body p-0">
+              <% if (!recentTransactions || !recentTransactions.length) { %>
+                <div class="p-3 text-muted small">No transactions yet.</div>
+              <% } else { %>
+                <ul class="list-group list-group-flush">
+                  <% recentTransactions.forEach(function(tx) {
+                    const amtStr = new Intl.NumberFormat('en-US', { style:'currency', currency: tx.currency||'USD' }).format((tx.amountCents||0)/100);
+                    const dateStr = tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString('en-AU', { day:'numeric', month:'short' }) : '—';
+                    const typeColors = { income: 'text-success', expense: 'text-danger' };
+                    const typeIcons = { income: 'fa-arrow-down', expense: 'fa-arrow-up' };
+                  %>
+                    <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+                      <div class="d-flex align-items-center gap-2">
+                        <i class="fa-solid <%= typeIcons[tx.type] || 'fa-circle' %> fa-fw <%= typeColors[tx.type] || '' %>"></i>
+                        <div>
+                          <div class="small fw-semibold"><%= tx.description || tx.type %></div>
+                          <% if (tx.category) { %><div class="text-muted" style="font-size:0.75rem;"><%= tx.category.name %></div><% } %>
+                        </div>
+                      </div>
+                      <div class="text-end">
+                        <div class="fw-semibold <%= typeColors[tx.type] || '' %>"><%= tx.type === 'expense' ? '−' : tx.type === 'income' ? '+' : '' %><%= amtStr %></div>
+                        <div class="text-muted" style="font-size:0.75rem;"><%= dateStr %></div>
+                      </div>
+                    </li>
+                  <% }) %>
+                </ul>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+        <%# Budget Summary -%>
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <span class="fw-semibold"><i class="fa-solid fa-gauge fa-fw me-2 text-info"></i>Operations Budget</span>
+              <% if (canManage) { %>
+                <div class="d-flex gap-1">
+                  <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#oneOffBudgetModal">
+                    <i class="fa-solid fa-plus me-1"></i>One-off item
+                  </button>
+                  <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addBudgetModal">
+                    <i class="fa-solid fa-plus me-1"></i>Template item
+                  </button>
+                </div>
+              <% } %>
+            </div>
+            <div class="card-body p-0">
+              <%# Month/year selector — which month's effective budget is shown below -%>
+              <form method="get" action="/dashboard/finance" class="d-flex gap-2 align-items-end flex-wrap p-3 border-bottom">
+                <div>
+                  <label class="form-label form-label-sm mb-1">Year</label>
+                  <select name="year" class="form-select form-select-sm" style="width:auto">
+                    <% for (let y = currentYear + 1; y >= currentYear - 2; y--) { %>
+                      <option value="<%= y %>" <%= y === selectedYear ? 'selected' : '' %>><%= y %></option>
+                    <% } %>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label form-label-sm mb-1">Month</label>
+                  <select name="month" class="form-select form-select-sm" style="width:auto">
+                    <% const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                       for (let m = 1; m <= 12; m++) { %>
+                      <option value="<%= m %>" <%= m === selectedMonth ? 'selected' : '' %>><%= monthNames[m-1] %></option>
+                    <% } %>
+                  </select>
+                </div>
+                <button type="submit" class="btn btn-sm btn-secondary">View</button>
+              </form>
+
+              <% if (!budgetSummary || !budgetSummary.length) { %>
+                <div class="p-3 text-muted small">No budget items are configured for this month yet.<% if (canManage) { %> Add a template item above.<% } %></div>
+              <% } else { %>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle mb-0">
+                    <thead>
+                      <tr>
+                        <th class="text-center" style="width:64px">Icon</th>
+                        <th>Line Item</th>
+                        <th style="width:190px">Type</th>
+                        <th class="text-end" style="width:130px">Budget</th>
+                        <th class="text-end" style="width:130px">Actual</th>
+                        <% if (canManage) { %><th class="text-end" style="width:140px">Actions</th><% } %>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <% budgetSummary.forEach(function(b) {
+                        const budgetStr = new Intl.NumberFormat('en-US', { style:'currency', currency: b.currency||'USD' }).format((b.monthlyBudgetCents||0)/100);
+                        const templateStr = b.templateMonthlyBudgetCents !== null ? new Intl.NumberFormat('en-US', { style:'currency', currency: b.currency||'USD' }).format((b.templateMonthlyBudgetCents||0)/100) : null;
+                        const actualStr = new Intl.NumberFormat('en-US', { style:'currency', currency: b.currency||'USD' }).format((b.actualCents||0)/100);
+                        const isOver = (b.actualCents||0) > (b.monthlyBudgetCents||0);
+                      %>
+                        <tr class="<%= isOver ? 'table-danger' : '' %>">
+                          <td class="text-center">
+                            <span class="d-inline-flex align-items-center justify-content-center rounded bg-light text-primary overflow-hidden"
+                                  style="width:38px;height:38px;">
+                              <% if (b.iconImageUrl) { %>
+                                <img src="<%= b.iconImageUrl %>" alt="" style="width:38px;height:38px;object-fit:cover;">
+                              <% } else { %>
+                                <i class="fa-solid fa-<%= b.iconName || 'receipt' %>" aria-hidden="true"></i>
+                              <% } %>
+                            </span>
+                          </td>
+                          <td>
+                            <div class="fw-semibold"><%= b.label %></div>
+                            <% if (b.category) { %><div class="small text-muted"><%= b.category.name %></div><% } %>
+                          </td>
+                          <td>
+                            <% if (b.isOneOff) { %>
+                              <span class="badge bg-info text-dark" title="Only exists for this month">One-off</span>
+                            <% } else if (b.cadence === 'annual') { %>
+                              <span class="badge bg-primary">Annual · <%= monthNames[(b.annualMonth || 1) - 1] %></span>
+                            <% } else { %>
+                              <span class="badge bg-secondary">Recurring</span>
+                            <% } %>
+                            <% if (b.isOverridden) { %>
+                              <span class="badge bg-warning text-dark ms-1" title="Template amount is <%= templateStr %> — overridden for this month">Override</span>
+                            <% } %>
+                          </td>
+                          <td class="text-end text-muted"><%= budgetStr %></td>
+                          <td class="text-end fw-semibold <%= isOver ? 'text-danger' : '' %>"><%= actualStr %></td>
+                          <% if (canManage) { %>
+                            <td class="text-end">
+                              <div class="d-flex gap-1 justify-content-end">
+                                <% if (b.isOneOff) { %>
+                                  <form method="post" action="/dashboard/finance/budget/one-off/<%= b.monthlyBudgetItemId %>/delete" class="d-inline"
+                                        onsubmit="return confirm('Delete this one-off item?')">
+                                    <input type="hidden" name="year" value="<%= selectedYear %>">
+                                    <input type="hidden" name="month" value="<%= selectedMonth %>">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                                  </form>
+                                <% } else { %>
+                                  <button type="button" class="btn btn-sm btn-outline-primary"
+                                          data-bs-toggle="modal" data-bs-target="#editBudgetModal"
+                                          data-id="<%= b.budgetId %>"
+                                          data-label="<%= (b.label||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;') %>"
+                                          data-public-description="<%= (b.publicDescription||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;') %>"
+                                          data-category-id="<%= b.categoryId || '' %>"
+                                          data-amount="<%= ((b.templateMonthlyBudgetCents||0)/100).toFixed(2) %>"
+                                          data-currency="<%= b.currency || 'USD' %>"
+                                          data-cadence="<%= b.cadence || 'monthly' %>"
+                                          data-annual-month="<%= b.annualMonth || '' %>"
+                                          data-icon-name="<%= b.iconName || '' %>"
+                                          data-icon-image-url="<%= b.iconImageUrl || '' %>"
+                                          data-notes="<%= (b.notes||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;') %>"
+                                          title="Edit standing budget item">
+                                    <i class="fa-solid fa-gear"></i>
+                                  </button>
+                                  <button type="button" class="btn btn-sm btn-outline-warning"
+                                          data-bs-toggle="modal" data-bs-target="#overrideBudgetModal"
+                                          data-budget-item-id="<%= b.budgetId %>"
+                                          data-label="<%= (b.label||'').replace(/"/g,'&quot;') %>"
+                                          data-amount="<%= ((b.monthlyBudgetCents||0)/100).toFixed(2) %>"
+                                          title="Override this month's amount">
+                                    <i class="fa-solid fa-pen"></i>
+                                  </button>
+                                  <% if (b.isOverridden) { %>
+                                    <form method="post" action="/dashboard/finance/budget/override/reset" class="d-inline">
+                                      <input type="hidden" name="year" value="<%= selectedYear %>">
+                                      <input type="hidden" name="month" value="<%= selectedMonth %>">
+                                      <input type="hidden" name="budgetItemId" value="<%= b.budgetId %>">
+                                      <button type="submit" class="btn btn-sm btn-outline-secondary" title="Reset to template amount"><i class="fa-solid fa-rotate-left"></i></button>
+                                    </form>
+                                  <% } %>
+                                <% } %>
+                              </div>
+                            </td>
+                          <% } %>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+  <%- include("../../admin/_footer.ejs") %>
+</div>
+
+<% if (canManage) { %>
+  <%# Add Budget Modal -%>
+  <div class="modal fade" id="addBudgetModal" tabindex="-1" aria-labelledby="addBudgetModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <form method="post" action="/dashboard/finance/budget/create" class="budget-entry-form">
+          <input type="hidden" name="monthlyBudgetCents" class="budget-cents-input">
+          <div class="modal-header">
+            <h5 class="modal-title" id="addBudgetModalLabel">Add Budget Entry</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="addBudgetLabel" class="form-label fw-semibold">Line item <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="addBudgetLabel" name="label" maxlength="100" required>
+            </div>
+            <div class="mb-3">
+              <label for="addBudgetDescription" class="form-label fw-semibold">Public description</label>
+              <textarea class="form-control" id="addBudgetDescription" name="publicDescription" rows="2" maxlength="300" placeholder="Shown under this line item on the public finance page."></textarea>
+              <div class="form-text">Optional. Leave blank to show just the line item name.</div>
+            </div>
+            <div class="mb-3">
+              <label for="addBudgetCategoryId" class="form-label fw-semibold">Category</label>
+              <select class="form-select" id="addBudgetCategoryId" name="categoryId">
+                <option value="">— None —</option>
+                <% (categories || []).forEach(function(cat) { %>
+                  <option value="<%= cat.categoryId %>"><%= cat.name %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="addBudgetCadence" class="form-label fw-semibold">Type</label>
+              <select class="form-select budget-cadence-input" id="addBudgetCadence" name="cadence">
+                <option value="monthly">Monthly</option>
+                <option value="annual">Annual</option>
+              </select>
+            </div>
+            <div class="mb-3 budget-icon-editor">
+              <label for="addBudgetIcon" class="form-label fw-semibold">Icon</label>
+              <select class="form-select budget-icon-select" id="addBudgetIcon" name="iconName">
+                <option value="">No icon</option>
+                <% budgetIconOptions.forEach(function(icon) { %><option value="<%= icon[0] %>"><%= icon[1] %></option><% }) %>
+              </select>
+              <div class="d-flex align-items-center gap-2 mt-2">
+                <span class="budget-icon-preview d-none fs-4"></span>
+                <img class="budget-image-preview d-none rounded" alt="Budget icon preview" style="width:48px;height:48px;object-fit:cover;">
+                <label class="btn btn-sm btn-outline-secondary mb-0"><i class="fa-solid fa-upload me-1"></i>Upload icon<input type="file" class="budget-icon-file d-none" accept="image/png,image/jpeg,image/gif,image/webp"></label>
+                <button type="button" class="btn btn-sm btn-outline-danger budget-icon-image-remove d-none">Remove upload</button>
+                <span class="budget-icon-status small"></span>
+              </div>
+              <input type="hidden" name="iconImageUrl" class="budget-icon-image-url">
+              <div class="form-text">Uploaded images take priority over the selected icon.</div>
+            </div>
+            <div class="mb-3 budget-annual-month-field d-none">
+              <label for="addBudgetAnnualMonth" class="form-label fw-semibold">Renewal month</label>
+              <select class="form-select" id="addBudgetAnnualMonth" name="annualMonth">
+                <% monthNames.forEach(function(name, index) { %><option value="<%= index + 1 %>"><%= name %></option><% }) %>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="addBudgetAmount" class="form-label fw-semibold">Budget amount <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" class="form-control budget-amount-input" id="addBudgetAmount" required min="0.01" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="addBudgetCurrency" class="form-label fw-semibold">Currency</label>
+              <select class="form-select" id="addBudgetCurrency" name="currency">
+                <% currencyOptions.forEach(function(c) { %>
+                  <option value="<%= c %>" <%= c === 'USD' ? 'selected' : '' %>><%= c %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="addBudgetNotes" class="form-label fw-semibold">Notes</label>
+              <input type="text" class="form-control" id="addBudgetNotes" name="notes" maxlength="500">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-1"></i>Add</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <%# Edit Budget Modal -%>
+  <div class="modal fade" id="editBudgetModal" tabindex="-1" aria-labelledby="editBudgetModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <form method="post" id="editBudgetForm" action="/dashboard/finance/budget/__id__/edit" class="budget-entry-form">
+          <input type="hidden" name="monthlyBudgetCents" class="budget-cents-input">
+          <input type="hidden" name="isActive" value="1">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editBudgetModalLabel">Edit Budget Entry</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="editBudgetLabel" class="form-label fw-semibold">Line item <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="editBudgetLabel" name="label" maxlength="100" required>
+            </div>
+            <div class="mb-3">
+              <label for="editBudgetDescription" class="form-label fw-semibold">Public description</label>
+              <textarea class="form-control" id="editBudgetDescription" name="publicDescription" rows="2" maxlength="300" placeholder="Shown under this line item on the public finance page."></textarea>
+              <div class="form-text">Optional. Leave blank to show just the line item name.</div>
+            </div>
+            <div class="mb-3">
+              <label for="editBudgetCategoryId" class="form-label fw-semibold">Category</label>
+              <select class="form-select" id="editBudgetCategoryId" name="categoryId">
+                <option value="">— None —</option>
+                <% (categories || []).forEach(function(cat) { %>
+                  <option value="<%= cat.categoryId %>"><%= cat.name %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="editBudgetCadence" class="form-label fw-semibold">Type</label>
+              <select class="form-select budget-cadence-input" id="editBudgetCadence" name="cadence">
+                <option value="monthly">Monthly</option>
+                <option value="annual">Annual</option>
+              </select>
+            </div>
+            <div class="mb-3 budget-icon-editor">
+              <label for="editBudgetIcon" class="form-label fw-semibold">Icon</label>
+              <select class="form-select budget-icon-select" id="editBudgetIcon" name="iconName">
+                <option value="">No icon</option>
+                <% budgetIconOptions.forEach(function(icon) { %><option value="<%= icon[0] %>"><%= icon[1] %></option><% }) %>
+              </select>
+              <div class="d-flex align-items-center gap-2 mt-2">
+                <span class="budget-icon-preview d-none fs-4"></span>
+                <img class="budget-image-preview d-none rounded" alt="Budget icon preview" style="width:48px;height:48px;object-fit:cover;">
+                <label class="btn btn-sm btn-outline-secondary mb-0"><i class="fa-solid fa-upload me-1"></i>Upload icon<input type="file" class="budget-icon-file d-none" accept="image/png,image/jpeg,image/gif,image/webp"></label>
+                <button type="button" class="btn btn-sm btn-outline-danger budget-icon-image-remove d-none">Remove upload</button>
+                <span class="budget-icon-status small"></span>
+              </div>
+              <input type="hidden" name="iconImageUrl" class="budget-icon-image-url">
+              <div class="form-text">Uploaded images take priority over the selected icon.</div>
+            </div>
+            <div class="mb-3 budget-annual-month-field d-none">
+              <label for="editBudgetAnnualMonth" class="form-label fw-semibold">Renewal month</label>
+              <select class="form-select" id="editBudgetAnnualMonth" name="annualMonth">
+                <% monthNames.forEach(function(name, index) { %><option value="<%= index + 1 %>"><%= name %></option><% }) %>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="editBudgetAmount" class="form-label fw-semibold">Budget amount <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" class="form-control budget-amount-input" id="editBudgetAmount" required min="0.01" step="0.01">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="editBudgetCurrency" class="form-label fw-semibold">Currency</label>
+              <select class="form-select" id="editBudgetCurrency" name="currency">
+                <% currencyOptions.forEach(function(c) { %>
+                  <option value="<%= c %>"><%= c %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="editBudgetNotes" class="form-label fw-semibold">Notes</label>
+              <input type="text" class="form-control" id="editBudgetNotes" name="notes" maxlength="500">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-1"></i>Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <%# Override this month's amount for a template line item -%>
+  <div class="modal fade" id="overrideBudgetModal" tabindex="-1" aria-labelledby="overrideBudgetModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <form method="post" action="/dashboard/finance/budget/override" class="budget-entry-form">
+          <input type="hidden" name="year" value="<%= selectedYear %>">
+          <input type="hidden" name="month" value="<%= selectedMonth %>">
+          <input type="hidden" name="budgetItemId" id="overrideBudgetItemId">
+          <input type="hidden" name="monthlyBudgetCents" class="budget-cents-input">
+          <div class="modal-header">
+            <h5 class="modal-title" id="overrideBudgetModalLabel">Override amount for this month</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted small mb-3">
+              This only changes <strong id="overrideBudgetLabel"></strong>'s budget for
+              <%= monthNames[selectedMonth - 1] %> <%= selectedYear %>. The standing template is unaffected.
+            </p>
+            <div class="mb-3">
+              <label for="overrideBudgetAmount" class="form-label fw-semibold">Amount this month <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" class="form-control budget-amount-input" id="overrideBudgetAmount" required min="0" step="0.01">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-1"></i>Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <%# Add a one-off item that only exists for the selected month -%>
+  <div class="modal fade" id="oneOffBudgetModal" tabindex="-1" aria-labelledby="oneOffBudgetModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <form method="post" action="/dashboard/finance/budget/one-off/create" class="budget-entry-form">
+          <input type="hidden" name="year" value="<%= selectedYear %>">
+          <input type="hidden" name="month" value="<%= selectedMonth %>">
+          <input type="hidden" name="monthlyBudgetCents" class="budget-cents-input">
+          <div class="modal-header">
+            <h5 class="modal-title" id="oneOffBudgetModalLabel">Add one-off item — <%= monthNames[selectedMonth - 1] %> <%= selectedYear %></h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted small mb-3">This item will only appear in this month's budget — it's not added to the standing template.</p>
+            <div class="mb-3">
+              <label for="oneOffLabel" class="form-label fw-semibold">Line item <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="oneOffLabel" name="label" maxlength="100" required>
+            </div>
+            <div class="mb-3">
+              <label for="oneOffDescription" class="form-label fw-semibold">Public description</label>
+              <textarea class="form-control" id="oneOffDescription" name="publicDescription" rows="2" maxlength="300" placeholder="Shown under this line item on the public finance page."></textarea>
+              <div class="form-text">Optional. Leave blank to show just the line item name.</div>
+            </div>
+            <div class="mb-3">
+              <label for="oneOffCategoryId" class="form-label fw-semibold">Category</label>
+              <select class="form-select" id="oneOffCategoryId" name="categoryId">
+                <option value="">— None —</option>
+                <% (categories || []).forEach(function(cat) { %>
+                  <option value="<%= cat.categoryId %>"><%= cat.name %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="oneOffAmount" class="form-label fw-semibold">Amount <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" class="form-control budget-amount-input" id="oneOffAmount" required min="0.01" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="oneOffCurrency" class="form-label fw-semibold">Currency</label>
+              <select class="form-select" id="oneOffCurrency" name="currency">
+                <% currencyOptions.forEach(function(c) { %>
+                  <option value="<%= c %>" <%= c === 'USD' ? 'selected' : '' %>><%= c %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="mb-3 budget-icon-editor">
+              <label for="oneOffIcon" class="form-label fw-semibold">Icon</label>
+              <select class="form-select budget-icon-select" id="oneOffIcon" name="iconName">
+                <option value="">No icon</option>
+                <% budgetIconOptions.forEach(function(icon) { %><option value="<%= icon[0] %>"><%= icon[1] %></option><% }) %>
+              </select>
+              <div class="d-flex align-items-center gap-2 mt-2">
+                <span class="budget-icon-preview d-none fs-4"></span>
+                <img class="budget-image-preview d-none rounded" alt="Budget icon preview" style="width:48px;height:48px;object-fit:cover;">
+                <label class="btn btn-sm btn-outline-secondary mb-0"><i class="fa-solid fa-upload me-1"></i>Upload icon<input type="file" class="budget-icon-file d-none" accept="image/png,image/jpeg,image/gif,image/webp"></label>
+                <button type="button" class="btn btn-sm btn-outline-danger budget-icon-image-remove d-none">Remove upload</button>
+                <span class="budget-icon-status small"></span>
+              </div>
+              <input type="hidden" name="iconImageUrl" class="budget-icon-image-url">
+              <div class="form-text">Uploaded images take priority over the selected icon.</div>
+            </div>
+            <div class="mb-3">
+              <label for="oneOffNotes" class="form-label fw-semibold">Notes</label>
+              <input type="text" class="form-control" id="oneOffNotes" name="notes" maxlength="500">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-1"></i>Add</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Convert the dollar-amount input to integer cents right before submit —
+    // the backend expects monthlyBudgetCents.
+    document.querySelectorAll('.budget-entry-form').forEach(function (form) {
+      form.addEventListener('submit', function () {
+        const dollars = parseFloat(form.querySelector('.budget-amount-input').value) || 0;
+        form.querySelector('.budget-cents-input').value = Math.round(dollars * 100);
+      });
+    });
+
+    function updateAnnualMonthField(cadenceInput) {
+      const field = cadenceInput.closest('form').querySelector('.budget-annual-month-field');
+      if (!field) return;
+      const isAnnual = cadenceInput.value === 'annual';
+      field.classList.toggle('d-none', !isAnnual);
+      field.querySelector('select').required = isAnnual;
+    }
+
+    document.querySelectorAll('.budget-cadence-input').forEach(function (input) {
+      input.addEventListener('change', function () { updateAnnualMonthField(input); });
+      updateAnnualMonthField(input);
+    });
+
+    function refreshBudgetIconEditor(editor) {
+      const selected = editor.querySelector('.budget-icon-select').value;
+      const imageUrl = editor.querySelector('.budget-icon-image-url').value;
+      const iconPreview = editor.querySelector('.budget-icon-preview');
+      const imagePreview = editor.querySelector('.budget-image-preview');
+      const removeButton = editor.querySelector('.budget-icon-image-remove');
+
+      iconPreview.innerHTML = selected ? '<i class="fa-solid fa-' + selected + '"></i>' : '';
+      iconPreview.classList.toggle('d-none', !selected || Boolean(imageUrl));
+      imagePreview.src = imageUrl || '';
+      imagePreview.classList.toggle('d-none', !imageUrl);
+      removeButton.classList.toggle('d-none', !imageUrl);
+    }
+
+    document.querySelectorAll('.budget-icon-editor').forEach(function (editor) {
+      const select = editor.querySelector('.budget-icon-select');
+      const fileInput = editor.querySelector('.budget-icon-file');
+      const hiddenUrl = editor.querySelector('.budget-icon-image-url');
+      const status = editor.querySelector('.budget-icon-status');
+
+      select.addEventListener('change', function () { refreshBudgetIconEditor(editor); });
+      editor.querySelector('.budget-icon-image-remove').addEventListener('click', function () {
+        hiddenUrl.value = '';
+        status.textContent = '';
+        refreshBudgetIconEditor(editor);
+      });
+      fileInput.addEventListener('change', async function () {
+        const file = fileInput.files[0];
+        if (!file) return;
+        fileInput.value = '';
+        status.textContent = 'Uploading...';
+        status.className = 'budget-icon-status small text-muted';
+        const body = new FormData();
+        body.append('file', file, file.name);
+        body.append('folder', 'finance-budget-icons');
+        try {
+          const response = await fetch('/dashboard/upload/image', { method: 'POST', body });
+          const result = await response.json();
+          if (!result.success) throw new Error(result.message || 'Upload failed.');
+          hiddenUrl.value = result.data.url;
+          status.textContent = 'Uploaded';
+          status.className = 'budget-icon-status small text-success';
+          refreshBudgetIconEditor(editor);
+        } catch (error) {
+          status.textContent = error.message || 'Upload failed.';
+          status.className = 'budget-icon-status small text-danger';
+        }
+      });
+      refreshBudgetIconEditor(editor);
+    });
+
+    document.getElementById('editBudgetModal')?.addEventListener('show.bs.modal', function (e) {
+      const btn = e.relatedTarget;
+      const form = document.getElementById('editBudgetForm');
+      form.action = '/dashboard/finance/budget/' + btn.dataset.id + '/edit';
+      document.getElementById('editBudgetLabel').value = btn.dataset.label || '';
+      document.getElementById('editBudgetDescription').value = btn.dataset.publicDescription || '';
+      document.getElementById('editBudgetCategoryId').value = btn.dataset.categoryId || '';
+      document.getElementById('editBudgetAmount').value = btn.dataset.amount || '';
+      document.getElementById('editBudgetCurrency').value = btn.dataset.currency || 'USD';
+      document.getElementById('editBudgetCadence').value = btn.dataset.cadence || 'monthly';
+      document.getElementById('editBudgetAnnualMonth').value = btn.dataset.annualMonth || '1';
+      updateAnnualMonthField(document.getElementById('editBudgetCadence'));
+      document.getElementById('editBudgetIcon').value = btn.dataset.iconName || '';
+      const iconEditor = form.querySelector('.budget-icon-editor');
+      iconEditor.querySelector('.budget-icon-image-url').value = btn.dataset.iconImageUrl || '';
+      iconEditor.querySelector('.budget-icon-status').textContent = '';
+      refreshBudgetIconEditor(iconEditor);
+      document.getElementById('editBudgetNotes').value = btn.dataset.notes || '';
+    });
+
+    document.getElementById('overrideBudgetModal')?.addEventListener('show.bs.modal', function (e) {
+      const btn = e.relatedTarget;
+      document.getElementById('overrideBudgetItemId').value = btn.dataset.budgetItemId || '';
+      document.getElementById('overrideBudgetLabel').textContent = btn.dataset.label || '';
+      document.getElementById('overrideBudgetAmount').value = btn.dataset.amount || '';
+    });
+  </script>
+
+  <%# ── Add Account Modal ─────────────────────────────────────────────── -%>
+  <div class="modal fade" id="addAccountModal" tabindex="-1" aria-labelledby="addAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <form method="post" action="/dashboard/finance/accounts/create">
+          <input type="hidden" name="year" value="<%= selectedYear %>">
+          <input type="hidden" name="month" value="<%= selectedMonth %>">
+          <div class="modal-header">
+            <h5 class="modal-title" id="addAccountModalLabel">Add Account</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="addAccountName" class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="addAccountName" name="name" maxlength="150" required placeholder="e.g. Stripe, Community Bank">
+            </div>
+            <div class="row g-2">
+              <div class="col-12 col-sm-7 mb-3">
+                <label for="addAccountType" class="form-label fw-semibold">Type</label>
+                <select class="form-select" id="addAccountType" name="accountType">
+                  <% accountTypeOptions.forEach(function (t) { %>
+                    <option value="<%= t %>"><%= accountTypeLabels[t] %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-12 col-sm-5 mb-3">
+                <label for="addAccountCurrency" class="form-label fw-semibold">Currency</label>
+                <select class="form-select" id="addAccountCurrency" name="currency">
+                  <% currencyOptions.forEach(function (c) { %>
+                    <option value="<%= c %>" <%= c === 'USD' ? 'selected' : '' %>><%= c %></option>
+                  <% }) %>
+                </select>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="addAccountOpening" class="form-label fw-semibold">Opening balance</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" step="0.01" class="form-control" id="addAccountOpening" name="openingBalanceCents" placeholder="0.00">
+              </div>
+              <div class="form-text">The balance before any recorded transactions. Leave at 0 if unsure.</div>
+            </div>
+            <div class="mb-3">
+              <label for="addAccountNotes" class="form-label fw-semibold">Notes</label>
+              <input type="text" class="form-control" id="addAccountNotes" name="notes" maxlength="500">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-1"></i>Add account</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <%# ── Edit Account Modal ────────────────────────────────────────────── -%>
+  <div class="modal fade" id="editAccountModal" tabindex="-1" aria-labelledby="editAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <form method="post" id="editAccountForm" action="/dashboard/finance/accounts/__id__/edit">
+          <input type="hidden" name="year" value="<%= selectedYear %>">
+          <input type="hidden" name="month" value="<%= selectedMonth %>">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editAccountModalLabel">Edit Account</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="editAccountName" class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="editAccountName" name="name" maxlength="150" required>
+            </div>
+            <div class="row g-2">
+              <div class="col-12 col-sm-7 mb-3">
+                <label for="editAccountType" class="form-label fw-semibold">Type</label>
+                <select class="form-select" id="editAccountType" name="accountType">
+                  <% accountTypeOptions.forEach(function (t) { %>
+                    <option value="<%= t %>"><%= accountTypeLabels[t] %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="col-12 col-sm-5 mb-3">
+                <label for="editAccountCurrency" class="form-label fw-semibold">Currency</label>
+                <select class="form-select" id="editAccountCurrency" name="currency">
+                  <% currencyOptions.forEach(function (c) { %>
+                    <option value="<%= c %>"><%= c %></option>
+                  <% }) %>
+                </select>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="editAccountOpening" class="form-label fw-semibold">Opening balance</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" step="0.01" class="form-control" id="editAccountOpening" name="openingBalanceCents">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="editAccountNotes" class="form-label fw-semibold">Notes</label>
+              <input type="text" class="form-control" id="editAccountNotes" name="notes" maxlength="500">
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="1" id="editAccountActive" name="isActive">
+              <label class="form-check-label" for="editAccountActive">Active</label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-1"></i>Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <%# ── Set Balance (reconcile) Modal ─────────────────────────────────── -%>
+  <div class="modal fade" id="setBalanceModal" tabindex="-1" aria-labelledby="setBalanceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <form method="post" id="setBalanceForm" action="/dashboard/finance/accounts/__id__/balance">
+          <input type="hidden" name="year" value="<%= selectedYear %>">
+          <input type="hidden" name="month" value="<%= selectedMonth %>">
+          <input type="hidden" name="source" value="manual">
+          <div class="modal-header">
+            <h5 class="modal-title" id="setBalanceModalLabel">Record balance</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted small mb-3">
+              Enter the balance <strong id="setBalanceAccountName">this account</strong> actually shows
+              (Stripe dashboard, bank statement). It is stored as a dated reading and compared against the ledger.
+            </p>
+            <div class="mb-3">
+              <label for="setBalanceAsOf" class="form-label fw-semibold">As of date <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" id="setBalanceAsOf" name="asOfDate" required value="<%= isoDate(reconcileAsOf) %>">
+            </div>
+            <div class="mb-3">
+              <label for="setBalanceAmount" class="form-label fw-semibold">Balance <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" step="0.01" class="form-control" id="setBalanceAmount" name="balanceCents" required placeholder="0.00">
+              </div>
+              <div class="form-text">Ledger balance for comparison: <span id="setBalanceLedgerHint">—</span></div>
+            </div>
+            <div class="mb-3">
+              <label for="setBalanceNote" class="form-label fw-semibold">Note</label>
+              <input type="text" class="form-control" id="setBalanceNote" name="note" maxlength="255" placeholder="e.g. Stripe end-of-month statement">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check me-1"></i>Record balance</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('setBalanceModal')?.addEventListener('show.bs.modal', function (e) {
+      const btn = e.relatedTarget;
+      if (!btn) return;
+      const form = document.getElementById('setBalanceForm');
+      form.action = '/dashboard/finance/accounts/' + btn.dataset.accountId + '/balance';
+      document.getElementById('setBalanceAccountName').textContent = btn.dataset.accountName || 'this account';
+      document.getElementById('setBalanceLedgerHint').textContent =
+        (btn.dataset.currency || 'USD') + ' ' + (btn.dataset.ledger || '0.00');
+      document.getElementById('setBalanceAmount').value = '';
+      document.getElementById('setBalanceNote').value = '';
+    });
+
+    document.getElementById('editAccountModal')?.addEventListener('show.bs.modal', function (e) {
+      const btn = e.relatedTarget;
+      if (!btn) return;
+      const form = document.getElementById('editAccountForm');
+      form.action = '/dashboard/finance/accounts/' + btn.dataset.accountId + '/edit';
+      document.getElementById('editAccountName').value = btn.dataset.name || '';
+      document.getElementById('editAccountType').value = btn.dataset.accountType || 'bank';
+      document.getElementById('editAccountCurrency').value = btn.dataset.currency || 'USD';
+      document.getElementById('editAccountOpening').value = btn.dataset.opening || '0.00';
+      document.getElementById('editAccountNotes').value = btn.dataset.notes || '';
+      document.getElementById('editAccountActive').checked = btn.dataset.active === '1';
+    });
+  </script>
+<% } %>

@@ -10,6 +10,7 @@ import {
   ActionRowBuilder,
   ChannelType,
   EmbedBuilder,
+  OverwriteType,
 } from "discord.js";
 import { startTicketFlow } from "../lib/discord/ticketFlow.mjs";
 import {
@@ -31,6 +32,18 @@ import {
   updateTicketStatus,
   deleteTicketChannel,
 } from "../controllers/supportTicketController.js";
+import { hasPermission } from "../lib/discord/permissions.mjs";
+import { UserGetter, getUserPermissions } from "../controllers/userController.js";
+
+const MANAGE_PARTICIPANTS_NODE = "zander.web.tickets.manageparticipants";
+
+async function callerHasManageParticipants(discordUserId) {
+  const userGetter = new UserGetter();
+  const linked = await userGetter.byDiscordId(discordUserId);
+  if (!linked) return false;
+  const perms = await getUserPermissions(linked);
+  return hasPermission(perms, MANAGE_PARTICIPANTS_NODE);
+}
 
 export class SupportCommand extends Command {
   constructor(context, options) {
@@ -71,7 +84,7 @@ export class SupportCommand extends Command {
       .addSubcommand((subcommand) =>
         subcommand
           .setName("add")
-          .setDescription("Add a user or role to the current ticket.")
+          .setDescription("Add a user or role(s) to the current ticket.")
           .addUserOption((option) =>
             option
               .setName("user")
@@ -82,11 +95,21 @@ export class SupportCommand extends Command {
               .setName("role")
               .setDescription("Discord role to grant access to the ticket")
           )
+          .addRoleOption((option) =>
+            option
+              .setName("role_two")
+              .setDescription("Second role to grant access to the ticket")
+          )
+          .addRoleOption((option) =>
+            option
+              .setName("role_three")
+              .setDescription("Third role to grant access to the ticket")
+          )
       )
       .addSubcommand((subcommand) =>
         subcommand
           .setName("remove")
-          .setDescription("Remove a user or role from the current ticket.")
+          .setDescription("Remove a user or role(s) from the current ticket.")
           .addUserOption((option) =>
             option
               .setName("user")
@@ -96,6 +119,16 @@ export class SupportCommand extends Command {
             option
               .setName("role")
               .setDescription("Discord role to remove from the ticket")
+          )
+          .addRoleOption((option) =>
+            option
+              .setName("role_two")
+              .setDescription("Second role to remove from the ticket")
+          )
+          .addRoleOption((option) =>
+            option
+              .setName("role_three")
+              .setDescription("Third role to remove from the ticket")
           )
       )
       .addSubcommand((subcommand) =>
@@ -189,38 +222,41 @@ export class SupportCommand extends Command {
 
     if (subcommand === "add") {
       const userOption = interaction.options.getUser("user");
-      const roleOption = interaction.options.getRole("role");
+      const roleOptions = [
+        interaction.options.getRole("role"),
+        interaction.options.getRole("role_two"),
+        interaction.options.getRole("role_three"),
+      ].filter((role, index, all) => role && all.findIndex((r) => r?.id === role.id) === index);
 
-      if (!userOption && !roleOption) {
+      if (!userOption && !roleOptions.length) {
         return interaction.reply({
           content: "Provide a user or role to add to this ticket.",
           ephemeral: true,
         });
       }
 
+      await interaction.deferReply({ ephemeral: true });
+
       const ticketDetails = await getTicketDetailsByChannel(interaction.channel.id);
 
       if (!ticketDetails) {
-        return interaction.reply({
-          content: "This channel is not linked to a ticket.",
-          ephemeral: true,
+        console.warn("ticket add: channel not linked to a ticket", {
+          channelId: interaction.channel.id,
+          channelName: interaction.channel.name,
+          parentId: interaction.channel.parentId,
+          guildId: interaction.guildId,
+        });
+        return interaction.editReply({
+          content:
+            "This channel is not linked to a ticket. Run this in the ticket's own channel — if you created the ticket on the website, its Discord channel may have failed to create (check the bot's permissions on the ticket category).",
         });
       }
 
-      const categoryStaffRoles = await getCategoryPermissions(ticketDetails.categoryId);
-      const member = await interaction.guild.members.fetch(interaction.user.id);
-      const hasPermission =
-        member.permissions.has(PermissionFlagsBits.ManageChannels) ||
-        member.roles.cache.some((role) => categoryStaffRoles.includes(role.id));
+      const canAdd = await callerHasManageParticipants(interaction.user.id);
 
-      if (!hasPermission) {
-        return interaction.reply({
-          content: "You need support staff permissions to update ticket access.",
-          ephemeral: true,
-        });
+      if (!canAdd) {
+        return interaction.editReply({ content: "You need the manage participants permission to update ticket access." });
       }
-
-      await interaction.deferReply({ ephemeral: true });
 
       const additions = [];
       const staffUserId = await getUserIdByDiscordId(interaction.user.id);
@@ -252,15 +288,27 @@ export class SupportCommand extends Command {
             }
             // Directly grant channel access using the Discord user ID from the slash command
             try {
-              await interaction.channel.permissionOverwrites.edit(userOption.id, {
-                ViewChannel: true,
-                SendMessages: true,
-                AttachFiles: true,
-                ReadMessageHistory: true,
-              });
+              await interaction.channel.permissionOverwrites.edit(
+                userOption.id,
+                {
+                  ViewChannel: true,
+                  SendMessages: true,
+                  AttachFiles: true,
+                  ReadMessageHistory: true,
+                },
+                { type: OverwriteType.Member },
+              );
             } catch (permError) {
-              console.error("ticket add: failed to set channel permissions for user", permError);
-              additions.push(`Warning: could not grant ${userOption.tag} channel access.`);
+              console.error("ticket add: failed to set channel permissions for user", {
+                targetUserId: userOption.id,
+                channelId: interaction.channel.id,
+                discordCode: permError?.code,
+                status: permError?.status,
+                message: permError?.message,
+              });
+              additions.push(
+                `Warning: could not grant ${userOption.tag} channel access (${permError?.code ?? permError?.message ?? "unknown error"}).`
+              );
             }
             await interaction.channel.send(`✅ ${interaction.user.tag} added ${userOption.tag} to this ticket.`);
           } catch (userAddError) {
@@ -272,7 +320,7 @@ export class SupportCommand extends Command {
         }
       }
 
-      if (roleOption) {
+      for (const roleOption of roleOptions) {
         try {
           await addTicketGroupParticipant(ticketDetails.ticketId, {
             id: roleOption.id,
@@ -294,28 +342,53 @@ export class SupportCommand extends Command {
           }
           // Directly grant channel access using the Discord role ID from the slash command
           try {
-            await interaction.channel.permissionOverwrites.edit(roleOption.id, {
-              ViewChannel: true,
-              SendMessages: true,
-              AttachFiles: true,
-              ReadMessageHistory: true,
-            });
+            await interaction.channel.permissionOverwrites.edit(
+              roleOption.id,
+              {
+                ViewChannel: true,
+                SendMessages: true,
+                AttachFiles: true,
+                ReadMessageHistory: true,
+              },
+              { type: OverwriteType.Role },
+            );
           } catch (permError) {
-            console.error("ticket add: failed to set channel permissions for role", permError);
-            additions.push(`Warning: could not grant ${roleOption.name} channel access.`);
+            console.error("ticket add: failed to set channel permissions for role", {
+              roleId: roleOption.id,
+              roleName: roleOption.name,
+              channelId: interaction.channel.id,
+              discordCode: permError?.code,
+              status: permError?.status,
+              message: permError?.message,
+            });
+            additions.push(
+              `Warning: could not grant ${roleOption.name} channel access (${permError?.code ?? permError?.message ?? "unknown error"}).`
+            );
           }
           await interaction.channel.send(`✅ ${interaction.user.tag} added ${roleOption.name} to this ticket.`);
         } catch (roleAddError) {
-          console.error("ticket add: failed to add role participant", roleAddError);
-          additions.push(`Failed to add role ${roleOption.name}`);
+          console.error("ticket add: failed to add role participant", {
+            roleId: roleOption.id,
+            roleName: roleOption.name,
+            discordCode: roleAddError?.code,
+            message: roleAddError?.message,
+            stack: roleAddError?.stack,
+          });
+          additions.push(`Failed to add role ${roleOption.name} (${roleAddError?.code ?? roleAddError?.message ?? "unknown error"})`);
         }
       }
 
       try {
         await applyTicketParticipantPermissions(interaction.client, ticketDetails.ticketId);
       } catch (permissionError) {
-        console.error("ticket add: failed to apply participant permissions", permissionError);
-        additions.push("Warning: could not refresh channel permissions.");
+        console.error("ticket add: failed to apply participant permissions", {
+          ticketId: ticketDetails.ticketId,
+          discordCode: permissionError?.discordCode ?? permissionError?.cause?.code,
+          message: permissionError?.message,
+        });
+        additions.push(
+          `Warning: could not refresh channel permissions (${permissionError?.discordCode ?? permissionError?.cause?.code ?? "unknown"}). Check the bot's Manage Permissions on the ticket category.`
+        );
       }
 
       return interaction.editReply({
@@ -325,38 +398,32 @@ export class SupportCommand extends Command {
 
     if (subcommand === "remove") {
       const userOption = interaction.options.getUser("user");
-      const roleOption = interaction.options.getRole("role");
+      const roleOptions = [
+        interaction.options.getRole("role"),
+        interaction.options.getRole("role_two"),
+        interaction.options.getRole("role_three"),
+      ].filter((role, index, all) => role && all.findIndex((r) => r?.id === role.id) === index);
 
-      if (!userOption && !roleOption) {
+      if (!userOption && !roleOptions.length) {
         return interaction.reply({
           content: "Provide a user or role to remove from this ticket.",
           ephemeral: true,
         });
       }
 
+      await interaction.deferReply({ ephemeral: true });
+
       const ticketDetails = await getTicketDetailsByChannel(interaction.channel.id);
 
       if (!ticketDetails) {
-        return interaction.reply({
-          content: "This channel is not linked to a ticket.",
-          ephemeral: true,
-        });
+        return interaction.editReply({ content: "This channel is not linked to a ticket." });
       }
 
-      const categoryStaffRoles = await getCategoryPermissions(ticketDetails.categoryId);
-      const member = await interaction.guild.members.fetch(interaction.user.id);
-      const hasPermission =
-        member.permissions.has(PermissionFlagsBits.ManageChannels) ||
-        member.roles.cache.some((role) => categoryStaffRoles.includes(role.id));
+      const canRemove = await callerHasManageParticipants(interaction.user.id);
 
-      if (!hasPermission) {
-        return interaction.reply({
-          content: "You need support staff permissions to update ticket access.",
-          ephemeral: true,
-        });
+      if (!canRemove) {
+        return interaction.editReply({ content: "You need the manage participants permission to update ticket access." });
       }
-
-      await interaction.deferReply({ ephemeral: true });
 
       const removals = [];
       const staffUserId = await getUserIdByDiscordId(interaction.user.id);
@@ -398,7 +465,7 @@ export class SupportCommand extends Command {
         }
       }
 
-      if (roleOption) {
+      for (const roleOption of roleOptions) {
         try {
           await removeTicketGroupParticipant(ticketDetails.ticketId, roleOption.id);
           await removeTicketParticipantPermissions(interaction.client, ticketDetails.ticketId, {
@@ -505,7 +572,12 @@ export class SupportCommand extends Command {
 
       if (state === "closed") {
         try {
-          await deleteTicketChannel(interaction.client, ticketDetails.ticketId, "Ticket closed from Discord");
+          await deleteTicketChannel(
+            interaction.client,
+            ticketDetails.ticketId,
+            "Ticket closed from Discord",
+            interaction.channel
+          );
         } catch (closeError) {
           console.error("ticket status: failed to close ticket channel", closeError);
         }
@@ -558,13 +630,19 @@ export class SupportCommand extends Command {
             { messageType: "status" }
           );
         }
-
-        await interaction.channel.send(`🔒 Ticket closed by ${username}. This channel will now close.`);
       } catch (statusError) {
         console.error("ticket close: failed to update ticket state", statusError);
         return interaction.editReply({
           content: "Failed to close ticket. Please try again.",
         });
+      }
+
+      // Best-effort channel announcement — the ticket is already closed, so a
+      // missing-access / deleted channel here must not fail the whole command.
+      try {
+        await interaction.channel.send(`🔒 Ticket closed by ${username}. This channel will now close.`);
+      } catch (announceError) {
+        console.warn("ticket close: could not post close notice to channel", announceError?.message || announceError);
       }
 
       try {
@@ -574,7 +652,18 @@ export class SupportCommand extends Command {
       }
 
       try {
-        await deleteTicketChannel(interaction.client, ticketDetails.ticketId, "Ticket closed from Discord");
+        const deleted = await deleteTicketChannel(
+          interaction.client,
+          ticketDetails.ticketId,
+          "Ticket closed from Discord",
+          interaction.channel
+        );
+        if (!deleted) {
+          await interaction.followUp({
+            content: "The ticket was closed, but the channel could not be deleted. Staff can retry the cleanup.",
+            ephemeral: true,
+          }).catch(() => {});
+        }
       } catch (closeError) {
         console.error("ticket close: failed to close ticket channel", closeError);
       }

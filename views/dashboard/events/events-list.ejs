@@ -1,0 +1,204 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <h1 class="h2">Events</h1>
+                <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+                    <a href="/dashboard/events" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-calendar fa-fw me-1"></i>Calendar
+                    </a>
+                    <a href="/dashboard/events/review" class="btn btn-sm btn-outline-warning">
+                        <i class="fas fa-clock fa-fw me-1"></i>Review Queue
+                    </a>
+                    <% if (hasEditPermission) { %>
+                    <a href="/dashboard/events/create" class="btn btn-sm btn-primary">
+                        <i class="fas fa-plus fa-fw me-1"></i>New Event
+                    </a>
+                    <% } %>
+                    <%- include("../../partials/documentationLink.ejs", {
+                        doclink: "https://modularsoft.org/docs/products/zander/features/events/"
+                    }) %>
+                </div>
+            </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+            <!-- Filters -->
+            <form method="GET" action="/dashboard/events/list" class="row g-2 mb-3 align-items-center">
+                <div class="col-sm-4">
+                    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Active (Draft, Approved, Published)</option>
+                        <% ['draft','pending_review','approved','published','rejected','cancelled','archived'].forEach(s => { %>
+                            <option value="<%= s %>" <%= statusFilter === s ? 'selected' : '' %>><%= s.replace('_',' ').replace(/\b\w/g,c=>c.toUpperCase()) %></option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div class="col-sm-5">
+                    <div class="input-group input-group-sm">
+                        <input type="text" name="search" class="form-control" placeholder="Search events…" value="<%= search %>">
+                        <button class="btn btn-outline-secondary" type="submit"><i class="fas fa-search"></i></button>
+                    </div>
+                </div>
+                <div class="col-sm-3">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="showPastToggle"
+                            name="showPast" value="1" <%= showPast ? 'checked' : '' %> onchange="this.form.submit()">
+                        <label class="form-check-label small" for="showPastToggle">Show past events</label>
+                    </div>
+                </div>
+            </form>
+
+            <% if (!apiData.success) { %>
+                <%- include("../../partials/alert.ejs", { alertType: "danger", content: apiData.message }) %>
+            <% } else { %>
+                <div class="table-responsive">
+                    <table class="table align-middle events-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Start</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (!apiData.events || apiData.events.length === 0) { %>
+                                <tr><td colspan="5" class="text-center text-muted py-4">No events found.</td></tr>
+                            <% } else { %>
+                                <% apiData.events.forEach(ev => {
+                                    const statusColors = {
+                                        draft:'secondary', pending_review:'warning', approved:'info',
+                                        published:'success', rejected:'danger', cancelled:'purple', archived:'dark'
+                                    };
+                                    const badgeClass = statusColors[ev.status] || 'secondary';
+                                %>
+                                <tr>
+                                    <td data-label="Title">
+                                        <strong><a href="/dashboard/events/view?eventId=<%= ev.eventId %>"><%= ev.title %></a></strong>
+                                        <% if (ev.featured) { %><span class="badge bg-warning text-dark ms-1"><i class="fas fa-star fa-fw"></i></span><% } %>
+                                        <% if (ev.templateId) { %><small class="text-muted d-block">From template</small><% } %>
+                                    </td>
+                                    <td data-label="Type"><span class="badge bg-secondary"><%= ev.eventType %></span></td>
+                                    <td data-label="Status">
+                                        <span class="badge bg-<%= badgeClass %> <%= badgeClass === 'warning' || badgeClass === 'info' ? 'text-dark' : '' %>">
+                                            <%= ev.status.replace(/_/g,' ') %>
+                                        </span>
+                                    </td>
+                                    <td data-label="Start">
+                                        <small class="js-datetime" data-iso="<%= ev.startAt ? new Date(ev.startAt).toISOString() : '' %>" data-fallback="—"></small>
+                                    </td>
+                                    <td data-label="Actions">
+                                        <%
+                                            var canEditThis = hasEditPermission || hasReviewPermission;
+                                        %>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            <a href="/dashboard/events/view?eventId=<%= ev.eventId %>" class="btn btn-xs btn-outline-secondary">View</a>
+                                            <% if (canEditThis && ['draft','rejected'].includes(ev.status)) { %>
+                                                <a href="/dashboard/events/edit?eventId=<%= ev.eventId %>" class="btn btn-xs btn-warning">Edit</a>
+                                            <% } %>
+                                            <% if (hasReviewPermission && ['pending_review','approved'].includes(ev.status)) { %>
+                                                <a href="/dashboard/events/edit?eventId=<%= ev.eventId %>" class="btn btn-xs btn-warning">Edit</a>
+                                            <% } %>
+                                            <% if (ev.status === 'published') { %>
+                                                <% if (canEditThis) { %>
+                                                    <a href="/dashboard/events/edit?eventId=<%= ev.eventId %>" class="btn btn-xs btn-warning">Edit Live</a>
+                                                <% } %>
+                                                <a href="/events/<%= ev.slug %>" target="_blank" class="btn btn-xs btn-outline-success">Public</a>
+                                            <% } %>
+                                            <button type="button" class="btn btn-xs btn-outline-secondary btn-duplicate-event" data-event-id="<%= ev.eventId %>" data-event-title="<%= ev.title %>">Duplicate</button>
+                                            <% if (canEditThis) { %>
+                                                <button type="button" class="btn btn-xs btn-outline-danger btn-delete-event" data-event-id="<%= ev.eventId %>" data-event-title="<%= ev.title %>">Delete</button>
+                                            <% } %>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <% }) %>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+                <small class="text-muted">Showing <%= apiData.events ? apiData.events.length : 0 %> of <%= apiData.total || 0 %> events</small>
+            <% } %>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+.btn-xs { padding: 0.15rem 0.4rem; font-size: 0.75rem; }
+@media (max-width: 768px) {
+    .events-table thead { display: none; }
+    .events-table tr { display:block; border:1px solid #e6e6e6; border-radius:12px; padding:12px; margin-bottom:12px; }
+    .events-table td { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; border:none; padding:6px 0; font-size:0.9rem; }
+    .events-table td::before { content: attr(data-label); font-weight:600; color:#5f6b7a; min-width:90px; }
+}
+</style>
+<script>
+document.querySelectorAll('.js-datetime').forEach(el => {
+    const d = el.dataset.iso ? new Date(el.dataset.iso) : null;
+    el.textContent = d && !isNaN(d) ? d.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
+    }) : (el.dataset.fallback || '');
+});
+
+document.querySelectorAll('.btn-duplicate-event').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+            const res = await fetch('/api/events/duplicate', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+                body: JSON.stringify({ eventId: btn.dataset.eventId }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                window.location.href = `/dashboard/events/edit?eventId=${data.data.eventId}`;
+            } else {
+                alert('Duplicate failed: ' + data.message);
+                btn.disabled = false;
+                btn.textContent = 'Duplicate';
+            }
+        } catch {
+            alert('Duplicate failed. Please try again.');
+            btn.disabled = false;
+            btn.textContent = 'Duplicate';
+        }
+    });
+});
+
+document.querySelectorAll('.btn-delete-event').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const title = btn.dataset.eventTitle;
+        if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+            const res = await fetch('/api/events/delete', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+                body: JSON.stringify({ eventId: btn.dataset.eventId }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                btn.closest('tr').remove();
+            } else {
+                alert('Delete failed: ' + data.message);
+                btn.disabled = false;
+                btn.textContent = 'Delete';
+            }
+        } catch {
+            alert('Delete failed. Please try again.');
+            btn.disabled = false;
+            btn.textContent = 'Delete';
+        }
+    });
+});
+</script>

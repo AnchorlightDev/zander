@@ -41,7 +41,8 @@ export default function dashboardForumsRoutes(
       getWebAnnouncement(),
     ]);
 
-    return res.view("dashboard/forums/categories", {
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("dashboard/forums/categories", {
       pageTitle: `Dashboard - Forum Categories`,
       config,
       features,
@@ -52,7 +53,8 @@ export default function dashboardForumsRoutes(
       createUnderId,
       globalImage,
       announcementWeb,
-    });
+    }));
+    return;
   });
 
   app.post("/dashboard/forums/categories/new", async function (req, res) {
@@ -75,7 +77,7 @@ export default function dashboardForumsRoutes(
     const postPermission = (req.body.postPermission || "").trim() || null;
 
     if (!name) {
-      await setBannerCookie("danger", "A category name is required.", res);
+      setBannerCookie("danger", "A category name is required.", res);
       return res.redirect("/dashboard/forums/categories");
     }
 
@@ -90,10 +92,10 @@ export default function dashboardForumsRoutes(
         postPermission,
       });
 
-      await setBannerCookie("success", "Category created.", res);
+      setBannerCookie("success", "Category created.", res);
     } catch (error) {
       console.error("[DASHBOARD] Failed to create forum category", error);
-      await setBannerCookie(
+      setBannerCookie(
         "danger",
         "Unable to create the category. Please try again.",
         res
@@ -118,7 +120,7 @@ export default function dashboardForumsRoutes(
       const existing = await getCategoryById(categoryId);
 
       if (!existing) {
-        await setBannerCookie("danger", "Category not found.", res);
+        setBannerCookie("danger", "Category not found.", res);
         return res.redirect("/dashboard/forums/categories");
       }
 
@@ -144,10 +146,10 @@ export default function dashboardForumsRoutes(
           postPermission,
         });
 
-        await setBannerCookie("success", "Category updated.", res);
+        setBannerCookie("success", "Category updated.", res);
       } catch (error) {
         console.error("[DASHBOARD] Failed to update forum category", error);
-        await setBannerCookie(
+        setBannerCookie(
           "danger",
           "Unable to update the category.",
           res
@@ -173,16 +175,16 @@ export default function dashboardForumsRoutes(
       const existing = await getCategoryById(categoryId);
 
       if (!existing) {
-        await setBannerCookie("danger", "Category not found.", res);
+        setBannerCookie("danger", "Category not found.", res);
         return res.redirect("/dashboard/forums/categories");
       }
 
       try {
         await deleteCategory(categoryId);
-        await setBannerCookie("success", "Category deleted.", res);
+        setBannerCookie("success", "Category deleted.", res);
       } catch (error) {
         console.error("[DASHBOARD] Failed to delete forum category", error);
-        await setBannerCookie(
+        setBannerCookie(
           "danger",
           "Unable to delete the category.",
           res

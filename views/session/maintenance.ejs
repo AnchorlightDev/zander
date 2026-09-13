@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Down for Maintenance &mdash; <%= config.siteConfiguration.siteName %></title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css" integrity="sha512-MV7K8+y+gLIBoVD59lQIYicR65iaqukzvf/nwasF0nqhPay5w/9lJmVM2hMDcnK1OnMGCdVK+iQrJ7lzPJQd1w==" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <style>
+    body { background: #f8f9fa; }
+    .maintenance-card {
+      max-width: 560px;
+      margin: 10vh auto;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.08);
+      padding: 3rem 2.5rem;
+      text-align: center;
+    }
+    .maintenance-icon { font-size: 4rem; color: #6c757d; margin-bottom: 1.5rem; }
+    .site-name { font-weight: 700; color: #343a40; }
+    .discord-link { color: #5865F2; text-decoration: none; }
+    .discord-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="maintenance-card">
+    <div class="maintenance-icon">
+      <i class="fas fa-wrench"></i>
+    </div>
+    <h1 class="h3 site-name mb-2"><%= config.siteConfiguration.siteName %></h1>
+    <h2 class="h5 text-muted mb-4">Down for Maintenance</h2>
+    <p class="text-secondary mb-4">
+      The site is temporarily unavailable while we resolve a technical issue.
+      We&rsquo;ll be back shortly.
+    </p>
+    <a href="<%= config.siteConfiguration.platforms.discord %>" class="discord-link">
+      <i class="fab fa-discord me-1"></i> Join our Community Discord
+    </a>
+  </div>
+</body>
+</html>

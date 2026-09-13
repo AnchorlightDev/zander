@@ -128,13 +128,15 @@
 
 	<!-- Tabbing in profiles -->
 	<script>
-		const triggerTabList = document.querySelectorAll('#myTab a')
-		triggerTabList.forEach(triggerEl => {
-			const tabTrigger = new bootstrap.Tab(triggerEl)
+		$(document).ready(function () {
+			const triggerTabList = document.querySelectorAll('#myTab a')
+			triggerTabList.forEach(triggerEl => {
+				const tabTrigger = new bootstrap.Tab(triggerEl)
 
-			triggerEl.addEventListener('click', event => {
-				event.preventDefault()
-				tabTrigger.show()
+				triggerEl.addEventListener('click', event => {
+					event.preventDefault()
+					tabTrigger.show()
+				})
 			})
 		})
 	</script>

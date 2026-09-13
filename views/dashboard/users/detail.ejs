@@ -1,0 +1,272 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <div>
+          <a href="/dashboard/users" class="text-decoration-none small text-muted"><i class="fa-solid fa-arrow-left me-1"></i>Back to Users</a>
+          <h1 class="h2 mb-0">
+            <img src="https://crafthead.net/avatar/<%= user.uuid %>/32" width="32" height="32" class="rounded me-2" alt="">
+            <%= user.username %>
+          </h1>
+          <div class="text-muted small">
+            <%= user.platform === "BEDROCK" ? "Bedrock" : "Java" %>
+            &middot;
+            <% if (user.accountState === "REGISTERED") { %>Website Registered
+            <% } else if (user.accountState === "REGISTRATION_INCOMPLETE") { %>Registration Incomplete
+            <% } else { %>Minecraft Profile Only<% } %>
+            &middot;
+            <%= user.account_disabled ? "Disabled" : "Active" %>
+            &middot;
+            <code><%= user.uuid %></code>
+          </div>
+        </div>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <div id="actionAlert" class="alert d-none"></div>
+
+      <div class="row g-3">
+        <div class="col-12 col-lg-6">
+          <div class="card shadow-sm border-0 mb-3">
+            <div class="card-header bg-white"><h5 class="card-title mb-0">Website Account</h5></div>
+            <div class="card-body">
+              <dl class="row mb-0">
+                <dt class="col-5">Registration</dt>
+                <dd class="col-7">
+                  <% if (user.accountState === "REGISTERED") { %>
+                    <span class="badge text-bg-success">Complete</span>
+                  <% } else if (user.accountState === "REGISTRATION_INCOMPLETE") { %>
+                    <span class="badge text-bg-warning text-dark">Incomplete</span>
+                  <% } else { %>
+                    <span class="badge text-bg-secondary">Not registered</span>
+                  <% } %>
+                </dd>
+                <dt class="col-5">Password configured</dt>
+                <dd class="col-7"><%= user.hasPassword ? "Yes" : "No" %></dd>
+                <dt class="col-5">Email</dt>
+                <dd class="col-7">
+                  <span id="emailDisplay"><%= user.maskedEmail || "Missing" %></span>
+                  <% if (user.maskedEmail && canRevealEmail) { %>
+                    <button class="btn btn-sm btn-link p-0 ms-2" id="revealEmailBtn">Reveal</button>
+                  <% } %>
+                </dd>
+                <dt class="col-5">Email verified</dt>
+                <dd class="col-7"><%= user.maskedEmail ? (user.email_verified ? "Yes" : "No") : "—" %></dd>
+                <dt class="col-5">Registered</dt>
+                <dd class="col-7"><%= user.account_registered ? new Date(user.account_registered).toLocaleDateString() : "—" %></dd>
+                <dt class="col-5">Last website login</dt>
+                <dd class="col-7"><%= user.audit_lastWebsiteLogin ? new Date(user.audit_lastWebsiteLogin).toLocaleString() : "Never" %></dd>
+                <dt class="col-5">Disabled</dt>
+                <dd class="col-7"><%= user.account_disabled ? "Yes" : "No" %></dd>
+              </dl>
+            </div>
+          </div>
+
+          <div class="card shadow-sm border-0">
+            <div class="card-header bg-white"><h5 class="card-title mb-0">Linked Services</h5></div>
+            <div class="card-body">
+              <h6 class="text-muted small text-uppercase">Minecraft</h6>
+              <p class="mb-3">
+                <%= user.username %> &middot; <%= user.platform === "BEDROCK" ? "Bedrock" : "Java" %><br>
+                <code class="small"><%= user.uuid %></code>
+              </p>
+              <h6 class="text-muted small text-uppercase">Discord</h6>
+              <% if (user.discordId) { %>
+                <p class="mb-0"><span class="badge text-bg-primary">Linked</span> <code class="small"><%= user.discordId %></code></p>
+              <% } else { %>
+                <p class="mb-0"><span class="badge text-bg-light text-muted">Not Linked</span></p>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-6">
+          <div class="card shadow-sm border-0 mb-3">
+            <div class="card-header bg-white"><h5 class="card-title mb-0">Account Recovery</h5></div>
+            <div class="card-body">
+              <% if (user.accountState === "MINECRAFT_PROFILE_ONLY") { %>
+                <p class="mb-1"><strong>Minecraft profile only</strong></p>
+                <p class="text-muted small mb-0">
+                  This player has not completed website registration. Password reset emails cannot be
+                  sent because no website credentials are configured. Ask the player to complete
+                  website registration.
+                </p>
+              <% } else { %>
+                <% if (canManage) { %>
+                  <div class="d-flex flex-wrap gap-2 mb-3">
+                    <% if (user.hasPassword && user.maskedEmail && !user.account_disabled) { %>
+                      <button class="btn btn-sm btn-primary" id="resetPasswordBtn">Send Password Reset</button>
+                    <% } %>
+                    <% if (user.maskedEmail && !user.email_verified) { %>
+                      <button class="btn btn-sm btn-outline-primary" id="resendVerificationBtn">Resend Verification</button>
+                    <% } %>
+                    <button class="btn btn-sm btn-outline-secondary" id="changeEmailBtn">Change Email</button>
+                  </div>
+                <% } %>
+                <% if (user.account_disabled) { %>
+                  <p class="text-muted small mb-0">This account is disabled; password reset is unavailable.</p>
+                <% } else if (!user.maskedEmail && !user.hasPassword) { %>
+                  <p class="text-muted small mb-0">
+                    A password reset cannot be sent because this account has no email address and no
+                    website password configured.
+                  </p>
+                <% } else if (!user.maskedEmail) { %>
+                  <p class="text-muted small mb-0">
+                    A password reset cannot be sent because this account has no email address configured.
+                  </p>
+                <% } else if (!user.hasPassword) { %>
+                  <p class="text-muted small mb-0">
+                    A password reset cannot be sent because this account has no website password configured.
+                  </p>
+                <% } %>
+              <% } %>
+            </div>
+          </div>
+
+          <% if (user.relatedAccounts && user.relatedAccounts.length) { %>
+          <div class="card shadow-sm border-0">
+            <div class="card-header bg-white"><h5 class="card-title mb-0">Related Accounts</h5></div>
+            <div class="card-body">
+              <% user.relatedAccounts.forEach((related) => { %>
+                <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                  <div>
+                    <div class="fw-semibold"><%= related.username %></div>
+                    <div class="text-muted small">
+                      <%= related.platform === "BEDROCK" ? "Bedrock" : "Java" %>
+                      &middot; <%= related.accountState === "REGISTERED" ? "Registered" : (related.accountState === "REGISTRATION_INCOMPLETE" ? "Registration incomplete" : "Profile only") %>
+                    </div>
+                  </div>
+                  <a href="/dashboard/users/<%= related.userId %>" class="btn btn-sm btn-outline-primary">View User</a>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+          <% } %>
+        </div>
+      </div>
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+
+<!-- Change Email Modal -->
+<div class="modal fade" id="changeEmailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Change Account Email</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">
+          Only change this after independently verifying account ownership. The new email will
+          not be marked verified automatically.
+        </p>
+        <label for="newEmailInput" class="form-label">New email address</label>
+        <input type="email" class="form-control" id="newEmailInput">
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="checkbox" id="confirmEmailChange">
+          <label class="form-check-label small" for="confirmEmailChange">
+            I have independently verified this staff member owns the account.
+          </label>
+        </div>
+        <div id="changeEmailError" class="alert alert-danger d-none mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="changeEmailConfirm">Change Email</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<script>
+const userId = <%= user.userId %>;
+
+function showAlert(type, message) {
+  const el = document.getElementById('actionAlert');
+  el.className = `alert alert-${type}`;
+  el.textContent = message;
+}
+
+const revealBtn = document.getElementById('revealEmailBtn');
+if (revealBtn) {
+  revealBtn.addEventListener('click', async () => {
+    const r = await fetch(`/dashboard/users/${userId}/reveal-email`, { method: 'POST' });
+    const data = await r.json();
+    if (data.success) {
+      document.getElementById('emailDisplay').textContent = data.email;
+      revealBtn.remove();
+    } else {
+      showAlert('danger', data.message || 'Failed to reveal email.');
+    }
+  });
+}
+
+const resetBtn = document.getElementById('resetPasswordBtn');
+if (resetBtn) {
+  resetBtn.addEventListener('click', async () => {
+    if (!confirm('Send a password reset email to this user?')) return;
+    const r = await fetch(`/dashboard/users/${userId}/reset-password`, { method: 'POST' });
+    const data = await r.json();
+    showAlert(data.success ? 'success' : 'danger', data.message || (data.success ? 'Password reset sent.' : 'Failed.'));
+  });
+}
+
+const resendBtn = document.getElementById('resendVerificationBtn');
+if (resendBtn) {
+  resendBtn.addEventListener('click', async () => {
+    const r = await fetch(`/dashboard/users/${userId}/resend-verification`, { method: 'POST' });
+    const data = await r.json();
+    showAlert(data.success ? 'success' : 'danger', data.message || (data.success ? 'Verification resent.' : 'Failed.'));
+  });
+}
+
+const changeEmailBtn = document.getElementById('changeEmailBtn');
+if (changeEmailBtn) {
+  changeEmailBtn.addEventListener('click', () => {
+    document.getElementById('newEmailInput').value = '';
+    document.getElementById('confirmEmailChange').checked = false;
+    document.getElementById('changeEmailError').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('changeEmailModal')).show();
+  });
+}
+
+const changeEmailConfirm = document.getElementById('changeEmailConfirm');
+if (changeEmailConfirm) {
+  changeEmailConfirm.addEventListener('click', async () => {
+    const newEmail = document.getElementById('newEmailInput').value.trim();
+    const confirmed = document.getElementById('confirmEmailChange').checked;
+    const errEl = document.getElementById('changeEmailError');
+    errEl.classList.add('d-none');
+
+    if (!newEmail || !confirmed) {
+      errEl.textContent = 'Enter a new email and confirm ownership verification.';
+      errEl.classList.remove('d-none');
+      return;
+    }
+
+    const r = await fetch(`/dashboard/users/${userId}/change-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newEmail, confirm: true }),
+    });
+    const data = await r.json();
+
+    if (data.success) {
+      location.reload();
+    } else {
+      errEl.textContent = data.message || 'Failed to change email.';
+      errEl.classList.remove('d-none');
+    }
+  });
+}
+</script>

@@ -1,6 +1,6 @@
 <%- include("modules/header.ejs", {
     pageTitle: pageTitle,
-    pageDescription: "Looking to support our Network and get awesome perks in return, we value our community supporting the Network in what we do."
+    pageDescription: pageDescription
 }) %>
 
 <%- include("modules/navigationBar.ejs") %>
@@ -10,54 +10,113 @@
   backgroundImage: globalImage
 }) %>
 
-
 <section class="section">
-    <div class="container">
-      <div>
-        <% rankData.forEach(function (category) { %>
-          <h3 class="mb-3"><%= category.displayName %></h3>
-          <hr>
+  <div class="container">
 
-        <div class="row">
-          <% category.packages.forEach(function (package) { %>
-              <div class="col-lg-4 col-md-6 col-sm-12">
-                <div class="service-item mb-4">
-                  <div class="feature-item mb-5 mb-lg-0">
-                    <div class="feature-icon mb-4">
-                      <img src="<%= package.image %>" alt="<%= package.displayName %> rank image" height="100px">
-                    </div>
-                    <h4 class="mb-3"><%= package.displayName %></h4>
-                    <% if (package.priceMonthly || package.priceOneTime) { %>
-                     <b>$<%= package.priceMonthly %> per month</b><br>
-                    <% } %>
-                    <% if (package.priceOneTime) { %>
-                      <b>$<%= package.priceOneTime %> permanently</b>
-                    <% } %>
-                    <br><br>
+    <div class="mb-4">
+      <p class="lead">
+        Ranks on <%= config.siteConfiguration.siteName %> are optional purchases that unlock in-game
+        perks. Below is every rank, its perks and its price. Pick a rank, complete checkout, and the
+        perks are applied to your account automatically.
+      </p>
+    </div>
 
-                    <% if (package.perks) { %>
-                      <% package.perks.forEach(function (perksGroup) { %>
-                        <h5 class="mb-3"><%= perksGroup.displayName %></h5>
-                        <ul>
-                          <% perksGroup.perks.forEach(function (perkItem) { %>
-                            <li><%= perkItem %></li>
-                          <% }) %>
-                        </ul>
+    <% if (ranksError) { %>
+      <div class="alert alert-warning"><%= ranksError %></div>
+    <% } else if (!rankCategories || !rankCategories.length) { %>
+      <div class="alert alert-info">Rank information is being updated — check back soon!</div>
+    <% } else { %>
+
+      <% rankCategories.forEach(function(category) { %>
+        <h3 class="mb-1"><%= category.displayName %></h3>
+        <hr class="mt-2 mb-4">
+
+        <div class="row g-4 mb-5">
+          <% category.packages.forEach(function(pkg) { %>
+            <div class="col-lg-4 col-md-6 col-sm-12">
+              <div class="card h-100 shadow-sm border-0">
+
+                <% if (pkg.imageUrl) { %>
+                  <img src="<%= pkg.imageUrl %>" alt="<%= pkg.displayName %>" class="card-img-top"
+                       style="height: 120px; object-fit: contain; object-position: center; padding: 1rem;">
+                <% } %>
+
+                <div class="card-body d-flex flex-column">
+                  <h5 class="card-title mb-2"><%= pkg.displayName %></h5>
+
+                  <% if (pkg.description) { %>
+                    <p class="text-muted small mb-3"><%= pkg.description %></p>
+                  <% } %>
+
+                  <% if (pkg.perks && pkg.perks.length) { %>
+                    <div class="mb-3 flex-grow-1">
+                      <% pkg.perks.forEach(function(group) { %>
+                        <% if (group && typeof group === 'object' && group.group) { %>
+                          <p class="small fw-semibold mb-1 mt-2 text-muted text-uppercase" style="font-size:0.7rem; letter-spacing:0.04em;"><%= group.group %></p>
+                          <ul class="list-unstyled mb-0">
+                            <% (group.perks || []).forEach(function(perk) { %>
+                              <li class="small mb-1">
+                                <i class="fa-solid fa-check text-success me-2"></i><%= perk %>
+                              </li>
+                            <% }) %>
+                          </ul>
+                        <% } else if (typeof group === 'string') { %>
+                          <ul class="list-unstyled mb-0">
+                            <li class="small mb-1">
+                              <i class="fa-solid fa-check text-success me-2"></i><%= group %>
+                            </li>
+                          </ul>
+                        <% } %>
                       <% }) %>
-                    <% } %>
+                    </div>
+                  <% } else { %>
+                    <div class="flex-grow-1"></div>
+                  <% } %>
 
-                    <% package.callToAction.forEach(function (cta) { %>
-                      <a href="<%= cta.redirectUrl %>" target="_blank"><button type="button" class="btn btn-info btn-sm me-2"><%= cta.displayText %></button></a>
-                    <% }) %>
-                  </div>
+                  <% if (pkg.prices && pkg.prices.length) { %>
+                    <div class="mt-auto pt-2 border-top">
+                      <% pkg.prices.forEach(function(price, pi) { %>
+                        <div class="d-flex justify-content-between align-items-center <%= pi > 0 ? 'mt-2' : '' %>">
+                          <span class="fw-bold">
+                            <%= price.priceDisplay %>
+                            <small class="text-muted fw-normal" style="font-size:0.78rem;">
+                              <%= price.badgeLabel === 'Monthly' ? '/ month' : 'one-time' %>
+                            </small>
+                          </span>
+                          <a href="/webstore#ws-<%= price.stripePriceId %>"
+                             class="btn btn-sm <%= price.badgeLabel === 'Monthly' ? 'btn-primary' : 'btn-success' %>">
+                            <i class="fa-solid fa-cart-shopping me-1"></i>
+                            <%= price.badgeLabel === 'Monthly' ? 'Subscribe' : 'Buy Now' %>
+                          </a>
+                        </div>
+                      <% }) %>
+                    </div>
+                  <% } else { %>
+                    <div class="mt-auto pt-2 border-top">
+                      <span class="text-muted small"><i class="fa-solid fa-circle-info me-1"></i>No purchase option configured</span>
+                    </div>
+                  <% } %>
+
                 </div>
               </div>
-            <% }) %>
+            </div>
+          <% }) %>
         </div>
 
-        <% }) %>
-      </div>
+      <% }) %>
+
+    <% } %>
+
+    <% if (typeof rankFaq !== 'undefined' && rankFaq && rankFaq.length) { %>
+    <div class="mt-5">
+      <h2 class="h4 mb-3">Ranks FAQ</h2>
+      <% rankFaq.forEach(function (item) { %>
+      <h3 class="h6 mb-1"><%= item.q %></h3>
+      <p><%= item.a %></p>
+      <% }) %>
     </div>
+    <% } %>
+  </div>
 </section>
 
 <%- include("modules/footer.ejs") %>

@@ -31,8 +31,9 @@
         </style>
 
         <form id="verificationForm" method="post" action="<%= process.env.siteAddress %>/redirect/web/user/link">
-          <p>Hey! Before you can get started, we need to know your Minecraft account. First, log in with the Minecraft account you want to use. Then, one of the below servers on your supported platform.</p>
-          <p>That server will give you a secret 6 digit code. Enter it here, and you're done!</p>
+          <p>Hey! Before you can get started, we need to link your Minecraft account.</p>
+          <p><strong>Easiest way:</strong> hop on the main server with the Minecraft account you want to use and run <code>/link</code> in chat. It replies with a secret 6 digit code &mdash; paste or type it in below and you're done. The code expires after 5 minutes; just run <code>/link</code> again for a fresh one.</p>
+          <p class="text-muted"><small><strong>Banned and can't join the main server?</strong> Connect to one of the verification servers below instead &mdash; you'll be kicked with your 6 digit code.</small></p>
 
           <% if (apiData.success == false) { %>
             <%- include("../partials/alert.ejs", {
@@ -92,13 +93,29 @@
             document.getElementById('submitButton').disabled = !isFilled;
           }
 
+          // Spread a pasted code across all 6 boxes instead of dumping it in the first one.
+          function handleOtpPaste(event) {
+            event.preventDefault();
+            var otpInputs = document.querySelectorAll('#otp input');
+            var pasted = (event.clipboardData || window.clipboardData).getData('text') || '';
+            var digits = pasted.replace(/\D/g, '').slice(0, otpInputs.length).split('');
+            if (!digits.length) return;
+            otpInputs.forEach(function(input, index) {
+              input.value = digits[index] || '';
+            });
+            var nextEmpty = digits.length < otpInputs.length ? digits.length : otpInputs.length - 1;
+            otpInputs[nextEmpty].focus();
+            validateInputs();
+          }
+
           // Event listener for input fields
           document.addEventListener('DOMContentLoaded', function() {
-            var inputs = document.querySelectorAll('input[type="text"]');
+            var inputs = document.querySelectorAll('#otp input');
             inputs.forEach(function(input) {
               input.addEventListener('input', function() {
                 moveToNextInput(this);
               });
+              input.addEventListener('paste', handleOtpPaste);
             });
           });
         </script>

@@ -21,6 +21,7 @@ import {
   getUserPermissions,
   UserGetter,
 } from "../controllers/userController.js";
+import { getUserPunishments } from "../services/profileService.js";
 import {
   createPunishment,
   getActivePunishments,
@@ -1422,27 +1423,21 @@ export class PunishCommand extends Command {
       }
     }
 
-    // Look up linked profile (for MC punishments + display name)
+    // Look up linked profile (for MC punishments + display name).
+    // Queried in-process (same as the web profile page) instead of an HTTP
+    // self-call, which is unreliable when the bot's outbound request to its
+    // own siteAddress can't complete (DNS/WAF/network hairpinning).
     let profileData = null;
-    const profileUrl = new URL(`${process.env.siteAddress}/api/user/profile/get`);
-
-    if (username) {
-      profileUrl.searchParams.set("username", username);
-    } else if (targetDiscordId) {
-      profileUrl.searchParams.set("discordId", targetDiscordId);
-    }
+    const userGetterForHistory = new UserGetter();
 
     try {
-      const profileResponse = await fetch(profileUrl, {
-        headers: { "x-access-token": process.env.apiKey },
-      });
-      const profileJson = await profileResponse.json();
-      if (profileJson?.success && profileJson.data?.profileData) {
-        profileData = profileJson.data.profileData;
-        // If we only had a username, pick up linked Discord ID
-        if (!targetDiscordId && profileData.discordId) {
-          targetDiscordId = profileData.discordId;
-        }
+      if (username) {
+        profileData = await userGetterForHistory.byUsername(username);
+      } else if (targetDiscordId) {
+        profileData = await userGetterForHistory.byDiscordId(targetDiscordId);
+      }
+      if (profileData && !targetDiscordId && profileData.discordId) {
+        targetDiscordId = profileData.discordId;
       }
     } catch (err) {
       console.error("Failed to fetch profile for punishment history:", err);
@@ -1458,23 +1453,13 @@ export class PunishCommand extends Command {
       }
     }
 
-    // Fetch Minecraft punishments (via internal API)
+    // Fetch Minecraft punishments directly from the punishments DB
     let mcPunishments = [];
-    if (profileData) {
-      const punishmentsUrl = new URL(`${process.env.siteAddress}/api/user/punishments`);
-      if (profileData.uuid) {
-        punishmentsUrl.searchParams.set("uuid", profileData.uuid);
-      } else if (profileData.username) {
-        punishmentsUrl.searchParams.set("username", profileData.username);
-      }
-
+    if (profileData?.username) {
       try {
-        const punishmentsResponse = await fetch(punishmentsUrl, {
-          headers: { "x-access-token": process.env.apiKey },
-        });
-        const punishmentsJson = await punishmentsResponse.json();
-        if (punishmentsJson?.success && Array.isArray(punishmentsJson.data)) {
-          mcPunishments = punishmentsJson.data;
+        const result = await getUserPunishments(profileData.username);
+        if (result?.success && Array.isArray(result.data)) {
+          mcPunishments = result.data;
         }
       } catch (err) {
         console.error("Failed to fetch MC punishments for history:", err);

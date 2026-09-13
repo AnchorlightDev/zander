@@ -17,9 +17,15 @@
                 <h2 class="mb-0">Notifications</h2>
                 <span class="badge bg-primary">Unread: <%= unreadCount %></span>
             </div>
-            <form action="/notifications/mark-all" method="POST">
-                <button type="submit" class="btn btn-sm btn-outline-primary">Mark all as read</button>
-            </form>
+            <div class="d-flex gap-2 flex-wrap">
+                <form action="/notifications/mark-all" method="POST">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Mark all as read</button>
+                </form>
+                <form action="/notifications/clear-all" method="POST"
+                      onsubmit="return confirm('Delete all notifications? This cannot be undone.')">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Clear all</button>
+                </form>
+            </div>
         </div>
         <div class="list-group list-group-flush">
             <% if (notifications && notifications.length) { %>

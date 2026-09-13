@@ -7,7 +7,9 @@
       "generalKenobi": true,
       "guildMemberBoost": true,
       "guildMemberVerify": true,
-      "nicknameCheck": true
+      "nicknameCheck": true,
+      "unverifiedReminder": true,
+      "ipAutoDetect": true
     },
     "punishments": true
   },
@@ -26,7 +28,12 @@
     "register": true
   },
 
+  "support": true,
   "staffAuditReport": true,
+  "watch": true,
+  "events": true,
+  "webstore": true,
+  "finance": true,
 
   "smDiscord": true,
   "smFacebook": true,

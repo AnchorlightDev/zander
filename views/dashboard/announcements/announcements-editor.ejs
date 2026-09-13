@@ -1,23 +1,10 @@
-<%- include("../../modules/header.ejs", {
-    pageTitle: pageTitle,
-    pageDescription: "Editor for Network Announcements."
-}) %>
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
 
-<%- include("../../modules/navigationBar.ejs") %>
-
-<%- include("../../partials/miniHeader.ejs", {
-  headerTitle: type === 'create' ? 'Create Announcement' : 'Edit Announcement',
-  backgroundImage: globalImage
-}) %>
-
-<%- include("../../modules/dashboard/dashboard-header.ejs") %>
-
-<div class="container my-4">
-    <div class="row g-4">
-        <div class="col-lg-3">
-            <%- include("../../modules/dashboard/dashboard-sidebar.ejs") %>
-        </div>
-        <main class="col-lg-9">
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
             <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                 <h1 class="h2"><%= type === 'create' ? 'Create' : 'Edit' %> Announcement</h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
@@ -128,9 +115,9 @@
                             </div>
                         </div>
 
-                        <!-- Banner Body -->
+                        <!-- Body -->
                         <div class="mb-3" data-announcement-field="body">
-                            <label for="body">Banner Body</label>
+                            <label for="body" id="label-body">Message</label>
 
                             <% if (type === 'create') { %>
                                 <%- include("../../partials/form/inputTextArea.ejs", {
@@ -152,20 +139,77 @@
                         <div class="mb-3" data-announcement-field="colourMessageFormat">
                             <label for="colourMessageFormat">Colour Message Format</label>
 
+                            <!-- Minecraft colour/format toolbar -->
+                            <div class="mc-toolbar mb-1" role="toolbar" aria-label="Minecraft colour codes">
+                                <button type="button" class="mc-code-btn" data-code="&0" title="Black (&0)"        style="background:#000000;color:#fff;border-color:#444;">&amp;0</button>
+                                <button type="button" class="mc-code-btn" data-code="&1" title="Dark Blue (&1)"    style="background:#0000AA;color:#fff;border-color:#000066;">&amp;1</button>
+                                <button type="button" class="mc-code-btn" data-code="&2" title="Dark Green (&2)"   style="background:#00AA00;color:#fff;border-color:#006600;">&amp;2</button>
+                                <button type="button" class="mc-code-btn" data-code="&3" title="Dark Aqua (&3)"    style="background:#00AAAA;color:#fff;border-color:#006666;">&amp;3</button>
+                                <button type="button" class="mc-code-btn" data-code="&4" title="Dark Red (&4)"     style="background:#AA0000;color:#fff;border-color:#660000;">&amp;4</button>
+                                <button type="button" class="mc-code-btn" data-code="&5" title="Dark Purple (&5)"  style="background:#AA00AA;color:#fff;border-color:#660066;">&amp;5</button>
+                                <button type="button" class="mc-code-btn" data-code="&6" title="Gold (&6)"         style="background:#FFAA00;color:#000;border-color:#aa7000;">&amp;6</button>
+                                <button type="button" class="mc-code-btn" data-code="&7" title="Gray (&7)"         style="background:#AAAAAA;color:#000;border-color:#777;">&amp;7</button>
+                                <button type="button" class="mc-code-btn" data-code="&8" title="Dark Gray (&8)"    style="background:#555555;color:#fff;border-color:#222;">&amp;8</button>
+                                <button type="button" class="mc-code-btn" data-code="&9" title="Blue (&9)"         style="background:#5555FF;color:#fff;border-color:#2222cc;">&amp;9</button>
+                                <button type="button" class="mc-code-btn" data-code="&a" title="Green (&a)"        style="background:#55FF55;color:#000;border-color:#22bb22;">&amp;a</button>
+                                <button type="button" class="mc-code-btn" data-code="&b" title="Aqua (&b)"         style="background:#55FFFF;color:#000;border-color:#22bbbb;">&amp;b</button>
+                                <button type="button" class="mc-code-btn" data-code="&c" title="Red (&c)"          style="background:#FF5555;color:#fff;border-color:#cc2222;">&amp;c</button>
+                                <button type="button" class="mc-code-btn" data-code="&d" title="Light Purple (&d)" style="background:#FF55FF;color:#000;border-color:#cc22cc;">&amp;d</button>
+                                <button type="button" class="mc-code-btn" data-code="&e" title="Yellow (&e)"       style="background:#FFFF55;color:#000;border-color:#cccc22;">&amp;e</button>
+                                <button type="button" class="mc-code-btn" data-code="&f" title="White (&f)"        style="background:#FFFFFF;color:#000;border-color:#ccc;">&amp;f</button>
+                                <span class="mc-toolbar-sep mx-1" aria-hidden="true"></span>
+                                <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&l" title="Bold (&l)"><b>&amp;l</b></button>
+                                <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&o" title="Italic (&o)"><i>&amp;o</i></button>
+                                <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&n" title="Underline (&n)" style="text-decoration:underline;">&amp;n</button>
+                                <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&m" title="Strikethrough (&m)" style="text-decoration:line-through;">&amp;m</button>
+                                <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&k" title="Obfuscated (&k)">&amp;k</button>
+                                <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&r" title="Reset (&r)">&amp;r</button>
+                            </div>
+
                             <% if (type === 'create') { %>
-                                <%- include("../../partials/form/inputTextArea.ejs", {
-                                    elementName: "colourMessageFormat",
-                                    elementValue: null,
-                                    required: false
-                                }) %>
+                                <textarea id="colourMessageFormat" name="colourMessageFormat"
+                                          class="form-control input-default"
+                                          cols="30" rows="3"
+                                          style="height:80px;font-family:monospace;"></textarea>
                             <% } %>
                             <% if (type === 'edit') { %>
-                                <%- include("../../partials/form/inputTextArea.ejs", {
-                                    elementName: "colourMessageFormat",
-                                    elementValue: announcementApiData.colourMessageFormat,
-                                    required: false
-                                }) %>
+                                <textarea id="colourMessageFormat" name="colourMessageFormat"
+                                          class="form-control input-default"
+                                          cols="30" rows="3"
+                                          style="height:80px;font-family:monospace;"><%= announcementApiData.colourMessageFormat || '' %></textarea>
                             <% } %>
+
+                            <small class="text-muted">Use <code>&amp;X</code> colour codes (e.g. <code>&amp;aHello &amp;eWorld</code>). For MOTD, a newline sets line&nbsp;2.</small>
+
+                            <!-- Live preview -->
+                            <div class="mt-2">
+                                <!-- MOTD: server-list mockup -->
+                                <div id="mc-motd-preview" class="mc-preview d-none">
+                                    <div class="mc-preview-label">MOTD Preview</div>
+                                    <div class="mc-server-list-row">
+                                        <div class="mc-icon-placeholder">
+                                            <i class="fas fa-server"></i>
+                                        </div>
+                                        <div class="mc-server-details">
+                                            <div class="mc-server-name-bar">CraftingForChrist.net</div>
+                                            <div id="mc-motd-line1" class="mc-motd-text">&nbsp;</div>
+                                            <div id="mc-motd-line2" class="mc-motd-text">&nbsp;</div>
+                                        </div>
+                                        <div class="mc-server-status">
+                                            <div><i class="fas fa-signal" style="color:#55FF55;font-size:10px;"></i></div>
+                                            <div class="mc-player-count">42/100</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Tip: in-game chat mockup -->
+                                <div id="mc-tip-preview" class="mc-preview d-none">
+                                    <div class="mc-preview-label">In-Game Tip Preview</div>
+                                    <div class="mc-chat-area">
+                                        <div id="mc-tip-text" class="mc-chat-line">&nbsp;</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="row">
@@ -210,9 +254,9 @@
                                 <small class="text-muted">Optional label for popup call-to-action button.</small>
                             </div>
 
-                            <!-- Announcement Visability -->
+                            <!-- Announcement Visibility -->
                             <div class="mb-3 col">
-                                <label for="enabled">Announcement Visability</label>
+                                <label for="enabled">Announcement Visibility</label>
 
                                 <% if (type === 'create') { %>
                                     <%- include("../../partials/form/inputSelect.ejs", {
@@ -221,7 +265,7 @@
                                         required: true,
                                         optionElements: [
                                             {
-                                                optionName: "Select a Visability",
+                                                optionName: "Select a Visibility",
                                                 optionValue: "null",
                                                 selected: true,
                                                 disabled: true
@@ -248,7 +292,7 @@
                                         required: true,
                                         optionElements: [
                                             {
-                                                optionName: "Select a Visability",
+                                                optionName: "Select a Visibility",
                                                 optionValue: "null",
                                                 selected: true,
                                                 disabled: true
@@ -272,23 +316,40 @@
                         </div>
 
                         <div class="mb-3" data-announcement-field="popupImageUrl">
-                            <label for="popupImageUrl">Popup Image URL</label>
+                            <label class="form-label">Popup Image</label>
 
-                            <% if (type === 'create') { %>
-                                <%- include("../../partials/form/inputText.ejs", {
-                                    elementName: "popupImageUrl",
-                                    elementValue: null,
-                                    required: false
-                                }) %>
-                            <% } %>
-                            <% if (type === 'edit') { %>
-                                <%- include("../../partials/form/inputText.ejs", {
-                                    elementName: "popupImageUrl",
-                                    elementValue: announcementApiData.popupImageUrl,
-                                    required: false
-                                }) %>
-                            <% } %>
-                            <small class="text-muted">Optional banner image for popup announcements.</small>
+                            <div id="popup-img-preview" class="mb-2 d-none">
+                                <div class="d-inline-flex align-items-start gap-2 border rounded p-2">
+                                    <img id="popup-img-thumb" src="" alt="Popup image preview"
+                                         style="max-height:120px;max-width:280px;object-fit:contain;">
+                                    <button type="button" id="popup-img-remove"
+                                            class="btn btn-sm btn-outline-danger flex-shrink-0"
+                                            title="Remove image">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                <label for="popup-img-file"
+                                       class="btn btn-outline-secondary btn-sm mb-0"
+                                       style="cursor:pointer">
+                                    <i class="fas fa-upload me-1"></i>Upload image
+                                </label>
+                                <input type="file" id="popup-img-file"
+                                       accept="image/png,image/jpeg,image/gif,image/webp"
+                                       class="d-none">
+                                <span class="text-muted small">or paste a URL:</span>
+                                <input type="url" name="popupImageUrl" id="popupImageUrl"
+                                       class="form-control form-control-sm flex-grow-1"
+                                       style="max-width:420px"
+                                       placeholder="https://..."
+                                       value="<%= (type === 'edit' && announcementApiData.popupImageUrl) ? announcementApiData.popupImageUrl : '' %>">
+                                <span id="popup-img-status" class="small"></span>
+                            </div>
+                            <small class="text-muted mt-1 d-block">
+                                Upload PNG, JPG, GIF or WebP (max 8 MB) or paste an image URL directly.
+                            </small>
                         </div>
 
                         <div class="row">
@@ -346,11 +407,47 @@
                         <% } %>
                 </form>
             </div>
-        </main>
-    </div>
-</div>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
 
-<%- include("../../modules/footer.ejs") %>
+<style>
+/* ── Minecraft colour toolbar ──────────────────────────────────── */
+.mc-toolbar { display:flex; flex-wrap:wrap; gap:3px; align-items:center; }
+.mc-code-btn {
+    min-width:26px; height:24px; padding:0 5px;
+    border:1px solid #ccc; border-radius:3px;
+    cursor:pointer; font-size:11px; font-family:monospace; line-height:22px;
+    background:#eee; color:#000; transition:opacity .1s;
+}
+.mc-code-btn:hover { opacity:.75; }
+.mc-fmt-btn { background:#555; color:#eee; border-color:#333; }
+.mc-toolbar-sep { display:inline-block; width:1px; background:#ccc; height:20px; align-self:center; }
+
+/* ── Minecraft preview panel ────────────────────────────────────── */
+.mc-preview {
+    background:#1d1d1d; border:1px solid #3a3a3a; border-radius:4px;
+    padding:8px 10px; font-family:'Courier New',Courier,monospace; font-size:13px;
+}
+.mc-preview-label {
+    font-size:10px; color:#666; text-transform:uppercase;
+    letter-spacing:.5px; margin-bottom:6px; font-family:sans-serif;
+}
+.mc-server-list-row { display:flex; align-items:flex-start; gap:8px; }
+.mc-icon-placeholder {
+    width:56px; height:56px; background:#2a2a2a; border:1px solid #444;
+    border-radius:2px; display:flex; align-items:center; justify-content:center;
+    color:#555; font-size:20px; flex-shrink:0;
+}
+.mc-server-details { flex:1; min-width:0; }
+.mc-server-name-bar { color:#fff; font-size:13px; margin-bottom:2px; }
+.mc-motd-text { color:#aaa; min-height:17px; line-height:1.35; word-break:break-all; }
+.mc-server-status { text-align:right; font-size:11px; flex-shrink:0; padding-top:2px; }
+.mc-player-count { color:#aaa; white-space:nowrap; }
+.mc-chat-area { padding:2px 0; }
+.mc-chat-line { color:#fff; min-height:18px; line-height:1.4; word-break:break-all; }
+</style>
 
 <script>
     const toLocalDateTimeInput = (isoString) => {
@@ -373,8 +470,18 @@
         const announcementTypeSelect = document.querySelector("select[name='announcementType']");
         const fieldGroups = document.querySelectorAll("[data-announcement-field]");
 
+        const bodyLabel = document.getElementById("label-body");
+        const bodyLabelMap = {
+            motd: "Server Ping Message",
+            tip: "In-Game Tip Text",
+            web: "Banner Body",
+            popup: "Popup Message",
+        };
+
         const updateAnnouncementFields = () => {
             const type = announcementTypeSelect?.value || "";
+
+            if (bodyLabel) bodyLabel.textContent = bodyLabelMap[type] || "Message";
 
             fieldGroups.forEach((group) => {
                 const field = group.dataset.announcementField;
@@ -417,4 +524,165 @@
     document.querySelectorAll("input[name='timezoneOffset']").forEach((input) => {
         input.value = String(new Date().getTimezoneOffset());
     });
+
+    // ── MOTD / Tip live previewer ─────────────────────────────────────────
+    (function () {
+        var MC_COLORS = {
+            '0':'#000000','1':'#0000AA','2':'#00AA00','3':'#00AAAA',
+            '4':'#AA0000','5':'#AA00AA','6':'#FFAA00','7':'#AAAAAA',
+            '8':'#555555','9':'#5555FF','a':'#55FF55','b':'#55FFFF',
+            'c':'#FF5555','d':'#FF55FF','e':'#FFFF55','f':'#FFFFFF'
+        };
+
+        function escHtml(s) {
+            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        function parseMcText(text) {
+            if (!text) return '';
+            var parts = text.split(/([&§][0-9a-fk-or])/i);
+            var color = '#FFFFFF', bold = false, italic = false, uline = false, strike = false;
+            var html = '';
+            for (var i = 0; i < parts.length; i++) {
+                var part = parts[i];
+                var m = part.match(/^[&§]([0-9a-fk-or])$/i);
+                if (m) {
+                    var code = m[1].toLowerCase();
+                    if (code in MC_COLORS) {
+                        color = MC_COLORS[code];
+                        bold = italic = uline = strike = false;
+                    } else if (code === 'r') {
+                        color = '#FFFFFF'; bold = italic = uline = strike = false;
+                    } else if (code === 'l') bold = true;
+                    else if (code === 'o') italic = true;
+                    else if (code === 'n') uline = true;
+                    else if (code === 'm') strike = true;
+                    // &k obfuscated — not rendered
+                } else if (part) {
+                    var deco = (uline && strike) ? 'underline line-through'
+                             : uline ? 'underline' : strike ? 'line-through' : '';
+                    var style = 'color:' + color + ';';
+                    if (bold)  style += 'font-weight:bold;';
+                    if (italic) style += 'font-style:italic;';
+                    if (deco)  style += 'text-decoration:' + deco + ';';
+                    html += '<span style="' + style + '">' + escHtml(part) + '</span>';
+                }
+            }
+            return html;
+        }
+
+        function updateMcPreview() {
+            var typeEl   = document.querySelector("select[name='announcementType']");
+            var textarea = document.getElementById('colourMessageFormat');
+            var motdEl   = document.getElementById('mc-motd-preview');
+            var tipEl    = document.getElementById('mc-tip-preview');
+            if (!textarea || !motdEl || !tipEl) return;
+
+            var type  = typeEl ? typeEl.value : '';
+            var lines = (textarea.value || '').split('\n');
+
+            if (type === 'motd') {
+                document.getElementById('mc-motd-line1').innerHTML = parseMcText(lines[0]) || '&nbsp;';
+                document.getElementById('mc-motd-line2').innerHTML = parseMcText(lines[1] || '') || '&nbsp;';
+                motdEl.classList.remove('d-none');
+                tipEl.classList.add('d-none');
+            } else if (type === 'tip') {
+                document.getElementById('mc-tip-text').innerHTML = parseMcText(lines[0]) || '&nbsp;';
+                tipEl.classList.remove('d-none');
+                motdEl.classList.add('d-none');
+            } else {
+                motdEl.classList.add('d-none');
+                tipEl.classList.add('d-none');
+            }
+        }
+
+        var textarea = document.getElementById('colourMessageFormat');
+        if (textarea) {
+            textarea.addEventListener('input', updateMcPreview);
+            var typeSelect = document.querySelector("select[name='announcementType']");
+            if (typeSelect) typeSelect.addEventListener('change', updateMcPreview);
+            // inputSelect.ejs sets the select value via its own window.load listener,
+            // registered earlier in the DOM. By the time this listener fires, the
+            // correct type is already set, so updateMcPreview reads the right value.
+            window.addEventListener('load', updateMcPreview);
+        }
+
+        // Toolbar: insert colour/format code at cursor position
+        document.querySelectorAll('.mc-code-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var code = btn.dataset.code;
+                if (!code || !textarea) return;
+                var start = textarea.selectionStart;
+                var end   = textarea.selectionEnd;
+                textarea.value = textarea.value.substring(0, start) + code + textarea.value.substring(end);
+                var pos = start + code.length;
+                textarea.setSelectionRange(pos, pos);
+                textarea.focus();
+                textarea.dispatchEvent(new Event('input'));
+            });
+        });
+    }());
+
+    // ── Popup image upload widget ─────────────────────────────────────────
+    (function () {
+        const fileInput   = document.getElementById("popup-img-file");
+        const urlInput    = document.getElementById("popupImageUrl");
+        const preview     = document.getElementById("popup-img-preview");
+        const thumb       = document.getElementById("popup-img-thumb");
+        const removeBtn   = document.getElementById("popup-img-remove");
+        const statusEl    = document.getElementById("popup-img-status");
+        if (!fileInput || !urlInput) return;
+
+        function showPreview(url) {
+            if (url) {
+                thumb.src = url;
+                preview.classList.remove("d-none");
+            } else {
+                preview.classList.add("d-none");
+                thumb.src = "";
+            }
+        }
+
+        // Show existing image on page load (edit mode)
+        showPreview(urlInput.value.trim());
+
+        urlInput.addEventListener("input", () => showPreview(urlInput.value.trim()));
+
+        removeBtn.addEventListener("click", () => {
+            urlInput.value = "";
+            showPreview("");
+            statusEl.textContent = "";
+            statusEl.className = "small";
+        });
+
+        fileInput.addEventListener("change", async () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+            fileInput.value = "";
+
+            statusEl.textContent = "Uploading…";
+            statusEl.className = "small text-muted";
+
+            const fd = new FormData();
+            fd.append("file", file, file.name);
+            fd.append("folder", "announcements");
+
+            try {
+                const res  = await fetch("/dashboard/upload/image", { method: "POST", body: fd });
+                const data = await res.json();
+                if (data.success) {
+                    urlInput.value = data.data.url;
+                    showPreview(data.data.url);
+                    statusEl.textContent = "Uploaded ✓";
+                    statusEl.className = "small text-success";
+                } else {
+                    statusEl.textContent = data.message || "Upload failed.";
+                    statusEl.className = "small text-danger";
+                }
+            } catch {
+                statusEl.textContent = "Upload failed.";
+                statusEl.className = "small text-danger";
+            }
+        });
+    })();
 </script>

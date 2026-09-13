@@ -1,0 +1,126 @@
+<%- include("../../modules/header.ejs", {
+  pageTitle,
+  pageDescription
+}) %>
+
+<%- include("../../modules/navigationBar.ejs") %>
+
+<%- include("../../partials/miniHeader.ejs", {
+  headerTitle: "Financial Report",
+  backgroundImage: globalImage
+}) %>
+
+<%
+  const fmtMoney = function(cents, currency = "USD") {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format((cents || 0) / 100);
+  };
+  const snapshot = report.snapshot || {};
+  const publishedDate = report.publishedAt ? new Date(report.publishedAt).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  }) : null;
+%>
+
+<section class="section finance-page">
+  <div class="container">
+    <div class="mb-4 text-center">
+      <h2 class="mb-2"><%= snapshot.monthLabel %></h2>
+      <p class="text-muted mb-0">A community-facing summary of support received and operating costs for the month.</p>
+    </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-sm-6 col-lg-3">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase fw-semibold mb-2">Community Support</div>
+            <div class="fs-4 fw-bold"><%= fmtMoney(snapshot.communitySupportCents) %></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase fw-semibold mb-2">Operating Expenses</div>
+            <div class="fs-4 fw-bold"><%= fmtMoney(snapshot.operatingCostsCents) %></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase fw-semibold mb-2">Net Position</div>
+            <div class="fs-4 fw-bold <%= snapshot.netPositionCents >= 0 ? 'text-success' : 'text-danger' %>">
+              <%= snapshot.netPositionCents >= 0 ? '+' : '-' %><%= fmtMoney(Math.abs(snapshot.netPositionCents)) %>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase fw-semibold mb-2">Funding Goal Reached</div>
+            <div class="fs-4 fw-bold"><%= snapshot.fundingProgressPercent || 0 %>%</div>
+            <div class="small text-muted mt-1"><%= fmtMoney(snapshot.communitySupportCents) %> / <%= fmtMoney(snapshot.fundingGoalCents) %></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-body">
+        <h3 class="h4 mb-3">Expense Breakdown</h3>
+        <% if (snapshot.categories && snapshot.categories.length) { %>
+          <div class="list-group">
+            <% snapshot.categories.forEach(function(category) { %>
+              <div class="list-group-item d-flex flex-column flex-sm-row align-items-sm-center gap-3 p-3">
+                <div class="d-flex align-items-center justify-content-center rounded bg-light text-primary flex-shrink-0" style="width:56px;height:56px;">
+                  <% if (category.iconImageUrl) { %>
+                    <img src="<%= category.iconImageUrl %>" alt="" class="rounded" style="width:56px;height:56px;object-fit:cover;">
+                  <% } else { %>
+                    <i class="fa-solid fa-<%= category.iconName || 'receipt' %> fa-xl" aria-hidden="true"></i>
+                  <% } %>
+                </div>
+                <div class="flex-grow-1">
+                  <h4 class="h5 mb-1"><%= category.name %></h4>
+                  <% if (category.description) { %>
+                    <p class="text-muted mb-0"><%= category.description %></p>
+                  <% } %>
+                </div>
+                <div class="fw-semibold text-sm-end text-nowrap"><%= fmtMoney(category.totalCents, category.currency) %></div>
+              </div>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <p class="text-muted mb-0">No public expense categories were included in this report.</p>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-body">
+        <h3 class="h4 mb-3">Report Notes</h3>
+        <% if (snapshot.publicNote) { %>
+          <p class="mb-0"><%= snapshot.publicNote %></p>
+        <% } else { %>
+          <p class="text-muted mb-0">No public note was published for this month.</p>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-body d-flex flex-column flex-md-row justify-content-between gap-3">
+        <div>
+          <h3 class="h5 mb-1">Published</h3>
+          <p class="text-muted mb-0"><%= publishedDate || "Unknown" %></p>
+        </div>
+        <div>
+          <h3 class="h5 mb-1">Included Totals</h3>
+          <p class="text-muted mb-0">Community support from the webstore and public operating expense categories for <%= snapshot.monthLabel %>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include("../../modules/footer.ejs") %>

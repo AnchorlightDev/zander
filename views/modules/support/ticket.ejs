@@ -37,6 +37,11 @@
             <p class="mb-0"><strong>Category:</strong> <%= currentCategory?.name || 'Uncategorized' %></p>
             <div class="mt-3">
                 <h4>Participants</h4>
+                <p class="text-muted small mb-2">
+                    All participants can view and reply to this ticket.
+                    Staff with the <strong>Actions</strong> menu can add individual users or entire rank groups —
+                    both are granted access to the linked Discord channel automatically.
+                </p>
                 <div class="d-flex flex-wrap gap-2">
                     <span class="rank-pill" style="--rank-pill-bg: #3b82f6; --rank-pill-text: #ffffff;">Owner: <%= ownerUser?.username || ticket.userId %></span>
                     <% participants.users.forEach((participant) => { %>
@@ -46,6 +51,13 @@
                         <span class="rank-pill" style="--rank-pill-bg: <%= group.badgeColor || '#6c757d' %>; --rank-pill-text: <%= group.textColor || '#fff' %>;">Group: <%= group.roleName || group.rankSlug || group.roleId %></span>
                     <% }); %>
                 </div>
+                <% if (canManageParticipants) { %>
+                    <p class="text-muted small mt-2 mb-0">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Use the <strong>Actions</strong> dropdown above to add or remove users and groups.
+                        Searching by username finds registered users; selecting a group grants access to everyone holding that rank.
+                    </p>
+                <% } %>
             </div>
         </div>
     </div>
@@ -167,7 +179,16 @@
         <div class="card-body">
             <% if (ticket.status === 'open' || ticket.status === 'pending') { %>
                 <% if (!isMinecraftLinked) { %>
-                    <p class="mb-0 text-muted">Link your Minecraft account to reply to this ticket.</p>
+                    <div class="alert alert-warning" role="alert">
+                        <h5 class="alert-heading">Minecraft account not linked</h5>
+                        <p class="mb-2">You need to link your Minecraft account before you can reply to tickets. To link your account:</p>
+                        <ol class="mb-2">
+                            <li>Log in to one of the verification servers listed on the <a href="/register/minecraft" class="alert-link">Minecraft verification page</a>.</li>
+                            <li>The server will give you a 6-digit code.</li>
+                            <li>Enter the code on that page to link your account.</li>
+                        </ol>
+                        <p class="mb-0">Once your account is linked, return here to reply. If you need help, please contact a staff member.</p>
+                    </div>
                 <% } else if (!canReplyDuringEscalation) { %>
                     <p class="mb-0 text-muted">This ticket is escalated. Only escalation staff or the ticket opener may reply.</p>
                 <% } else { %>

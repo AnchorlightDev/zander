@@ -1,5 +1,11 @@
-<!-- Slider Start -->
-<section class="banner hero-overlay" style="background: url(<%= globalImage %>) no-repeat 50% 50%; background-size:cover">
+<!-- Hero Start -->
+<section class="banner hero-overlay">
+	<% if (typeof jumboVideo !== 'undefined' && jumboVideo) { %>
+		<video class="banner-video-bg" autoplay muted loop playsinline>
+			<source src="<%= jumboVideo %>" type="video/mp4">
+		</video>
+	<% } %>
+
 	<div class="container">
 		<% if (req.cookies.alertType) { %>
 			<br>
@@ -9,27 +15,30 @@
 			}) %>
 		<% } %>
 
-		<div class="row">
+		<div class="row align-items-center">
 			<div class="col-lg-7">
 				<div class="block">
 					<div class="divider mb-3"></div>
-					<span class="text-uppercase text-sm letter-spacing "><%= config.siteConfiguration.tagline %></span>
+					<span class="text-uppercase text-sm letter-spacing"><%= config.siteConfiguration.tagline %></span>
 					<h1 class="mb-3 mt-3"><%= config.siteConfiguration.siteName %></h1>
-					
-					<p class="mb-4 pr-5">A Christian Minecraft Server loving the game we play and the God we serve.</p>
 
-					<div class="text-center">
-						<p>By the grace God has given me, I laid a foundation as a wise builder, and someone else is building on it. But each one should build with care. For no one can lay any foundation other than the one already laid, which is Jesus Christ.<br>1 Corinthians 3:10-11</p>
-					</div>
-					<div class="btn-container ">
+					<p class="mb-4">A Christian Minecraft Server loving the game we play and the God we serve.</p>
+
+					<blockquote class="banner-scripture mb-4">
+						<p class="mb-1">By the grace God has given me, I laid a foundation as a wise builder, and someone else is building on it. But each one should build with care. For no one can lay any foundation other than the one already laid, which is Jesus Christ.</p>
+						<cite>1 Corinthians 3:10-11</cite>
+					</blockquote>
+
+					<div class="btn-container d-flex flex-wrap gap-2">
 						<a href="/play" class="btn btn-main-2 btn-icon btn-round-full">Let's Play <i class="fa-solid fa-right-long"></i></a>
+						<a href="/discord" class="btn btn-hero-secondary btn-round-full"><i class="fab fa-discord me-1"></i> Join Discord</a>
 					</div>
 				</div>
 			</div>
 
-			<div class="col-lg-4">
-				<div class="block">
-					<iframe class="youtube-home-player" width="430" height="240" src="https://www.youtube.com/embed/ceKiwsIuiA8" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+			<div class="col-lg-5 d-none d-lg-flex align-items-center justify-content-center">
+				<div class="youtube-embed-wrapper">
+					<iframe class="youtube-home-player" src="https://www.youtube.com/embed/ceKiwsIuiA8" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 				</div>
 			</div>
 		</div>

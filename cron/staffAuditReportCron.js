@@ -1,7 +1,8 @@
 import cron from "node-cron";
-import { Colors, EmbedBuilder, WebhookClient } from "discord.js";
+import { Colors, EmbedBuilder } from "discord.js";
 import { createRequire } from "module";
-import db from "../controllers/databaseController.js";
+import db, { luckpermsDb } from "../controllers/databaseController.js";
+import { client } from "../controllers/discordController.js";
 
 const require = createRequire(import.meta.url);
 const config = require("../config.json");
@@ -47,176 +48,142 @@ function buildCronExpression() {
   return `${minute} ${hour} * * ${day}`;
 }
 
-function formatAuditTimestamp(value) {
-  if (!value) return "No record";
 
-  const timestamp = Math.floor(new Date(value).getTime() / 1000);
-  if (!Number.isFinite(timestamp)) return "No record";
+function buildMemberField(member) {
+  const ts = (val) => {
+    if (!val) return "_No record_";
+    const t = Math.floor(new Date(val).getTime() / 1000);
+    return Number.isFinite(t) ? `<t:${t}:R>` : "_No record_";
+  };
 
-  return `<t:${timestamp}:F> (<t:${timestamp}:R>)`;
-}
-
-function buildMemberSection(member) {
+  const websiteLinked = !!member.userId;
+  const discordLinked = !!member.discordId;
   const lines = [];
 
-  // Header: username + Discord mention
-  const headerParts = [`**${member.username}**`];
-  if (member.discordId) {
-    headerParts.push(`<@${member.discordId}>`);
-  }
-  lines.push(headerParts.join(" "));
+  lines.push(discordLinked ? `<@${member.discordId}>` : "❌ No Discord linked");
 
-  // Account linkage status
-  const mcLinked = member.uuid ? "✅ Linked" : "❌ Not linked";
-  const discordLinked = member.discordId ? "✅ Linked" : "❌ Not linked";
-  lines.push(`__Account Linkage:__ Minecraft: ${mcLinked} · Discord: ${discordLinked}`);
+  lines.push(websiteLinked
+    ? `⛏️ Login ${ts(member.audit_lastMinecraftLogin)} · Chat ${ts(member.audit_lastMinecraftMessage)}`
+    : "⛏️ _Not registered on website_");
 
-  // Minecraft activity
-  lines.push("");
-  lines.push("**Minecraft**");
-  if (member.uuid) {
-    lines.push(`• Last Login: ${formatAuditTimestamp(member.audit_lastMinecraftLogin)}`);
-    lines.push(`• Last Message: ${formatAuditTimestamp(member.audit_lastMinecraftMessage)}`);
-    lines.push(`• Punishments: _Feature coming soon_`);
-  } else {
-    lines.push(`• _Account not linked — activity cannot be tracked_`);
-  }
+  lines.push(discordLinked
+    ? `💬 Chat ${ts(member.audit_lastDiscordMessage)} · 🔊 Voice ${ts(member.audit_lastDiscordVoice)}`
+    : "💬 _No Discord linked_");
 
-  // Discord activity
-  lines.push("");
-  lines.push("**Discord**");
-  if (member.discordId) {
-    lines.push(`• Last Message: ${formatAuditTimestamp(member.audit_lastDiscordMessage)}`);
-    lines.push(`• Last Voice: ${formatAuditTimestamp(member.audit_lastDiscordVoice)}`);
-    lines.push(`• Punishments: _Feature coming soon_`);
-  } else {
-    lines.push(`• _Account not linked — activity cannot be tracked_`);
-  }
-
-  // Website activity
-  lines.push("");
-  lines.push("**Website**");
-  lines.push(`• Last Login: ${formatAuditTimestamp(member.audit_lastWebsiteLogin)}`);
+  lines.push(`🌐 Login ${websiteLinked ? ts(member.audit_lastWebsiteLogin) : "_not registered_"}`);
 
   return lines.join("\n");
 }
 
-async function fetchActiveStaff() {
-  return new Promise((resolve, reject) => {
-    db.query(
-      `SELECT
-        u.userId,
-        u.username,
-        u.uuid,
-        u.discordId,
-        u.audit_lastDiscordMessage,
-        u.audit_lastDiscordVoice,
-        u.audit_lastMinecraftLogin,
-        u.audit_lastMinecraftMessage,
-        u.audit_lastMinecraftPunishment,
-        u.audit_lastDiscordPunishment,
-        u.audit_lastWebsiteLogin
-      FROM users u
-      JOIN userRanks ur ON ur.userId = u.userId
-      JOIN ranks r ON r.rankSlug = ur.rankSlug
-      WHERE r.isStaff = '1'
-        AND ur.rankSlug != 'retired'
-        AND u.account_disabled = 0
-      GROUP BY u.userId
-      ORDER BY u.username;`,
+async function fetchActiveStaff(staffGroups) {
+  if (!staffGroups?.length) return [];
+
+  // Step 1: query LP directly for UUIDs of members in any configured staff group.
+  const groupPermissions = staffGroups.map((g) => `group.${g}`);
+  const lpRows = await new Promise((resolve, reject) => {
+    luckpermsDb.query(
+      `SELECT DISTINCT uuid FROM luckperms_user_permissions
+       WHERE permission IN (?) AND value = 1`,
+      [groupPermissions],
       (error, results) => {
         if (error) return reject(error);
         resolve(results || []);
       }
     );
   });
-}
 
-function packIntoFields(sections) {
-  const MAX_FIELD_LENGTH = 1024;
-  const fields = [];
-  let buffer = "";
+  if (!lpRows.length) return [];
+  const uuids = lpRows.map((r) => r.uuid);
 
-  for (const section of sections) {
-    const candidate = buffer ? `${buffer}\n\n${section}` : section;
-
-    if (candidate.length > MAX_FIELD_LENGTH) {
-      if (buffer) fields.push(buffer);
-
-      if (section.length > MAX_FIELD_LENGTH) {
-        // Split oversized section by lines
-        let chunk = "";
-        for (const line of section.split("\n")) {
-          const lineCandidate = chunk ? `${chunk}\n${line}` : line;
-          if (lineCandidate.length > MAX_FIELD_LENGTH) {
-            if (chunk) fields.push(chunk);
-            chunk = line.length > MAX_FIELD_LENGTH ? line.slice(0, MAX_FIELD_LENGTH) : line;
-          } else {
-            chunk = lineCandidate;
-          }
-        }
-        if (chunk) fields.push(chunk);
-        buffer = "";
-      } else {
-        buffer = section;
+  // Step 2: get usernames from LP for all found UUIDs.
+  const lpPlayers = await new Promise((resolve, reject) => {
+    luckpermsDb.query(
+      `SELECT uuid, username FROM luckperms_players WHERE uuid IN (?)`,
+      [uuids],
+      (error, results) => {
+        if (error) return reject(error);
+        resolve(results || []);
       }
-    } else {
-      buffer = candidate;
-    }
-  }
+    );
+  });
+  const nameMap = Object.fromEntries(lpPlayers.map((r) => [r.uuid, r.username]));
 
-  if (buffer) fields.push(buffer);
-  return fields;
+  // Step 3: get website/audit data from main DB for any matched users.
+  const websiteRows = await new Promise((resolve, reject) => {
+    db.query(
+      `SELECT
+        userId,
+        uuid,
+        discordId,
+        audit_lastDiscordMessage,
+        audit_lastDiscordVoice,
+        audit_lastMinecraftLogin,
+        audit_lastMinecraftMessage,
+        audit_lastWebsiteLogin
+      FROM users
+      WHERE uuid IN (?) AND account_disabled = 0`,
+      [uuids],
+      (error, results) => {
+        if (error) return reject(error);
+        resolve(results || []);
+      }
+    );
+  });
+  const websiteMap = Object.fromEntries(websiteRows.map((r) => [r.uuid, r]));
+
+  // Merge: one entry per UUID, LP username + website audit data where available.
+  return uuids
+    .map((uuid) => ({
+      uuid,
+      username: nameMap[uuid] ?? uuid,
+      ...websiteMap[uuid],
+    }))
+    .sort((a, b) => a.username.localeCompare(b.username));
 }
 
-async function runStaffAuditReport() {
+
+export async function runStaffAuditReport() {
   // Check feature flag
   if (!features.staffAuditReport) {
-    return;
+    return { sent: false, reason: "Feature is disabled." };
   }
 
   const auditConfig = config.staffAuditReport;
   if (!auditConfig?.enabled) {
-    return;
+    return { sent: false, reason: "Staff audit report is not enabled in config." };
   }
 
-  // Get webhook URL from staffAuditReport config or discord.webhooks fallback
-  const webhookUrl = auditConfig.webhookUrl || config?.discord?.webhooks?.staffAuditLog;
-  if (!webhookUrl || webhookUrl === "WEBHOOKURL") {
-    console.warn(
-      "Staff audit report skipped: no valid webhook URL configured."
-    );
-    return;
+  // Support both flat channelId and legacy delivery.channelId
+  const channelId = auditConfig.channelId || auditConfig.delivery?.channelId;
+  if (!channelId) {
+    console.warn("Staff audit report skipped: no channelId configured.");
+    return { sent: false, reason: "No `channelId` is configured for the staff audit report." };
+  }
+
+  const staffGroups = auditConfig.staffGroups;
+  if (!staffGroups?.length) {
+    return { sent: false, reason: "No `staffGroups` are configured. Add a list of LP group names e.g. `\"staffGroups\": [\"mod\", \"admin\"]`." };
   }
 
   // Fetch staff data
-  const staffMembers = await fetchActiveStaff();
+  const staffMembers = await fetchActiveStaff(staffGroups);
 
   if (!staffMembers.length) {
     console.warn("Staff audit report skipped: no active staff members found.");
-    return;
+    return { sent: false, reason: "No active staff members were found." };
   }
 
-  // Build per-member sections
-  const sections = staffMembers.map(buildMemberSection);
-  const fieldValues = packIntoFields(sections);
-
-  if (!fieldValues.length) {
-    fieldValues.push("No audit data was available for staff members.");
-  }
-
-  // Discord embeds have a max of 25 fields and 6000 chars total
-  // Split into multiple embeds if needed
+  // Each member gets their own named field. Discord allows max 25 fields per
+  // embed, so split into multiple embeds if there are more than 25 staff.
   const embeds = [];
+  let embedIndex = 1;
   let currentEmbed = new EmbedBuilder()
     .setTitle("Weekly Staff Activity Audit")
     .setColor(Colors.Blurple)
     .setTimestamp(new Date());
-
   let fieldCount = 0;
-  let embedIndex = 1;
 
-  for (let i = 0; i < fieldValues.length; i++) {
+  for (const member of staffMembers) {
     if (fieldCount >= 25) {
       embeds.push(currentEmbed);
       embedIndex++;
@@ -228,32 +195,26 @@ async function runStaffAuditReport() {
     }
 
     currentEmbed.addFields({
-      name: fieldCount === 0 && embedIndex === 1 ? "Staff Activity" : "\u200b",
-      value: fieldValues[i],
+      name: member.username,
+      value: buildMemberField(member),
       inline: false,
     });
     fieldCount++;
   }
 
-  const timezone = auditConfig.timezone || "UTC";
-  currentEmbed.setFooter({
-    text: `Total active staff: ${staffMembers.length} · Schedule: ${auditConfig.dayOfWeek || "Monday"} ${auditConfig.time || "12:00"} ${timezone}`,
-  });
+  currentEmbed.setFooter({ text: `${staffMembers.length} active staff members` });
   embeds.push(currentEmbed);
 
-  // Send via webhook
-  const webhookClient = new WebhookClient({ url: webhookUrl });
-  try {
-    for (const embed of embeds) {
-      await webhookClient.send({ embeds: [embed] });
-    }
-  } finally {
-    webhookClient.destroy?.();
+  const channel = await client.channels.fetch(channelId);
+  for (const embed of embeds) {
+    await channel.send({ embeds: [embed] });
   }
 
   console.log(
     `Posted weekly staff audit report (${staffMembers.length} staff members, ${embeds.length} embed(s)).`
   );
+
+  return { sent: true, staffCount: staffMembers.length, embedCount: embeds.length };
 }
 
 // Build schedule from config

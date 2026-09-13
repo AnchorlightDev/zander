@@ -1,5 +1,5 @@
 import { Command, RegisterBehavior } from "@sapphire/framework";
-import { EmbedBuilder } from "discord.js";
+import { Colors, EmbedBuilder } from "discord.js";
 
 export class WebsiteCommand extends Command {
   constructor(context, options) {
@@ -24,7 +24,7 @@ export class WebsiteCommand extends Command {
 
     interaction.reply({
       embeds: [embed],
-      empheral: false,
+      ephemeral: true,
     });
   }
 }

@@ -1,5 +1,6 @@
-import db from "./databaseController.js";
+import db, { luckpermsDb } from "./databaseController.js";
 import { hashEmail } from "../api/common.js";
+import { sanitizeForumHtml } from "../lib/htmlSanitize.js";
 
 function query(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -8,6 +9,30 @@ function query(sql, params = []) {
         return reject(error);
       }
 
+      resolve(results || []);
+    });
+  });
+}
+
+const LUCKPERMS_QUERY_TIMEOUT_MS = 5000;
+
+function luckpermsQuery(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error(`LuckPerms query timed out after ${LUCKPERMS_QUERY_TIMEOUT_MS}ms`));
+      }
+    }, LUCKPERMS_QUERY_TIMEOUT_MS);
+
+    luckpermsDb.query(sql, params, (error, results) => {
+      if (settled) return; // timeout already fired
+      clearTimeout(timer);
+      settled = true;
+
+      if (error) return reject(error);
       resolve(results || []);
     });
   });
@@ -218,8 +243,9 @@ async function ensureUniqueDiscussionSlug(categoryId, baseName, excludeDiscussio
   const baseSlug = slugify(baseName);
   let candidate = baseSlug;
   let counter = 1;
+  const MAX_ITERATIONS = 100;
 
-  while (true) {
+  while (counter <= MAX_ITERATIONS) {
     const params = [categoryId, candidate];
     let queryText =
       "SELECT discussionId FROM forumDiscussions WHERE categoryId = ? AND slug = ?";
@@ -237,6 +263,9 @@ async function ensureUniqueDiscussionSlug(categoryId, baseName, excludeDiscussio
     counter += 1;
     candidate = `${baseSlug}-${counter}`;
   }
+
+  // Fallback: append timestamp to guarantee uniqueness without infinite loop
+  return `${baseSlug}-${Date.now()}`;
 }
 
 export async function createCategory({
@@ -472,6 +501,7 @@ async function recalculateDiscussionMeta(discussionId) {
 }
 
 export async function createDiscussion({ categoryId, userId, title, content }) {
+  content = sanitizeForumHtml(content);
   const slug = await ensureUniqueDiscussionSlug(categoryId, title, null);
 
   const result = await query(
@@ -512,6 +542,7 @@ export async function updateDiscussion(discussionId, { title, content, editorUse
   }
 
   if (content !== undefined && content !== null) {
+    content = sanitizeForumHtml(content);
     const originalPost = await getOriginalPost(discussionId);
     if (originalPost && originalPost.content !== content) {
       await recordPostRevision(originalPost.postId, editorUserId, originalPost.content);
@@ -547,11 +578,12 @@ export async function moveDiscussion(discussionId, newCategoryId) {
   );
 }
 
-export async function createReply({ discussionId, userId, content }) {
+export async function createReply({ discussionId, userId, content, replyToPostId = null }) {
+  content = sanitizeForumHtml(content);
   const result = await query(
-    `INSERT INTO forumPosts (discussionId, userId, content, isOriginal)
-     VALUES (?, ?, ?, 0)`,
-    [discussionId, userId, content]
+    `INSERT INTO forumPosts (discussionId, userId, replyToPostId, content, isOriginal)
+     VALUES (?, ?, ?, ?, 0)`,
+    [discussionId, userId, replyToPostId || null, content]
   );
 
   const postId = result.insertId || result?.[0]?.insertId;
@@ -570,7 +602,7 @@ export async function createReply({ discussionId, userId, content }) {
 
 export async function getPostById(postId) {
   const [row] = await query(
-    `SELECT postId, discussionId, userId, content, isOriginal, createdAt, updatedAt
+    `SELECT postId, discussionId, userId, replyToPostId, content, isOriginal, createdAt, updatedAt
        FROM forumPosts
       WHERE postId = ?
       LIMIT 1`,
@@ -581,6 +613,7 @@ export async function getPostById(postId) {
 }
 
 export async function updatePost(postId, { content, editorUserId }) {
+  content = sanitizeForumHtml(content);
   const post = await getPostById(postId);
   if (!post) {
     return null;
@@ -676,35 +709,138 @@ async function fetchUserSummaries(userIds) {
     }
   });
 
-  const rankRows = await query(
-    `SELECT ur.userId,
-            ur.rankSlug,
-            ur.title,
-            r.displayName,
-            r.rankBadgeColour,
-            r.rankTextColour,
-            r.priority
-       FROM userRanks ur
-       LEFT JOIN ranks r ON r.rankSlug = ur.rankSlug
-      WHERE ur.userId IN (${placeholders})
-      ORDER BY CAST(COALESCE(r.priority, 0) AS UNSIGNED) DESC, r.rankSlug ASC`,
-    uniqueIds
-  );
-
-  rankRows.forEach((row) => {
-    const summary = summaries.get(row.userId);
-    if (!summary) {
-      return;
+  // Build uuid → userId map so we can correlate LuckPerms rows back to forum users
+  const uuidToUserId = new Map();
+  for (const summary of summaries.values()) {
+    if (summary.uuid) {
+      uuidToUserId.set(summary.uuid, summary.userId);
     }
+  }
 
-    summary.ranks.push({
-      rankSlug: row.rankSlug,
-      displayName: row.displayName || row.rankSlug,
-      badgeColour: row.rankBadgeColour || null,
-      textColour: row.rankTextColour || null,
-      title: row.title || null,
-    });
-  });
+  // Fetch rank data from LuckPerms directly (avoids broken cross-database views)
+  try {
+    const uuids = Array.from(uuidToUserId.keys());
+    if (uuids.length > 0) {
+      const uuidPlaceholders = uuids.map(() => "?").join(",");
+
+      // Two simple queries instead of a slow correlated self-join.
+      // Query 1: group memberships (uuid → rankSlug)
+      const userRankRows = await luckpermsQuery(
+        `SELECT uuid, SUBSTRING_INDEX(permission, '.', -1) AS rankSlug
+         FROM luckperms_user_permissions
+         WHERE uuid IN (${uuidPlaceholders})
+           AND permission LIKE 'group.%'
+           AND value = 1`,
+        uuids
+      );
+
+      // Query 2: per-rank title overrides (meta.group.<rankSlug>.title.<title>)
+      const titleRows = await luckpermsQuery(
+        `SELECT
+           uuid,
+           SUBSTRING_INDEX(SUBSTRING_INDEX(permission, '.', 3), '.', -1) AS rankSlug,
+           SUBSTRING_INDEX(permission, 'title.', -1) AS title
+         FROM luckperms_user_permissions
+         WHERE uuid IN (${uuidPlaceholders})
+           AND permission LIKE 'meta.group.%.title.%'
+           AND value = 1`,
+        uuids
+      );
+
+      // Build uuid:rankSlug → title map for O(1) correlation
+      const titleMap = new Map();
+      for (const row of titleRows) {
+        titleMap.set(`${row.uuid}:${row.rankSlug}`, row.title);
+      }
+
+      // Attach title to each rank row
+      for (const row of userRankRows) {
+        row.title = titleMap.get(`${row.uuid}:${row.rankSlug}`) || null;
+      }
+
+      const rankSlugs = [...new Set(userRankRows.map((r) => r.rankSlug))];
+      let rankInfoMap = new Map();
+
+      if (rankSlugs.length > 0) {
+        const rankPlaceholders = rankSlugs.map(() => "?").join(",");
+        const rankInfoRows = await luckpermsQuery(
+          `SELECT
+            lpGroups.name AS rankSlug,
+            COALESCE(SUBSTRING_INDEX(lpGroupDisplayName.permission, '.', -1), lpGroups.name) AS displayName,
+            SUBSTRING_INDEX(lpGroupWeight.permission, '.', -1) AS priority,
+            COALESCE(
+              CONCAT('#', SUBSTRING_INDEX(lpMetaBadgeColour.permission, '.', -1)),
+              CASE LEFT(SUBSTRING_INDEX(lpGroupPrefix.permission, '[&', -1), 1)
+                WHEN '0' THEN '#000000' WHEN '1' THEN '#0000AA' WHEN '2' THEN '#00AA00'
+                WHEN '3' THEN '#00AAAA' WHEN '4' THEN '#AA0000' WHEN '5' THEN '#AA00AA'
+                WHEN '6' THEN '#FFAA00' WHEN '7' THEN '#AAAAAA' WHEN '8' THEN '#555555'
+                WHEN '9' THEN '#5555FF' WHEN 'a' THEN '#55FF55' WHEN 'b' THEN '#55FFFF'
+                WHEN 'c' THEN '#FF5555' WHEN 'd' THEN '#FF55FF' WHEN 'e' THEN '#FFFF55'
+                WHEN 'g' THEN '#DDD605' ELSE '#FFFFFF'
+              END
+            ) AS rankBadgeColour,
+            COALESCE(
+              CONCAT('#', SUBSTRING_INDEX(lpMetaTextColour.permission, '.', -1)),
+              CASE WHEN LEFT(SUBSTRING_INDEX(lpGroupPrefix.permission, '[&', -1), 1)
+                IN ('0','1','2','3','4','5','8','9') THEN '#FFFFFF'
+              ELSE '#000000' END
+            ) AS rankTextColour
+          FROM luckperms_groups lpGroups
+            LEFT JOIN luckperms_group_permissions lpGroupDisplayName
+              ON lpGroups.name = lpGroupDisplayName.name
+              AND lpGroupDisplayName.permission LIKE 'displayname.%'
+              AND lpGroupDisplayName.value = 1
+            LEFT JOIN luckperms_group_permissions lpGroupWeight
+              ON lpGroups.name = lpGroupWeight.name
+              AND lpGroupWeight.permission LIKE 'weight.%'
+              AND lpGroupWeight.value = 1
+            LEFT JOIN luckperms_group_permissions lpGroupPrefix
+              ON lpGroups.name = lpGroupPrefix.name
+              AND lpGroupPrefix.permission LIKE 'prefix.%'
+              AND lpGroupPrefix.value = 1
+            LEFT JOIN luckperms_group_permissions lpMetaBadgeColour
+              ON lpGroups.name = lpMetaBadgeColour.name
+              AND lpMetaBadgeColour.permission LIKE 'meta.rankbadgecolour.%'
+              AND lpMetaBadgeColour.value = 1
+            LEFT JOIN luckperms_group_permissions lpMetaTextColour
+              ON lpGroups.name = lpMetaTextColour.name
+              AND lpMetaTextColour.permission LIKE 'meta.ranktextcolour.%'
+              AND lpMetaTextColour.value = 1
+          WHERE lpGroups.name IN (${rankPlaceholders})`,
+          rankSlugs
+        );
+
+        rankInfoMap = new Map(rankInfoRows.map((r) => [r.rankSlug, r]));
+      }
+
+      // Sort by priority descending then rankSlug ascending (matching original ORDER BY)
+      userRankRows.sort((a, b) => {
+        const pA = parseInt(rankInfoMap.get(a.rankSlug)?.priority) || 0;
+        const pB = parseInt(rankInfoMap.get(b.rankSlug)?.priority) || 0;
+        if (pB !== pA) return pB - pA;
+        return (a.rankSlug || "").localeCompare(b.rankSlug || "");
+      });
+
+      for (const row of userRankRows) {
+        if (row.rankSlug === "default") continue;
+        const userId = uuidToUserId.get(row.uuid);
+        if (userId === undefined) continue;
+        const summary = summaries.get(userId);
+        if (!summary) continue;
+        const rankInfo = rankInfoMap.get(row.rankSlug) || {};
+        summary.ranks.push({
+          rankSlug: row.rankSlug,
+          displayName: rankInfo.displayName || row.rankSlug,
+          badgeColour: rankInfo.rankBadgeColour || null,
+          textColour: rankInfo.rankTextColour || null,
+          title: row.title || null,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("[forums] Failed to load rank data from LuckPerms:", err);
+    // ranks remain empty for all summaries — page still renders without rank badges
+  }
 
   for (const summary of summaries.values()) {
     if (!summary.avatarUrl) {
@@ -727,7 +863,7 @@ async function fetchUserSummaries(userIds) {
 
 export async function getDiscussionPosts(discussionId) {
   const rows = await query(
-    `SELECT postId, discussionId, userId, content, isOriginal, createdAt, updatedAt
+    `SELECT postId, discussionId, userId, replyToPostId, content, isOriginal, createdAt, updatedAt
        FROM forumPosts
       WHERE discussionId = ?
       ORDER BY createdAt ASC, postId ASC`,
@@ -772,10 +908,17 @@ export async function getDiscussionPosts(discussionId) {
   });
 
   return rows.map((row) => {
+    const replyTarget = row.replyToPostId
+      ? rows.find((candidate) => candidate.postId === row.replyToPostId)
+      : null;
     return {
       ...row,
       isOriginal: !!row.isOriginal,
       user: userSummaries.get(row.userId) || null,
+      replyTo: replyTarget ? {
+        postId: replyTarget.postId,
+        user: userSummaries.get(replyTarget.userId) || null,
+      } : null,
       revisions: revisionsByPost.get(row.postId) || [],
     };
   });

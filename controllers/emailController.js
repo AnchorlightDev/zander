@@ -84,4 +84,21 @@ export async function sendMail(
 }
 
 
+/**
+ * Send a pre-rendered HTML email without going through the EJS template layer.
+ * Used by the global error reporter, which must not depend on view files and
+ * needs to stay side-effect free (no throwing) for the caller.
+ */
+export async function sendRawMail(recipient, subject, html, { text } = {}) {
+  const mailOptions = {
+    from: `"${process.env.smtpIdentityDisplayName}" <${process.env.smtpIdentityEmailAddress}>`,
+    to: recipient,
+    subject,
+    html,
+    ...(text ? { text } : {}),
+  };
+
+  return transporter.sendMail(mailOptions);
+}
+
 export default transporter;

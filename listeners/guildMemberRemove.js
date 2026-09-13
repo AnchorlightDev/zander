@@ -1,5 +1,5 @@
 import { Listener } from "@sapphire/framework";
-import { AuditLogEvent } from "discord.js";
+import { AuditLogEvent, PermissionFlagsBits, RESTJSONErrorCodes } from "discord.js";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const config = require("../config.json");
@@ -21,6 +21,18 @@ export class GuildMemberRemoveListener extends Listener {
   async run(member) {
     // guildMemberRemove fires for both kicks AND voluntary leaves.
     // We check the audit log to determine if this was a kick.
+    // Without View Audit Log we cannot tell a kick from a voluntary leave.
+    // Bail quietly rather than throwing on every single departure.
+    if (
+      !member.guild.members.me?.permissions.has(PermissionFlagsBits.ViewAuditLog)
+    ) {
+      console.warn(
+        "[Punishments] Skipping native kick detection: bot lacks View Audit Log in",
+        member.guild.id
+      );
+      return;
+    }
+
     try {
       // Small delay to let the audit log entry populate
       await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -76,6 +88,12 @@ export class GuildMemberRemoveListener extends Listener {
           : undefined,
       });
     } catch (error) {
+      if (error?.code === RESTJSONErrorCodes.MissingPermissions) {
+        console.warn(
+          "[Punishments] Could not read audit log for native kick detection (missing permissions)"
+        );
+        return;
+      }
       console.error("[Punishments] Failed to process native guildMemberRemove:", error);
     }
   }

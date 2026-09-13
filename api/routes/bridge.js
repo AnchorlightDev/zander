@@ -60,8 +60,11 @@ function applyMetadataPlaceholders(command, ...metadataSources) {
     }
 
     const replacement = typeof value === "string" ? value : String(value);
-    const pattern = new RegExp(`{{\\s*${escapeRegExp(key)}\\s*}}`, "gi");
-    resolved = resolved.replace(pattern, replacement);
+    const escapedKey = escapeRegExp(key);
+    // Double-brace syntax: {{key}} or {{ key }}
+    resolved = resolved.replace(new RegExp(`{{\\s*${escapedKey}\\s*}}`, "gi"), replacement);
+    // Single-brace syntax: {key} — only when not part of a double-brace sequence
+    resolved = resolved.replace(new RegExp(`(?<!\\{)\\{\\s*${escapedKey}\\s*\\}(?!\\})`, "gi"), replacement);
   });
 
   return resolved;
@@ -139,7 +142,9 @@ export default function bridgeApiRoute(app, config, db, features, lang) {
       let sql = `SELECT * FROM ${TASK_TABLE} WHERE status = ?`;
 
       if (slug) {
-        sql += ` AND slug = ?`;
+        // Match tasks targeting this specific server OR tasks marked 'any'
+        // (claimable by whichever server polls first).
+        sql += ` AND (slug = ? OR slug = 'any')`;
         params.push(slug);
       }
 

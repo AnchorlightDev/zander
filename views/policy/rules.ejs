@@ -1,6 +1,6 @@
 <%- include("../modules/header.ejs", {
     pageTitle: pageTitle,
-    pageDescription: "The Rules for the Network to abide by."
+    pageDescription: pageDescription
 }) %>
 
 <%- include("../modules/navigationBar.ejs") %>
@@ -13,8 +13,26 @@
   
   <section class="section">
       <div class="container">
+        <% if (typeof rulesSummary !== 'undefined' && rulesSummary) { %>
+        <div class="details mb-4">
+          <h2 class="h4">In short</h2>
+          <p class="lead"><%= rulesSummary %></p>
+        </div>
+        <% } %>
+
+        <% if (typeof rulesFaq !== 'undefined' && rulesFaq && rulesFaq.length) { %>
+        <div class="details mb-4">
+          <h2 class="h4">Rules FAQ</h2>
+          <% rulesFaq.forEach(function (item) { %>
+          <h3 class="h6 mb-1"><%= item.q %></h3>
+          <p><%= item.a %></p>
+          <% }) %>
+        </div>
+        <% } %>
+
         <div>
-            <div class="details mt-4 mt-lg-0">
+            <h2 class="h4">Full ruleset</h2>
+            <div class="details mt-2 mt-lg-0">
                 <zero-md src="<%= config.siteConfiguration.policy.rules %>"></zero-md>
             </div>
         </div>

@@ -1,0 +1,39 @@
+<details class="mb-3">
+    <summary class="text-muted small fw-semibold" style="cursor:pointer; user-select:none; list-style:none; display:flex; align-items:center; gap:.4rem;">
+        <i class="fas fa-shield-alt fa-fw"></i> Required permissions
+        <i class="fas fa-chevron-down fa-xs ms-auto toggle-chevron" style="transition:transform .15s;"></i>
+    </summary>
+    <div class="border rounded mt-2 p-3 bg-light">
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr>
+                    <th class="text-muted fw-semibold small text-uppercase" style="letter-spacing:.05em; width:45%;">Permission node</th>
+                    <th class="text-muted fw-semibold small text-uppercase" style="letter-spacing:.05em;">What it grants</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% permissions.forEach(p => { %>
+                    <tr>
+                        <td><code class="text-nowrap"><%= p.node %></code></td>
+                        <td class="text-muted small"><%= p.description || '' %></td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+        <p class="text-muted small mb-0 mt-2">
+            <i class="fas fa-info-circle fa-fw me-1"></i>
+            Wildcards are supported — <code>zander.web.*</code> grants all <code>zander.web</code> permissions.
+            Assign nodes in LuckPerms on your server.
+        </p>
+    </div>
+</details>
+<script>
+    (function () {
+        const details = document.currentScript.previousElementSibling;
+        const chevron = details && details.querySelector('.toggle-chevron');
+        if (!details || !chevron) return;
+        details.addEventListener('toggle', () => {
+            chevron.style.transform = details.open ? 'rotate(180deg)' : '';
+        });
+    })();
+</script>

@@ -1,0 +1,24 @@
+\target
+.idea
+/target
+/.idea
+*.iml
+dependency-reduced-pom.xml
+
+# jdtls generation
+.classpath
+.factorypath
+.project
+.settings/
+
+# git worktrees
+.worktrees/
+
+# graphify
+graphify-out/
+
+# build/compile logs
+compile_output.txt
+
+# VS Code
+.vscode/

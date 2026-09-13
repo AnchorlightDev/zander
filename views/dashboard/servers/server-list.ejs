@@ -1,80 +1,118 @@
-<%- include("../../modules/header.ejs", {
-    pageTitle: pageTitle,
-    pageDescription: "List of all Network Servers."
-}) %>
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
 
-<%- include("../../modules/navigationBar.ejs") %>
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
 
-<%- include("../../partials/miniHeader.ejs", {
-  headerTitle: "Servers",
-  backgroundImage: globalImage
-}) %>
+      <!-- ── Page header ─────────────────────────────────────────────────── -->
+      <div class="wp-admin-page-header">
+        <h1 class="wp-heading-inline">Servers</h1>
+        <a href="/dashboard/servers/create" class="page-title-action">
+          <i class="fas fa-plus" aria-hidden="true"></i> Add Server
+        </a>
+        <a href="https://modularsoft.org/docs/products/zander/features/server/"
+           target="_blank" rel="noopener" class="page-title-action outline"
+           title="Documentation">
+          <i class="fas fa-book" aria-hidden="true"></i>
+          <span class="d-none d-md-inline">Docs</span>
+        </a>
+      </div>
+      <hr class="wp-section-divider">
 
-<%- include("../../modules/dashboard/dashboard-header.ejs") %>
+      <%- include("../../admin/_notices.ejs") %>
 
-<div class="container my-4">
-    <div class="row g-4">
-        <div class="col-lg-3">
-            <%- include("../../modules/dashboard/dashboard-sidebar.ejs") %>
-        </div>
-        <main class="col-lg-9">
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                <h1 class="h2">Servers</h1>
-                <div class="btn-toolbar mb-2 mb-md-0">
-                    <a href="/dashboard/servers/create" class="btn btn-sm btn-info">Create a Server</a>
-                    <%- include("../../partials/documentationLink.ejs", {
-                        doclink: "https://modularsoft.org/docs/products/zander/features/server/"
-                    }) %>
-                </div>
-            </div>
+      <!-- ── List table ──────────────────────────────────────────────────── -->
+      <div class="wp-list-wrap">
 
-            <% if (req.cookies.alertType) { %>
-                <%- include("../../partials/alert.ejs", {
-                  alertType: req.cookies.alertType,
-                  content: req.cookies.alertContent
-                }) %>
+        <div class="tablenav">
+          <span class="text-muted-sm">
+            <% if (apiData && apiData.data) { %>
+              <%= apiData.data.length %> server<%= apiData.data.length !== 1 ? 's' : '' %>
             <% } %>
+          </span>
+        </div>
 
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Display Name</th>
-                            <th>Connection Address</th>
-                            <th>Type</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <% if (apiData.success == false) { %>
-                            <%- include("../../partials/alert.ejs", {
-                            alertType: "danger",
-                            content: apiData.message
-                            }) %>
-                        <% } else { %>
-                            <% apiData.data.forEach(function (server) { %>
-                                <tr>
-                                    <td><%= server.displayName %></td>
-                                    <td><%= server.serverConnectionAddress %></td>
-                                    <td><%= server.serverType %></td>
-                                    <td>
-                                        <div class="btn-group">
-                                            <a href="/dashboard/servers/edit?id=<%= server.serverId %>"><button class="btn btn-sm btn-warning" type="button">Edit</button></a>
+        <div class="table-responsive">
+          <table class="wp-list-table wp-list-table-responsive" aria-label="Servers">
+            <thead>
+              <tr>
+                <th scope="col">Display Name</th>
+                <th scope="col">Connection Address</th>
+                <th scope="col">Type</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
 
-                                            <form action="<%= process.env.siteAddress %>/redirect/server/delete" method="post">
-                                                <input type="hidden" name="serverId" value="<%= server.serverId %>">
-                                                <button class="btn btn-sm btn-danger" type="submit">Delete</button>
-                                            </form>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <% }) %>
-                        <% } %>
-                    </tbody>
-                </table>
-            </div>
-        </main>
-    </div>
-</div>
+              <% if (!apiData || apiData.success === false) { %>
+                <tr>
+                  <td colspan="4">
+                    <div class="wp-notice wp-notice-error" style="margin:0;">
+                      <span class="wp-notice-icon"><i class="fas fa-times-circle"></i></span>
+                      <p><%= apiData ? apiData.message : 'Failed to load servers.' %></p>
+                    </div>
+                  </td>
+                </tr>
 
-<%- include("../../modules/footer.ejs") %>
+              <% } else if (!apiData.data || apiData.data.length === 0) { %>
+                <tr>
+                  <td colspan="4">
+                    <div class="wp-empty-state">
+                      <i class="fas fa-server"></i>
+                      <p>No servers configured yet. <a href="/dashboard/servers/create">Add the first one.</a></p>
+                    </div>
+                  </td>
+                </tr>
+
+              <% } else { %>
+                <% for (const srv of apiData.data) { %>
+                  <%
+                    const _typeCls = srv.serverType === 'INTERNAL'
+                      ? 'blue'
+                      : srv.serverType === 'EXTERNAL'
+                      ? 'info'
+                      : 'inactive';
+                  %>
+                  <tr>
+                    <td data-label="Display Name">
+                      <strong><%= srv.displayName || '—' %></strong>
+                    </td>
+                    <td data-label="Connection Address">
+                      <code style="font-size:12px;"><%= srv.serverConnectionAddress || '—' %></code>
+                    </td>
+                    <td data-label="Type">
+                      <span class="wp-badge <%= _typeCls %>"><%= srv.serverType || '—' %></span>
+                    </td>
+                    <td data-label="Actions">
+                      <div class="row-actions">
+                        <a class="row-action-btn edit"
+                           href="/dashboard/servers/edit?id=<%= srv.serverId %>">
+                          <i class="fas fa-pen" aria-hidden="true"></i> Edit
+                        </a>
+                        <form action="<%= process.env.siteAddress %>/redirect/server/delete" method="post"
+                              style="display:inline;"
+                              onsubmit="return confirm('Delete server \'<%= srv.displayName %>\'?')">
+                          <input type="hidden" name="serverId" value="<%= srv.serverId %>">
+                          <button type="submit" class="row-action-btn danger">
+                            <i class="fas fa-trash" aria-hidden="true"></i> Delete
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                <% } %>
+              <% } %>
+
+            </tbody>
+          </table>
+        </div><!-- /table-responsive -->
+
+      </div><!-- /wp-list-wrap -->
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->

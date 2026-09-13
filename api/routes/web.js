@@ -1,6 +1,8 @@
 export default async function webApiRoute(app, config, db, features, lang) {
   const baseEndpoint = "/api/web";
 
+  const { luckpermsDb } = await import("../../controllers/databaseController.js");
+
   app.get(baseEndpoint + "/configuration", async function (req, res) {
     // There is no isFeatureEnabled() due to being a critical endpoint.
 
@@ -17,43 +19,51 @@ export default async function webApiRoute(app, config, db, features, lang) {
     // There is no isFeatureEnabled() due to being a critical endpoint.
 
     try {
-      const results = await new Promise((resolve, reject) => {
-        db.query(
-          `
-          SELECT COUNT(DISTINCT gs.userId) AS communityMembers
-          FROM gameSessions gs
-          JOIN users u ON gs.userId = u.userId
-          WHERE gs.sessionStart >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
-            AND u.account_disabled = 0;
+      const [mainResults, staffResults] = await Promise.all([
+        new Promise((resolve, reject) => {
+          db.query(
+            `
+            SELECT COUNT(DISTINCT gs.userId) AS communityMembers
+            FROM gameSessions gs
+            JOIN users u ON gs.userId = u.userId
+            WHERE gs.sessionStart >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
+              AND u.account_disabled = 0;
 
-          SELECT ROUND(SUM(TIMESTAMPDIFF(SECOND, gs.sessionStart, COALESCE(gs.sessionEnd, NOW()))) / 3600) AS timePlayed
-          FROM gameSessions gs
-          JOIN users u ON gs.userId = u.userId
-          WHERE gs.sessionStart >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
-            AND u.account_disabled = 0;
-
-          SELECT COUNT(*) AS totalStaff
-          FROM (
-            SELECT u.uuid
-            FROM userRanks ur
-            JOIN ranks r ON ur.rankSlug = r.rankSlug
-            JOIN users u ON u.uuid = ur.uuid
-            WHERE r.isStaff = 1
-              AND u.account_disabled = 0
-            GROUP BY u.uuid
-          ) staffRoster;
-          `,
-          (err, results) => {
-            if (err) return reject(err);
-            resolve(results);
-          }
-        );
-      });
+            SELECT ROUND(SUM(TIMESTAMPDIFF(SECOND, gs.sessionStart, COALESCE(gs.sessionEnd, NOW()))) / 3600) AS timePlayed
+            FROM gameSessions gs
+            JOIN users u ON gs.userId = u.userId
+            WHERE gs.sessionStart >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
+              AND u.account_disabled = 0;
+`,
+            (err, results) => {
+              if (err) return reject(err);
+              resolve(results);
+            }
+          );
+        }),
+        new Promise((resolve, reject) => {
+          luckpermsDb.query(
+            `SELECT COUNT(DISTINCT lup.uuid) AS totalStaff
+             FROM luckperms_user_permissions lup
+             JOIN luckperms_group_permissions lgp
+               ON lgp.name = SUBSTRING_INDEX(lup.permission, '.', -1)
+               AND lgp.permission LIKE 'meta.staff.%'
+               AND lgp.value = 1
+             WHERE lup.permission LIKE 'group.%'
+               AND lup.value = 1
+               AND SUBSTRING_INDEX(lup.permission, '.', -1) NOT IN ('default', 'retired')`,
+            (err, results) => {
+              if (err) return reject(err);
+              resolve(results);
+            }
+          );
+        }),
+      ]);
 
       // General
-      const communityMembers = results[0][0].communityMembers || 0;
-      const timePlayed = results[1][0].timePlayed || 0;
-      const staffMembers = results[2][0].totalStaff || 0;
+      const communityMembers = mainResults[0][0].communityMembers || 0;
+      const timePlayed = mainResults[1][0].timePlayed || 0;
+      const staffMembers = staffResults[0].totalStaff || 0;
 
       return res.send({
         success: true,

@@ -1,0 +1,201 @@
+<%- include("../header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription
+}) %>
+
+<%- include("../navigationBar.ejs") %>
+
+<% if (typeof isPreview !== 'undefined' && isPreview) { %>
+<div class="alert alert-warning text-center mb-0 rounded-0 border-start-0 border-end-0 border-top-0" role="alert" style="position:relative;z-index:1050;">
+    <i class="fas fa-eye me-2"></i><strong>Preview Mode</strong> — This is how the event will appear to the public. It is not yet visible to visitors.
+    <a href="/dashboard/events/view?eventId=<%= event.eventId %>" class="btn btn-sm btn-outline-dark ms-3">
+        <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+    </a>
+</div>
+<% } %>
+
+<% if (event.bannerUrl) { %>
+<div style="background:url('<%= event.bannerUrl %>') center/cover no-repeat;height:320px;position:relative;overflow:hidden;">
+    <div style="position:absolute;inset:0;background:linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.85) 100%);"></div>
+    <div class="container h-100 d-flex align-items-end pb-4 position-relative">
+        <div>
+            <% if (event.featured) { %><span class="badge bg-warning text-dark mb-2"><i class="fas fa-star me-1"></i>Featured</span><br><% } %>
+            <h1 class="fw-bold mb-0" style="color:#ffffff;font-size:clamp(1.5rem, 4vw, 2.5rem);text-shadow:0 2px 12px rgba(0,0,0,0.8);"><%= event.title %></h1>
+        </div>
+    </div>
+</div>
+<% } else { %>
+<%- include("../../partials/miniHeader.ejs", { headerTitle: event.title, backgroundImage: globalImage }) %>
+<% } %>
+
+<style>
+.event-description img { max-width: 100%; }
+.event-description p:last-child { margin-bottom: 0; }
+.info-row { display: flex; gap: .75rem; padding: .6rem 0; border-bottom: 1px solid var(--bs-border-color); }
+.info-row:last-child { border-bottom: none; }
+.info-icon { width: 1.25rem; flex-shrink: 0; text-align: center; margin-top: .1rem; }
+.btn-xs { padding: 0.15rem 0.4rem; font-size: 0.75rem; }
+</style>
+
+<div class="container py-5">
+    <div class="row g-4">
+
+        <!-- Main Content -->
+        <div class="col-lg-8">
+
+            <% if (event.description) { %>
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3"><i class="fas fa-info-circle me-2 text-primary"></i>About This Event</h5>
+                    <div class="event-description"><%- event.description %></div>
+                </div>
+            </div>
+            <% } %>
+
+            <!-- Hosts -->
+            <% if (event.hosts && event.hosts.length > 0) { %>
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3"><i class="fas fa-users me-2 text-primary"></i>Event Team</h5>
+                    <div class="d-flex flex-wrap gap-3">
+                        <% event.hosts.forEach(h => { %>
+                        <div class="d-flex align-items-center gap-2 border rounded-3 px-3 py-2 bg-light">
+                            <% if (h.avatarUrl) { %>
+                                <img src="<%= h.avatarUrl %>" alt="<%= h.displayName || 'Host' %>" class="rounded-circle flex-shrink-0" style="width:38px;height:38px;object-fit:cover;" loading="lazy">
+                            <% } else { %>
+                                <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center text-white flex-shrink-0" style="width:38px;height:38px;">
+                                    <i class="fas fa-user small"></i>
+                                </div>
+                            <% } %>
+                            <div>
+                                <div class="fw-semibold small"><%= h.displayName || 'Unknown' %></div>
+                                <div class="text-muted" style="font-size:.75rem;text-transform:capitalize;"><%= h.role.replace('_',' ') %></div>
+                            </div>
+                        </div>
+                        <% }) %>
+                    </div>
+                </div>
+            </div>
+            <% } %>
+
+            <!-- External Links -->
+            <% if (externalLinks && externalLinks.length > 0) { %>
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3"><i class="fas fa-link me-2 text-primary"></i>Links</h5>
+                    <div class="d-flex flex-wrap gap-2">
+                        <% externalLinks.forEach(link => { %>
+                            <a href="<%= link.url %>" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-external-link-alt me-1"></i><%= link.label || link.url %>
+                            </a>
+                        <% }) %>
+                    </div>
+                </div>
+            </div>
+            <% } %>
+
+            <a href="/events" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left me-2"></i>All Events
+            </a>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm sticky-top" style="top:20px;">
+                <% if (event.logoUrl) { %>
+                <div class="text-center pt-4">
+                    <img src="<%= event.logoUrl %>" alt="Event Logo" style="max-height:72px;max-width:144px;object-fit:contain;">
+                </div>
+                <% } %>
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3"><%= event.title %></h5>
+
+                    <div class="mb-3">
+                        <div class="info-row">
+                            <span class="info-icon text-primary"><i class="fas fa-calendar-day"></i></span>
+                            <div>
+                                <div class="small fw-semibold text-muted text-uppercase" style="font-size:.7rem;letter-spacing:.05em;">Starts</div>
+                                <div class="js-datetime-full" data-iso="<%= event.startAt ? new Date(event.startAt).toISOString() : '' %>"></div>
+                                <div class="text-muted small js-datetime-relative" data-iso="<%= event.startAt ? new Date(event.startAt).toISOString() : '' %>"></div>
+                            </div>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-icon text-secondary"><i class="fas fa-calendar-check"></i></span>
+                            <div>
+                                <div class="small fw-semibold text-muted text-uppercase" style="font-size:.7rem;letter-spacing:.05em;">Ends</div>
+                                <div class="js-datetime-full" data-iso="<%= event.endAt ? new Date(event.endAt).toISOString() : '' %>"></div>
+                            </div>
+                        </div>
+                        <% if (event.locationLabel) { %>
+                        <div class="info-row">
+                            <span class="info-icon text-danger"><i class="fas fa-map-marker-alt"></i></span>
+                            <div>
+                                <div class="small fw-semibold text-muted text-uppercase" style="font-size:.7rem;letter-spacing:.05em;">Location</div>
+                                <div><%= event.locationLabel %></div>
+                                <% if (event.locationType === 'discord' && event.locationDiscordChannelId && config.discord?.guildId) { %>
+                                <a href="https://discord.com/channels/<%= config.discord.guildId %>/<%= event.locationDiscordChannelId %>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary mt-1">
+                                    <i class="fab fa-discord me-1"></i>Join Voice Channel
+                                </a>
+                                <% } %>
+                            </div>
+                        </div>
+                        <% } %>
+                        <% if (event.serverName) { %>
+                        <div class="info-row">
+                            <span class="info-icon text-info"><i class="fas fa-server"></i></span>
+                            <div>
+                                <div class="small fw-semibold text-muted text-uppercase" style="font-size:.7rem;letter-spacing:.05em;">Server</div>
+                                <div><%= event.serverName %></div>
+                                <% if (event.serverIp) { %><div class="font-monospace small text-muted"><%= event.serverIp %></div><% } %>
+                            </div>
+                        </div>
+                        <% } %>
+                    </div>
+
+                    <!-- Tags -->
+                    <% if (tags && tags.length > 0) { %>
+                    <div class="mb-3">
+                        <% tags.forEach(tag => { %>
+                            <span class="badge bg-secondary me-1 mb-1"><%= tag %></span>
+                        <% }) %>
+                    </div>
+                    <% } %>
+
+                    <!-- Calendar -->
+                    <div class="d-grid">
+                        <a href="<%= gcalUrl %>" target="_blank" rel="noopener noreferrer" class="btn btn-outline-danger btn-sm">
+                            <i class="fab fa-google me-2"></i>Add to Google Calendar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<%- include("../footer.ejs") %>
+
+<script>
+document.querySelectorAll('.js-datetime-full').forEach(el => {
+    const d = el.dataset.iso ? new Date(el.dataset.iso) : null;
+    el.textContent = d && !isNaN(d) ? d.toLocaleString(undefined, {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
+    }) : '—';
+});
+
+document.querySelectorAll('.js-datetime-relative').forEach(el => {
+    const d = el.dataset.iso ? new Date(el.dataset.iso) : null;
+    if (!d || isNaN(d)) { el.textContent = ''; return; }
+    const diff = d - new Date();
+    if (diff < 0) { el.textContent = 'This event has passed'; return; }
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    if (days > 0) el.textContent = `Starts in ${days} day${days !== 1 ? 's' : ''}`;
+    else if (hours > 0) el.textContent = `Starts in ${hours} hour${hours !== 1 ? 's' : ''}`;
+    else if (mins > 0) el.textContent = `Starts in ${mins} minute${mins !== 1 ? 's' : ''}`;
+    else el.textContent = 'Starting now!';
+});
+</script>

@@ -1,6 +1,7 @@
 <textarea id="<%= editorElementName %>" name="<%= editorPOSTElementName %>"><%= editorElementText %></textarea>
+<div id="<%= editorElementName %>-validation" class="text-danger small mt-1" style="display:none;">Post content cannot be empty.</div>
 
-<script src="https://cdn.jsdelivr.net/npm/marked@13/marked.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/marked@13/marked.min.js"></script>
 <script>
   $(document).ready(function() {
     window.emojis = window.emojis || [];
@@ -41,6 +42,51 @@
       .fail(function() {
         console.warn('Unable to load custom emoji list.');
       });
+
+    // Force-sync the backing textarea right before the form submits.
+    // Registered before Summernote init so it always fires regardless of
+    // whether Summernote initialises successfully.
+    $('#<%= editorElementName %>').closest('form').on('submit', function (e) {
+      const $editor = $('#<%= editorElementName %>');
+      const $validation = $('#<%= editorElementName %>-validation');
+      const snData = $editor.data('summernote');
+
+      if (snData) {
+        // Summernote is active
+        if ($editor.summernote('isEmpty')) {
+          e.preventDefault();
+          $validation.show();
+          $editor.summernote('focus');
+          var $form = $(this);
+          setTimeout(function() {
+            var $btn = $form.find('button[type="submit"]');
+            var orig = $btn[0] && $btn[0].dataset.originalText;
+            if (orig) { $btn.text(orig); }
+            $btn.prop('disabled', false);
+          }, 50);
+          return false;
+        }
+
+        $validation.hide();
+        document.getElementById('<%= editorElementName %>').value = $editor.summernote('code');
+      } else {
+        // Summernote did not init — textarea holds the value directly.
+        var rawVal = ($editor.val() || '').trim();
+        if (!rawVal) {
+          e.preventDefault();
+          $validation.show();
+          var $form = $(this);
+          setTimeout(function() {
+            var $btn = $form.find('button[type="submit"]');
+            var orig = $btn[0] && $btn[0].dataset.originalText;
+            if (orig) { $btn.text(orig); }
+            $btn.prop('disabled', false);
+          }, 50);
+          return false;
+        }
+        $validation.hide();
+      }
+    });
 
     // ── Custom toolbar buttons ─────────────────────────────────────────────
     // The built-in 'style' dropdown is broken in Summernote 0.8.x + BS5
@@ -149,14 +195,6 @@
     });
 
     $('div.note-group-select-from-files').remove();
-
-    // Force-sync the backing textarea right before the form submits.
-    // Summernote updates the textarea on change events but may not flush on
-    // a rapid submit; doing this guarantees content is never lost.
-    $('#<%= editorElementName %>').closest('form').on('submit', function () {
-      document.getElementById('<%= editorElementName %>').value =
-        $('#<%= editorElementName %>').summernote('code');
-    });
 
   });
 </script>

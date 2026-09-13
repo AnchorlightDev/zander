@@ -1,67 +1,256 @@
-<%- include("../modules/header.ejs", {
-    pageTitle: pageTitle,
-    pageDescription: "The dashboard for the Network Administration Panel"
-}) %>
+<%- include("../admin/_head.ejs", { pageTitle }) %>
+<%- include("../admin/_topbar.ejs") %>
+<%- include("../admin/_sidebar.ejs") %>
 
-<%- include("../modules/navigationBar.ejs") %>
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
 
-<%- include("../partials/miniHeader.ejs", {
-  headerTitle: "Dashboard",
-  backgroundImage: globalImage
-}) %>
+      <!-- ── Page header ─────────────────────────────────────────────────── -->
+      <div class="wp-admin-page-header">
+        <h1 class="wp-heading-inline">Dashboard</h1>
+      </div>
+      <hr class="wp-section-divider">
 
-<%- include("../modules/dashboard/dashboard-header.ejs") %>
+      <%- include("../admin/_notices.ejs") %>
 
-<div class="container my-4">
-    <div class="row g-4">
-        <div class="col-lg-3">
-            <%- include("../modules/dashboard/dashboard-sidebar.ejs") %>
-        </div>
-        <main class="col-lg-9">
-            <% if (req.cookies.alertType) { %>
-                <%- include("../partials/alert.ejs", {
-                  alertType: req.cookies.alertType,
-                  content: req.cookies.alertContent
-                }) %>
-            <% } %>
+      <!-- ── Stat cards ─────────────────────────────────────────────────── -->
+      <div class="stat-card-grid">
 
-            <div class="row g-3 mb-4">
-                <div class="col-sm-6 col-md-4">
-                    <div class="card shadow-sm border-0 dashboard-stat-card">
-                        <div class="card-body d-flex align-items-center gap-3 p-3">
-                            <div class="dashboard-stat-icon text-success"><i class="fas fa-bullhorn"></i></div>
-                            <div>
-                                <div class="text-muted small">Announcements</div>
-                                <div class="fw-bold fs-4"><%= announcementsCount %></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-sm-6 col-md-4">
-                    <div class="card shadow-sm border-0 dashboard-stat-card">
-                        <div class="card-body d-flex align-items-center gap-3 p-3">
-                            <div class="dashboard-stat-icon text-primary"><i class="fas fa-file-alt"></i></div>
-                            <div>
-                                <div class="text-muted small">Applications</div>
-                                <div class="fw-bold fs-4"><%= applicationsCount %></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-sm-6 col-md-4">
-                    <div class="card shadow-sm border-0 dashboard-stat-card">
-                        <div class="card-body d-flex align-items-center gap-3 p-3">
-                            <div class="dashboard-stat-icon text-warning"><i class="fas fa-server"></i></div>
-                            <div>
-                                <div class="text-muted small">Servers</div>
-                                <div class="fw-bold fs-4"><%= serversCount %></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <a class="stat-card" href="/dashboard/announcements">
+          <div class="stat-icon blue"><i class="fas fa-bullhorn" aria-hidden="true"></i></div>
+          <div class="stat-info">
+            <div class="stat-label">Announcements</div>
+            <div class="stat-value"><%= announcementsCount %></div>
+          </div>
+        </a>
+
+        <a class="stat-card" href="/dashboard/applications">
+          <div class="stat-icon green"><i class="fas fa-file-alt" aria-hidden="true"></i></div>
+          <div class="stat-info">
+            <div class="stat-label">Applications</div>
+            <div class="stat-value"><%= applicationsCount %></div>
+          </div>
+        </a>
+
+
+        <a class="stat-card" href="/dashboard/servers">
+          <div class="stat-icon amber"><i class="fas fa-server" aria-hidden="true"></i></div>
+          <div class="stat-info">
+            <div class="stat-label">Servers</div>
+            <div class="stat-value"><%= serversCount %></div>
+          </div>
+        </a>
+
+        <% if (features.support) { %>
+          <a class="stat-card" href="/dashboard/support">
+            <div class="stat-icon purple"><i class="fas fa-ticket-alt" aria-hidden="true"></i></div>
+            <div class="stat-info">
+              <div class="stat-label">Support Tickets</div>
+              <div class="stat-value">—</div>
             </div>
-        </main>
-    </div>
-</div>
+          </a>
+        <% } %>
 
-<%- include("../modules/footer.ejs") %>
+        <% if (features.webstore) { %>
+          <a class="stat-card" href="/dashboard/webstore">
+            <div class="stat-icon green"><i class="fas fa-store" aria-hidden="true"></i></div>
+            <div class="stat-info">
+              <div class="stat-label">Webstore</div>
+              <div class="stat-value">—</div>
+            </div>
+          </a>
+        <% } %>
+
+        <% if (features.finance) { %>
+          <a class="stat-card" href="/dashboard/finance">
+            <div class="stat-icon amber"><i class="fas fa-chart-line" aria-hidden="true"></i></div>
+            <div class="stat-info">
+              <div class="stat-label">Finance</div>
+              <div class="stat-value">—</div>
+            </div>
+          </a>
+        <% } %>
+
+      </div>
+      <!-- /stat-card-grid -->
+
+      <!-- ── Widget grid ────────────────────────────────────────────────── -->
+      <div class="wp-widget-grid">
+
+        <!-- Quick actions -->
+        <div class="wp-card">
+          <div class="wp-card-header">
+            <h2 class="wp-card-title"><i class="fas fa-bolt" aria-hidden="true"></i> Quick Actions</h2>
+          </div>
+          <div class="wp-card-body">
+            <div class="quick-action-grid">
+
+              <% if (features.announcements) { %>
+                <a class="quick-action-item" href="/dashboard/announcements/create">
+                  <i class="fas fa-plus-circle" aria-hidden="true"></i>
+                  New Announcement
+                </a>
+              <% } %>
+
+              <% if (features.events) { %>
+                <a class="quick-action-item" href="/dashboard/events">
+                  <i class="fas fa-calendar-plus" aria-hidden="true"></i>
+                  Events Calendar
+                </a>
+              <% } %>
+
+
+              <% if (features.server) { %>
+                <a class="quick-action-item" href="/dashboard/servers/create">
+                  <i class="fas fa-server" aria-hidden="true"></i>
+                  Add Server
+                </a>
+              <% } %>
+
+              <% if (features.support) { %>
+                <a class="quick-action-item" href="/dashboard/support">
+                  <i class="fas fa-ticket-alt" aria-hidden="true"></i>
+                  Manage Tickets
+                </a>
+              <% } %>
+
+
+              <a class="quick-action-item" href="/dashboard/logs">
+                <i class="fas fa-terminal" aria-hidden="true"></i>
+                System Logs
+              </a>
+
+              <% if (features.forums) { %>
+                <a class="quick-action-item" href="/dashboard/forums/categories">
+                  <i class="fas fa-comments" aria-hidden="true"></i>
+                  Forum Categories
+                </a>
+              <% } %>
+
+              <a class="quick-action-item" href="/dashboard/bridge">
+                <i class="fas fa-bridge" aria-hidden="true"></i>
+                Bridge Status
+              </a>
+
+              <% if (features.webstore) { %>
+                <a class="quick-action-item" href="/dashboard/webstore">
+                  <i class="fas fa-store" aria-hidden="true"></i>
+                  Webstore Purchases
+                </a>
+              <% } %>
+
+              <% if (features.finance) { %>
+                <a class="quick-action-item" href="/dashboard/finance">
+                  <i class="fas fa-chart-line" aria-hidden="true"></i>
+                  Finance
+                </a>
+              <% } %>
+
+            </div>
+          </div>
+        </div>
+        <!-- /quick actions -->
+
+        <!-- Recent announcements -->
+        <div class="wp-card">
+          <div class="wp-card-header">
+            <h2 class="wp-card-title"><i class="fas fa-bullhorn" aria-hidden="true"></i> Recent Announcements</h2>
+            <% if (features.announcements) { %>
+              <a class="page-title-action outline" href="/dashboard/announcements" style="font-size:12px;padding:3px 8px;">View All</a>
+            <% } %>
+          </div>
+          <div class="wp-card-body" style="padding: 0;">
+            <% if (!recentAnnouncements || recentAnnouncements.length === 0) { %>
+              <div class="wp-empty-state">
+                <i class="fas fa-bullhorn"></i>
+                <p>No announcements found.</p>
+              </div>
+            <% } else { %>
+              <ul class="wp-recent-list" style="margin: 0; padding: 0 16px;">
+                <% for (const ann of recentAnnouncements) { %>
+                  <%
+                    const _now     = new Date();
+                    const _end     = ann.endDate ? new Date(ann.endDate) : null;
+                    const _start   = ann.startDate ? new Date(ann.startDate) : null;
+                    const _expired = _end && _end < _now;
+                    const _sched   = _start && _start > _now;
+                    let _statusCls = ann.enabled ? 'active' : 'inactive';
+                    if (_expired)   _statusCls = 'inactive';
+                    if (_sched)     _statusCls = 'pending';
+                    let _statusLbl = ann.enabled ? 'Active' : 'Disabled';
+                    if (_expired)   _statusLbl = 'Expired';
+                    if (_sched)     _statusLbl = 'Scheduled';
+                  %>
+                  <li>
+                    <span class="item-label">
+                      <span class="wp-badge info" style="margin-right:6px;"><%= ann.announcementType %></span>
+                      <%= ann.colourMessageFormat || ann.body || '(no text)' %>
+                    </span>
+                    <span class="wp-badge <%= _statusCls %>"><%= _statusLbl %></span>
+                  </li>
+                <% } %>
+              </ul>
+            <% } %>
+          </div>
+          <% if (features.announcements) { %>
+            <div class="wp-card-footer">
+              <a href="/dashboard/announcements/create" class="button-primary" style="font-size:12px;padding:4px 10px;">
+                <i class="fas fa-plus" aria-hidden="true"></i> New Announcement
+              </a>
+            </div>
+          <% } %>
+        </div>
+        <!-- /recent announcements -->
+
+        <!-- System info -->
+        <div class="wp-card">
+          <div class="wp-card-header">
+            <h2 class="wp-card-title"><i class="fas fa-info-circle" aria-hidden="true"></i> System Overview</h2>
+          </div>
+          <div class="wp-card-body">
+            <table style="width:100%;font-size:13px;border-collapse:collapse;">
+              <tr style="border-bottom:1px solid #f0f0f1;">
+                <td style="padding:7px 0;color:#646970;width:120px;">Platform</td>
+                <td style="padding:7px 0;font-weight:600;"><%= config.siteConfiguration.siteName %></td>
+              </tr>
+              <tr style="border-bottom:1px solid #f0f0f1;">
+                <td style="padding:7px 0;color:#646970;">Environment</td>
+                <td style="padding:7px 0;">
+                  <span class="wp-badge active">Online</span>
+                </td>
+              </tr>
+              <% if (features.announcements) { %>
+                <tr style="border-bottom:1px solid #f0f0f1;">
+                  <td style="padding:7px 0;color:#646970;">Announcements</td>
+                  <td style="padding:7px 0;"><%= announcementsCount %> total</td>
+                </tr>
+              <% } %>
+              <% if (features.server) { %>
+                <tr style="border-bottom:1px solid #f0f0f1;">
+                  <td style="padding:7px 0;color:#646970;">Servers</td>
+                  <td style="padding:7px 0;"><%= serversCount %> registered</td>
+                </tr>
+              <% } %>
+              <tr>
+                <td style="padding:7px 0;color:#646970;">Logged in as</td>
+                <td style="padding:7px 0;">
+                  <a href="/profile/<%= req.session.user.username %>"><%= req.session.user.username %></a>
+                </td>
+              </tr>
+            </table>
+          </div>
+          <div class="wp-card-footer">
+            <a href="/dashboard/logs" style="font-size:12px;">View system logs →</a>
+          </div>
+        </div>
+        <!-- /system info -->
+
+      </div>
+      <!-- /wp-widget-grid -->
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+
+  <%- include("../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->

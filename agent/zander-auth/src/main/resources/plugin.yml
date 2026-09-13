@@ -1,0 +1,5 @@
+main: dev.anchorlight.zander.auth.ZanderAuthMain
+name: zander-auth
+version: ${project.version}
+author: ModularSoft
+api-version: 1.19

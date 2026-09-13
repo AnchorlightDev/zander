@@ -1,8 +1,8 @@
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const config = require("../config.json");
-import db from "./databaseController.js";
-import { ChannelType, PermissionFlagsBits } from "discord.js";
+import db, { luckpermsDb } from "./databaseController.js";
+import { ChannelType, PermissionFlagsBits, OverwriteType } from "discord.js";
 import { hashEmail } from "../api/common.js";
 import { createNotificationsForUsers } from "./notificationController.js";
 
@@ -492,11 +492,22 @@ export async function createSupportCategory(name, description, discordCategoryId
   });
 }
 
+// LuckPerms lives on a separate MySQL server from the main app DB, so this
+// can't be read via the (cross-server, unreliable) `ranks` view — query
+// luckpermsDb directly, scoped to server='global'/world='global' to match
+// how the dashboard's rank config editor writes these nodes.
 export async function getLuckPermRankRoles() {
     try {
-        const ranks = await new Promise((resolve, reject) => {
-            db.query(
-                "SELECT rankSlug, displayName, discordRoleId, rankBadgeColour, rankTextColour FROM ranks WHERE discordRoleId IS NOT NULL AND discordRoleId != ''",
+        const rows = await new Promise((resolve, reject) => {
+            luckpermsDb.query(
+                `SELECT name, permission FROM luckperms_group_permissions
+                  WHERE server = 'global' AND world = 'global' AND value = 1
+                    AND (
+                      permission LIKE 'displayname.%'
+                      OR permission LIKE 'meta.discordid.%'
+                      OR permission LIKE 'meta.rankbadgecolour.%'
+                      OR permission LIKE 'meta.ranktextcolour.%'
+                    )`,
                 (error, results) => {
                     if (error) {
                         reject(error);
@@ -507,13 +518,26 @@ export async function getLuckPermRankRoles() {
             );
         });
 
-        return ranks.map((rank) => ({
-            id: rank.discordRoleId,
-            name: rank.displayName || rank.rankSlug,
-            rankSlug: rank.rankSlug,
-            badgeColor: rank.rankBadgeColour,
-            textColor: rank.rankTextColour,
-        }));
+        const meta = new Map();
+        for (const row of rows) {
+            const m = meta.get(row.name) || {};
+            const p = row.permission;
+            if (p.startsWith("displayname.")) m.displayName = p.slice("displayname.".length);
+            else if (p.startsWith("meta.discordid.")) m.discordRoleId = p.slice("meta.discordid.".length);
+            else if (p.startsWith("meta.rankbadgecolour.")) m.rankBadgeColour = "#" + p.slice("meta.rankbadgecolour.".length);
+            else if (p.startsWith("meta.ranktextcolour.")) m.rankTextColour = "#" + p.slice("meta.ranktextcolour.".length);
+            meta.set(row.name, m);
+        }
+
+        return [...meta.entries()]
+            .filter(([, m]) => m.discordRoleId)
+            .map(([rankSlug, m]) => ({
+                id: m.discordRoleId,
+                name: m.displayName || rankSlug,
+                rankSlug,
+                badgeColor: m.rankBadgeColour || null,
+                textColor: m.rankTextColour || null,
+            }));
     } catch (error) {
         console.error("getLuckPermRankRoles: failed to fetch rank Discord role mappings", error);
         return [];
@@ -558,6 +582,23 @@ export async function createSupportTicket(
         },
     ];
 
+    // The bot must be able to see and post in the channel it just created —
+    // without an explicit overwrite the @everyone ViewChannel deny above can
+    // stop `channel.send` (the pinned opener embed) from working.
+    const botId = client?.user?.id;
+    if (botId) {
+        permissionOverwrites.push({
+            id: botId,
+            allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.EmbedLinks,
+                PermissionFlagsBits.AttachFiles,
+                PermissionFlagsBits.ReadMessageHistory,
+            ],
+        });
+    }
+
     if (discordUserId) {
         permissionOverwrites.push({
             id: discordUserId,
@@ -583,52 +624,191 @@ export async function createSupportTicket(
         });
     });
 
+    const hasChannelColumn = await ensureDiscordChannelColumn();
+
+    // Persist the ticket row FIRST. A Discord API failure can then never leave an
+    // orphaned "ticket-pending" channel with no matching DB row (the bug that
+    // spammed `getTicketDetailsByChannel: no ticket linked to channel ...`).
+    const ticketId = await new Promise((resolve, reject) => {
+        db.query(
+            "INSERT INTO supportTickets (userId, categoryId, title) VALUES (?, ?, ?)",
+            [userId, categoryId, title],
+            (err, results) => (err ? reject(err) : resolve(results.insertId)),
+        );
+    });
+
+    // Create the Discord channel already named with the real ticket id, so a
+    // failure part-way through leaves an obviously-named, sweepable channel
+    // rather than a bare "ticket-pending".
     const channelCreationOptions = {
-        name: "ticket-pending",
+        name: `ticket-${ticketId}`,
         type: ChannelType.GuildText,
         permissionOverwrites,
-        reason: `Support ticket for ${discordUserId ?? `user ${userId}`}`,
+        reason: `Support ticket #${ticketId} for ${discordUserId ?? `user ${userId}`}`,
     };
-
-    // Set parent category if configured
     if (targetParentId) {
         channelCreationOptions.parent = targetParentId;
     }
 
-    const channel = await guild.channels.create(channelCreationOptions);
-
-    const hasChannelColumn = await ensureDiscordChannelColumn();
-
-    return new Promise((resolve, reject) => {
-        const query = hasChannelColumn
-            ? "INSERT INTO supportTickets (userId, categoryId, title, discordChannelId) VALUES (?, ?, ?, ?)"
-            : "INSERT INTO supportTickets (userId, categoryId, title) VALUES (?, ?, ?)";
-        const params = hasChannelColumn
-            ? [userId, categoryId, title, channel.id]
-            : [userId, categoryId, title];
-
-        db.query(query, params, async (err, results) => {
-            if (err) {
-                try {
-                    await channel.delete("Failed to persist support ticket");
-                } catch (cleanupError) {
-                    console.error("Failed to clean up orphaned ticket channel", cleanupError);
-                }
-                reject(err);
-                return;
-            }
-
-            const ticketId = results.insertId;
-
-            try {
-                await channel.setName(`ticket-${ticketId}`);
-            } catch (renameError) {
-                console.error("Failed to rename ticket channel", renameError);
-            }
-
-            resolve({ ticketId, channel });
+    let channel = null;
+    try {
+        channel = await guild.channels.create(channelCreationOptions);
+    } catch (channelError) {
+        console.error("createSupportTicket: Discord channel creation failed; ticket persisted without a channel", {
+            ticketId,
+            parentId: targetParentId,
+            discordCode: channelError?.code,
+            message: channelError?.message,
         });
+        // The row survives — staff can recreate the channel via ticket reopen.
+        return { ticketId, channel: null };
+    }
+
+    if (!hasChannelColumn) {
+        return { ticketId, channel };
+    }
+
+    // Link the channel back to the row. If this fails, delete the channel so it
+    // never dangles unlinked.
+    try {
+        await new Promise((resolve, reject) => {
+            db.query(
+                "UPDATE supportTickets SET discordChannelId = ? WHERE ticketId = ?",
+                [channel.id, ticketId],
+                (err) => (err ? reject(err) : resolve()),
+            );
+        });
+    } catch (linkError) {
+        console.error("createSupportTicket: failed to link channel to ticket; deleting channel", {
+            ticketId,
+            channelId: channel.id,
+            message: linkError?.message,
+        });
+        try {
+            await channel.delete("Failed to link ticket channel to database row");
+        } catch (cleanupError) {
+            console.error("createSupportTicket: failed to delete unlinked ticket channel", {
+                ticketId,
+                channelId: channel.id,
+            }, cleanupError);
+        }
+        return { ticketId, channel: null };
+    }
+
+    return { ticketId, channel };
+}
+
+/**
+ * Delete Discord channels that look like ticket channels (name `ticket-<n>` or
+ * the legacy `ticket-pending`) but have no matching `supportTickets` row linking
+ * them. These are the debris left by a create that failed after the channel was
+ * made. Runs on bot startup. `minAgeMinutes` guards against deleting a channel
+ * whose row is still being written by an in-flight `createSupportTicket`.
+ */
+export async function cleanupOrphanTicketChannels(client, { minAgeMinutes = 10, dryRun = false } = {}) {
+    const hasChannelColumn = await ensureDiscordChannelColumn();
+    if (!hasChannelColumn || !client) return { scanned: 0, deleted: 0 };
+
+    const guildId = config.discord?.guildId ?? process.env.DISCORD_GUILD_ID;
+    const categoryId = config.discord?.supportTicketCategoryId ?? process.env.SUPPORT_CATEGORY_ID ?? null;
+    if (!guildId) return { scanned: 0, deleted: 0 };
+
+    let guild;
+    try {
+        guild = await client.guilds.fetch(guildId);
+    } catch (error) {
+        console.error("cleanupOrphanTicketChannels: failed to fetch guild", error);
+        return { scanned: 0, deleted: 0 };
+    }
+
+    let channels;
+    try {
+        channels = await guild.channels.fetch();
+    } catch (error) {
+        console.error("cleanupOrphanTicketChannels: failed to fetch channels", error);
+        return { scanned: 0, deleted: 0 };
+    }
+
+    const linkedIds = await new Promise((resolve) => {
+        db.query(
+            "SELECT discordChannelId FROM supportTickets WHERE discordChannelId IS NOT NULL",
+            (err, rows) => {
+                if (err) {
+                    console.error("cleanupOrphanTicketChannels: failed to load linked channel ids", err);
+                    resolve(null);
+                    return;
+                }
+                resolve(new Set(rows.map((r) => String(r.discordChannelId))));
+            },
+        );
     });
+    if (!linkedIds) return { scanned: 0, deleted: 0 };
+
+    const cutoff = Date.now() - minAgeMinutes * 60 * 1000;
+    const candidates = [...channels.values()].filter(
+        (ch) =>
+            ch &&
+            ch.type === ChannelType.GuildText &&
+            /^ticket-(pending|\d+)$/.test(ch.name) &&
+            (!categoryId || ch.parentId === categoryId) &&
+            !linkedIds.has(String(ch.id)) &&
+            ch.createdTimestamp &&
+            ch.createdTimestamp < cutoff,
+    );
+
+    const me = guild.members?.me ?? null;
+    let deleted = 0;
+    const skipped = []; // channels we cannot touch — reported once, not per-channel
+
+    for (const ch of candidates) {
+        // Don't even attempt the API call if the bot plainly can't manage this
+        // channel — that just produces a 50001/50013 error per restart.
+        const perms = me ? ch.permissionsFor(me) : null;
+        if (
+            perms &&
+            !(
+                perms.has(PermissionFlagsBits.ViewChannel) &&
+                perms.has(PermissionFlagsBits.ManageChannels)
+            )
+        ) {
+            skipped.push(`${ch.name} (${ch.id})`);
+            continue;
+        }
+
+        if (dryRun) {
+            console.info(`cleanupOrphanTicketChannels: [dry-run] would delete ${ch.name} (${ch.id})`);
+            continue;
+        }
+
+        try {
+            await ch.delete("Orphaned ticket channel with no matching database row");
+            deleted += 1;
+            console.info(`cleanupOrphanTicketChannels: deleted orphan ${ch.name} (${ch.id})`);
+        } catch (error) {
+            if (error?.code === 50001 || error?.code === 50013) {
+                skipped.push(`${ch.name} (${ch.id})`);
+            } else {
+                console.error(
+                    `cleanupOrphanTicketChannels: failed to delete ${ch.name} (${ch.id})`,
+                    error,
+                );
+            }
+        }
+    }
+
+    if (deleted) {
+        console.info(
+            `cleanupOrphanTicketChannels: ${deleted}/${candidates.length} orphan ticket channel(s) removed`,
+        );
+    }
+    if (skipped.length) {
+        console.warn(
+            `cleanupOrphanTicketChannels: ${skipped.length} orphan ticket channel(s) left in place — ` +
+                `bot lacks View Channel + Manage Channels on them (grant access on the ticket category ` +
+                `or delete manually): ${skipped.sort().join(", ")}`,
+        );
+    }
+    return { scanned: candidates.length, deleted, skipped: skipped.length };
 }
 
 export async function recreateTicketChannel(
@@ -698,6 +878,20 @@ export async function recreateTicketChannel(
             deny: [PermissionFlagsBits.ViewChannel],
         },
     ];
+
+    const botId = client?.user?.id;
+    if (botId) {
+        permissionOverwrites.push({
+            id: botId,
+            allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.EmbedLinks,
+                PermissionFlagsBits.AttachFiles,
+                PermissionFlagsBits.ReadMessageHistory,
+            ],
+        });
+    }
 
     if (owner?.discordId) {
         permissionOverwrites.push({
@@ -1067,6 +1261,18 @@ export async function removeTicketParticipantPermissions(
     }
 }
 
+// Discord codes meaning "the thing you are pointing at no longer exists"
+// (participant left the guild, role/channel deleted, stale overwrite cache).
+// These are expected for long-lived tickets and must not abort the permission
+// sync for the remaining participants.
+const MISSING_TARGET_DISCORD_CODES = new Set([
+    10003, // Unknown Channel
+    10007, // Unknown Member
+    10009, // Unknown Overwrite
+    10011, // Unknown Role
+    10013, // Unknown User
+]);
+
 export async function applyTicketParticipantPermissions(client, ticketId) {
     const hasChannelColumn = await ensureDiscordChannelColumn();
     const hasTable = await ensureTicketParticipantTable();
@@ -1097,17 +1303,48 @@ export async function applyTicketParticipantPermissions(client, ticketId) {
 
     const isSnowflake = (value) => Boolean(value) && /^\d{5,}$/.test(String(value).trim());
 
+    const botPerms = channel.permissionsFor?.(channel.guild?.members?.me);
+    const canManagePermissions = botPerms ? botPerms.has(PermissionFlagsBits.ManageRoles) : null;
+
     participants.users
         .map((user) => (user.discordId ? String(user.discordId).trim() : ""))
         .filter((id) => isSnowflake(id))
         .forEach((discordId) => {
             permissionUpdates.push(
-                channel.permissionOverwrites.edit(discordId, {
-                    ViewChannel: true,
-                    SendMessages: true,
-                    AttachFiles: true,
-                    ReadMessageHistory: true,
-                }),
+                channel.permissionOverwrites
+                    .edit(
+                        discordId,
+                        {
+                            ViewChannel: true,
+                            SendMessages: true,
+                            AttachFiles: true,
+                            ReadMessageHistory: true,
+                        },
+                        // Explicit type: the target user may not be cached (never
+                        // seen by the bot), which otherwise fails with InvalidType
+                        // "Supplied parameter is not a User nor a Role".
+                        { type: OverwriteType.Member },
+                    )
+                    .catch((error) => {
+                        const details = {
+                            ticketId,
+                            channelId: channel.id,
+                            targetUserId: discordId,
+                            canManagePermissions,
+                            discordCode: error?.code,
+                            status: error?.status,
+                            message: error?.message,
+                        };
+                        if (MISSING_TARGET_DISCORD_CODES.has(error?.code)) {
+                            console.warn(
+                                "applyTicketParticipantPermissions: skipping user overwrite for missing target",
+                                details,
+                            );
+                            return;
+                        }
+                        console.error("applyTicketParticipantPermissions: failed to grant user overwrite", details);
+                        throw error;
+                    }),
             );
         });
 
@@ -1121,48 +1358,196 @@ export async function applyTicketParticipantPermissions(client, ticketId) {
             return valid;
         })
         .forEach((roleId) => {
+            const role = channel.guild?.roles?.cache?.get(roleId);
+            const botHighest = channel.guild?.members?.me?.roles?.highest;
             permissionUpdates.push(
-                channel.permissionOverwrites.edit(roleId, {
-                    ViewChannel: true,
-                    SendMessages: true,
-                    AttachFiles: true,
-                    ReadMessageHistory: true,
-                }),
+                channel.permissionOverwrites
+                    .edit(
+                        roleId,
+                        {
+                            ViewChannel: true,
+                            SendMessages: true,
+                            AttachFiles: true,
+                            ReadMessageHistory: true,
+                        },
+                        { type: OverwriteType.Role },
+                    )
+                    .catch((error) => {
+                        const details = {
+                            ticketId,
+                            channelId: channel.id,
+                            targetRoleId: roleId,
+                            targetRoleName: role?.name ?? "(uncached)",
+                            targetRolePosition: role?.position ?? null,
+                            botHighestRole: botHighest?.name ?? null,
+                            botHighestPosition: botHighest?.position ?? null,
+                            botAboveTarget: role && botHighest ? botHighest.position > role.position : null,
+                            canManagePermissions,
+                            discordCode: error?.code,
+                            status: error?.status,
+                            message: error?.message,
+                        };
+                        if (MISSING_TARGET_DISCORD_CODES.has(error?.code)) {
+                            console.warn(
+                                "applyTicketParticipantPermissions: skipping role overwrite for missing target",
+                                details,
+                            );
+                            return;
+                        }
+                        console.error("applyTicketParticipantPermissions: failed to grant role overwrite", details);
+                        throw error;
+                    }),
             );
         });
 
-    try {
-        await Promise.all(permissionUpdates);
-    } catch (error) {
-        console.error("applyTicketParticipantPermissions: failed to update channel permissions", error);
+    const results = await Promise.allSettled(permissionUpdates);
+    const failures = results.filter((r) => r.status === "rejected");
+    if (failures.length) {
+        const err = new Error(
+            `applyTicketParticipantPermissions: ${failures.length}/${results.length} channel permission update(s) failed for ticket ${ticketId}`,
+        );
+        err.cause = failures[0].reason;
+        err.discordCode = failures[0].reason?.code;
+        console.error(err.message, { discordCode: err.discordCode, canManagePermissions });
+        throw err;
     }
 }
 
-export async function deleteTicketChannel(client, ticketId, reason = "Ticket closed") {
+/**
+ * One-off repair for tickets whose Discord channel is still stuck on the
+ * "ticket-pending" placeholder name (from before channel creation was
+ * changed to name the channel correctly up front). Renames each affected
+ * channel to ticket-<id>, spaced out to stay well under Discord's
+ * per-channel rename rate limit (2 changes per 10 min).
+ *
+ * @returns {Promise<{checked: number, renamed: number, failed: Array<{ticketId, error}>}>}
+ */
+export async function repairPendingTicketChannelNames(client) {
+    const hasChannelColumn = await ensureDiscordChannelColumn();
+    if (!hasChannelColumn || !client) {
+        return { checked: 0, renamed: 0, failed: [] };
+    }
+
+    const tickets = await new Promise((resolve, reject) => {
+        db.query(
+            "SELECT ticketId, discordChannelId FROM supportTickets WHERE discordChannelId IS NOT NULL",
+            (err, results) => (err ? reject(err) : resolve(results)),
+        );
+    });
+
+    let renamed = 0;
+    const failed = [];
+
+    for (const ticket of tickets) {
+        try {
+            const channel = await client.channels.fetch(ticket.discordChannelId);
+            if (!channel) continue;
+
+            const expectedName = `ticket-${ticket.ticketId}`;
+            if (channel.name === expectedName) continue;
+
+            await channel.setName(expectedName, "Repairing ticket channel name");
+            renamed++;
+            // Stay well clear of Discord's rename rate limit when repairing many at once.
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+        } catch (error) {
+            console.error("repairPendingTicketChannelNames: failed to rename channel", {
+                ticketId: ticket.ticketId,
+                channelId: ticket.discordChannelId,
+            }, error);
+            failed.push({ ticketId: ticket.ticketId, error: error.message });
+        }
+    }
+
+    return { checked: tickets.length, renamed, failed };
+}
+
+export async function deleteTicketChannel(client, ticketId, reason = "Ticket closed", knownChannel = null) {
     const hasChannelColumn = await ensureDiscordChannelColumn();
     if (!hasChannelColumn) {
         return false;
     }
 
     const ticket = await getTicketById(ticketId);
-    if (!ticket?.discordChannelId) {
+    const storedChannelId = ticket?.discordChannelId ? String(ticket.discordChannelId).trim() : "";
+    const canDeleteKnownChannel = Boolean(knownChannel && typeof knownChannel.delete === "function");
+
+    if (!storedChannelId && !canDeleteKnownChannel) {
         return false;
     }
 
-    if (!client) {
-        console.warn("deleteTicketChannel: Discord client unavailable; skipping channel removal", { ticketId });
-    } else {
+    if (!client && !canDeleteKnownChannel) {
+        console.warn("deleteTicketChannel: Discord client unavailable; retaining channel link for retry", { ticketId });
+        return false;
+    }
+
+    const attemptedChannelIds = new Set();
+    let channelDeleted = false;
+    const deleteTargets = [];
+
+    if (canDeleteKnownChannel) {
+        deleteTargets.push({
+            source: "known-channel",
+            getChannel: async () => knownChannel,
+        });
+    }
+
+    if (client && storedChannelId && knownChannel?.id !== storedChannelId) {
+        deleteTargets.push({
+            source: "stored-channel-id",
+            getChannel: async () => client.channels.fetch(storedChannelId),
+        });
+    }
+
+    for (const target of deleteTargets) {
+        let channel;
         try {
-            const channel = await client.channels.fetch(ticket.discordChannelId);
-            if (channel) {
-                await channel.delete(reason);
+            channel = await target.getChannel();
+        } catch (fetchError) {
+            const isAlreadyDeleted = fetchError?.code === 10003 || fetchError?.status === 404;
+            if (isAlreadyDeleted) {
+                channelDeleted = true;
+                break;
             }
-        } catch (error) {
-            console.error("deleteTicketChannel: failed to delete Discord channel", {
+
+            console.error("deleteTicketChannel: failed to resolve Discord channel for deletion", {
                 ticketId,
-                channelId: ticket.discordChannelId,
+                channelId: storedChannelId || knownChannel?.id || null,
+                source: target.source,
+            }, fetchError);
+            continue;
+        }
+
+        const resolvedChannelId = channel?.id ? String(channel.id).trim() : "";
+        if (!channel || attemptedChannelIds.has(resolvedChannelId || target.source)) {
+            continue;
+        }
+
+        attemptedChannelIds.add(resolvedChannelId || target.source);
+
+        try {
+            await channel.delete(reason);
+            channelDeleted = true;
+            break;
+        } catch (error) {
+            // Unknown Channel means Discord has already removed it, so clearing the
+            // stale database link is safe. Other failures must remain retryable.
+            const isAlreadyDeleted = error?.code === 10003 || error?.status === 404;
+            if (isAlreadyDeleted) {
+                channelDeleted = true;
+                break;
+            }
+
+            console.error("deleteTicketChannel: failed to delete Discord channel; retaining link for retry", {
+                ticketId,
+                channelId: resolvedChannelId || storedChannelId || null,
+                source: target.source,
             }, error);
         }
+    }
+
+    if (!channelDeleted) {
+        return false;
     }
 
     return new Promise((resolve) => {
@@ -1479,13 +1864,17 @@ export async function updateTicketCategory(client, ticketId, newCategoryId) {
         .filter((roleId) => isSnowflake(roleId))
         .forEach((roleId) => {
             permissionPromises.push(
-                channel.permissionOverwrites.edit(roleId, {
-                    ViewChannel: true,
-                    SendMessages: true,
-                    AttachFiles: true,
-                    ReadMessageHistory: true,
-                    ManageMessages: true,
-                }),
+                channel.permissionOverwrites.edit(
+                    roleId,
+                    {
+                        ViewChannel: true,
+                        SendMessages: true,
+                        AttachFiles: true,
+                        ReadMessageHistory: true,
+                        ManageMessages: true,
+                    },
+                    { type: OverwriteType.Role },
+                ),
             );
         });
 
@@ -1589,11 +1978,40 @@ export async function searchUsersByUsername(query) {
     });
 }
 
+export async function searchLinkedUsers(query) {
+    const term = query?.trim();
+    if (!term || term.length < 2) return [];
+
+    return new Promise((resolve) => {
+        db.query(
+            "SELECT userId, username, discordId, profilePicture_type, profilePicture_email, uuid FROM users WHERE username LIKE ? AND discordId IS NOT NULL ORDER BY username ASC LIMIT 8",
+            [`${term}%`],
+            async (err, results) => {
+                if (err) {
+                    console.error("searchLinkedUsers: failed to run query", err);
+                    resolve([]);
+                    return;
+                }
+
+                const enriched = await Promise.all(
+                    results.map(async (row) => ({
+                        userId: row.userId,
+                        username: row.username,
+                        discordId: row.discordId,
+                        avatarUrl: await buildAvatarUrl(row),
+                    })),
+                );
+                resolve(enriched);
+            },
+        );
+    });
+}
+
 export async function createUnlinkedUser(discordId, username) {
     // Truncate username to fit VARCHAR(16) column – Discord usernames can be up to 32 chars
     const safeName = username ? username.substring(0, 16) : "Unknown";
     return new Promise((resolve, reject) => {
-        db.query("INSERT INTO users (discordId, username, uuid) VALUES (?, ?, UUID())", [discordId, safeName], (err, results) => {
+        db.query("INSERT INTO users (discordId, username, uuid, is_placeholder) VALUES (?, ?, UUID(), 1)", [discordId, safeName], (err, results) => {
             if (err) {
                 reject(err);
             } else {
@@ -1652,6 +2070,24 @@ export async function getTicketsAccessibleByUser(userId, rankSlugs = []) {
                 resolve(results);
             }
         });
+    });
+}
+
+export async function getOpenTicketsWithChannelForUser(userId) {
+    return new Promise((resolve, reject) => {
+        db.query(
+            `SELECT DISTINCT st.*
+             FROM supportTickets st
+             LEFT JOIN supportTicketParticipants p ON p.ticketId = st.ticketId AND p.userId = ?
+             WHERE (st.userId = ? OR p.userId IS NOT NULL)
+               AND st.discordChannelId IS NOT NULL
+               AND st.status NOT IN ('closed', 'locked')`,
+            [userId, userId],
+            (err, results) => {
+                if (err) reject(err);
+                else resolve(results);
+            },
+        );
     });
 }
 
@@ -1733,39 +2169,86 @@ export async function getTicketMessages(ticketId, includeInternal = false) {
     }
 
     if (uniqueUserIds.length > 0) {
-        userRanks = await new Promise((resolve) => {
-            db.query(
-                `SELECT ur.userId, ur.rankSlug, r.displayName, r.rankBadgeColour, r.rankTextColour, r.priority
-                 FROM userRanks ur
-                 LEFT JOIN ranks r ON ur.rankSlug = r.rankSlug
-                 WHERE ur.userId IN (?)
-                 ORDER BY CAST(r.priority AS SIGNED) DESC`,
-                [uniqueUserIds],
-                (err, results) => {
-                    if (err) {
-                        console.error("Failed to load ranks for ticket messages", err);
-                        resolve({});
-                        return;
+            // LuckPerms lives on a separate MySQL server from the main app
+            // DB, so this can't be read via the (cross-server, unreliable)
+            // `userRanks`/`ranks` views — resolve uuids from the main DB,
+            // then query luckpermsDb directly and join in JS.
+            userRanks = await (async () => {
+                try {
+                    const webUsers = await new Promise((resolve, reject) => {
+                        db.query(
+                            `SELECT userId, uuid FROM users WHERE userId IN (?) AND uuid IS NOT NULL`,
+                            [uniqueUserIds],
+                            (err, results) => (err ? reject(err) : resolve(results)),
+                        );
+                    });
+                    if (!webUsers.length) return {};
+
+                    const uuidToUserId = {};
+                    for (const u of webUsers) uuidToUserId[u.uuid.toLowerCase()] = u.userId;
+                    const uuids = Object.keys(uuidToUserId);
+
+                    const groupRows = await new Promise((resolve, reject) => {
+                        luckpermsDb.query(
+                            `SELECT uuid, SUBSTRING_INDEX(permission, '.', -1) AS rankSlug
+                               FROM luckperms_user_permissions
+                              WHERE uuid IN (?) AND permission LIKE 'group.%' AND value = 1
+                                AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
+                            [uuids],
+                            (err, results) => (err ? reject(err) : resolve(results)),
+                        );
+                    });
+                    if (!groupRows.length) return {};
+
+                    const rankSlugs = [...new Set(groupRows.map((r) => r.rankSlug))];
+                    const metaRows = await new Promise((resolve, reject) => {
+                        luckpermsDb.query(
+                            `SELECT name, permission FROM luckperms_group_permissions
+                              WHERE name IN (?) AND server = 'global' AND world = 'global' AND value = 1
+                                AND (
+                                  permission LIKE 'displayname.%'
+                                  OR permission LIKE 'weight.%'
+                                  OR permission LIKE 'meta.rankbadgecolour.%'
+                                  OR permission LIKE 'meta.ranktextcolour.%'
+                                )`,
+                            [rankSlugs],
+                            (err, results) => (err ? reject(err) : resolve(results)),
+                        );
+                    });
+
+                    const meta = {};
+                    for (const row of metaRows) {
+                        const m = meta[row.name] || (meta[row.name] = {});
+                        const p = row.permission;
+                        if (p.startsWith("displayname.")) m.displayName = p.slice("displayname.".length);
+                        else if (p.startsWith("weight.")) m.priority = parseInt(p.slice("weight.".length), 10) || 0;
+                        else if (p.startsWith("meta.rankbadgecolour.")) m.rankBadgeColour = "#" + p.slice("meta.rankbadgecolour.".length);
+                        else if (p.startsWith("meta.ranktextcolour.")) m.rankTextColour = "#" + p.slice("meta.ranktextcolour.".length);
                     }
 
                     const grouped = {};
-                    results.forEach((row) => {
-                        if (!grouped[row.userId]) grouped[row.userId] = [];
-                        grouped[row.userId].push({
+                    for (const row of groupRows) {
+                        const userId = uuidToUserId[row.uuid.toLowerCase()];
+                        if (!userId) continue;
+                        const m = meta[row.rankSlug] || {};
+                        if (!grouped[userId]) grouped[userId] = [];
+                        grouped[userId].push({
                             rankSlug: row.rankSlug,
-                            displayName: row.displayName || row.rankSlug,
-                            badgeColor: row.rankBadgeColour,
-                            textColor: row.rankTextColour,
-                            priority: Number(row.priority) || 0,
+                            displayName: m.displayName || row.rankSlug,
+                            badgeColor: m.rankBadgeColour || null,
+                            textColor: m.rankTextColour || null,
+                            priority: m.priority || 0,
                         });
-                    });
+                    }
                     Object.values(grouped).forEach((ranks) => {
                         ranks.sort((a, b) => (b.priority || 0) - (a.priority || 0));
                     });
-                    resolve(grouped);
-                },
-            );
-        });
+                    return grouped;
+                } catch (err) {
+                    console.error("Failed to load ranks for ticket messages", err);
+                    return {};
+                }
+            })();
     }
 
     const resolvedMessages = [];
@@ -1831,12 +2314,16 @@ export async function getTicketDetailsByChannel(channelId) {
 
     return new Promise((resolve, reject) => {
         db.query(
-            "SELECT t.*, u.discordId FROM supportTickets t JOIN users u ON t.userId = u.userId WHERE t.discordChannelId = ?",
+            "SELECT t.*, u.discordId FROM supportTickets t LEFT JOIN users u ON t.userId = u.userId WHERE t.discordChannelId = ?",
             [channelId],
             (err, results) => {
                 if (err) {
+                    console.error("getTicketDetailsByChannel: query failed", { channelId, message: err.message });
                     reject(err);
                 } else {
+                    if (!results.length) {
+                        console.warn("getTicketDetailsByChannel: no ticket linked to channel", { channelId });
+                    }
                     resolve(results[0]);
                 }
             }
@@ -1868,32 +2355,56 @@ export async function getTicketsByCategory(categoryId) {
     });
 }
 
-export async function getUserRoles(userId) {
-    return new Promise((resolve, reject) => {
-        db.query("SELECT discordRoleId FROM userRanks WHERE userId = ?", [userId], (err, results) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve(results.map(r => r.discordRoleId));
-            }
-        });
+// LuckPerms lives on a separate MySQL server from the main app DB, so these
+// can't be read via the (cross-server, unreliable) `userRanks` view —
+// resolve the user's uuid from the main DB, then query luckpermsDb directly.
+async function getUserUuidByUserId(userId) {
+    const rows = await new Promise((resolve, reject) => {
+        db.query(
+            "SELECT uuid FROM users WHERE userId = ? LIMIT 1",
+            [userId],
+            (err, results) => (err ? reject(err) : resolve(results)),
+        );
     });
+    return rows[0]?.uuid ? rows[0].uuid.toLowerCase() : null;
+}
+
+async function getUserGroupSlugs(uuid) {
+    if (!uuid) return [];
+    const rows = await new Promise((resolve, reject) => {
+        luckpermsDb.query(
+            `SELECT SUBSTRING_INDEX(permission, '.', -1) AS rankSlug
+               FROM luckperms_user_permissions
+              WHERE uuid = ? AND permission LIKE 'group.%' AND value = 1
+                AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
+            [uuid],
+            (err, results) => (err ? reject(err) : resolve(results)),
+        );
+    });
+    return rows.map((r) => r.rankSlug);
+}
+
+export async function getUserRoles(userId) {
+    const uuid = await getUserUuidByUserId(userId);
+    const rankSlugs = await getUserGroupSlugs(uuid);
+    if (!rankSlugs.length) return [];
+
+    const rows = await new Promise((resolve, reject) => {
+        luckpermsDb.query(
+            `SELECT SUBSTRING_INDEX(permission, '.', -1) AS discordRoleId
+               FROM luckperms_group_permissions
+              WHERE name IN (?) AND permission LIKE 'meta.discordid.%' AND value = 1
+                AND server = 'global' AND world = 'global'`,
+            [rankSlugs],
+            (err, results) => (err ? reject(err) : resolve(results)),
+        );
+    });
+    return rows.map((r) => r.discordRoleId).filter(Boolean);
 }
 
 export async function getUserRankSlugs(userId) {
-    return new Promise((resolve, reject) => {
-        db.query(
-            "SELECT rankSlug FROM userRanks WHERE userId = ?",
-            [userId],
-            (err, results) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(results.map((r) => r.rankSlug));
-                }
-            },
-        );
-    });
+    const uuid = await getUserUuidByUserId(userId);
+    return getUserGroupSlugs(uuid);
 }
 
 export async function updateTicketStatus(ticketId, status) {

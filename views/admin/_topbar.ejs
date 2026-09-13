@@ -1,0 +1,81 @@
+<%
+  const _siteName = config.siteConfiguration.siteName || "Zander";
+  const _user     = req.session?.user;
+%>
+<!-- ── WP Admin Top Bar ──────────────────────────────────────────────────── -->
+<div id="wpadminbar" role="navigation" aria-label="Admin bar">
+  <div class="ab-bar-inner">
+    <div class="ab-left">
+
+      <!-- Mobile hamburger (shown on <992px) -->
+      <button class="ab-item ab-mobile-toggle" id="ab-mobile-toggle"
+              aria-label="Toggle sidebar" aria-expanded="false"
+              aria-controls="adminmenuback">
+        <i class="fas fa-bars" aria-hidden="true"></i>
+      </button>
+
+      <!-- Site name / logo -->
+      <a class="ab-item ab-site-name" href="/dashboard">
+        <i class="fas fa-cubes" aria-hidden="true"></i>
+        <%= _siteName %>
+      </a>
+
+      <!-- Visit public site (hidden on small screens) -->
+      <a class="ab-item ab-visit-site" href="/" target="_blank" rel="noopener">
+        <i class="fas fa-external-link-alt" style="font-size:11px" aria-hidden="true"></i>
+        Visit Site
+      </a>
+
+    </div>
+
+    <div class="ab-right">
+
+      <% if (_user) { %>
+        <!-- Reference drawer toggle -->
+        <button class="ab-item" id="refDrawerToggle" type="button"
+                title="Reference — placeholders, API endpoints &amp; more"
+                aria-controls="refDrawer" aria-expanded="false">
+          <i class="fas fa-book-open" aria-hidden="true"></i>
+          <span class="d-none d-sm-inline">Reference</span>
+        </button>
+        <div class="ab-divider" aria-hidden="true"></div>
+
+        <!-- Notification bell -->
+        <% if (req.notifications?.unreadCount) { %>
+          <a class="ab-item" href="/notifications" title="<%= req.notifications.unreadCount %> unread notifications">
+            <i class="fas fa-bell" aria-hidden="true"></i>
+            <span class="badge bg-danger" style="font-size:10px;padding:2px 5px;">
+              <%= req.notifications.unreadCount %>
+            </span>
+          </a>
+        <% } %>
+
+        <div class="ab-divider" aria-hidden="true"></div>
+
+        <!-- User menu -->
+        <a class="ab-item" href="/profile/<%= _user.username %>">
+          <img class="ab-avatar"
+               src="<%= _user.profilePicture %>"
+               alt="<%= _user.username %> avatar">
+          <span class="d-none d-sm-inline"><%= _user.username %></span>
+        </a>
+
+        <a class="ab-item" href="/auth/refresh-session" title="Re-sync your permissions from LuckPerms">
+          <i class="fas fa-sync-alt" aria-hidden="true"></i>
+          <span class="d-none d-sm-inline">Refresh Perms</span>
+        </a>
+
+        <a class="ab-item" href="/logout">
+          <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
+          <span class="d-none d-sm-inline">Logout</span>
+        </a>
+
+      <% } else { %>
+        <a class="ab-item" href="/login">
+          <i class="fas fa-sign-in-alt" aria-hidden="true"></i> Login
+        </a>
+      <% } %>
+
+    </div>
+  </div>
+</div>

@@ -1,0 +1,171 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<%
+  const fmtMoney = function(cents, currency = "USD") {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format((cents || 0) / 100);
+  };
+  const preview = previewData || null;
+  const reportIsPublished = existingReport && existingReport.isPublished;
+  const reportIsLocked = existingReport && existingReport.isLocked;
+%>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-file-invoice-dollar fa-fw me-2"></i>Finance Reports</h1>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <div class="row g-4">
+        <div class="col-xl-5">
+          <div class="card shadow-sm">
+            <div class="card-header fw-semibold">Report Controls</div>
+            <div class="card-body">
+              <form action="/dashboard/finance/reports" class="row g-3 mb-4">
+                <div class="col-sm-6">
+                  <label class="form-label fw-semibold">Year</label>
+                  <input type="number" class="form-control" name="year" min="2020" max="2100" value="<%= selectedYear %>" required>
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label fw-semibold">Month</label>
+                  <input type="number" class="form-control" name="month" min="1" max="12" value="<%= selectedMonth %>" required>
+                </div>
+                <div class="col-12">
+                  <label class="form-label fw-semibold">Public Report Note</label>
+                  <textarea class="form-control" name="publicNote" rows="4" maxlength="2000" placeholder="Short community-facing summary."><%= req.query.publicNote || existingReport?.notes || '' %></textarea>
+                </div>
+                <div class="col-12 d-flex flex-wrap gap-2">
+                  <button type="submit" class="btn btn-outline-primary" formmethod="get" formaction="/dashboard/finance/reports" name="preview" value="1">Preview Public Report</button>
+                  <% if (canManage) { %>
+                    <button type="submit" class="btn btn-primary" formmethod="post" formaction="/dashboard/finance/reports/publish" <%= reportIsLocked ? 'disabled' : '' %>><%= reportIsPublished ? 'Update Published Report' : 'Publish Report' %></button>
+                  <% } %>
+                </div>
+              </form>
+
+              <div class="small text-muted mb-3">
+                The monthly funding goal is calculated from the published operating costs for the selected month.
+                Fallback goal when no operating costs are budgeted: <strong><%= fmtMoney(monthlyGoalCents) %></strong>
+              </div>
+
+              <% if (existingReport) { %>
+                <div class="alert alert-<%= reportIsLocked ? 'warning' : reportIsPublished ? 'success' : 'secondary' %> mb-3">
+                  <% if (reportIsLocked) { %>
+                    This report is published and locked.
+                  <% } else if (reportIsPublished) { %>
+                    This report is currently published and can still be updated.
+                  <% } else { %>
+                    A draft report record exists for this month.
+                  <% } %>
+                </div>
+              <% } %>
+
+              <% if (canManage) { %>
+                <form method="post" action="/dashboard/finance/reports/lock">
+                  <input type="hidden" name="year" value="<%= selectedYear %>">
+                  <input type="hidden" name="month" value="<%= selectedMonth %>">
+                  <button type="submit" class="btn btn-outline-danger" <%= !reportIsPublished || reportIsLocked ? 'disabled' : '' %>>Lock Report</button>
+                </form>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="card shadow-sm mt-4">
+            <div class="card-header fw-semibold">Published Reports</div>
+            <div class="card-body">
+              <% if (publishedReports && publishedReports.length) { %>
+                <div class="list-group">
+                  <% publishedReports.forEach(function(item) { const snapshot = item.snapshot; %>
+                    <a href="/dashboard/finance/reports?year=<%= snapshot.year %>&month=<%= snapshot.month %>" class="list-group-item list-group-item-action">
+                      <div class="d-flex justify-content-between align-items-center">
+                        <strong><%= snapshot.monthLabel %></strong>
+                        <span class="badge <%= item.isLocked ? 'bg-warning text-dark' : 'bg-success' %>"><%= item.isLocked ? 'Locked' : 'Published' %></span>
+                      </div>
+                      <div class="small text-muted mt-1">Support <%= fmtMoney(snapshot.communitySupportCents) %> · Expenses <%= fmtMoney(snapshot.operatingCostsCents) %></div>
+                    </a>
+                  <% }) %>
+                </div>
+              <% } else { %>
+                <p class="text-muted mb-0">No reports have been published yet.</p>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-xl-7">
+          <div class="card shadow-sm" id="preview">
+            <div class="card-header fw-semibold">Public Preview</div>
+            <div class="card-body">
+              <% if (!preview) { %>
+                <p class="text-muted mb-0">Choose a month and use Preview Public Report to see the public-facing snapshot before publishing.</p>
+              <% } else { %>
+                <h2 class="h4 mb-3"><%= preview.monthLabel %></h2>
+
+                <div class="row g-3 mb-4">
+                  <div class="col-sm-6 col-lg-3">
+                    <div class="border rounded p-3 h-100">
+                      <div class="text-muted small text-uppercase fw-semibold mb-2">Support</div>
+                      <div class="fs-5 fw-bold"><%= fmtMoney(preview.communitySupportCents) %></div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6 col-lg-3">
+                    <div class="border rounded p-3 h-100">
+                      <div class="text-muted small text-uppercase fw-semibold mb-2">Expenses</div>
+                      <div class="fs-5 fw-bold"><%= fmtMoney(preview.operatingCostsCents) %></div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6 col-lg-3">
+                    <div class="border rounded p-3 h-100">
+                      <div class="text-muted small text-uppercase fw-semibold mb-2">Goal</div>
+                      <div class="fs-5 fw-bold"><%= fmtMoney(preview.fundingGoalCents) %></div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6 col-lg-3">
+                    <div class="border rounded p-3 h-100">
+                      <div class="text-muted small text-uppercase fw-semibold mb-2">Funding</div>
+                      <div class="fs-5 fw-bold"><%= preview.fundingProgressPercent %>%</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mb-4">
+                  <h3 class="h5 mb-3">Category Breakdown</h3>
+                  <% if (preview.categories && preview.categories.length) { %>
+                    <div class="row g-3">
+                      <% preview.categories.forEach(function(category) { %>
+                        <div class="col-md-6">
+                          <div class="border rounded p-3 h-100">
+                            <div class="fw-semibold"><%= category.name %></div>
+                            <% if (category.description) { %><div class="text-muted small mt-1"><%= category.description %></div><% } %>
+                            <div class="mt-3"><strong><%= fmtMoney(category.totalCents) %></strong></div>
+                          </div>
+                        </div>
+                      <% }) %>
+                    </div>
+                  <% } else { %>
+                    <p class="text-muted mb-0">No public categories are currently configured for this month.</p>
+                  <% } %>
+                </div>
+
+                <div>
+                  <h3 class="h5 mb-2">Public Note</h3>
+                  <% if (preview.publicNote) { %>
+                    <p class="mb-0"><%= preview.publicNote %></p>
+                  <% } else { %>
+                    <p class="text-muted mb-0">No public note provided.</p>
+                  <% } %>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <%- include("../../admin/_footer.ejs") %>
+</div>

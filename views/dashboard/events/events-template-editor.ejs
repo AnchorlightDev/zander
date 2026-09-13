@@ -1,0 +1,977 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <h1 class="h2"><%= mode === 'create' ? 'Create Template' : 'Edit Template' %></h1>
+                <a href="/dashboard/events/templates" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-arrow-left fa-fw me-1"></i>Back
+                </a>
+            </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+            <form id="templateForm">
+                <% if (mode === 'edit') { %>
+                    <input type="hidden" name="templateId" value="<%= tmpl.templateId %>">
+                <% } %>
+
+                <div class="card mb-3">
+                    <div class="card-header">Basic Info</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Template Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="title" value="<%= tmpl.title || '' %>" required maxlength="255">
+                            <small class="text-muted">This becomes the default event title for generated drafts.</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Default Description</label>
+                            <%- include("../../partials/summerNoteEditor.ejs", {
+                                editorElementName: "tmplDescriptionEditor",
+                                editorPOSTElementName: "description",
+                                editorElementText: tmpl.description || ''
+                            }) %>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Default Start Time</label>
+                                <input type="time" class="form-control" id="defaultStartTimeLocal"
+                                    data-utc="<%= tmpl.defaultStartTime || '' %>">
+                                <input type="hidden" name="defaultStartTime" id="defaultStartTimeUtc">
+                                <small class="text-muted js-tz-label">In your local timezone.</small>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Default End Time</label>
+                                <input type="time" class="form-control" id="defaultEndTimeLocal"
+                                    data-utc="<%= tmpl.defaultEndTime || '' %>">
+                                <input type="hidden" name="defaultEndTime" id="defaultEndTimeUtc">
+                                <small class="text-muted js-tz-label">In your local timezone.</small>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Duration (mins)</label>
+                                <input type="number" class="form-control" name="defaultDurationMins" min="1" value="<%= tmpl.defaultDurationMins || '' %>" placeholder="60">
+                                <small class="text-muted">Used if no end time set.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Recurrence</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Template Type</label>
+                            <select class="form-select" name="recurrenceType" id="recurrenceType">
+                                <option value="once" <%= tmpl.recurrenceType === 'once' ? 'selected' : '' %>>Once-off / Master Template</option>
+                                <option value="weekly" <%= (tmpl.recurrenceType || 'weekly') === 'weekly' ? 'selected' : '' %>>Weekly (specific days)</option>
+                                <option value="daily" <%= tmpl.recurrenceType === 'daily' ? 'selected' : '' %>>Daily</option>
+                                <option value="custom" <%= tmpl.recurrenceType === 'custom' ? 'selected' : '' %>>Every N Days</option>
+                            </select>
+                        </div>
+
+                        <div id="onceInfo" class="alert alert-info mb-3 <%= tmpl.recurrenceType !== 'once' ? 'd-none' : '' %>">
+                            <i class="fas fa-info-circle me-2"></i>
+                            A <strong>once-off / master template</strong> stores default settings you can manually apply to create individual events. No drafts are auto-generated — click <strong>Generate Draft</strong> from the templates list when you need it.
+                        </div>
+
+                        <div id="recurringOptions" class="<%= tmpl.recurrenceType === 'once' ? 'd-none' : '' %>">
+                            <div id="weeklyOptions" class="mb-3 <%= (tmpl.recurrenceType || 'weekly') !== 'weekly' ? 'd-none' : '' %>">
+                                <label class="form-label fw-semibold">Days of Week</label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <% dayNames.forEach((day, i) => { %>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input recurrence-day" type="checkbox" value="<%= i %>" id="day_<%= i %>" <%= recDays.includes(i) ? 'checked' : '' %>>
+                                        <label class="form-check-label" for="day_<%= i %>"><%= day %></label>
+                                    </div>
+                                    <% }) %>
+                                </div>
+                                <input type="hidden" name="recurrenceDaysJson" id="recurrenceDaysJson">
+                            </div>
+
+                            <div id="customOptions" class="mb-3 <%= tmpl.recurrenceType !== 'custom' ? 'd-none' : '' %>">
+                                <label class="form-label fw-semibold">Every N Days</label>
+                                <input type="number" class="form-control" name="recurrenceEveryDays" min="1" value="<%= tmpl.recurrenceEveryDays || '' %>" placeholder="7">
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">Draft Lead Time (days)</label>
+                                    <input type="number" class="form-control" name="draftAdvanceDays" min="0" value="<%= tmpl.draftAdvanceDays || 7 %>">
+                                    <small class="text-muted">Generate the draft this many days before the event.</small>
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" name="autoGenerateDrafts" id="autoGenCheck" value="true" <%= (tmpl.autoGenerateDrafts !== false) ? 'checked' : '' %>>
+                                        <label class="form-check-label" for="autoGenCheck">Auto-generate drafts</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mt-0">
+                            <div class="col-md-4 d-flex align-items-end">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" name="isActive" id="isActiveCheck" value="true" <%= (tmpl.isActive !== false) ? 'checked' : '' %>>
+                                    <label class="form-check-label" for="isActiveCheck">Template active</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Default Location</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Location Type</label>
+                            <div class="d-flex gap-2 flex-wrap" id="tmplLocationTypeBtns">
+                                <% const tlt = tmpl.locationType || 'other'; %>
+                                <button type="button" class="btn btn-sm tmpl-loc-type-btn <%= tlt === 'discord' ? 'btn-primary' : 'btn-outline-secondary' %>" data-type="discord">
+                                    <i class="fab fa-discord me-1"></i>Discord Voice
+                                </button>
+                                <button type="button" class="btn btn-sm tmpl-loc-type-btn <%= tlt === 'minecraft' ? 'btn-primary' : 'btn-outline-secondary' %>" data-type="minecraft">
+                                    <i class="fas fa-cubes me-1"></i>Minecraft Server
+                                </button>
+                                <button type="button" class="btn btn-sm tmpl-loc-type-btn <%= tlt === 'other' ? 'btn-primary' : 'btn-outline-secondary' %>" data-type="other">
+                                    <i class="fas fa-map-marker-alt me-1"></i>Other
+                                </button>
+                            </div>
+                            <input type="hidden" name="locationType" id="tmplLocationType" value="<%= tmpl.locationType || 'other' %>">
+                        </div>
+
+                        <!-- Discord voice channel picker -->
+                        <div id="tmpl-loc-discord" class="row g-3 mb-3 <%= (tmpl.locationType || 'other') !== 'discord' ? 'd-none' : '' %>">
+                            <div class="col-md-8">
+                                <label class="form-label fw-semibold">Voice Channel</label>
+                                <select class="form-select" id="tmplLocationDiscordChannelId">
+                                    <option value="">Loading channels…</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Minecraft server -->
+                        <div id="tmpl-loc-minecraft" class="row g-3 mb-3 <%= (tmpl.locationType || 'other') !== 'minecraft' ? 'd-none' : '' %>">
+                            <div class="col-md-5">
+                                <label class="form-label fw-semibold">Server Name</label>
+                                <input type="text" class="form-control" id="tmplServerName" value="<%= tmpl.serverName || '' %>" placeholder="e.g. Survival">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Server IP</label>
+                                <input type="text" class="form-control" id="tmplServerIp" value="<%= tmpl.serverIp || '' %>" placeholder="e.g. play.example.com">
+                            </div>
+                        </div>
+
+                        <!-- Other / free-text -->
+                        <div id="tmpl-loc-other" class="row g-3 mb-3 <%= (tmpl.locationType || 'other') !== 'other' ? 'd-none' : '' %>">
+                            <div class="col-md-8">
+                                <label class="form-label fw-semibold">Location</label>
+                                <input type="text" class="form-control" id="tmplLocationLabelOther"
+                                    value="<%= (tmpl.locationType === 'other' || !tmpl.locationType) ? (tmpl.locationLabel || '') : '' %>"
+                                    placeholder="e.g. Main Hall, Event Arena…">
+                            </div>
+                        </div>
+
+                        <!-- Hidden fields submitted with form -->
+                        <input type="hidden" name="locationLabel" id="tmplLocationLabel" value="<%= tmpl.locationLabel || '' %>">
+                        <input type="hidden" name="locationDiscordChannelId" id="tmplLocationDiscordChannelId" value="<%= tmpl.locationDiscordChannelId || '' %>">
+                        <input type="hidden" name="serverName" id="tmplServerNameHidden" value="<%= tmpl.serverName || '' %>">
+                        <input type="hidden" name="serverIp" id="tmplServerIpHidden" value="<%= tmpl.serverIp || '' %>">
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">Default Branding</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Banner Image</label>
+                            <input type="hidden" name="bannerUrl" id="bannerUrlInput" value="<%= tmpl.bannerUrl || '' %>">
+                            <div class="input-group mb-1">
+                                <input type="file" class="form-control" id="bannerFileInput" accept="image/png,image/jpeg,image/gif,image/webp">
+                                <button type="button" class="btn btn-outline-secondary" id="bannerUploadBtn" disabled>
+                                    <i class="fas fa-cloud-upload-alt me-1"></i>Upload
+                                </button>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <small class="text-muted flex-grow-1">Or enter URL directly:</small>
+                                <span id="bannerUploadStatus" class="small d-none"></span>
+                            </div>
+                            <input type="url" class="form-control form-control-sm" id="bannerUrlManual" value="<%= tmpl.bannerUrl || '' %>" placeholder="https://…">
+                            <small class="text-muted">Recommended: <strong>1920×480px</strong> (4:1) for website; <strong>1280×720px</strong> (16:9) for Discord. PNG/JPG, max 8 MB.</small>
+                            <div id="bannerPreview" class="mt-2 <%= tmpl.bannerUrl ? '' : 'd-none' %>">
+                                <div class="position-relative d-inline-block">
+                                    <img src="<%= tmpl.bannerUrl || '' %>" class="img-fluid rounded" style="max-height:200px" alt="Banner preview">
+                                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1" id="bannerClearBtn" title="Remove"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Logo / Thumbnail</label>
+                            <input type="hidden" name="logoUrl" id="logoUrlInput" value="<%= tmpl.logoUrl || '' %>">
+                            <div class="input-group mb-1">
+                                <input type="file" class="form-control" id="logoFileInput" accept="image/png,image/jpeg,image/gif,image/webp">
+                                <button type="button" class="btn btn-outline-secondary" id="logoUploadBtn" disabled>
+                                    <i class="fas fa-cloud-upload-alt me-1"></i>Upload
+                                </button>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <small class="text-muted flex-grow-1">Or enter URL directly:</small>
+                                <span id="logoUploadStatus" class="small d-none"></span>
+                            </div>
+                            <input type="url" class="form-control form-control-sm" id="logoUrlManual" value="<%= tmpl.logoUrl || '' %>" placeholder="https://…">
+                            <small class="text-muted">Recommended: <strong>512×512px</strong> (1:1 square). PNG with transparency preferred. Max 8 MB.</small>
+                            <div id="logoPreview" class="mt-2 <%= tmpl.logoUrl ? '' : 'd-none' %>">
+                                <div class="position-relative d-inline-block">
+                                    <img src="<%= tmpl.logoUrl || '' %>" class="rounded" style="max-height:80px;max-width:80px;object-fit:contain" alt="Logo preview">
+                                    <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1" id="logoClearBtn" title="Remove"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between">
+                        <span>Default Hosts</span>
+                        <button type="button" class="btn btn-sm btn-primary" id="addTemplateHostBtn">
+                            <i class="fas fa-plus me-1"></i>Add Host
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="templateHostsContainer">
+                            <% const defaultHosts = tmpl.defaultHosts || []; %>
+                            <% defaultHosts.forEach((h, i) => { %>
+                            <div class="host-row border rounded p-3 mb-2 position-relative">
+                                <button type="button" class="btn btn-xs btn-danger position-absolute top-0 end-0 m-2 remove-host">×</button>
+                                <div class="row g-2">
+                                    <div class="col-md-5">
+                                        <label class="form-label small">Player <span class="text-muted">(linked accounts only)</span></label>
+                                        <div class="position-relative">
+                                            <input type="text" class="form-control form-control-sm host-userSearch" placeholder="Search by username…" autocomplete="off" value="<%= h.displayName || '' %>">
+                                            <div class="host-suggestions list-group position-absolute w-100" style="z-index:1000;top:100%;left:0;display:none;"></div>
+                                        </div>
+                                        <input type="hidden" class="host-userId" value="<%= h.userId || '' %>">
+                                        <input type="hidden" class="host-discordUserId" value="<%= h.discordUserId || '' %>">
+                                        <input type="hidden" class="host-displayName" value="<%= h.displayName || '' %>">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small">Role</label>
+                                        <select class="form-select form-select-sm host-role">
+                                            <option value="host" <%= h.role === 'host' ? 'selected' : '' %>>Host</option>
+                                            <option value="co_host" <%= h.role === 'co_host' ? 'selected' : '' %>>Co-Host</option>
+                                            <option value="coordinator" <%= h.role === 'coordinator' ? 'selected' : '' %>>Coordinator</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <% }) %>
+                        </div>
+                        <input type="hidden" name="defaultHostsJson" id="defaultHostsJson">
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>Default Announcements</span>
+                        <button type="button" class="btn btn-sm btn-primary" id="addTemplateAnnouncementBtn">
+                            <i class="fas fa-plus me-1"></i>Add Announcement
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">Announcements added here are copied to every draft generated from this template.</p>
+                        <div id="templateAnnouncementsContainer">
+                            <% const tmplAnnouncements = tmpl.announcements || []; %>
+                            <% tmplAnnouncements.forEach(function(ann) {
+                                const ap = ann.platform || 'discord';
+                                const isDiscord = ap === 'discord';
+                                const isMC = ['motd','tip'].includes(ap);
+                                const hasLink = ['tip','web','popup'].includes(ap);
+                                const isPopup = ap === 'popup';
+                                const hasBody = !isDiscord;
+                            %>
+                            <div class="announcement-row border rounded p-3 mb-2 position-relative">
+                                <button type="button" class="btn btn-xs btn-danger position-absolute top-0 end-0 m-2 remove-announcement">×</button>
+                                <div class="row g-2">
+                                    <div class="col-md-3">
+                                        <label class="form-label small">Platform</label>
+                                        <select class="form-select form-select-sm ann-platform">
+                                            <option value="discord" <%= isDiscord ? 'selected' : '' %>>Discord Message</option>
+                                            <option value="motd" <%= ap === 'motd' ? 'selected' : '' %>>MOTD (Minecraft)</option>
+                                            <option value="tip" <%= ap === 'tip' ? 'selected' : '' %>>In-Game Tip</option>
+                                            <option value="web" <%= ap === 'web' ? 'selected' : '' %>>Website Banner</option>
+                                            <option value="popup" <%= ap === 'popup' ? 'selected' : '' %>>Website Popup</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small">Label</label>
+                                        <input type="text" class="form-control form-control-sm ann-label" placeholder="e.g. 24h Reminder" value="<%= ann.label || '' %>">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label small">Trigger</label>
+                                        <select class="form-select form-select-sm ann-trigger">
+                                            <option value="on_publish" <%= ann.triggerType === 'on_publish' ? 'selected' : '' %>>On Publish</option>
+                                            <option value="before_event" <%= ann.triggerType === 'before_event' ? 'selected' : '' %>>Before Event</option>
+                                            <option value="event_start" <%= ann.triggerType === 'event_start' ? 'selected' : '' %>>Event Start</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2 ann-offset-group <%= ann.triggerType !== 'before_event' ? 'd-none' : '' %>">
+                                        <label class="form-label small">Minutes Before</label>
+                                        <input type="number" class="form-control form-control-sm ann-offsetMinutes" placeholder="60" min="0" value="<%= ann.offsetMinutes || '' %>">
+                                    </div>
+                                    <!-- Discord: Type -->
+                                    <div class="col-md-2 ann-discord-group <%= !isDiscord ? 'd-none' : '' %>">
+                                        <label class="form-label small">Type</label>
+                                        <select class="form-select form-select-sm ann-type">
+                                            <option value="on_publish" <%= ann.announcementType === 'on_publish' ? 'selected' : '' %>>On Publish</option>
+                                            <option value="reminder" <%= ann.announcementType === 'reminder' ? 'selected' : '' %>>Reminder</option>
+                                            <option value="event_start" <%= ann.announcementType === 'event_start' ? 'selected' : '' %>>At Start</option>
+                                            <option value="recap" <%= ann.announcementType === 'recap' ? 'selected' : '' %>>Recap</option>
+                                        </select>
+                                    </div>
+                                    <!-- Discord: Channel ID -->
+                                    <div class="col-md-3 ann-discord-group <%= !isDiscord ? 'd-none' : '' %>">
+                                        <label class="form-label small">Channel ID</label>
+                                        <input type="text" class="form-control form-control-sm ann-channelId" placeholder="Discord Channel ID" value="<%= ann.channelId || '' %>">
+                                    </div>
+                                    <!-- Discord: Content Template -->
+                                    <div class="col-12 ann-discord-group <%= !isDiscord ? 'd-none' : '' %>">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <label class="form-label small mb-0">Content Template <small class="text-muted">(leave blank for default)</small></label>
+                                            <div class="dropdown">
+                                                <button type="button" class="btn btn-xs btn-outline-secondary dropdown-toggle ann-ts-btn" data-bs-toggle="dropdown">
+                                                    <i class="fab fa-discord me-1"></i>Timestamps
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end" style="min-width:260px;font-size:0.8rem;">
+                                                    <li><h6 class="dropdown-header">Start time</h6></li>
+                                                    <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{startAt}"><code>{startAt}</code> <span class="text-muted">— full date/time</span></a></li>
+                                                    <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{startRelative}"><code>{startRelative}</code> <span class="text-muted">— relative</span></a></li>
+                                                    <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{discord_f}"><code>{discord_f}</code> <span class="text-muted">— short date/time</span></a></li>
+                                                    <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{discord_t}"><code>{discord_t}</code> <span class="text-muted">— time only</span></a></li>
+                                                    <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{discord_d}"><code>{discord_d}</code> <span class="text-muted">— date only</span></a></li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li><h6 class="dropdown-header">End time</h6></li>
+                                                    <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{endAt}"><code>{endAt}</code></a></li>
+                                                    <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{endRelative}"><code>{endRelative}</code></a></li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li><h6 class="dropdown-header">Other</h6></li>
+                                                    <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{title}"><code>{title}</code></a></li>
+                                                    <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{location}"><code>{location}</code></a></li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <textarea class="form-control form-control-sm ann-contentTemplate" rows="2" placeholder="Use {title}, {startAt}, {startRelative}…"><%= ann.contentTemplate || '' %></textarea>
+                                    </div>
+                                    <!-- Non-Discord: Body -->
+                                    <div class="col-12 ann-body-group <%= !hasBody ? 'd-none' : '' %>">
+                                        <label class="form-label small">Message Body</label>
+                                        <textarea class="form-control form-control-sm ann-body" rows="2"><%= ann.body || '' %></textarea>
+                                    </div>
+                                    <!-- MOTD/Tip: Colour format -->
+                                    <div class="col-12 ann-colour-group <%= !isMC ? 'd-none' : '' %>">
+                                        <label class="form-label small">Colour Format <small class="text-muted">(Minecraft)</small></label>
+                                        <input type="text" class="form-control form-control-sm ann-colourMessageFormat" placeholder="&aHello!" value="<%= ann.colourMessageFormat || '' %>">
+                                    </div>
+                                    <!-- Tip/Web/Popup: Link -->
+                                    <div class="col-md-8 ann-link-group <%= !hasLink ? 'd-none' : '' %>">
+                                        <label class="form-label small">Link URL <small class="text-muted">(optional)</small></label>
+                                        <input type="url" class="form-control form-control-sm ann-link" placeholder="https://…" value="<%= ann.link || '' %>">
+                                    </div>
+                                    <!-- Popup: Button text & image -->
+                                    <div class="col-md-4 ann-popup-group <%= !isPopup ? 'd-none' : '' %>">
+                                        <label class="form-label small">Button Text</label>
+                                        <input type="text" class="form-control form-control-sm ann-popupButtonText" placeholder="Learn More" value="<%= ann.popupButtonText || '' %>">
+                                    </div>
+                                    <div class="col-12 ann-popup-group <%= !isPopup ? 'd-none' : '' %>">
+                                        <label class="form-label small">Popup Image URL</label>
+                                        <input type="url" class="form-control form-control-sm ann-popupImageUrl" placeholder="https://…" value="<%= ann.popupImageUrl || '' %>">
+                                    </div>
+                                    <!-- Enabled -->
+                                    <div class="col-md-3 d-flex align-items-end">
+                                        <div class="form-check form-switch mb-1">
+                                            <input class="form-check-input ann-enabled" type="checkbox" <%= ann.enabled !== false ? 'checked' : '' %>>
+                                            <label class="form-check-label small">Enabled</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <% }) %>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i><%= mode === 'create' ? 'Create Template' : 'Save Template' %>
+                    </button>
+                </div>
+            </form>
+
+            <template id="tmplAnnouncementRowTemplate">
+                <div class="announcement-row border rounded p-3 mb-2 position-relative">
+                    <button type="button" class="btn btn-xs btn-danger position-absolute top-0 end-0 m-2 remove-announcement">×</button>
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label small">Platform</label>
+                            <select class="form-select form-select-sm ann-platform">
+                                <option value="discord" selected>Discord Message</option>
+                                <option value="motd">MOTD (Minecraft)</option>
+                                <option value="tip">In-Game Tip</option>
+                                <option value="web">Website Banner</option>
+                                <option value="popup">Website Popup</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Label</label>
+                            <input type="text" class="form-control form-control-sm ann-label" placeholder="e.g. 24h Reminder" value="">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Trigger</label>
+                            <select class="form-select form-select-sm ann-trigger">
+                                <option value="on_publish">On Publish</option>
+                                <option value="before_event" selected>Before Event</option>
+                                <option value="event_start">Event Start</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 ann-offset-group">
+                            <label class="form-label small">Minutes Before</label>
+                            <input type="number" class="form-control form-control-sm ann-offsetMinutes" placeholder="60" min="0" value="">
+                        </div>
+                        <!-- Discord: Type -->
+                        <div class="col-md-2 ann-discord-group">
+                            <label class="form-label small">Type</label>
+                            <select class="form-select form-select-sm ann-type">
+                                <option value="on_publish">On Publish</option>
+                                <option value="reminder" selected>Reminder</option>
+                                <option value="event_start">At Start</option>
+                                <option value="recap">Recap</option>
+                            </select>
+                        </div>
+                        <!-- Discord: Channel ID -->
+                        <div class="col-md-3 ann-discord-group">
+                            <label class="form-label small">Channel ID</label>
+                            <input type="text" class="form-control form-control-sm ann-channelId" placeholder="Discord Channel ID" value="">
+                        </div>
+                        <!-- Discord: Content Template + timestamp insert -->
+                        <div class="col-12 ann-discord-group">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label small mb-0">Content Template <small class="text-muted">(leave blank for default)</small></label>
+                                <div class="dropdown">
+                                    <button type="button" class="btn btn-xs btn-outline-secondary dropdown-toggle ann-ts-btn" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="fab fa-discord me-1"></i>Timestamps
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end" style="min-width:260px;font-size:0.8rem;">
+                                        <li><h6 class="dropdown-header">Start time</h6></li>
+                                        <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{startAt}"><code>{startAt}</code> <span class="text-muted">— Tue, 20 Apr 09:01</span></a></li>
+                                        <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{startRelative}"><code>{startRelative}</code> <span class="text-muted">— in 2 months</span></a></li>
+                                        <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{discord_f}"><code>{discord_f}</code> <span class="text-muted">— 20 April 2021 09:01</span></a></li>
+                                        <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{discord_d}"><code>{discord_d}</code> <span class="text-muted">— 20/04/2021</span></a></li>
+                                        <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{discord_D}"><code>{discord_D}</code> <span class="text-muted">— 20 April 2021</span></a></li>
+                                        <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{discord_t}"><code>{discord_t}</code> <span class="text-muted">— 9:01 AM</span></a></li>
+                                        <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{discord_T}"><code>{discord_T}</code> <span class="text-muted">— 9:01:00 AM</span></a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">End time</h6></li>
+                                        <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{endAt}"><code>{endAt}</code> <span class="text-muted">— Tue, 20 Apr 10:01</span></a></li>
+                                        <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{endRelative}"><code>{endRelative}</code> <span class="text-muted">— in 3 months</span></a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">Other tokens</h6></li>
+                                        <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{title}"><code>{title}</code></a></li>
+                                        <li><a class="dropdown-item ann-ts-insert" href="#" data-token="{location}"><code>{location}</code></a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <textarea class="form-control form-control-sm ann-contentTemplate" rows="2" placeholder="Use {title}, {startAt}, {startRelative}, {endAt}…"></textarea>
+                        </div>
+                        <!-- Non-Discord: Body -->
+                        <div class="col-12 ann-body-group d-none">
+                            <label class="form-label small">Message Body</label>
+                            <textarea class="form-control form-control-sm ann-body" rows="2" placeholder="Announcement text…"></textarea>
+                        </div>
+                        <!-- MOTD/Tip: Colour format -->
+                        <div class="col-12 ann-colour-group d-none">
+                            <label class="form-label small">Colour Format <small class="text-muted">(Minecraft color codes, e.g. <code>&amp;aGreen</code>)</small></label>
+                            <input type="text" class="form-control form-control-sm ann-colourMessageFormat" placeholder="&aHello!" value="">
+                        </div>
+                        <!-- Tip/Web/Popup: Link -->
+                        <div class="col-md-8 ann-link-group d-none">
+                            <label class="form-label small">Link URL <small class="text-muted">(optional)</small></label>
+                            <input type="url" class="form-control form-control-sm ann-link" placeholder="https://…" value="">
+                        </div>
+                        <!-- Popup: Button text -->
+                        <div class="col-md-4 ann-popup-group d-none">
+                            <label class="form-label small">Button Text</label>
+                            <input type="text" class="form-control form-control-sm ann-popupButtonText" placeholder="Learn More" value="">
+                        </div>
+                        <!-- Popup: Image URL -->
+                        <div class="col-12 ann-popup-group d-none">
+                            <label class="form-label small">Popup Image URL <small class="text-muted">(optional)</small></label>
+                            <input type="url" class="form-control form-control-sm ann-popupImageUrl" placeholder="https://…" value="">
+                        </div>
+                        <!-- Enabled -->
+                        <div class="col-md-3 d-flex align-items-end">
+                            <div class="form-check form-switch mb-1">
+                                <input class="form-check-input ann-enabled" type="checkbox" checked>
+                                <label class="form-check-label small">Enabled</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>.btn-xs { padding: 0.15rem 0.5rem; font-size: 0.75rem; }</style>
+
+<script>
+// ============================================================
+// Timezone-aware time helpers for default start/end time
+// ============================================================
+const _tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+// Show timezone name in labels
+document.querySelectorAll('.js-tz-label').forEach(el => {
+    el.textContent = `In your local timezone (${_tz}).`;
+});
+
+/** Convert a stored UTC HH:MM:SS string to a local HH:MM string for <input type="time">. */
+function utcTimeToLocal(utcTimeStr) {
+    if (!utcTimeStr) return '';
+    const [h, m] = utcTimeStr.split(':');
+    const d = new Date();
+    d.setUTCHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: _tz, hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(d);
+    const p = {};
+    parts.forEach(({ type, value }) => { p[type] = value; });
+    const hh = p.hour === '24' ? '00' : p.hour;
+    return `${hh}:${p.minute}`;
+}
+
+/** Convert a local HH:MM string from <input type="time"> back to UTC HH:MM:SS for storage. */
+function localTimeToUtc(localTimeStr) {
+    if (!localTimeStr) return '';
+    const [h, m] = localTimeStr.split(':');
+    const d = new Date();
+    // Set to today's date in local time at that hour/minute, then read UTC
+    const fake = new Date(`${d.toISOString().slice(0, 10)}T${h.padStart(2,'0')}:${m.padStart(2,'0')}:00`);
+    // This parses as LOCAL time only in some environments; use Intl to be safe
+    const asUtc = new Date(d.getFullYear(), d.getMonth(), d.getDate(), parseInt(h, 10), parseInt(m, 10), 0);
+    return `${String(asUtc.getUTCHours()).padStart(2,'0')}:${String(asUtc.getUTCMinutes()).padStart(2,'0')}:00`;
+}
+
+// Init: convert stored UTC times to local for display
+(function initTemplateTimes() {
+    const startLocal = document.getElementById('defaultStartTimeLocal');
+    const endLocal   = document.getElementById('defaultEndTimeLocal');
+    if (startLocal) startLocal.value = utcTimeToLocal(startLocal.dataset.utc);
+    if (endLocal)   endLocal.value   = utcTimeToLocal(endLocal.dataset.utc);
+})();
+
+// Recurrence type toggle
+const recTypeSelect = document.getElementById('recurrenceType');
+const weeklyOpts = document.getElementById('weeklyOptions');
+const customOpts = document.getElementById('customOptions');
+const recurringOpts = document.getElementById('recurringOptions');
+const onceInfo = document.getElementById('onceInfo');
+
+function toggleRecurrenceOptions() {
+    const val = recTypeSelect.value;
+    const isOnce = val === 'once';
+    recurringOpts.classList.toggle('d-none', isOnce);
+    onceInfo.classList.toggle('d-none', !isOnce);
+    weeklyOpts.classList.toggle('d-none', val !== 'weekly');
+    customOpts.classList.toggle('d-none', val !== 'custom');
+}
+recTypeSelect.addEventListener('change', toggleRecurrenceOptions);
+
+// Hosts — autofill search
+function initTemplateHostSearch(row) {
+    const searchInput = row.querySelector('.host-userSearch');
+    const suggestionsEl = row.querySelector('.host-suggestions');
+    const userIdInput = row.querySelector('.host-userId');
+    const discordIdInput = row.querySelector('.host-discordUserId');
+    const displayNameInput = row.querySelector('.host-displayName');
+
+    if (!searchInput || !suggestionsEl) return;
+
+    let searchTimeout;
+
+    const clearSuggestions = () => {
+        suggestionsEl.innerHTML = '';
+        suggestionsEl.style.display = 'none';
+    };
+
+    const selectUser = (user) => {
+        searchInput.value = user.username;
+        userIdInput.value = user.userId;
+        discordIdInput.value = user.discordId || '';
+        displayNameInput.value = user.username;
+        clearSuggestions();
+    };
+
+    const renderSuggestions = (results) => {
+        clearSuggestions();
+        if (!results.length) return;
+        results.forEach(user => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'list-group-item list-group-item-action d-flex align-items-center gap-2 py-1 px-2';
+            if (user.avatarUrl) {
+                const img = document.createElement('img');
+                img.src = user.avatarUrl;
+                img.alt = '';
+                img.width = 28;
+                img.height = 28;
+                img.className = 'rounded';
+                btn.appendChild(img);
+            }
+            const span = document.createElement('span');
+            span.textContent = user.username;
+            span.className = 'flex-fill text-start small';
+            btn.appendChild(span);
+            btn.addEventListener('click', () => selectUser(user));
+            suggestionsEl.appendChild(btn);
+        });
+        suggestionsEl.style.display = 'block';
+    };
+
+    const doSearch = async (term) => {
+        if (!term || term.length < 2) { clearSuggestions(); return; }
+        try {
+            const res = await fetch(`/api/events/users/search?q=${encodeURIComponent(term)}`, {
+                credentials: 'include',
+                headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+            });
+            if (!res.ok) { clearSuggestions(); return; }
+            const data = await res.json();
+            renderSuggestions(data.results || []);
+        } catch { clearSuggestions(); }
+    };
+
+    searchInput.addEventListener('input', (e) => {
+        userIdInput.value = '';
+        discordIdInput.value = '';
+        displayNameInput.value = e.target.value;
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => doSearch(e.target.value.trim()), 250);
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!row.contains(e.target)) clearSuggestions();
+    });
+}
+
+function addTemplateHost(host = {}) {
+    const row = document.createElement('div');
+    row.className = 'host-row border rounded p-3 mb-2 position-relative';
+    row.innerHTML = `
+        <button type="button" class="btn btn-xs btn-danger position-absolute top-0 end-0 m-2 remove-host">×</button>
+        <div class="row g-2">
+            <div class="col-md-5">
+                <label class="form-label small">Player <span class="text-muted">(linked accounts only)</span></label>
+                <div class="position-relative">
+                    <input type="text" class="form-control form-control-sm host-userSearch" placeholder="Search by username…" autocomplete="off" value="${host.displayName||''}">
+                    <div class="host-suggestions list-group position-absolute w-100" style="z-index:1000;top:100%;left:0;display:none;"></div>
+                </div>
+                <input type="hidden" class="host-userId" value="${host.userId||''}">
+                <input type="hidden" class="host-discordUserId" value="${host.discordUserId||''}">
+                <input type="hidden" class="host-displayName" value="${host.displayName||''}">
+            </div>
+            <div class="col-md-3"><label class="form-label small">Role</label>
+                <select class="form-select form-select-sm host-role">
+                    <option value="host" ${host.role==='host'?'selected':''}>Host</option>
+                    <option value="co_host" ${host.role==='co_host'?'selected':''}>Co-Host</option>
+                    <option value="coordinator" ${host.role==='coordinator'?'selected':''}>Coordinator</option>
+                </select>
+            </div>
+        </div>`;
+    row.querySelector('.remove-host').addEventListener('click', () => row.remove());
+    document.getElementById('templateHostsContainer').appendChild(row);
+    initTemplateHostSearch(row);
+}
+
+document.getElementById('addTemplateHostBtn').addEventListener('click', () => addTemplateHost());
+document.querySelectorAll('#templateHostsContainer .remove-host').forEach(btn => {
+    btn.addEventListener('click', () => btn.closest('.host-row').remove());
+});
+document.querySelectorAll('#templateHostsContainer .host-row').forEach(initTemplateHostSearch);
+
+// Location picker
+(function initTmplLocationPicker() {
+    const typeInput = document.getElementById('tmplLocationType');
+    const sections = {
+        discord:   document.getElementById('tmpl-loc-discord'),
+        minecraft: document.getElementById('tmpl-loc-minecraft'),
+        other:     document.getElementById('tmpl-loc-other'),
+    };
+    const btns = document.querySelectorAll('.tmpl-loc-type-btn');
+
+    function setType(type) {
+        typeInput.value = type;
+        Object.keys(sections).forEach(k => sections[k].classList.toggle('d-none', k !== type));
+        btns.forEach(b => {
+            b.classList.toggle('btn-primary', b.dataset.type === type);
+            b.classList.toggle('btn-outline-secondary', b.dataset.type !== type);
+        });
+    }
+    btns.forEach(b => b.addEventListener('click', () => setType(b.dataset.type)));
+
+    // Load voice channels
+    const voiceSelect = document.getElementById('tmplLocationDiscordChannelId');
+    const savedChannelId = '<%= tmpl.locationDiscordChannelId || "" %>';
+    async function loadVoiceChannels() {
+        try {
+            const res = await fetch('/api/events/discord/voice-channels', { credentials: 'include', headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> } });
+            const data = await res.json();
+            voiceSelect.innerHTML = '<option value="">— select a channel —</option>';
+            let lastCat = null, grp;
+            data.channels.forEach(ch => {
+                if (ch.category !== lastCat) {
+                    grp = document.createElement('optgroup');
+                    grp.label = ch.category || 'Uncategorised';
+                    voiceSelect.appendChild(grp);
+                    lastCat = ch.category;
+                }
+                const opt = document.createElement('option');
+                opt.value = ch.id;
+                opt.textContent = ch.name;
+                if (ch.id === savedChannelId) opt.selected = true;
+                (grp || voiceSelect).appendChild(opt);
+            });
+            if (!data.channels.length) voiceSelect.innerHTML = '<option value="">No voice channels found</option>';
+        } catch { voiceSelect.innerHTML = '<option value="">Failed to load channels</option>'; }
+    }
+    loadVoiceChannels();
+})();
+
+// Form submission
+document.getElementById('templateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const fd = new FormData(form);
+    const body = Object.fromEntries(fd.entries());
+
+    // Description is synced by summerNoteEditor partial before submit
+    body.description = document.getElementById('tmplDescriptionEditor')?.value || '';
+
+    // Convert local times back to UTC before submission
+    const startLocalEl = document.getElementById('defaultStartTimeLocal');
+    const endLocalEl   = document.getElementById('defaultEndTimeLocal');
+    document.getElementById('defaultStartTimeUtc').value = startLocalEl?.value ? localTimeToUtc(startLocalEl.value) : '';
+    document.getElementById('defaultEndTimeUtc').value   = endLocalEl?.value   ? localTimeToUtc(endLocalEl.value)   : '';
+
+    // Recurrence days
+    const days = Array.from(document.querySelectorAll('.recurrence-day:checked')).map(cb => parseInt(cb.value));
+    body.recurrenceDays = days;
+    const isOnce = body.recurrenceType === 'once';
+    body.autoGenerateDrafts = isOnce ? false : document.getElementById('autoGenCheck').checked;
+    body.isActive = document.getElementById('isActiveCheck').checked;
+    body.recurrenceEveryDays = body.recurrenceEveryDays ? parseInt(body.recurrenceEveryDays) : null;
+    body.defaultDurationMins = body.defaultDurationMins ? parseInt(body.defaultDurationMins) : null;
+    body.draftAdvanceDays = parseInt(body.draftAdvanceDays) || 7;
+
+    // Location — consolidate based on active type
+    const locType = document.getElementById('tmplLocationType').value;
+    body.locationType = locType;
+    if (locType === 'discord') {
+        const sel = document.getElementById('tmplLocationDiscordChannelId');
+        body.locationDiscordChannelId = sel.value || null;
+        body.locationLabel = sel.options[sel.selectedIndex]?.textContent?.trim() || null;
+        body.serverName = null;
+        body.serverIp = null;
+    } else if (locType === 'minecraft') {
+        body.locationDiscordChannelId = null;
+        body.locationLabel = document.getElementById('tmplServerName')?.value || null;
+        body.serverName = document.getElementById('tmplServerName')?.value || null;
+        body.serverIp = document.getElementById('tmplServerIp')?.value || null;
+    } else {
+        body.locationDiscordChannelId = null;
+        body.locationLabel = document.getElementById('tmplLocationLabelOther')?.value || null;
+        body.serverName = null;
+        body.serverIp = null;
+    }
+
+    // Hosts
+    body.defaultHosts = Array.from(document.querySelectorAll('#templateHostsContainer .host-row')).map(row => ({
+        displayName: row.querySelector('.host-displayName')?.value || null,
+        role: row.querySelector('.host-role')?.value || 'host',
+        discordUserId: row.querySelector('.host-discordUserId')?.value || null,
+        userId: row.querySelector('.host-userId')?.value || null,
+    })).filter(h => h.userId || h.displayName);
+
+    const endpoint = '<%= mode === "create" ? "/api/events/templates/create" : "/api/events/templates/update" %>';
+    const res = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+        body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!data.success) { alert('Error: ' + data.message); return; }
+
+    // Save announcements (use returned templateId for new templates)
+    const savedTemplateId = data.data?.templateId || body.templateId;
+    if (savedTemplateId) {
+        const annRes = await fetch('/api/events/templates/announcements/update', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+            body: JSON.stringify({ templateId: savedTemplateId, announcements: collectTemplateAnnouncements() }),
+        });
+        const annData = await annRes.json();
+        if (!annData.success) { alert('Template saved but announcements failed: ' + annData.message); return; }
+    }
+
+    window.location.href = '/dashboard/events/templates';
+});
+
+// Announcements
+function initAnnouncementRow(row) {
+    row.querySelector('.remove-announcement').addEventListener('click', () => row.remove());
+
+    const trigger = row.querySelector('.ann-trigger');
+    const offsetGroup = row.querySelector('.ann-offset-group');
+    if (trigger && offsetGroup) {
+        const toggleOffset = () => offsetGroup.classList.toggle('d-none', trigger.value !== 'before_event');
+        trigger.addEventListener('change', toggleOffset);
+        toggleOffset();
+    }
+
+    const platformSel = row.querySelector('.ann-platform');
+    const togglePlatform = () => {
+        const p = platformSel?.value || 'discord';
+        row.querySelectorAll('.ann-discord-group').forEach(el => el.classList.toggle('d-none', p !== 'discord'));
+        row.querySelector('.ann-body-group')?.classList.toggle('d-none', p === 'discord');
+        row.querySelector('.ann-colour-group')?.classList.toggle('d-none', !['motd','tip'].includes(p));
+        row.querySelector('.ann-link-group')?.classList.toggle('d-none', !['tip','web','popup'].includes(p));
+        row.querySelectorAll('.ann-popup-group').forEach(el => el.classList.toggle('d-none', p !== 'popup'));
+    };
+    platformSel?.addEventListener('change', togglePlatform);
+    togglePlatform();
+
+    row.querySelectorAll('.ann-ts-insert').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const ta = row.querySelector('.ann-contentTemplate');
+            const token = link.dataset.token;
+            const start = ta.selectionStart, end = ta.selectionEnd;
+            ta.value = ta.value.slice(0, start) + token + ta.value.slice(end);
+            ta.selectionStart = ta.selectionEnd = start + token.length;
+            ta.focus();
+        });
+    });
+}
+
+function addTemplateAnnouncementRow(ann = {}) {
+    const tmpl = document.getElementById('tmplAnnouncementRowTemplate');
+    const row = tmpl.content.cloneNode(true).querySelector('.announcement-row');
+    if (ann.platform) row.querySelector('.ann-platform').value = ann.platform;
+    if (ann.label) row.querySelector('.ann-label').value = ann.label;
+    if (ann.announcementType) row.querySelector('.ann-type').value = ann.announcementType;
+    if (ann.triggerType) row.querySelector('.ann-trigger').value = ann.triggerType;
+    if (ann.offsetMinutes) row.querySelector('.ann-offsetMinutes').value = ann.offsetMinutes;
+    if (ann.channelId) row.querySelector('.ann-channelId').value = ann.channelId;
+    if (ann.contentTemplate) row.querySelector('.ann-contentTemplate').value = ann.contentTemplate;
+    if (ann.body) row.querySelector('.ann-body').value = ann.body;
+    if (ann.colourMessageFormat) row.querySelector('.ann-colourMessageFormat').value = ann.colourMessageFormat;
+    if (ann.link) row.querySelector('.ann-link').value = ann.link;
+    if (ann.popupButtonText) row.querySelector('.ann-popupButtonText').value = ann.popupButtonText;
+    if (ann.popupImageUrl) row.querySelector('.ann-popupImageUrl').value = ann.popupImageUrl;
+    if (ann.enabled === false) row.querySelector('.ann-enabled').checked = false;
+    document.getElementById('templateAnnouncementsContainer').appendChild(row);
+    initAnnouncementRow(row);
+}
+
+function collectTemplateAnnouncements() {
+    return Array.from(document.querySelectorAll('#templateAnnouncementsContainer .announcement-row')).map(row => ({
+        platform: row.querySelector('.ann-platform')?.value || 'discord',
+        label: row.querySelector('.ann-label')?.value || null,
+        announcementType: row.querySelector('.ann-type')?.value || 'reminder',
+        channelId: row.querySelector('.ann-channelId')?.value || null,
+        contentTemplate: row.querySelector('.ann-contentTemplate')?.value || null,
+        body: row.querySelector('.ann-body')?.value || null,
+        colourMessageFormat: row.querySelector('.ann-colourMessageFormat')?.value || null,
+        link: row.querySelector('.ann-link')?.value || null,
+        popupButtonText: row.querySelector('.ann-popupButtonText')?.value || null,
+        popupImageUrl: row.querySelector('.ann-popupImageUrl')?.value || null,
+        triggerType: row.querySelector('.ann-trigger')?.value || 'before_event',
+        offsetMinutes: row.querySelector('.ann-offsetMinutes')?.value ? parseInt(row.querySelector('.ann-offsetMinutes').value) : null,
+        enabled: row.querySelector('.ann-enabled')?.checked !== false,
+    }));
+}
+
+document.getElementById('addTemplateAnnouncementBtn').addEventListener('click', () => addTemplateAnnouncementRow());
+document.querySelectorAll('#templateAnnouncementsContainer .announcement-row').forEach(initAnnouncementRow);
+
+// ============================================================
+// Image upload + preview (Cloudinary)
+// ============================================================
+function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, statusId, clearBtnId, folder) {
+    const hidden = document.getElementById(hiddenId);
+    const fileInput = document.getElementById(fileId);
+    const uploadBtn = document.getElementById(uploadBtnId);
+    const manual = document.getElementById(manualId);
+    const preview = document.getElementById(previewId);
+    const statusEl = document.getElementById(statusId);
+    const clearBtn = document.getElementById(clearBtnId);
+    if (!hidden || !fileInput || !uploadBtn || !manual || !preview) return;
+
+    function setUrl(url) {
+        hidden.value = url;
+        manual.value = url;
+        const img = preview.querySelector('img');
+        if (url && img) { img.src = url; preview.classList.remove('d-none'); }
+        else { preview.classList.add('d-none'); }
+    }
+
+    fileInput.addEventListener('change', () => { uploadBtn.disabled = !fileInput.files.length; });
+
+    uploadBtn.addEventListener('click', async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        uploadBtn.disabled = true;
+        statusEl.className = 'small text-info';
+        statusEl.textContent = 'Uploading…';
+        statusEl.classList.remove('d-none');
+        try {
+            const fd = new FormData();
+            fd.append('folder', folder);
+            fd.append('file', file);
+            const res = await fetch('/api/upload/image', {
+                method: 'POST',
+                body: fd,
+            });
+            const json = await res.json();
+            if (json.success) {
+                setUrl(json.data.url);
+                statusEl.className = 'small text-success';
+                statusEl.textContent = 'Uploaded!';
+                fileInput.value = '';
+            } else {
+                statusEl.className = 'small text-danger';
+                statusEl.textContent = json.message || 'Upload failed';
+            }
+        } catch {
+            statusEl.className = 'small text-danger';
+            statusEl.textContent = 'Upload failed';
+        }
+        uploadBtn.disabled = true;
+        setTimeout(() => statusEl.classList.add('d-none'), 4000);
+    });
+
+    manual.addEventListener('change', () => setUrl(manual.value.trim()));
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            setUrl('');
+            fileInput.value = '';
+        });
+    }
+}
+setupImageUpload('bannerUrlInput', 'bannerFileInput', 'bannerUploadBtn', 'bannerUrlManual', 'bannerPreview', 'bannerUploadStatus', 'bannerClearBtn', 'zander/events/banners');
+setupImageUpload('logoUrlInput', 'logoFileInput', 'logoUploadBtn', 'logoUrlManual', 'logoPreview', 'logoUploadStatus', 'logoClearBtn', 'zander/events/logos');
+</script>

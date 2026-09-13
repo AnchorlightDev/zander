@@ -1,0 +1,53 @@
+<%- include("../../modules/header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription
+}) %>
+
+<%- include("../../modules/navigationBar.ejs") %>
+
+<%- include("../../partials/miniHeader.ejs", {
+  headerTitle: "Thank You!",
+  backgroundImage: globalImage
+}) %>
+
+<section class="section">
+  <div class="container">
+
+    <div class="row justify-content-center">
+      <div class="col-lg-7">
+
+        <div class="text-center mb-5">
+          <div style="font-size: 4rem; line-height: 1;" class="mb-3">&#127881;</div>
+          <h2>Payment received!</h2>
+          <p class="text-muted">
+            Your purchase is being processed. In-game commands will run on the server shortly —
+            you don't need to be online right now.
+          </p>
+        </div>
+
+        <div class="alert alert-success">
+          <h5 class="alert-heading">What happens next?</h5>
+          <ul class="mb-0">
+            <li>Your rank or perk will be applied to the server automatically.</li>
+            <li>For subscriptions, your rank will be re-granted each billing period.</li>
+            <li>If you gifted to another player, they will receive it the next time they connect.</li>
+          </ul>
+        </div>
+
+        <p class="text-muted">
+          If your rank has not appeared within a few minutes of joining the server,
+          please contact staff with your Minecraft username and transaction details.
+        </p>
+
+        <div class="d-flex gap-2 flex-wrap">
+          <a href="/webstore" class="btn btn-primary">Back to Webstore</a>
+          <a href="/webstore/history" class="btn btn-outline-secondary">View Purchase History</a>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<%- include("../../modules/footer.ejs") %>

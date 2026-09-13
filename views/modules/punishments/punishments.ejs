@@ -63,7 +63,12 @@
                                     <th scope="row"><%= punishmentId %></th>
                                     <td>
                                         <% if (punishment.bannedUsername) { %>
-                                            <a href="/profile/<%= punishment.bannedUsername %>"><%= playerName %></a>
+                                            <a href="/profile/<%= punishment.bannedUsername %>" class="d-flex align-items-center gap-2 text-decoration-none">
+                                                <% if (punishment.bannedUuid) { %>
+                                                    <img src="https://crafatar.com/avatars/<%= punishment.bannedUuid %>?size=24&overlay" width="24" height="24" class="rounded flex-shrink-0" alt="" onerror="this.style.display='none'">
+                                                <% } %>
+                                                <span><%= playerName %></span>
+                                            </a>
                                         <% } else { %>
                                             <%= playerName %>
                                         <% } %>

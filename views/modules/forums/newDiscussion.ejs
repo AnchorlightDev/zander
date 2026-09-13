@@ -42,7 +42,104 @@
                 editorElementText: ""
               }) %>
             </div>
-            <div class="text-end">
+
+            <!-- Poll section -->
+            <div class="mt-4 pt-3 border-top">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="pollEnabled" name="pollEnabled" value="1">
+                <label class="form-check-label fw-semibold" for="pollEnabled">
+                  <i class="fa-solid fa-chart-bar me-1"></i> Attach a poll to this discussion
+                </label>
+              </div>
+
+              <div id="pollCreator" class="forums-poll-creator d-none">
+                <div class="mb-3">
+                  <label class="form-label" for="pollQuestion">
+                    Poll Question <span class="text-danger">*</span>
+                  </label>
+                  <input type="text" class="form-control" id="pollQuestion" name="pollQuestion"
+                         maxlength="500" placeholder="What would you like to ask?">
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">
+                    Options <span class="text-danger">*</span>
+                    <span class="text-muted fw-normal small">(min 2, max 20)</span>
+                  </label>
+                  <div id="pollOptionsList">
+                    <div class="forums-poll-option-row">
+                      <div class="forums-poll-option-fields">
+                        <input type="text" class="form-control" name="pollOptions"
+                               maxlength="300" placeholder="Option 1">
+                        <input type="url" class="form-control forums-poll-option-image-url"
+                               name="pollOptionImages" maxlength="2000"
+                               placeholder="Image URL (optional)">
+                      </div>
+                      <button type="button" class="btn btn-sm btn-outline-danger poll-remove-option"
+                              title="Remove option" disabled>
+                        <i class="fa-solid fa-xmark"></i>
+                      </button>
+                    </div>
+                    <div class="forums-poll-option-row">
+                      <div class="forums-poll-option-fields">
+                        <input type="text" class="form-control" name="pollOptions"
+                               maxlength="300" placeholder="Option 2">
+                        <input type="url" class="form-control forums-poll-option-image-url"
+                               name="pollOptionImages" maxlength="2000"
+                               placeholder="Image URL (optional)">
+                      </div>
+                      <button type="button" class="btn btn-sm btn-outline-danger poll-remove-option"
+                              title="Remove option" disabled>
+                        <i class="fa-solid fa-xmark"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="pollAddOption">
+                    <i class="fa-solid fa-plus me-1"></i>Add Option
+                  </button>
+                </div>
+
+                <div class="row g-3 mb-3">
+                  <div class="col-sm-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="pollAllowMultiple"
+                             name="pollAllowMultiple" value="1">
+                      <label class="form-check-label" for="pollAllowMultiple">
+                        Allow multiple choices
+                      </label>
+                    </div>
+                  </div>
+                  <div class="col-sm-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="pollAllowVoteChange"
+                             name="pollAllowVoteChange" value="1">
+                      <label class="form-check-label" for="pollAllowVoteChange">
+                        Allow changing vote before close
+                      </label>
+                    </div>
+                  </div>
+                  <div class="col-sm-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="pollShowVoters"
+                             name="pollShowVoters" value="1">
+                      <label class="form-check-label" for="pollShowVoters">
+                        Show who voted for each option
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mb-0">
+                  <label class="form-label" for="pollExpiresAt">
+                    Closing date &amp; time <span class="text-muted fw-normal">(optional)</span>
+                  </label>
+                  <input type="datetime-local" class="form-control" id="pollExpiresAt" name="pollExpiresAt">
+                  <div class="form-text">Leave blank to keep the poll open indefinitely.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-end mt-4">
               <a class="btn btn-link" href="/forums/category/<%= category.slug %>">Cancel</a>
               <button type="submit" class="btn btn-main">Post Discussion</button>
             </div>
@@ -55,6 +152,68 @@
 
 <script>
   (() => {
+    const pollToggle = document.getElementById('pollEnabled');
+    const pollCreator = document.getElementById('pollCreator');
+    const optionsList = document.getElementById('pollOptionsList');
+    const addOptionBtn = document.getElementById('pollAddOption');
+    const MAX_OPTIONS = 20;
+    const MIN_OPTIONS = 2;
+
+    function getOptionRows() {
+      return Array.from(optionsList.querySelectorAll('.forums-poll-option-row'));
+    }
+
+    function updateRemoveButtons() {
+      const rows = getOptionRows();
+      rows.forEach((row, i) => {
+        const btn = row.querySelector('.poll-remove-option');
+        if (btn) btn.disabled = rows.length <= MIN_OPTIONS;
+        const input = row.querySelector('input[name="pollOptions"]');
+        if (input) input.placeholder = `Option ${i + 1}`;
+      });
+      if (addOptionBtn) {
+        addOptionBtn.disabled = rows.length >= MAX_OPTIONS;
+      }
+    }
+
+    pollToggle.addEventListener('change', () => {
+      pollCreator.classList.toggle('d-none', !pollToggle.checked);
+    });
+
+    addOptionBtn.addEventListener('click', () => {
+      const rows = getOptionRows();
+      if (rows.length >= MAX_OPTIONS) return;
+
+      const row = document.createElement('div');
+      row.className = 'forums-poll-option-row';
+      row.innerHTML = `
+        <div class="forums-poll-option-fields">
+          <input type="text" class="form-control" name="pollOptions"
+                 maxlength="300" placeholder="Option ${rows.length + 1}">
+          <input type="url" class="form-control forums-poll-option-image-url"
+                 name="pollOptionImages" maxlength="2000" placeholder="Image URL (optional)">
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-danger poll-remove-option" title="Remove option">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      `;
+      optionsList.appendChild(row);
+      row.querySelector('input[name="pollOptions"]').focus();
+      updateRemoveButtons();
+    });
+
+    optionsList.addEventListener('click', (e) => {
+      const btn = e.target.closest('.poll-remove-option');
+      if (!btn || btn.disabled) return;
+      const row = btn.closest('.forums-poll-option-row');
+      if (row) {
+        row.remove();
+        updateRemoveButtons();
+      }
+    });
+
+    updateRemoveButtons();
+
     document.querySelectorAll('form[method="post"]').forEach(form => {
       form.addEventListener('submit', () => {
         const btn = form.querySelector('button[type="submit"]');
@@ -65,6 +224,12 @@
           btn.textContent = 'Submitting…';
         }, 0);
       });
+    });
+
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) {
+        window.location.reload();
+      }
     });
   })();
 </script>

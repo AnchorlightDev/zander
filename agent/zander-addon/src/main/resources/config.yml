@@ -1,0 +1,37 @@
+# Zander Addon Configuration
+
+# --- Plugin Settings ---
+# The base URL of the live zander-web API. Policy links, social links, rewards and
+# bridge tasks are all fetched from here. A trailing /api is optional.
+api-url: "https://craftingforchrist.net"
+
+# API key sent as the x-access-token header on authenticated bridge calls.
+# Must match the `apiKey` value in the web app's .env.
+api-key: "changeme"
+
+# This server's identifier, used to target queued commands at this server.
+# Matches the serverName / slug used when commands are queued on the web side.
+server-name: "survival"
+
+# --- Command Bridge ---
+# Claims and executes pending reward commands for players on join
+# (POST /api/command-bridge/claim, then /complete and /fail)
+command-bridge:
+  enabled: true
+
+# --- Bridge Processor ---
+# Polls for queued server-side console tasks on a timer
+# (GET /api/bridge/processor/get)
+bridge:
+  enabled: true
+  poll-interval-seconds: 4
+
+# --- Policy Book ---
+policy-book:
+  enabled: false
+  slot: 8
+
+# --- Social Media Paper ---
+social-paper:
+  enabled: false
+  slot: 7

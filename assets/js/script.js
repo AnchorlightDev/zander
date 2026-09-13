@@ -107,6 +107,14 @@
 
 	$(document).on('submit', 'form', function (event) {
 		const $form = $(this);
+		// If the event's default action was already cancelled (e.g. by an
+		// onsubmit="return confirm(...)" where the user clicked Cancel, or by
+		// Summernote's empty-editor check), do NOT mark the form as submitting.
+		// Without this guard the form becomes permanently locked: the next real
+		// submission attempt is blocked by the submitting=true flag.
+		if (event.isDefaultPrevented()) {
+			return;
+		}
 		if ($form.data('submitting')) {
 			event.preventDefault();
 			return;
@@ -203,16 +211,19 @@
     var Shuffle = window.Shuffle;
     var jQuery = window.jQuery;
 
-    var myShuffle = new Shuffle(document.querySelector('.shuffle-wrapper'), {
-        itemSelector: '.shuffle-item',
-        buffer: 1
-    });
+    var shuffleWrapper = document.querySelector('.shuffle-wrapper');
+    if (shuffleWrapper) {
+        var myShuffle = new Shuffle(shuffleWrapper, {
+            itemSelector: '.shuffle-item',
+            buffer: 1
+        });
 
-    jQuery('input[name="shuffle-filter"]').on('change', function (evt) {
-        var input = evt.currentTarget;
-        if (input.checked) {
-            myShuffle.filter(input.value);
-        }
-    });
+        jQuery('input[name="shuffle-filter"]').on('change', function (evt) {
+            var input = evt.currentTarget;
+            if (input.checked) {
+                myShuffle.filter(input.value);
+            }
+        });
+    }
 
 })(jQuery);

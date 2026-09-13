@@ -1,0 +1,114 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <h1 class="h2">Events Calendar</h1>
+                <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+                    <a href="/dashboard/events/list" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-list fa-fw me-1"></i>List View
+                    </a>
+                    <a href="/dashboard/events/review" class="btn btn-sm btn-outline-warning" id="reviewQueueBtn">
+                        <i class="fas fa-clock fa-fw me-1"></i>Review Queue
+                    </a>
+                    <%- include("../../partials/documentationLink.ejs", {
+                        doclink: "https://modularsoft.org/docs/products/zander/features/events/"
+                    }) %>
+                    <a href="/dashboard/events/templates" class="btn btn-sm btn-outline-info">
+                        <i class="fas fa-copy fa-fw me-1"></i>Templates
+                    </a>
+                    <a href="/dashboard/events/create" class="btn btn-sm btn-primary">
+                        <i class="fas fa-plus fa-fw me-1"></i>New Event
+                    </a>
+                </div>
+            </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+            <!-- Status Legend -->
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <span class="badge" style="background:#6c757d">Draft</span>
+                <span class="badge" style="background:#ffc107;color:#000">Pending Review</span>
+                <span class="badge" style="background:#198754">Published</span>
+                <span class="badge" style="background:#dc3545">Rejected</span>
+                <span class="badge" style="background:#6f42c1">Cancelled</span>
+                <span class="badge" style="background:#adb5bd;color:#000">Archived</span>
+            </div>
+
+            <div id="events-calendar" style="background:#fff;padding:16px;border-radius:8px;border:1px solid #dee2e6;min-height:600px;"></div>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+<script>
+const STATUS_COLORS = {
+    draft: '#6c757d',
+    pending_review: '#ffc107',
+    approved: '#0dcaf0',
+    published: '#198754',
+    rejected: '#dc3545',
+    cancelled: '#6f42c1',
+    archived: '#adb5bd',
+};
+
+document.addEventListener('DOMContentLoaded', function () {
+    const calendarEl = document.getElementById('events-calendar');
+
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        timeZone: 'local',
+        initialView: 'timeGridWeek',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,listMonth',
+        },
+        height: 'auto',
+        events: async function (fetchInfo, successCallback, failureCallback) {
+            try {
+                const res = await fetch(
+                    `/api/events/calendar?start=${encodeURIComponent(fetchInfo.startStr)}&end=${encodeURIComponent(fetchInfo.endStr)}`,
+                    { headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> } }
+                );
+                const data = await res.json();
+                if (!data.success) { failureCallback(data.message); return; }
+
+                const events = data.data.map(ev => ({
+                    id: ev.eventId,
+                    title: ev.title,
+                    start: ev.startAt,
+                    end: ev.endAt,
+                    color: STATUS_COLORS[ev.status] || '#6c757d',
+                    textColor: ['pending_review', 'approved', 'archived'].includes(ev.status) ? '#000' : '#fff',
+                    extendedProps: { status: ev.status, eventId: ev.eventId },
+                }));
+                successCallback(events);
+            } catch (err) {
+                failureCallback(err);
+            }
+        },
+        eventClick: function (info) {
+            const eventId = info.event.extendedProps.eventId;
+            window.location.href = `/dashboard/events/view?eventId=${eventId}`;
+        },
+        eventDidMount: function (info) {
+            info.el.title = `${info.event.title} [${info.event.extendedProps.status}]`;
+        },
+    });
+
+    calendar.render();
+
+    // Update review queue badge
+    fetch('/api/events/pending-review', { headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> } })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.data.length > 0) {
+                const btn = document.getElementById('reviewQueueBtn');
+                btn.innerHTML = `<i class="fas fa-clock fa-fw me-1"></i>Review Queue <span class="badge bg-danger">${data.data.length}</span>`;
+            }
+        }).catch(() => {});
+});
+</script>

@@ -8,39 +8,55 @@ const config = require("../config.json");
 import moment from "moment";
 import { sendWebhookMessage } from "../lib/discord/webhooks.mjs";
 
-var cakeDayUserCheckTask = cron.schedule("0 7 * * *", () => {
+var cakeDayUserCheckTask = cron.schedule("0 7 * * *", async () => {
+  console.log("[CakeDayUserCheck] Running daily cake day check...");
   try {
-    db.query(
-      `SELECT * FROM users WHERE DATE_FORMAT(joined, '%m-%d') = DATE_FORMAT(CURDATE(), '%m-%d') AND YEAR(joined) != YEAR(CURDATE()) AND account_registered IS NOT NULL;`,
-      async function (error, results, fields) {
-        if (error) {
-          return console.log(`Error: ${error}`);
+    const results = await new Promise((resolve, reject) => {
+      db.query(
+        `SELECT * FROM users
+         WHERE account_registered IS NOT NULL
+           AND DATE_FORMAT(joined, '%m-%d') = DATE_FORMAT(CURDATE(), '%m-%d')
+           AND YEAR(joined) != YEAR(CURDATE())
+           AND account_disabled = 0
+           AND audit_lastWebsiteLogin >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)`,
+        (error, rows) => {
+          if (error) return reject(error);
+          resolve(rows);
         }
+      );
+    });
 
-        const welcomeHook = new Webhook(config.discord.webhooks.welcome);
+    console.log(`[CakeDayUserCheck] Found ${results.length} user(s) with a cake day today.`);
 
-        for (const user of results) {
-          const joinDate = moment(user.joined); // Parse the join date
-          const years = moment().diff(joinDate, "years"); // Calculate the difference in years
+    const welcomeHook = new Webhook(config.discord.webhooks.welcome);
 
-          let embed = new MessageBuilder()
-            .setTitle(`🎂 Happy cake day to ${user.username}! :tada:`)
-            .setDescription(
-              `Celebrating ${years} year(s) with ${config.siteConfiguration.siteName}`
-            )
-            .setColor(Colors.Blurple)
-            .setFooter(
-              `To get your cake day mention, make sure you are a member on our website.`
-            );
+    for (const user of results) {
+      try {
+        const years = moment().diff(moment(user.joined), "years");
 
-          await sendWebhookMessage(welcomeHook, embed, {
-            context: "cron/cakeDayUserCheck",
-          });
-        }
+        const embed = new MessageBuilder()
+          .setTitle(`🎂 Happy cake day to ${user.username}! 🎉`)
+          .setDescription(
+            `Celebrating ${years} year${years !== 1 ? "s" : ""} with ${config.siteConfiguration.siteName}`
+          )
+          .setColor(Colors.Blurple)
+          .setFooter(
+            `To get your cake day mention, make sure you are a member on our website.`
+          );
+
+        await sendWebhookMessage(welcomeHook, embed, {
+          context: "cron/cakeDayUserCheck",
+        });
+
+        console.log(`[CakeDayUserCheck] Announced cake day for ${user.username} (${years} year(s)).`);
+      } catch (userError) {
+        console.error(`[CakeDayUserCheck] Failed to announce cake day for ${user.username}:`, userError);
       }
-    );
+    }
+
+    console.log("[CakeDayUserCheck] Done.");
   } catch (error) {
-    console.log(`Error: ${error}`);
+    console.error("[CakeDayUserCheck] Error:", error);
   }
 });
 
