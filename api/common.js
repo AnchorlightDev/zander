@@ -214,7 +214,7 @@ export function internalApiHeaders(extraHeaders = {}) {
 
 /*
     Makes a POST API request to the specified postURL with the provided apiPostBody.
-    It includes a header with the x-access-token value taken from an environment variable named apiKey.
+    It authenticates with this app's own internal client credential via internalApiHeaders().
     If the request is successful, it logs the response data.
     If the request fails, it sets a cookie with a "danger" alert type and an error message,
     then redirects the user to the specified failureRedirectURL.

@@ -2,11 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { generateKey, hashKey, verifyKeyHash, resolveScope } from "../../lib/apiKeys.js";
 
 // verifyToken pulls the controller in for the client lookup; the controller
-// opens a mysql2 pool at import time, so it is stubbed here. features.json is
-// stubbed too so the legacy-fallback flag can be flipped per test.
+// opens a mysql2 pool at import time, so it is stubbed here.
 const mockGetClientByPrefixCached = vi.fn();
 const mockTouchLastUsed = vi.fn();
-const mockFeatures = { legacyApiKey: true };
 
 vi.mock("../../controllers/apiClientController.js", () => ({
   getClientByPrefixCached: (...a) => mockGetClientByPrefixCached(...a),
@@ -18,7 +16,6 @@ vi.mock("module", async (importOriginal) => {
   return {
     ...actual,
     createRequire: () => (specifier) => {
-      if (specifier.includes("features.json")) return mockFeatures;
       if (specifier.includes("lang.json")) {
         return {
           api: {
@@ -35,7 +32,9 @@ vi.mock("module", async (importOriginal) => {
 
 const { default: verifyToken } = await import("../../api/routes/verifyToken.js");
 
-const LEGACY_KEY = "legacy-shared-key-value";
+// The app-wide shared secret that used to be accepted via process.env.apiKey.
+// The cutover is complete; it is now just another invalid token.
+const RETIRED_SHARED_KEY = "legacy-shared-key-value";
 
 function makeRes() {
   return {
@@ -135,12 +134,6 @@ describe("resolveScope", () => {
 describe("verifyToken — per-client keys", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockFeatures.legacyApiKey = true;
-    process.env.apiKey = LEGACY_KEY;
-  });
-
-  afterEach(() => {
-    delete process.env.apiKey;
   });
 
   it("accepts a valid key holding the required scope", async () => {
@@ -243,54 +236,34 @@ describe("verifyToken — per-client keys", () => {
   });
 });
 
-describe("verifyToken — legacy shared key fallback", () => {
+describe("verifyToken — retired shared key", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.apiKey = LEGACY_KEY;
+    // Set even though nothing reads it: proves the cutover removed the read,
+    // not merely that the variable happens to be unset in CI.
+    process.env.apiKey = RETIRED_SHARED_KEY;
   });
 
   afterEach(() => {
     delete process.env.apiKey;
   });
 
-  it("is honoured while legacyApiKey is true", async () => {
-    mockFeatures.legacyApiKey = true;
-
-    const out = await run(makeReq({ token: LEGACY_KEY }));
-    expect(out.allowed).toBe(true);
-    expect(out.req.apiClient.name).toBe("legacy-shared-key");
-  });
-
-  it("is rejected once legacyApiKey is false", async () => {
-    mockFeatures.legacyApiKey = false;
-
-    const out = await run(makeReq({ token: LEGACY_KEY }));
+  it("is rejected with 401 even while apiKey is still present in the environment", async () => {
+    const out = await run(makeReq({ token: RETIRED_SHARED_KEY }));
     expect(out.allowed).toBe(false);
     expect(out.status).toBe(401);
+    expect(out.req.apiClient).toBeUndefined();
   });
 
-  it("still rejects a wrong legacy value while the flag is true", async () => {
-    mockFeatures.legacyApiKey = true;
-
-    const out = await run(makeReq({ token: "not-the-legacy-key" }));
-    expect(out.allowed).toBe(false);
-    expect(out.status).toBe(401);
-  });
-
-  it("does not accept the legacy key when none is configured", async () => {
-    mockFeatures.legacyApiKey = true;
-    delete process.env.apiKey;
-
-    const out = await run(makeReq({ token: "undefined" }));
-    expect(out.allowed).toBe(false);
-    expect(out.status).toBe(401);
+  it("never consults the database for a non-`zdr_` token", async () => {
+    await run(makeReq({ token: RETIRED_SHARED_KEY }));
+    expect(mockGetClientByPrefixCached).not.toHaveBeenCalled();
   });
 });
 
 describe("verifyToken — dashboard session fallback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockFeatures.legacyApiKey = false;
   });
 
   it("allows an allowlisted route when the user holds the node", async () => {

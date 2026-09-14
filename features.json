@@ -41,6 +41,5 @@
   "smTwitch": true,
   "smYouTube": true,
   "smLinkedIn": true,
-  "smTikTok": true,
-  "legacyApiKey": true
+  "smTikTok": true
 }

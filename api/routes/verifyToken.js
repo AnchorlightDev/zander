@@ -8,7 +8,6 @@ import {
 
 const require = createRequire(import.meta.url);
 const lang = require("../../lang.json");
-const features = require("../../features.json");
 
 /*
     Endpoints that a logged-in dashboard user may call using their session
@@ -156,24 +155,8 @@ export default async function verifyToken(req, res) {
     return;
   }
 
-  // ── Legacy shared key ────────────────────────────────────────────────────
-  // Retained only while features.legacyApiKey is true so callers can migrate.
-  // Every use is logged so the remaining un-migrated callers are visible; once
-  // the log is silent, flip the flag to false and delete apiKey from .env.
-  if (features.legacyApiKey) {
-    const expected = process.env.apiKey;
-
-    if (typeof expected === "string" && expected.length > 0 && token === expected) {
-      console.warn(
-        `[apiAuth] LEGACY shared apiKey accepted —` +
-          ` path=${req.method} ${path} ip=${clientIp(req)}.` +
-          ` Migrate this caller to a per-client key.`
-      );
-      req.apiClient = { clientId: null, name: "legacy-shared-key", scopes: ["*legacy*"] };
-      return;
-    }
-  }
-
+  // Anything that is not a well-formed per-client key is rejected outright.
+  // The old app-wide shared key is gone; there is no fallback.
   logDenial("invalid token", { req });
   return deny(res, 401, lang.api.invalidToken);
 }
