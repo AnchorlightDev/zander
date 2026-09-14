@@ -34,7 +34,17 @@
                 <executions>
                     <execution>
                         <id>copy-artifacts</id>
-                        <phase>package</phase>
+                        <!--
+                            verify, not package. maven-shade-plugin binds to
+                            package and replaces the module's jar with the
+                            shaded one, and this inherited execution ran before
+                            it — so the last module in the reactor had its
+                            pre-shade jar collected here, missing every bundled
+                            dependency. Earlier modules were corrected by
+                            accident when a later module re-globbed the tree.
+                            verify runs after package, so the artifact is final.
+                        -->
+                        <phase>verify</phase>
                         <goals>
                             <goal>run</goal>
                         </goals>
