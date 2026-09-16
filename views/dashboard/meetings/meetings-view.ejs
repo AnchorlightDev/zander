@@ -1,0 +1,205 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <div>
+                    <h1 class="h2 mb-1"><%= poll.title %></h1>
+                    <span class="badge bg-<%= badgeClass %> <%= badgeClass === 'info' ? 'text-dark' : '' %>"><%= poll.status %></span>
+                    <% if (poll.timezone) { %>
+                        <small class="text-muted ms-2">Times shown in your local timezone (organised in <%= poll.timezone %>)</small>
+                    <% } %>
+                </div>
+                <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+                    <a href="/dashboard/meetings" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-arrow-left fa-fw me-1"></i>Back
+                    </a>
+                    <% if (canManage && poll.status === 'open') { %>
+                        <a href="/dashboard/meetings/edit?pollId=<%= poll.pollId %>" class="btn btn-sm btn-warning">
+                            <i class="fas fa-pen fa-fw me-1"></i>Edit
+                        </a>
+                    <% } %>
+                </div>
+            </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+            <% if (poll.description) { %>
+                <p class="mb-3"><%= poll.description %></p>
+            <% } %>
+
+            <div class="row g-3 mb-4">
+                <div class="col-sm-4">
+                    <div class="border rounded p-3">
+                        <div class="small text-muted">Invited</div>
+                        <div class="h4 mb-0"><%= poll.invitees.length %></div>
+                    </div>
+                </div>
+                <div class="col-sm-4">
+                    <div class="border rounded p-3">
+                        <div class="small text-muted">Responded</div>
+                        <div class="h4 mb-0"><%= poll.respondedCount %></div>
+                    </div>
+                </div>
+                <div class="col-sm-4">
+                    <div class="border rounded p-3">
+                        <div class="small text-muted">Deadline</div>
+                        <div class="h6 mb-0 js-datetime"
+                             data-iso="<%= poll.deadlineAt ? new Date(poll.deadlineAt).toISOString() : '' %>"
+                             data-fallback="None"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================ Respond ============================ -->
+            <% if (poll.viewerIsInvitee) { %>
+                <h2 class="h5 mt-4 pt-3 border-top">Your availability</h2>
+
+                <% if (!poll.viewerCanRespond) { %>
+                    <div class="alert alert-secondary">
+                        <% if (poll.status !== 'open') { %>
+                            This meeting poll is <%= poll.status %> and no longer accepts responses.
+                        <% } else { %>
+                            Responses for this meeting poll are closed.
+                        <% } %>
+                    </div>
+                <% } %>
+
+                <div id="meetingMatrix"
+                     class="mb-4"
+                     data-poll-id="<%= poll.pollId %>"
+                     data-readonly="<%= poll.viewerCanRespond ? 'false' : 'true' %>"
+                     data-options='<%- JSON.stringify(poll.options.map(o => ({
+                            optionId: o.optionId,
+                            startAt: new Date(o.startAt).toISOString(),
+                            endAt: new Date(o.endAt).toISOString(),
+                            label: o.label || ""
+                        }))) %>'
+                     data-responses='<%- JSON.stringify(poll.viewerResponses || {}) %>'></div>
+            <% } %>
+
+            <!-- ============================ Results ============================ -->
+            <h2 class="h5 mt-4 pt-3 border-top">Results</h2>
+            <p class="text-muted small">
+                Ranked by weighted availability — a yes counts full, a maybe counts half, a no counts nothing.
+            </p>
+
+            <div class="table-responsive">
+                <table class="table align-middle meetings-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Slot</th>
+                            <th>Yes</th>
+                            <th>Maybe</th>
+                            <th>No</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (!poll.ranked || poll.ranked.length === 0) { %>
+                            <tr><td colspan="6" class="text-center text-muted py-4">No time options on this poll.</td></tr>
+                        <% } else { %>
+                            <% poll.ranked.forEach((option, index) => { %>
+                            <tr class="<%= index === 0 && option.responseCount > 0 ? 'table-success' : '' %>">
+                                <td data-label="#"><%= index + 1 %></td>
+                                <td data-label="Slot">
+                                    <span class="js-datetime-range"
+                                          data-start="<%= new Date(option.startAt).toISOString() %>"
+                                          data-end="<%= new Date(option.endAt).toISOString() %>"></span>
+                                    <% if (option.label) { %>
+                                        <small class="text-muted d-block"><%= option.label %></small>
+                                    <% } %>
+                                </td>
+                                <td data-label="Yes"><span class="badge bg-success"><%= option.yesCount %></span></td>
+                                <td data-label="Maybe"><span class="badge bg-warning text-dark"><%= option.maybeCount %></span></td>
+                                <td data-label="No"><span class="badge bg-secondary"><%= option.noCount %></span></td>
+                                <td data-label="Score"><strong><%= option.score %></strong></td>
+                            </tr>
+                            <% }) %>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- ============================ Roster ============================ -->
+            <% if (canManage) { %>
+                <h2 class="h5 mt-4 pt-3 border-top">Roster</h2>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle meetings-table">
+                        <thead>
+                            <tr>
+                                <th>Player</th>
+                                <th>Via rank</th>
+                                <th>Source</th>
+                                <th>Responded</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (poll.invitees.length === 0) { %>
+                                <tr><td colspan="5" class="text-center text-muted py-4">Nobody has been invited yet.</td></tr>
+                            <% } else { %>
+                                <% poll.invitees.forEach(invitee => { %>
+                                <tr>
+                                    <td data-label="Player"><%= invitee.username || ('User #' + invitee.userId) %></td>
+                                    <td data-label="Via rank"><%= invitee.viaRankSlug || '—' %></td>
+                                    <td data-label="Source"><span class="badge bg-light text-dark"><%= invitee.source %></span></td>
+                                    <td data-label="Responded">
+                                        <% if (invitee.hasResponded) { %>
+                                            <i class="fas fa-check text-success fa-fw"></i>
+                                        <% } else { %>
+                                            <i class="fas fa-minus text-muted fa-fw"></i>
+                                        <% } %>
+                                    </td>
+                                    <td data-label="Status">
+                                        <% if (invitee.canRespond) { %>
+                                            <span class="badge bg-success">Can respond</span>
+                                        <% } else { %>
+                                            <span class="badge bg-warning text-dark">No website login</span>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                                <% }) %>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } %>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+@media (max-width: 768px) {
+    .meetings-table thead { display: none; }
+    .meetings-table tr { display:block; border:1px solid #e6e6e6; border-radius:12px; padding:12px; margin-bottom:12px; }
+    .meetings-table td { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; border:none; padding:6px 0; font-size:0.9rem; }
+    .meetings-table td::before { content: attr(data-label); font-weight:600; color:#5f6b7a; min-width:90px; }
+}
+</style>
+<script src="/js/meeting-matrix.js"></script>
+<script>
+document.querySelectorAll('.js-datetime').forEach(el => {
+    const d = el.dataset.iso ? new Date(el.dataset.iso) : null;
+    el.textContent = d && !isNaN(d) ? d.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
+    }) : (el.dataset.fallback || '');
+});
+
+document.querySelectorAll('.js-datetime-range').forEach(el => {
+    const start = new Date(el.dataset.start);
+    const end = new Date(el.dataset.end);
+    if (isNaN(start) || isNaN(end)) { el.textContent = '—'; return; }
+
+    const dayPart = start.toLocaleDateString(undefined, {
+        weekday: 'short', month: 'short', day: 'numeric'
+    });
+    const timeOpts = { hour: '2-digit', minute: '2-digit' };
+    el.textContent = `${dayPart}, ${start.toLocaleTimeString(undefined, timeOpts)} – ${end.toLocaleTimeString(undefined, timeOpts)}`;
+});
+</script>

@@ -18,6 +18,7 @@ import schedulerApiRoute from "./scheduler.js";
 import eventsApiRoute from "./events.js";
 import badgeApiRoute from "./badges.js";
 import financeApiRoute from "./finance.js";
+import meetingsApiRoute from "./meetings.js";
 import adminUsersRoute from "./adminUsers.js";
 
 export default (app, client, moment, config, db, features, lang) => {
@@ -41,6 +42,7 @@ export default (app, client, moment, config, db, features, lang) => {
   eventsApiRoute(app, config, db, features, lang);
   badgeApiRoute(app, config, db, features, lang);
   financeApiRoute(app, config, db, features, lang);
+  meetingsApiRoute(app, config, db, features, lang);
   adminUsersRoute(app, config, db, features, lang);
 
 };

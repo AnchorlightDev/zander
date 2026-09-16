@@ -1,0 +1,166 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <h1 class="h2">Meetings</h1>
+                <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+                    <% if (canManage) { %>
+                    <a href="/dashboard/meetings/create" class="btn btn-sm btn-primary">
+                        <i class="fas fa-plus fa-fw me-1"></i>New Meeting Poll
+                    </a>
+                    <% } %>
+                </div>
+            </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+            <% if (!canManage) { %>
+                <p class="text-muted small mb-3">
+                    <i class="fas fa-info-circle fa-fw me-1"></i>Showing meetings you have been invited to.
+                </p>
+            <% } %>
+
+            <!-- Filters -->
+            <form method="GET" action="/dashboard/meetings" class="row g-2 mb-3 align-items-center">
+                <div class="col-sm-4">
+                    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">All statuses</option>
+                        <% ['open','finalized','cancelled'].forEach(s => { %>
+                            <option value="<%= s %>" <%= statusFilter === s ? 'selected' : '' %>><%= s.charAt(0).toUpperCase() + s.slice(1) %></option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div class="col-sm-5">
+                    <div class="input-group input-group-sm">
+                        <input type="text" name="search" class="form-control" placeholder="Search meetings…" value="<%= search %>">
+                        <button class="btn btn-outline-secondary" type="submit"><i class="fas fa-search"></i></button>
+                    </div>
+                </div>
+            </form>
+
+            <div class="table-responsive">
+                <table class="table align-middle meetings-table">
+                    <thead>
+                        <tr>
+                            <th>Meeting</th>
+                            <th>Status</th>
+                            <th>Options</th>
+                            <th>Invited</th>
+                            <th>Deadline</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% if (!polls || polls.length === 0) { %>
+                            <tr><td colspan="6" class="text-center text-muted py-4">No meeting polls found.</td></tr>
+                        <% } else { %>
+                            <% polls.forEach(poll => {
+                                const statusColors = { open:'success', finalized:'info', cancelled:'secondary' };
+                                const badgeClass = statusColors[poll.status] || 'secondary';
+                            %>
+                            <tr>
+                                <td data-label="Meeting">
+                                    <strong><a href="/dashboard/meetings/view?pollId=<%= poll.pollId %>"><%= poll.title %></a></strong>
+                                    <% if (poll.roles && poll.roles.length > 0) { %>
+                                        <small class="text-muted d-block">
+                                            <%= poll.roles.map(r => r.rankSlug).join(', ') %>
+                                        </small>
+                                    <% } %>
+                                </td>
+                                <td data-label="Status">
+                                    <span class="badge bg-<%= badgeClass %> <%= badgeClass === 'info' ? 'text-dark' : '' %>">
+                                        <%= poll.status %>
+                                    </span>
+                                </td>
+                                <td data-label="Options"><%= poll.options ? poll.options.length : 0 %></td>
+                                <td data-label="Invited">
+                                    <%= poll._count ? poll._count.invitees : 0 %>
+                                </td>
+                                <td data-label="Deadline">
+                                    <small class="js-datetime" data-iso="<%= poll.deadlineAt ? new Date(poll.deadlineAt).toISOString() : '' %>" data-fallback="—"></small>
+                                </td>
+                                <td data-label="Actions">
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <a href="/dashboard/meetings/view?pollId=<%= poll.pollId %>" class="btn btn-xs btn-outline-secondary">View</a>
+                                        <% if (canManage && poll.status === 'open') { %>
+                                            <a href="/dashboard/meetings/edit?pollId=<%= poll.pollId %>" class="btn btn-xs btn-warning">Edit</a>
+                                            <button type="button" class="btn btn-xs btn-outline-secondary btn-cancel-meeting"
+                                                    data-poll-id="<%= poll.pollId %>" data-poll-title="<%= poll.title %>">Cancel</button>
+                                        <% } %>
+                                        <% if (canManage) { %>
+                                            <button type="button" class="btn btn-xs btn-outline-danger btn-delete-meeting"
+                                                    data-poll-id="<%= poll.pollId %>" data-poll-title="<%= poll.title %>">Delete</button>
+                                        <% } %>
+                                    </div>
+                                </td>
+                            </tr>
+                            <% }) %>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+            <small class="text-muted">Showing <%= polls ? polls.length : 0 %> of <%= total || 0 %> meeting polls</small>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+.btn-xs { padding: 0.15rem 0.4rem; font-size: 0.75rem; }
+@media (max-width: 768px) {
+    .meetings-table thead { display: none; }
+    .meetings-table tr { display:block; border:1px solid #e6e6e6; border-radius:12px; padding:12px; margin-bottom:12px; }
+    .meetings-table td { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; border:none; padding:6px 0; font-size:0.9rem; }
+    .meetings-table td::before { content: attr(data-label); font-weight:600; color:#5f6b7a; min-width:90px; }
+}
+</style>
+<script>
+document.querySelectorAll('.js-datetime').forEach(el => {
+    const d = el.dataset.iso ? new Date(el.dataset.iso) : null;
+    el.textContent = d && !isNaN(d) ? d.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
+    }) : (el.dataset.fallback || '');
+});
+
+async function postMeetingAction(url, pollId, btn, failureLabel) {
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = '…';
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pollId }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            window.location.reload();
+            return;
+        }
+        alert(failureLabel + ': ' + data.message);
+    } catch {
+        alert(failureLabel + '. Please try again.');
+    }
+    btn.disabled = false;
+    btn.textContent = original;
+}
+
+document.querySelectorAll('.btn-cancel-meeting').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (!confirm(`Cancel "${btn.dataset.pollTitle}"? Responses are kept.`)) return;
+        postMeetingAction('/api/meetings/cancel', btn.dataset.pollId, btn, 'Cancel failed');
+    });
+});
+
+document.querySelectorAll('.btn-delete-meeting').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (!confirm(`Delete "${btn.dataset.pollTitle}"? This also deletes every response and cannot be undone.`)) return;
+        postMeetingAction('/api/meetings/delete', btn.dataset.pollId, btn, 'Delete failed');
+    });
+});
+</script>

@@ -1,0 +1,320 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<%
+  // Pre-fill values for edit mode.  Datetime-local inputs need a local-time
+  // "YYYY-MM-DDTHH:mm" string, which toISOString() cannot give (it is UTC), so
+  // the client script below fills them from the ISO values in data attributes.
+  const isEdit = mode === 'edit';
+  const selectedRanks = poll && poll.roles ? poll.roles.map(r => r.rankSlug) : [];
+%>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <h1 class="h2"><%= isEdit ? 'Edit Meeting Poll' : 'New Meeting Poll' %></h1>
+                <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+                    <a href="/dashboard/meetings" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-arrow-left fa-fw me-1"></i>Back
+                    </a>
+                </div>
+            </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+            <div id="meetingFormError" class="alert alert-danger d-none" role="alert"></div>
+
+            <form id="meetingForm"
+                  data-mode="<%= mode %>"
+                  data-endpoint="<%= apiEndpoint %>"
+                  data-poll-id="<%= isEdit ? poll.pollId : '' %>">
+
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label for="meetingTitle" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="meetingTitle" maxlength="255" required
+                               value="<%= isEdit ? poll.title : '' %>">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label for="meetingTimezone" class="form-label">Timezone</label>
+                        <input type="text" class="form-control" id="meetingTimezone" maxlength="64"
+                               placeholder="Australia/Sydney"
+                               value="<%= isEdit ? poll.timezone : '' %>">
+                        <div class="form-text">Defaults to your browser timezone.</div>
+                    </div>
+
+                    <div class="col-12">
+                        <label for="meetingDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="meetingDescription" rows="3" maxlength="5000"><%= isEdit ? (poll.description || '') : '' %></textarea>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="meetingDeadline" class="form-label">Response deadline</label>
+                        <input type="datetime-local" class="form-control" id="meetingDeadline"
+                               data-iso="<%= isEdit && poll.deadlineAt ? new Date(poll.deadlineAt).toISOString() : '' %>">
+                        <div class="form-text">Optional. Responses close at this time.</div>
+                    </div>
+                </div>
+
+                <!-- Audience -->
+                <h2 class="h5 mt-4 pt-3 border-top">Audience</h2>
+                <p class="text-muted small">
+                    Everyone holding one of these ranks is invited. The roster is resolved now and
+                    stored, so later rank changes do not silently alter who was asked.
+                </p>
+
+                <% if (!rankSlugs || rankSlugs.length === 0) { %>
+                    <div class="alert alert-warning">
+                        No ranks could be loaded from LuckPerms. You can still save the meeting and add an audience later.
+                    </div>
+                <% } else { %>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <select class="form-select" id="rankPicker" multiple size="8">
+                                <% rankSlugs.forEach(slug => { %>
+                                    <option value="<%= slug %>" <%= selectedRanks.includes(slug) ? 'selected' : '' %>><%= slug %></option>
+                                <% }) %>
+                            </select>
+                            <div class="form-text">Hold Ctrl (Cmd on Mac) to select more than one.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <button type="button" class="btn btn-sm btn-outline-secondary mb-2" id="previewRosterBtn">
+                                <i class="fas fa-users fa-fw me-1"></i>Preview roster
+                            </button>
+                            <div id="rosterPreview" class="small text-muted">No roster previewed yet.</div>
+                        </div>
+                    </div>
+                <% } %>
+
+                <!-- Time options -->
+                <h2 class="h5 mt-4 pt-3 border-top">Time options</h2>
+                <p class="text-muted small">
+                    Propose the slots invitees choose between. Each invitee answers every slot with
+                    yes, no or maybe.
+                </p>
+
+                <div id="optionRows"></div>
+
+                <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="addOptionBtn">
+                    <i class="fas fa-plus fa-fw me-1"></i>Add time option
+                </button>
+
+                <div class="mt-4 pt-3 border-top d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" id="saveMeetingBtn">
+                        <%= isEdit ? 'Save changes' : 'Create meeting poll' %>
+                    </button>
+                    <a href="/dashboard/meetings" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+
+            <!-- Existing options, as ISO values for the script to hydrate -->
+            <script type="application/json" id="existingOptions">
+                <%- JSON.stringify(isEdit && poll.options ? poll.options.map(o => ({
+                        optionId: o.optionId,
+                        startAt: new Date(o.startAt).toISOString(),
+                        endAt: new Date(o.endAt).toISOString(),
+                        label: o.label || ''
+                    })) : []) %>
+            </script>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<script>
+(function () {
+    'use strict';
+
+    const form = document.getElementById('meetingForm');
+    const optionRows = document.getElementById('optionRows');
+    const errorBox = document.getElementById('meetingFormError');
+    const isEdit = form.dataset.mode === 'edit';
+
+    /** Date -> "YYYY-MM-DDTHH:mm" in local time, which datetime-local expects. */
+    function toLocalInputValue(date) {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+               `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    // Hydrate the deadline from its ISO value.
+    const deadlineInput = document.getElementById('meetingDeadline');
+    if (deadlineInput.dataset.iso) {
+        deadlineInput.value = toLocalInputValue(new Date(deadlineInput.dataset.iso));
+    }
+
+    // Default the timezone field to the browser's zone on a new poll.
+    const timezoneInput = document.getElementById('meetingTimezone');
+    if (!timezoneInput.value) {
+        try {
+            timezoneInput.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        } catch {
+            timezoneInput.value = 'UTC';
+        }
+    }
+
+    function addOptionRow(option) {
+        const row = document.createElement('div');
+        row.className = 'row g-2 align-items-end mb-2 option-row';
+        row.innerHTML = `
+            <input type="hidden" class="opt-id" value="${option && option.optionId ? option.optionId : ''}">
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Start</label>
+                <input type="datetime-local" class="form-control form-control-sm opt-start" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">End</label>
+                <input type="datetime-local" class="form-control form-control-sm opt-end" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small mb-1">Label (optional)</label>
+                <input type="text" class="form-control form-control-sm opt-label" maxlength="255">
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="btn btn-sm btn-outline-danger w-100 opt-remove">Remove</button>
+            </div>
+        `;
+
+        if (option) {
+            row.querySelector('.opt-start').value = toLocalInputValue(new Date(option.startAt));
+            row.querySelector('.opt-end').value = toLocalInputValue(new Date(option.endAt));
+            row.querySelector('.opt-label').value = option.label || '';
+        }
+
+        row.querySelector('.opt-remove').addEventListener('click', () => {
+            row.remove();
+            if (optionRows.children.length === 0) addOptionRow(null);
+        });
+
+        optionRows.appendChild(row);
+    }
+
+    // Seed the rows: existing options in edit mode, one blank row otherwise.
+    const existing = JSON.parse(document.getElementById('existingOptions').textContent || '[]');
+    if (existing.length > 0) {
+        existing.forEach(addOptionRow);
+    } else {
+        addOptionRow(null);
+    }
+
+    document.getElementById('addOptionBtn').addEventListener('click', () => addOptionRow(null));
+
+    function selectedRankSlugs() {
+        const picker = document.getElementById('rankPicker');
+        if (!picker) return [];
+        return Array.from(picker.selectedOptions).map((o) => o.value);
+    }
+
+    // Roster preview — shows who would be invited before anything is saved.
+    const previewBtn = document.getElementById('previewRosterBtn');
+    if (previewBtn) {
+        previewBtn.addEventListener('click', async () => {
+            const slugs = selectedRankSlugs();
+            const target = document.getElementById('rosterPreview');
+
+            if (slugs.length === 0) {
+                target.textContent = 'Select at least one rank first.';
+                return;
+            }
+
+            target.textContent = 'Loading…';
+            try {
+                const res = await fetch(
+                    '/api/meetings/roles/preview?rankSlugs=' + encodeURIComponent(slugs.join(',')),
+                    { credentials: 'include' }
+                );
+                const data = await res.json();
+                if (!data.success) {
+                    target.textContent = data.message || 'Preview failed.';
+                    return;
+                }
+
+                const counts = data.counts;
+                const blocked = counts.total - counts.canRespond;
+                const parts = [`${counts.total} invitee(s), ${counts.canRespond} able to respond`];
+                if (blocked > 0) parts.push(`${blocked} with no usable website login`);
+                if (counts.unresolved > 0) parts.push(`${counts.unresolved} rank member(s) have no website account`);
+
+                target.innerHTML = parts.map((p) => `<div>${p}</div>`).join('');
+            } catch {
+                target.textContent = 'Preview failed. Please try again.';
+            }
+        });
+    }
+
+    function collectOptions() {
+        return Array.from(document.querySelectorAll('.option-row')).map((row, index) => {
+            const optionId = row.querySelector('.opt-id').value;
+            const start = row.querySelector('.opt-start').value;
+            const end = row.querySelector('.opt-end').value;
+            return {
+                optionId: optionId ? Number(optionId) : undefined,
+                // datetime-local gives local wall-clock time; new Date() reads it
+                // as local and toISOString() normalises it to UTC for the API.
+                startAt: start ? new Date(start).toISOString() : null,
+                endAt: end ? new Date(end).toISOString() : null,
+                label: row.querySelector('.opt-label').value.trim() || null,
+                orderIndex: index,
+            };
+        });
+    }
+
+    function showError(message) {
+        errorBox.textContent = message;
+        errorBox.classList.remove('d-none');
+        errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        errorBox.classList.add('d-none');
+
+        const options = collectOptions();
+        if (options.some((o) => !o.startAt || !o.endAt)) {
+            showError('Every time option needs both a start and an end time.');
+            return;
+        }
+
+        const deadline = deadlineInput.value;
+        const payload = {
+            title: document.getElementById('meetingTitle').value.trim(),
+            description: document.getElementById('meetingDescription').value.trim() || null,
+            timezone: timezoneInput.value.trim() || 'UTC',
+            deadlineAt: deadline ? new Date(deadline).toISOString() : null,
+            rankSlugs: selectedRankSlugs(),
+            options,
+        };
+        if (isEdit) payload.pollId = Number(form.dataset.pollId);
+
+        const saveBtn = document.getElementById('saveMeetingBtn');
+        saveBtn.disabled = true;
+        const originalLabel = saveBtn.textContent;
+        saveBtn.textContent = 'Saving…';
+
+        try {
+            const res = await fetch(form.dataset.endpoint, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                const pollId = data.data && data.data.pollId ? data.data.pollId : form.dataset.pollId;
+                window.location.href = '/dashboard/meetings/view?pollId=' + pollId;
+                return;
+            }
+
+            showError(data.message || 'Save failed.');
+        } catch {
+            showError('Save failed. Please try again.');
+        }
+
+        saveBtn.disabled = false;
+        saveBtn.textContent = originalLabel;
+    });
+})();
+</script>

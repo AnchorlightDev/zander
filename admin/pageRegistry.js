@@ -130,6 +130,21 @@ export const adminPages = [
     sortOrder: 33,
   },
 
+  // ── Meetings group ─────────────────────────────────────────────────────────
+  {
+    slug: "meetings",
+    title: "Meetings",
+    menuTitle: "Meetings",
+    icon: "fas fa-user-clock",
+    // Viewing is gated on roster membership, not a node, so the menu entry is
+    // shown to managers only — an invitee reaches their meeting by link.
+    capability: "zander.web.meetings.manage",
+    path: "/dashboard/meetings",
+    featureFlag: "meetings",
+    group: "Events",
+    sortOrder: 34,
+  },
+
   // ── Moderation group ───────────────────────────────────────────────────────
   {
     slug: "web-punishments",
@@ -404,6 +419,12 @@ export const adminSubPages = [
     path: "/dashboard/users/",
     capability: "zander.web.users",
   },
+
+  // Meetings sub-pages
+  { slug: "meetings-create", title: "New Meeting Poll", parent: "meetings", path: "/dashboard/meetings/create", capability: "zander.web.meetings.manage" },
+  { slug: "meetings-edit", title: "Edit Meeting Poll", parent: "meetings", path: "/dashboard/meetings/edit", capability: "zander.web.meetings.manage" },
+  // No capability: access is decided by roster membership in the route handler.
+  { slug: "meetings-view", title: "Meeting Poll", parent: "meetings", path: "/dashboard/meetings/view" },
 
   // Finance sub-pages
   { slug: "finance-transaction-create", title: "New Transaction", parent: "finance-transactions", path: "/dashboard/finance/transactions/create", capability: "zander.web.finance.manage" },

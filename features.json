@@ -31,6 +31,7 @@
   "staffAuditReport": true,
   "watch": true,
   "events": true,
+  "meetings": true,
   "webstore": true,
   "finance": true,
   "smDiscord": true,

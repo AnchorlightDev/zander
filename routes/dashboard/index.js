@@ -13,6 +13,7 @@ import supportDashboardRoutes from "./support.js";
 import dashboardSchedulerSiteRoute from "./scheduler.js";
 import dashboardWebPunishmentsRoute from "./webPunishments.js";
 import dashboardEventsRoute from "./events.js";
+import dashboardMeetingsRoute from "./meetings.js";
 import dashboardBadgesRoute from "./badges.js";
 import dashboardUsersRoute from "./users.js";
 import dashboardFinanceRoute from "./finance.js";
@@ -93,6 +94,7 @@ export default function dashboardSiteRoutes(
   dashboardSchedulerSiteRoute(app, client, fetch, config, features, lang);
   dashboardWebPunishmentsRoute(app, client, fetch, config, db, features, lang);
   dashboardEventsRoute(app, fetch, config, db, features, lang);
+  dashboardMeetingsRoute(app, fetch, config, db, features, lang);
   dashboardBadgesRoute(app, fetch, config, db, features, lang);
   dashboardUsersRoute(app, fetch, config, db, features, lang);
   dashboardFinanceRoute(app, fetch, config, db, features, lang);

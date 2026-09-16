@@ -24,6 +24,17 @@ const lang = require("../../lang.json");
 */
 const EVENTS_WRITE = ["zander.web.events.edit", "zander.web.events.review"];
 const EVENTS_REVIEW = ["zander.web.events.review"];
+const MEETINGS_MANAGE = ["zander.web.meetings.manage"];
+
+/*
+    Meeting routes a plain invitee may call.  These carry no permission node:
+    the handler itself checks roster membership, which is the whole point of
+    the module — someone with no dashboard permissions at all still has to be
+    able to see and answer a meeting they were invited to.  An empty node list
+    means "any logged-in session"; the route is still responsible for its own
+    authorisation.
+*/
+const MEETINGS_INVITEE = [];
 
 const SESSION_ALLOWED_ROUTES = new Map([
   // Reads
@@ -43,6 +54,21 @@ const SESSION_ALLOWED_ROUTES = new Map([
   ["POST /api/events/resync-discord", EVENTS_WRITE],
   ["POST /api/events/approve", EVENTS_REVIEW],
   ["POST /api/events/reject", EVENTS_REVIEW],
+
+  // Meetings — manage
+  ["GET /api/meetings/roles", MEETINGS_MANAGE],
+  ["GET /api/meetings/roles/preview", MEETINGS_MANAGE],
+  ["POST /api/meetings/create", MEETINGS_MANAGE],
+  ["POST /api/meetings/update", MEETINGS_MANAGE],
+  ["POST /api/meetings/cancel", MEETINGS_MANAGE],
+  ["POST /api/meetings/delete", MEETINGS_MANAGE],
+  ["POST /api/meetings/roster/refresh", MEETINGS_MANAGE],
+
+  // Meetings — invitee (handler enforces roster membership)
+  ["GET /api/meetings/get", MEETINGS_INVITEE],
+  ["GET /api/meetings/single", MEETINGS_INVITEE],
+  ["GET /api/meetings/roster", MEETINGS_INVITEE],
+  ["POST /api/meetings/respond", MEETINGS_INVITEE],
 
   // Templates
   ["POST /api/events/templates/delete", EVENTS_WRITE],
@@ -91,6 +117,10 @@ export default async function verifyToken(req, res) {
       const requiredNodes = SESSION_ALLOWED_ROUTES.get(routeKey);
 
       if (requiredNodes) {
+        // An empty list is an explicit "any logged-in session" — the route
+        // authorises the caller itself (e.g. meeting invitees).
+        if (requiredNodes.length === 0) return;
+
         const permissions = Array.isArray(user.permissions) ? user.permissions : [];
         if (requiredNodes.some((node) => hasPermission(permissions, node))) return;
 

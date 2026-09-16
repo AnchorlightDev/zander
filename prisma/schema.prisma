@@ -636,6 +636,9 @@ model events {
   timezone            String    @default("UTC") @db.VarChar(64)
   status              String    @default("draft") @db.VarChar(32)
   visibility          String    @default("public") @db.VarChar(32)
+  /// Staff-only event, hidden from public listings.  Unused in phase one —
+  /// written by the meeting finalise -> event handoff (a later pass).
+  internal            Boolean   @default(false)
   locationLabel       String?   @db.VarChar(255)
   locationType        String?   @db.VarChar(32)
   locationDiscordChannelId String? @db.VarChar(64)
@@ -649,6 +652,9 @@ model events {
   creatorId           Int
   reviewerId          Int?
   templateId          Int?
+  /// Back-link to the meeting poll this event was created from.  Nothing writes
+  /// it yet; the handoff is a later pass.
+  meetingPollId       Int?
   rejectionNote       String?   @db.Text
   discordMessageId    String?   @db.VarChar(32)
   discordGuildEventId String?   @db.VarChar(32)
@@ -1328,4 +1334,103 @@ model apiClients {
   revokedAt       DateTime?
 
   @@index([isRevoked])
+}
+
+// =============================================================================
+// Meetings Module
+// =============================================================================
+
+/// A "when can everyone make it" poll.  The organiser proposes candidate time
+/// slots (options), the roster is expanded from LuckPerms ranks, and every
+/// invitee marks availability against every slot.
+model meetingPolls {
+  pollId            Int       @id @default(autoincrement())
+  title             String    @db.VarChar(255)
+  description       String?   @db.Text
+  timezone          String    @default("UTC") @db.VarChar(64)
+  /// 'ranks' | 'open' — 'open' (town hall) is reserved, not yet implemented.
+  audienceMode      String    @default("ranks") @db.VarChar(16)
+  /// open | finalized | cancelled
+  status            String    @default("open") @db.VarChar(16)
+  deadlineAt        DateTime?
+  createdByUserId   Int
+  /// Winning optionId once finalised.  Not a relation — see migration 0042 for
+  /// why an FK here would form a delete cycle.
+  finalizedOptionId Int?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  options   meetingPollOptions[]
+  roles     meetingPollRoles[]
+  invitees  meetingPollInvitees[]
+  responses meetingPollResponses[]
+
+  @@index([status])
+  @@index([createdByUserId])
+}
+
+model meetingPollOptions {
+  optionId   Int      @id @default(autoincrement())
+  pollId     Int
+  startAt    DateTime
+  endAt      DateTime
+  label      String?  @db.VarChar(255)
+  orderIndex Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  poll      meetingPolls           @relation(fields: [pollId], references: [pollId], onDelete: Cascade)
+  responses meetingPollResponses[]
+
+  @@index([pollId])
+}
+
+/// LuckPerms ranks the roster is drawn from.  rankSlug matches
+/// `luckperms_groups`.`name`, which lives on a separate server — no FK possible.
+model meetingPollRoles {
+  pollId   Int
+  rankSlug String @db.VarChar(36)
+
+  poll meetingPolls @relation(fields: [pollId], references: [pollId], onDelete: Cascade)
+
+  @@id([pollId, rankSlug])
+}
+
+/// Snapshotted roster.  canRespond = false marks someone with no usable website
+/// login, kept visible to the organiser rather than dropped.  notifiedAt is
+/// written by the not-yet-implemented notification pass.
+model meetingPollInvitees {
+  inviteeId   Int       @id @default(autoincrement())
+  pollId      Int
+  userId      Int
+  /// 'role' (expanded from meetingPollRoles) | 'manual'
+  source      String    @default("role") @db.VarChar(16)
+  viaRankSlug String?   @db.VarChar(36)
+  canRespond  Boolean   @default(true)
+  removedAt   DateTime?
+  notifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  poll meetingPolls @relation(fields: [pollId], references: [pollId], onDelete: Cascade)
+
+  @@unique([pollId, userId])
+  @@index([userId])
+}
+
+/// One row per (invitee, option).  Submissions are all-or-nothing: the service
+/// rejects anything not covering every option, so these are written as a set.
+model meetingPollResponses {
+  responseId   Int      @id @default(autoincrement())
+  pollId       Int
+  userId       Int
+  optionId     Int
+  /// yes | no | maybe
+  availability String   @db.VarChar(8)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  poll   meetingPolls       @relation(fields: [pollId], references: [pollId], onDelete: Cascade)
+  option meetingPollOptions @relation(fields: [optionId], references: [optionId], onDelete: Cascade)
+
+  @@unique([pollId, userId, optionId])
+  @@index([optionId])
 }

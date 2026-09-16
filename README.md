@@ -37,6 +37,16 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | `zander.web.events.edit` | Create and edit events |
 | `zander.web.events.review` | Review and publish events (implies edit access) |
 
+### Meetings
+
+| Permission Node | Description |
+|---|---|
+| `zander.web.meetings.manage` | Create, edit, invite to, and finalise meeting polls |
+
+Viewing and responding to a meeting poll requires no permission node — access is
+granted by being an invitee on that poll's roster, which is resolved from the
+LuckPerms ranks the organiser selected.
+
 ### Webstore
 
 | Permission Node | Description |
