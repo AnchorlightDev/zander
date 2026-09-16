@@ -43,7 +43,12 @@ export default function dashboardMeetingsSiteRoute(app, fetch, config, db, featu
    */
   async function requireLogin(req, res) {
     if (isLoggedIn(req)) return true;
-    res.redirect("/login");
+
+    // Carry the destination through the login round trip.  A server-side
+    // redirect sends no Referer, so without this an invitee following a link
+    // to their meeting lands on /dashboard after signing in and has to find it
+    // again.  /login sanitises returnTo (must be a single-leading-slash path).
+    res.redirect(`/login?returnTo=${encodeURIComponent(req.url)}`);
     return false;
   }
 

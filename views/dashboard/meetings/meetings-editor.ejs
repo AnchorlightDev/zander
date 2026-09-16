@@ -109,15 +109,26 @@
                 </div>
             </form>
 
+<%
+              // Carried on a data attribute rather than inside an
+              // application/json script block: JSON.stringify does not escape
+              // the forward slash, so an option label containing a closing
+              // script tag would end the block early and inject markup.
+              // Interpolated escaped (never raw) so it is safe in attribute
+              // context; the browser decodes it back for JSON.parse.
+              const existingOptionsJson = JSON.stringify(
+                  isEdit && poll.options
+                      ? poll.options.map(o => ({
+                            optionId: o.optionId,
+                            startAt: new Date(o.startAt).toISOString(),
+                            endAt: new Date(o.endAt).toISOString(),
+                            label: o.label || ''
+                        }))
+                      : []
+              );
+            %>
             <!-- Existing options, as ISO values for the script to hydrate -->
-            <script type="application/json" id="existingOptions">
-                <%- JSON.stringify(isEdit && poll.options ? poll.options.map(o => ({
-                        optionId: o.optionId,
-                        startAt: new Date(o.startAt).toISOString(),
-                        endAt: new Date(o.endAt).toISOString(),
-                        label: o.label || ''
-                    })) : []) %>
-            </script>
+            <div id="existingOptions" hidden data-options="<%= existingOptionsJson %>"></div>
     </div><!-- /.wrap -->
   </div><!-- /#wpbody-content -->
   <%- include("../../admin/_footer.ejs") %>
@@ -192,7 +203,7 @@
     }
 
     // Seed the rows: existing options in edit mode, one blank row otherwise.
-    const existing = JSON.parse(document.getElementById('existingOptions').textContent || '[]');
+    const existing = JSON.parse(document.getElementById('existingOptions').dataset.options || '[]');
     if (existing.length > 0) {
         existing.forEach(addOptionRow);
     } else {

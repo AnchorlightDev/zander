@@ -12,7 +12,10 @@
  */
 
 import { prisma } from "../controllers/databaseController.js";
-import { expandRanksToInvitees } from "./meetingRosterService.js";
+import {
+  classifyInviteeEligibility,
+  expandRanksToInvitees,
+} from "./meetingRosterService.js";
 
 export const POLL_STATUS = {
   OPEN: "open",
@@ -256,7 +259,16 @@ export async function getPollById(pollId, viewerUserId = null) {
 
   if (!poll) return null;
 
-  const ranked = rankOptions(poll.options, poll.responses);
+  // Rank on answers from people still on the roster.  Responses survive a
+  // soft-removal so they come back intact if the person is re-added, but while
+  // they are off the roster their availability must not decide the meeting
+  // time — otherwise removing someone silently leaves their vote in play.
+  const activeUserIds = new Set(poll.invitees.map((invitee) => invitee.userId));
+  const activeResponses = poll.responses.filter((response) =>
+    activeUserIds.has(response.userId)
+  );
+
+  const ranked = rankOptions(poll.options, activeResponses);
 
   // Invitee rows carry only userId; usernames come from the main DB so the
   // roster can be rendered without a second round-trip per row.
@@ -296,7 +308,9 @@ export async function getPollById(pollId, viewerUserId = null) {
     options: poll.options,
     ranked,
     invitees,
-    respondedCount: new Set(poll.responses.map((r) => r.userId)).size,
+    // Counted over active responses so "12 of 15 responded" cannot exceed the
+    // roster size by including people who have since been removed.
+    respondedCount: new Set(activeResponses.map((r) => r.userId)).size,
     viewerIsInvitee: Boolean(viewerInvitee),
     viewerCanRespond:
       poll.status === POLL_STATUS.OPEN &&
@@ -533,7 +547,11 @@ export async function addManualInvitee(pollId, userId) {
   const user = await prisma.users.findUnique({ where: { userId: uid } });
   if (!user) throw new Error("User not found.");
 
-  const canRespond = !user.is_placeholder && !user.account_disabled && Boolean(user.password_hash);
+  // Same rule as rank expansion, so a person added by hand and the same person
+  // picked up by their rank are judged identically.  Rolling the check by hand
+  // here previously accepted a half-finished registration that the roster
+  // service would have flagged as unable to respond.
+  const { canRespond } = classifyInviteeEligibility(user);
 
   return prisma.meetingPollInvitees.upsert({
     where: { pollId_userId: { pollId: id, userId: uid } },

@@ -76,6 +76,17 @@ describe("classifyInviteeEligibility", () => {
     expect(result.blockedReason).toBe(INVITEE_BLOCKED_REASON.NO_WEBSITE_LOGIN);
   });
 
+  it("blocks a half-finished registration that has a password but never completed", () => {
+    // meetingPollService.addManualInvitee once judged this by password_hash
+    // alone and let them respond, while rank expansion blocked the same person.
+    // Both paths now go through this function, so they agree.
+    const result = classifyInviteeEligibility(
+      registeredUser({ account_registered: null })
+    );
+    expect(result.canRespond).toBe(false);
+    expect(result.blockedReason).toBe(INVITEE_BLOCKED_REASON.NO_WEBSITE_LOGIN);
+  });
+
   it("treats mysql2's 0/1 tinyints and real booleans alike", () => {
     expect(classifyInviteeEligibility(registeredUser({ is_placeholder: true })).canRespond).toBe(false);
     expect(classifyInviteeEligibility(registeredUser({ is_placeholder: 1 })).canRespond).toBe(false);

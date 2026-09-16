@@ -77,8 +77,11 @@ export default function meetingsApiRoute(app, _config, _db, features, _lang) {
       // A non-manager only ever sees polls they are on.  Scoping here rather
       // than filtering in the view keeps the roster out of the response for
       // meetings the caller has nothing to do with.
+      // -1 rather than null for a caller with no session: null would lift the
+      // invitee filter entirely and list every poll, so an unauthenticated or
+      // session-less caller must match a userId that cannot exist.
       const inviteeUserId =
-        req.apiClient || isManager(req) ? null : req.session?.user?.userId || -1;
+        req.apiClient || isManager(req) ? null : (req.session?.user?.userId ?? -1);
 
       const result = await getPolls({
         status: req.query.status || null,

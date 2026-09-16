@@ -150,6 +150,24 @@ describe("rankOptions", () => {
     expect(options).toEqual(snapshot);
   });
 
+  it("counts only the responses it is handed, so a caller can exclude removed invitees", () => {
+    // getPollById filters soft-removed invitees' answers out before calling
+    // this — a removed person's availability must not keep deciding the time.
+    const options = [option(1), option(2)];
+    const all = [
+      ...responses(1, { yes: 1 }), // from a since-removed invitee
+      ...responses(2, { yes: 1 }),
+      ...responses(2, { maybe: 1 }),
+    ];
+
+    const withRemoved = rankOptions(options, all);
+    const activeOnly = rankOptions(options, all.slice(1));
+
+    expect(withRemoved.find((o) => o.optionId === 1).score).toBe(1);
+    expect(activeOnly.find((o) => o.optionId === 1).score).toBe(0);
+    expect(activeOnly[0].optionId).toBe(2);
+  });
+
   it("is deterministic across repeated calls on the same input", () => {
     const options = [option(1), option(2), option(3)];
     const answers = [

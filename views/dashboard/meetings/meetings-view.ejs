@@ -67,17 +67,27 @@
                     </div>
                 <% } %>
 
+<%
+                  // Interpolated escaped (never raw) into a double-quoted
+                  // attribute.  An organiser-supplied option label is untrusted
+                  // text: raw JSON in a single-quoted attribute lets a label
+                  // containing an apostrophe close the attribute early and
+                  // inject an event handler.  Escaping covers quotes and angle
+                  // brackets, and the browser decodes them back before
+                  // dataset/JSON.parse sees the value.
+                  const matrixOptions = JSON.stringify(poll.options.map(o => ({
+                      optionId: o.optionId,
+                      startAt: new Date(o.startAt).toISOString(),
+                      endAt: new Date(o.endAt).toISOString(),
+                      label: o.label || ""
+                  })));
+                %>
                 <div id="meetingMatrix"
                      class="mb-4"
                      data-poll-id="<%= poll.pollId %>"
                      data-readonly="<%= poll.viewerCanRespond ? 'false' : 'true' %>"
-                     data-options='<%- JSON.stringify(poll.options.map(o => ({
-                            optionId: o.optionId,
-                            startAt: new Date(o.startAt).toISOString(),
-                            endAt: new Date(o.endAt).toISOString(),
-                            label: o.label || ""
-                        }))) %>'
-                     data-responses='<%- JSON.stringify(poll.viewerResponses || {}) %>'></div>
+                     data-options="<%= matrixOptions %>"
+                     data-responses="<%= JSON.stringify(poll.viewerResponses || {}) %>"></div>
             <% } %>
 
             <!-- ============================ Results ============================ -->
