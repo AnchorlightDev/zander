@@ -23,9 +23,10 @@ public class UserOnProxyPing {
     private volatile List<Component> cachedMotds = List.of();
 
     public UserOnProxyPing(ZanderVelocityMain plugin) {
-        // Used only to register the listener; nothing reads it afterwards, so
-        // it is not retained as a field.
-        ZanderVelocityMain.getProxy().getEventManager().register(plugin, this);
+        // Deliberately does NOT register itself: ZanderVelocityMain registers
+        // the instance it constructs, the same as every other listener. Doing
+        // both registered this listener twice, so onProxyPingEvent ran twice
+        // per ping. `plugin` is still needed to own the scheduled task below.
 
         // Fetch MOTD immediately, then refresh every 60 seconds
         ZanderVelocityMain.getProxy().getScheduler()

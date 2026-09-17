@@ -1,6 +1,8 @@
 <%- include("../modules/header.ejs", {
     pageTitle: pageTitle,
-    pageDescription: "Login and get involved in the community!"
+    pageDescription: "Login and get involved in the community!",
+    // Auth / account utility page: never useful in search results.
+    pageRobots: "noindex, follow"
 }) %>
 
 <%- include("../modules/navigationBar.ejs") %>

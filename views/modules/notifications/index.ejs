@@ -1,6 +1,8 @@
 <%- include('../header.ejs', {
     pageTitle: pageTitle,
-    pageDescription: "Notifications"
+    pageDescription: "Notifications",
+    // Auth / account utility page: never useful in search results.
+    pageRobots: "noindex, follow"
 }) %>
 
 <%- include('../navigationBar.ejs') %>

@@ -36,7 +36,30 @@ const AI_USER_AGENTS = [
   "YouBot",
 ];
 
-const DISALLOW = ["/api/", "/dashboard/", "/login", "/logout", "/register", "/account", "/notifications"];
+/*
+    Paths crawlers are told not to fetch.
+
+    Deliberately short.  robots.txt controls *crawling*, not *indexing* — a
+    blocked URL that is linked from elsewhere on the site still gets indexed,
+    as a bare URL with no title or snippet.  That is the "Indexed, though
+    blocked by robots.txt" state in Search Console.
+
+    Worse, blocking a page hides its <meta name="robots" content="noindex">,
+    because the crawler never fetches the page to read it.  So a page that is
+    both Disallow-ed here and marked noindex will never be dropped.
+
+    The rule therefore is: anything that renders HTML and should stay out of
+    the index is NOT listed here — it is crawlable and declares `noindex`
+    itself (`pageRobots` in views/modules/header.ejs, and the hardcoded tag in
+    views/admin/_head.ejs for the dashboard).  Only surfaces with nothing to
+    index at all belong below.
+*/
+export const DISALLOW = [
+  // JSON only — no markup, so no meta tag is possible, and nothing links to it.
+  "/api/",
+  // Side-effecting action rather than a page.
+  "/logout",
+];
 
 export default function sitemapRoutes(app, config, features) {
   const rawUrl = config?.siteConfiguration?.siteUrl;

@@ -1,6 +1,8 @@
 <%- include("../modules/header.ejs", {
     pageTitle: pageTitle,
-    pageDescription: "You must be logged in to use this feature."
+    pageDescription: "You must be logged in to use this feature.",
+    // Auth / account utility page: never useful in search results.
+    pageRobots: "noindex, follow"
 }) %>
 
 <%- include("../modules/navigationBar.ejs", {
