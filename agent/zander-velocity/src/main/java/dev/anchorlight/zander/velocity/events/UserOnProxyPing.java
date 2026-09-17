@@ -55,8 +55,27 @@ public class UserOnProxyPing {
             cachedMotds = formats.stream()
                     .map(fmt -> (Component) serializer.deserialize(motdTopLine + "\n" + fmt))
                     .toList();
-        } catch (Exception e) {
-            logger.error("Failed to refresh MOTD from API", e);
+        } catch (Throwable t) {
+            // Deliberately Throwable, not Exception.
+            //
+            // An Error (a NoClassDefFoundError from a stripped dependency, an
+            // ExceptionInInitializerError, a LinkageError) is not an Exception,
+            // so `catch (Exception)` let it escape to Velocity's scheduler.
+            // Velocity catches it and logs a bare
+            // "Exception in task ...$$Lambda ... by plugin zander-velocity"
+            // with no stack of its own, which says nothing about which stage
+            // failed — that is exactly why the 2026-09-16 failure could not be
+            // diagnosed from the logs.
+            //
+            // Catching Throwable puts the real cause in our log with context.
+            //
+            // VirtualMachineError (OutOfMemoryError, StackOverflowError) is
+            // rethrown: the JVM itself is in trouble and quietly swallowing
+            // that on a 60-second timer would hide a far bigger problem.
+            if (t instanceof VirtualMachineError) {
+                throw (VirtualMachineError) t;
+            }
+            logger.error("Failed to refresh MOTD from API", t);
         }
     }
 

@@ -24,16 +24,38 @@ const lang = require("../../lang.json");
 */
 const EVENTS_WRITE = ["zander.web.events.edit", "zander.web.events.review"];
 const EVENTS_REVIEW = ["zander.web.events.review"];
+// Read-only access, matching the node the dashboard events pages themselves
+// require (routes/dashboard/events.js).
+const EVENTS_VIEW = ["zander.web.events", ...EVENTS_WRITE];
 
-const SESSION_ALLOWED_ROUTES = new Map([
+export const SESSION_ALLOWED_ROUTES = new Map([
   // Reads
   ["GET /api/events/pending-review", EVENTS_REVIEW],
   ["GET /api/events/discord/text-channels", EVENTS_WRITE],
   ["GET /api/events/discord/voice-channels", EVENTS_WRITE],
   ["GET /api/events/users/search", EVENTS_WRITE],
   ["GET /api/server/get", [...EVENTS_WRITE, "zander.web.server"]],
+  ["GET /api/events/calendar", EVENTS_VIEW],
 
-  // Event lifecycle
+  /*
+      Event lifecycle.
+
+      Every entry below is reached from the dashboard by a fetch() whose URL is
+      built from a variable rather than written inline — `apiEndpoint` in
+      events-editor.ejs, `endpoint` in events-template-editor.ejs, and the
+      eventAction() helper in events-view.ejs.  That is why they were missed
+      when the shared API key was retired and the literal fetch URLs were swept
+      into this map: a grep for "/api/..." in the views does not find them.
+      Creating, editing and cancelling events all 401'd as a result.
+
+      /api/events/cancel performs no permission check of its own, so this entry
+      is its only gate — it must stay on EVENTS_WRITE.
+  */
+  ["POST /api/events/create", EVENTS_WRITE],
+  ["POST /api/events/update", EVENTS_WRITE],
+  ["POST /api/events/update-published", EVENTS_WRITE],
+  ["POST /api/events/cancel", EVENTS_WRITE],
+  ["POST /api/events/revert-to-draft", EVENTS_REVIEW],
   ["POST /api/events/submit-review", EVENTS_WRITE],
   ["POST /api/events/publish", EVENTS_WRITE],
   ["POST /api/events/actions/update", EVENTS_WRITE],
@@ -45,6 +67,8 @@ const SESSION_ALLOWED_ROUTES = new Map([
   ["POST /api/events/reject", EVENTS_REVIEW],
 
   // Templates
+  ["POST /api/events/templates/create", EVENTS_WRITE],
+  ["POST /api/events/templates/update", EVENTS_WRITE],
   ["POST /api/events/templates/delete", EVENTS_WRITE],
   ["POST /api/events/templates/generate-draft", EVENTS_WRITE],
   ["POST /api/events/templates/announcements/update", EVENTS_WRITE],
