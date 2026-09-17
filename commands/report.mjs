@@ -28,6 +28,10 @@ export class ReportCommand extends Command {
             .setName("reason")
             .setDescription("The reason for reporting the user.")
             .setRequired(true)
+            // reports.reportReason is VARCHAR(100). Discord enforces this in
+            // the client, so a long reason is caught before submission rather
+            // than being silently truncated by the API.
+            .setMaxLength(100)
         )
     );
   }

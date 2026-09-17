@@ -8,6 +8,39 @@ import {
 } from "../common.js";
 import { Colors } from "discord.js";
 
+/** Matches reports.reportReason VARCHAR(100) — see prisma/schema.prisma. */
+export const REPORT_REASON_MAX_LENGTH = 100;
+
+/**
+ * Fit a report reason into its column without losing what the reporter wrote.
+ *
+ * reports.reportReason is VARCHAR(100) and MySQL rejects anything longer
+ * outright ("Data too long for column 'reportReason'"), which threw away the
+ * entire report.  The reason is truncated to fit and the full text is folded
+ * into reportReasonEvidence (MEDIUMTEXT) so the moderator still sees all of it.
+ *
+ * routes/forumRoutes.js already truncates to the same limit before calling the
+ * API; this covers the callers that do not — the web form and /report.
+ *
+ * Pure, so the boundary behaviour is unit-testable without a database.
+ *
+ * @param {string} rawReason
+ * @param {string|null} rawEvidence
+ * @returns {{reportReason: string, reportReasonEvidence: string|null}}
+ */
+export function fitReportReason(rawReason, rawEvidence = null) {
+  if (typeof rawReason !== "string" || rawReason.length <= REPORT_REASON_MAX_LENGTH) {
+    return { reportReason: rawReason, reportReasonEvidence: rawEvidence };
+  }
+
+  return {
+    reportReason: rawReason.slice(0, REPORT_REASON_MAX_LENGTH),
+    reportReasonEvidence: [`Full reason: ${rawReason}`, rawEvidence]
+      .filter(Boolean)
+      .join("\n\n"),
+  };
+}
+
 export default function reportApiRoute(app, config, db, features, lang) {
   const baseEndpoint = "/api/report";
 
@@ -59,12 +92,20 @@ export default function reportApiRoute(app, config, db, features, lang) {
 
     const reporterUser = required(req.body, "reporterUser", res);
     const reportedUser = required(req.body, "reportedUser", res);
-    const reportReason = required(req.body, "reportReason", res);
-    const reportReasonEvidence = optional(
+    const rawReportReason = required(req.body, "reportReason", res);
+    const rawReportReasonEvidence = optional(
       req.body,
       "reportReasonEvidence",
       res
     );
+
+    // Keeps the reason inside VARCHAR(100); an over-long one is folded into
+    // the evidence field rather than failing the whole insert.
+    const { reportReason, reportReasonEvidence } = fitReportReason(
+      rawReportReason,
+      rawReportReasonEvidence
+    );
+
     const reportPlatform = required(req.body, "reportPlatform", res);
 
     try {
