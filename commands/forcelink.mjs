@@ -2,7 +2,7 @@ import { Command } from "@sapphire/framework";
 import { Colors, EmbedBuilder, SlashCommandBuilder } from "discord.js";
 import { hasPermission } from "../lib/discord/permissions.mjs";
 import { describeRankRoleSync, syncMemberRankRoles, stripAllTrackedRankRoles } from "../lib/discord/rankRoleSync.mjs";
-import { UserGetter, getUserPermissions, linkDiscordAccount, unlinkDiscordAccount } from "../controllers/userController.js";
+import { UserGetter, getUserPermissions, linkDiscordAccount, mergePlaceholderUser, resolveDiscordLinkConflict, unlinkDiscordAccount } from "../controllers/userController.js";
 import { retryDeferredDiscordRoles } from "../controllers/webstoreController.js";
 import db from "../controllers/databaseController.js";
 
@@ -87,13 +87,30 @@ export class ForceLinkCommand extends Command {
 
     const warnings = [];
 
-    if (existingDiscordLink && existingDiscordLink.userId !== mcUser.userId) {
-      warnings.push(
-        `⚠️ <@${targetDiscordUser.id}> was previously linked to \`${existingDiscordLink.username}\` — that link will be cleared.`,
-      );
-      // Clear the old link from the Discord user's previous MC account
-      await unlinkDiscordAccount(existingDiscordLink.userId);
-      await stripAllTrackedRankRoles(targetDiscordUser.id);
+    const linkConflict = resolveDiscordLinkConflict(existingDiscordLink, mcUser.userId);
+
+    if (linkConflict !== "none") {
+      if (linkConflict === "absorb") {
+        // A placeholder row is not "another account" — it is the same person,
+        // created from Discord before they had a Minecraft account attached.
+        // Fold it in (tickets and all) rather than orphaning it, matching the
+        // Discord-link flow in routes/profileRoutes.js.
+        const mergeSummary = await mergePlaceholderUser(existingDiscordLink.userId, mcUser.userId);
+        warnings.push(
+          `ℹ️ Absorbed a placeholder account (\`${existingDiscordLink.username}\`) created from Discord — its ticket history now belongs to \`${mcUser.username}\`.`,
+        );
+        console.log(
+          `[forcelink] Absorbed placeholder userId=${existingDiscordLink.userId} into userId=${mcUser.userId}`,
+          mergeSummary,
+        );
+      } else {
+        warnings.push(
+          `⚠️ <@${targetDiscordUser.id}> was previously linked to \`${existingDiscordLink.username}\` — that link will be cleared.`,
+        );
+        // Clear the old link from the Discord user's previous MC account
+        await unlinkDiscordAccount(existingDiscordLink.userId);
+        await stripAllTrackedRankRoles(targetDiscordUser.id);
+      }
     }
 
     if (mcUser.discordId && mcUser.discordId !== targetDiscordUser.id) {

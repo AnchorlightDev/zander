@@ -10,6 +10,8 @@ import {
   getUserPermissions,
   getUserStats,
   linkDiscordAccount,
+  mergePlaceholderUser,
+  resolveDiscordLinkConflict,
   unlinkDiscordAccount,
 } from "../controllers/userController.js";
 import { getTicketsAccessibleByUser, getOpenTicketsWithChannelForUser } from "../controllers/supportTicketController.js";
@@ -486,13 +488,38 @@ export default function profileSiteRoutes(
       const userData = new UserGetter();
       const existingLink = await userData.byDiscordId(discordUser.id);
 
-      if (existingLink && existingLink.userId !== req.session.user.userId) {
-        setBannerCookie(
-          "danger",
-          "That Discord account is already linked to another profile.",
-          res
-        );
-        return res.redirect(redirectPath);
+      const linkConflict = resolveDiscordLinkConflict(
+        existingLink,
+        req.session.user.userId
+      );
+
+      if (linkConflict !== "none") {
+        // A placeholder ("ghost") row holds this discordId only because the
+        // person used the support bot before linking a Minecraft account
+        // (createUnlinkedUser in controllers/supportTicketController.js).
+        // Refusing the link here is what stranded their Discord identity on a
+        // row with a random UUID and no ranks, permanently splitting them
+        // across two accounts — fold the ghost into the real account instead,
+        // exactly as registration already does (routes/sessionRoutes.js).
+        // A link held by a *real* account is still refused: that would be an
+        // account takeover, not a merge.
+        if (linkConflict === "absorb") {
+          const mergeSummary = await mergePlaceholderUser(
+            existingLink.userId,
+            req.session.user.userId
+          );
+          console.log(
+            `[PROFILE] Absorbed placeholder userId=${existingLink.userId} into userId=${req.session.user.userId} while linking Discord`,
+            mergeSummary
+          );
+        } else {
+          setBannerCookie(
+            "danger",
+            "That Discord account is already linked to another profile.",
+            res
+          );
+          return res.redirect(redirectPath);
+        }
       }
 
       await linkDiscordAccount(

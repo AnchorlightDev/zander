@@ -1091,6 +1091,26 @@ async function repointUserReferences(fromUserId, toUserId) {
 
     Returns a summary object describing what was moved (for logging).
 */
+/**
+ * Decides what to do when the Discord account being linked is already held by
+ * a different users row.
+ *
+ * A placeholder ("ghost") row is the same person — createUnlinkedUser() made it
+ * from Discord before they had a Minecraft account attached — so it should be
+ * absorbed, not treated as a rival account. Refusing instead is what leaves a
+ * player split across two rows: ranks on one, the Discord link on the other,
+ * which silently breaks rank-to-Discord-role sync.
+ *
+ * A link held by a *real* account must still be refused — absorbing that would
+ * be an account takeover.
+ *
+ * @returns {"none"|"absorb"|"refuse"}
+ */
+export function resolveDiscordLinkConflict(existingLink, currentUserId) {
+  if (!existingLink || existingLink.userId === currentUserId) return "none";
+  return existingLink.is_placeholder ? "absorb" : "refuse";
+}
+
 export async function mergePlaceholderUser(placeholderUserId, survivingUserId) {
   if (!placeholderUserId || !survivingUserId || placeholderUserId === survivingUserId) {
     throw new Error("mergePlaceholderUser requires two distinct user ids");
