@@ -132,15 +132,35 @@ export default function rankApiRoute(app, config, db, features, lang) {
       return null;
     }
 
-    const [webUser] = await queryDb(
-      `SELECT userId, username, uuid FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1`,
-      [trimmedUsername]
-    );
-
     const [luckPermsUser] = await queryLuckPermsDb(
       `SELECT username, LOWER(uuid) AS uuid FROM ${LUCKPERMS_PLAYERS_TABLE} WHERE LOWER(username) = LOWER(?) LIMIT 1`,
       [trimmedUsername]
     );
+
+    // users.username is not unique, and a placeholder ("ghost") row created
+    // from Discord by createUnlinkedUser() can carry the same name as the real
+    // account while holding a random UUID() and a different discordId. Match on
+    // the LuckPerms uuid first — that is the authoritative identity — and only
+    // fall back to the name, preferring a real account over a placeholder, so a
+    // rank change never ends up syncing the ghost row's Discord link.
+    let webUser = null;
+
+    if (luckPermsUser?.uuid) {
+      [webUser] = await queryDb(
+        `SELECT userId, username, uuid FROM users WHERE LOWER(uuid) = ? LIMIT 1`,
+        [luckPermsUser.uuid]
+      );
+    }
+
+    if (!webUser) {
+      [webUser] = await queryDb(
+        `SELECT userId, username, uuid FROM users
+          WHERE LOWER(username) = LOWER(?)
+          ORDER BY is_placeholder ASC, userId ASC
+          LIMIT 1`,
+        [trimmedUsername]
+      );
+    }
 
     if (!webUser && !luckPermsUser) {
       return null;
