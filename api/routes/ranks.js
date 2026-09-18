@@ -4,7 +4,10 @@ import {
   getUserPermissions,
 } from "../../controllers/userController.js";
 import { luckpermsDb } from "../../controllers/databaseController.js";
-import { syncMemberRankRoles } from "../../lib/discord/rankRoleSync.mjs";
+import {
+  describeRankRoleSync,
+  syncMemberRankRoles,
+} from "../../lib/discord/rankRoleSync.mjs";
 import { syncAllRanks, syncUserRanks } from "../../controllers/rankSyncController.js";
 
 const LUCKPERMS_PLAYERS_TABLE = "luckperms_players";
@@ -690,13 +693,26 @@ export default function rankApiRoute(app, config, db, features, lang) {
 
       await syncUserRanks(player.uuid);
 
-      if (player.userId) {
-        await syncMemberRankRoles(player.userId);
+      // The Discord role sync never throws, so without reporting its outcome
+      // an admin sees "Rank assigned successfully" even when no Discord role
+      // was touched (unlinked account, no meta.discordid on the rank, bot
+      // missing Manage Roles, ...). Surface it instead of claiming blind success.
+      const discordSync = describeRankRoleSync(
+        player.userId
+          ? await syncMemberRankRoles(player.userId, { luckPermsUuid: player.uuid })
+          : { ok: false, reason: "NO_USER_ID" }
+      );
+
+      if (!discordSync.ok) {
+        console.warn(
+          `[RANKS] Assigned ${rankSlug} to ${player.username} but Discord roles were not updated: ${discordSync.message}`
+        );
       }
 
       return res.send({
         success: true,
         message: "Rank assigned successfully.",
+        discordSync,
       });
     } catch (error) {
       console.error(error);
@@ -749,16 +765,27 @@ export default function rankApiRoute(app, config, db, features, lang) {
 
       await syncUserRanks(player.uuid);
 
-      if (player.userId && result?.affectedRows > 0) {
-        await syncMemberRankRoles(player.userId);
+      const removed = result?.affectedRows > 0;
+      const discordSync = removed
+        ? describeRankRoleSync(
+            player.userId
+              ? await syncMemberRankRoles(player.userId, { luckPermsUuid: player.uuid })
+              : { ok: false, reason: "NO_USER_ID" }
+          )
+        : null;
+
+      if (discordSync && !discordSync.ok) {
+        console.warn(
+          `[RANKS] Removed ${rankSlug} from ${player.username} but Discord roles were not updated: ${discordSync.message}`
+        );
       }
 
       return res.send({
         success: true,
-        message:
-          result?.affectedRows > 0
-            ? "Rank removed successfully."
-            : "Rank was not assigned to the player.",
+        message: removed
+          ? "Rank removed successfully."
+          : "Rank was not assigned to the player.",
+        discordSync,
       });
     } catch (error) {
       console.error(error);

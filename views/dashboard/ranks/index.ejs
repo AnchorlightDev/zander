@@ -716,6 +716,18 @@
       lookupFeedback.textContent = '';
     }
 
+    // The Discord role sync is best-effort and never fails the rank change, so
+    // the API reports what it actually did (or why it did nothing) alongside a
+    // successful assign/remove. Show it, otherwise a silent no-op on Discord
+    // looks identical to a working sync.
+    function showDiscordSyncFeedback(discordSync, action) {
+      if (!discordSync || !discordSync.message) return;
+      const level = discordSync.level === 'success' ? 'success'
+        : discordSync.level === 'warning' ? 'warning'
+        : 'info';
+      showLookupFeedback(level, `Rank ${action}. Discord roles: ${discordSync.message}`);
+    }
+
     async function handleRankRemoval(rankSlug) {
       if (!activeUser) return;
       if (rankSlug === 'default') return;
@@ -730,6 +742,7 @@
         const data = await response.json();
         if (data.success) {
           await loadUser(activeUser.user.username, true);
+          showDiscordSyncFeedback(data.discordSync, 'removed');
         } else {
           alert(data.message || 'Unable to remove rank.');
         }
@@ -786,6 +799,7 @@
         if (data.success) {
           assignForm.reset();
           await loadUser(activeUser.user.username, true);
+          showDiscordSyncFeedback(data.discordSync, 'assigned');
         } else {
           alert(data.message || 'Unable to assign rank.');
         }

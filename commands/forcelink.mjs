@@ -1,7 +1,7 @@
 import { Command } from "@sapphire/framework";
 import { Colors, EmbedBuilder, SlashCommandBuilder } from "discord.js";
 import { hasPermission } from "../lib/discord/permissions.mjs";
-import { syncMemberRankRoles, stripAllTrackedRankRoles } from "../lib/discord/rankRoleSync.mjs";
+import { describeRankRoleSync, syncMemberRankRoles, stripAllTrackedRankRoles } from "../lib/discord/rankRoleSync.mjs";
 import { UserGetter, getUserPermissions, linkDiscordAccount, unlinkDiscordAccount } from "../controllers/userController.js";
 import { retryDeferredDiscordRoles } from "../controllers/webstoreController.js";
 import db from "../controllers/databaseController.js";
@@ -149,33 +149,13 @@ export class ForceLinkCommand extends Command {
       embed.addFields({ name: "Warnings", value: warnings.join("\n"), inline: false });
     }
 
-    const roleSyncReasonLabels = {
-      FEATURE_DISABLED: "the `ranks` feature flag is disabled.",
-      NOT_LINKED: "no Discord account is linked (unexpected — link just succeeded).",
-      MEMBER_NOT_IN_GUILD: "they aren't a member of the configured guild.",
-      ERROR: `an error occurred (${syncResult?.error ?? "unknown"}).`,
-    };
+    const syncSummary = describeRankRoleSync(syncResult, { mentionRoles: true });
 
-    if (!syncResult?.ok) {
-      embed.addFields({
-        name: "⚠️ Role Sync Skipped",
-        value: `No Discord roles were assigned because ${roleSyncReasonLabels[syncResult?.reason] ?? "of an unknown reason."}`,
-        inline: false,
-      });
-    } else if (!syncResult.toAdd.length && !syncResult.toRemove.length) {
-      embed.addFields({
-        name: "Role Sync",
-        value: syncResult.shouldHaveRoleIds.length
-          ? "Their Discord roles already matched their ranks — nothing to change."
-          : "No rank-mapped Discord role is configured for their current rank(s) (`meta.discordid` not set in LuckPerms), so nothing was assigned.",
-        inline: false,
-      });
-    } else {
-      const parts = [];
-      if (syncResult.toAdd.length) parts.push(`Added: ${syncResult.toAdd.map((id) => `<@&${id}>`).join(", ")}`);
-      if (syncResult.toRemove.length) parts.push(`Removed: ${syncResult.toRemove.map((id) => `<@&${id}>`).join(", ")}`);
-      embed.addFields({ name: "Role Sync", value: parts.join("\n"), inline: false });
-    }
+    embed.addFields({
+      name: syncSummary.ok ? "Role Sync" : "⚠️ Role Sync Skipped",
+      value: syncSummary.message,
+      inline: false,
+    });
 
     return interaction.editReply({ embeds: [embed] });
   }

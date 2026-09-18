@@ -72,19 +72,34 @@ async function reconcileRankDiscordRoles() {
         // lib/discord/rankRoleSync.mjs normalizeUuid / services/profileService.js
         // getUserRanks for the same fix applied elsewhere).
         const lpRows = await queryLuckPermsDb(
-          `SELECT LOWER(uuid) AS uuid FROM luckperms_user_permissions
-            WHERE permission = ? AND value = 1
-              AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
+          `SELECT LOWER(lup.uuid) AS uuid, LOWER(lp.username) AS username
+             FROM luckperms_user_permissions lup
+             LEFT JOIN luckperms_players lp ON lp.uuid = lup.uuid
+            WHERE lup.permission = ? AND lup.value = 1
+              AND (lup.expiry IS NULL OR lup.expiry = 0 OR lup.expiry > UNIX_TIMESTAMP())`,
           [`group.${rank.rankSlug}`]
         );
         if (lpRows.length === 0) continue;
         anyRankHadMembers = true;
 
+        // A placeholder ("ghost") users row created from Discord carries a
+        // random MySQL UUID() rather than the player's Mojang uuid (see
+        // createUnlinkedUser in controllers/supportTicketController.js), so it
+        // never matches on uuid — match those by username instead, or the
+        // sweep below strips every rank role such a player holds. The
+        // is_placeholder guard keeps the (non-unique) username match from
+        // hijacking a real account.
         const uuids = lpRows.map((r) => r.uuid);
-        const placeholders = uuids.map(() => "?").join(", ");
+        const usernames = lpRows.map((r) => r.username).filter(Boolean);
+        const uuidPlaceholders = uuids.map(() => "?").join(", ");
+        const usernameClause = usernames.length
+          ? ` OR (is_placeholder = 1 AND LOWER(username) IN (${usernames.map(() => "?").join(", ")}))`
+          : "";
         const webUsers = await queryDb(
-          `SELECT userId, discordId FROM users WHERE LOWER(uuid) IN (${placeholders}) AND discordId IS NOT NULL`,
-          uuids
+          `SELECT userId, discordId FROM users
+            WHERE discordId IS NOT NULL
+              AND (LOWER(uuid) IN (${uuidPlaceholders})${usernameClause})`,
+          [...uuids, ...usernames]
         );
 
         for (const user of webUsers) {
