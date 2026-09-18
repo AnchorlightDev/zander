@@ -50,6 +50,7 @@ import { ChannelType } from "discord.js";
 import { client as discordClient } from "../../controllers/discordController.js";
 import { required, optional } from "../common.js";
 import { hasPermission as checkPermNode } from "../../lib/discord/permissions.mjs";
+import { resolveEventAccess, redactLockedEvent, viewerRankSlugs } from "../../lib/eventAccess.js";
 import { searchLinkedUsers } from "../../controllers/supportTicketController.js";
 import { createRequire } from "module";
 import path from "path";
@@ -62,6 +63,20 @@ function actorFromReq(req) {
     actorId: user?.userId || null,
     actorName: user?.username || "System",
   };
+}
+
+/**
+ * Apply an event's rank lock to an API response.
+ *
+ * These two endpoints are reachable with nothing but an API token, so a
+ * rank-locked event must come back as the same teaser the website shows —
+ * otherwise the JSON feed becomes the way around the lock.
+ */
+function redactForCaller(events, viewerRanks, isStaff) {
+  return (events || []).map((ev) => {
+    const access = resolveEventAccess(ev, viewerRanks, { isStaff });
+    return access.locked ? redactLockedEvent(ev) : ev;
+  });
 }
 
 function isReviewer(req) {
@@ -83,8 +98,10 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     if (!features.events) return res.send({ success: false, message: "Events feature disabled" });
     try {
       const limit = Math.min(parseInt(req.query.limit || "20"), 50);
-      const events = await getUpcomingPublishedEvents(limit);
-      return res.send({ success: true, data: events });
+      const viewerRanks = viewerRankSlugs(req);
+      const isStaff = Boolean(req.session?.user?.isStaff);
+      const events = await getUpcomingPublishedEvents(limit, viewerRanks, isStaff);
+      return res.send({ success: true, data: redactForCaller(events, viewerRanks, isStaff) });
     } catch (err) {
       console.error("[Events API] upcoming:", err);
       return res.send({ success: false, message: "Failed to fetch upcoming events" });
@@ -97,7 +114,10 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     try {
       const page = Math.max(parseInt(req.query.page || "1"), 1);
       const limit = Math.min(parseInt(req.query.limit || "20"), 100);
-      const result = await getAllPublishedEvents(page, limit);
+      const viewerRanks = viewerRankSlugs(req);
+      const isStaff = Boolean(req.session?.user?.isStaff);
+      const result = await getAllPublishedEvents(page, limit, viewerRanks, isStaff);
+      result.events = redactForCaller(result.events, viewerRanks, isStaff);
       return res.send({ success: true, ...result });
     } catch (err) {
       console.error("[Events API] published:", err);

@@ -5,6 +5,8 @@
 
 <%- include("../navigationBar.ejs") %>
 
+<% const eventLock = (typeof lock !== 'undefined' && lock) ? lock : null; %>
+
 <% if (typeof isPreview !== 'undefined' && isPreview) { %>
 <div class="alert alert-warning text-center mb-0 rounded-0 border-start-0 border-end-0 border-top-0" role="alert" style="position:relative;z-index:1050;">
     <i class="fas fa-eye me-2"></i><strong>Preview Mode</strong> — This is how the event will appear to the public. It is not yet visible to visitors.
@@ -19,7 +21,9 @@
     <div style="position:absolute;inset:0;background:linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.85) 100%);"></div>
     <div class="container h-100 d-flex align-items-end pb-4 position-relative">
         <div>
-            <% if (event.featured) { %><span class="badge bg-warning text-dark mb-2"><i class="fas fa-star me-1"></i>Featured</span><br><% } %>
+            <% if (event.featured) { %><span class="badge bg-warning text-dark mb-2"><i class="fas fa-star me-1"></i>Featured</span><% } %>
+            <% if (eventLock) { %><span class="badge <%= eventLock.supporter ? 'bg-success' : 'bg-secondary' %> mb-2 ms-1"><i class="fas fa-lock me-1"></i><%= eventLock.heading %></span><% } %>
+            <% if (event.featured || eventLock) { %><br><% } %>
             <h1 class="fw-bold mb-0" style="color:#ffffff;font-size:clamp(1.5rem, 4vw, 2.5rem);text-shadow:0 2px 12px rgba(0,0,0,0.8);"><%= event.title %></h1>
         </div>
     </div>
@@ -35,6 +39,16 @@
 .info-row:last-child { border-bottom: none; }
 .info-icon { width: 1.25rem; flex-shrink: 0; text-align: center; margin-top: .1rem; }
 .btn-xs { padding: 0.15rem 0.4rem; font-size: 0.75rem; }
+.lock-panel {
+    border: 1px dashed var(--bs-border-color);
+    border-radius: .75rem;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+}
+.lock-panel-icon {
+    width: 56px; height: 56px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+}
 </style>
 
 <div class="container py-5">
@@ -43,7 +57,22 @@
         <!-- Main Content -->
         <div class="col-lg-8">
 
-            <% if (event.description) { %>
+            <% if (eventLock) { %>
+            <div class="card border-0 shadow-sm mb-4 lock-panel">
+                <div class="card-body p-4 text-center">
+                    <div class="lock-panel-icon mx-auto mb-3 <%= eventLock.supporter ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' %>">
+                        <i class="fas fa-lock fa-lg"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2"><%= eventLock.heading %></h5>
+                    <p class="text-muted mb-0 mx-auto" style="max-width:46ch;"><%= eventLock.body %></p>
+                    <% if (eventLock.ctaUrl) { %>
+                    <a href="<%= eventLock.ctaUrl %>" class="btn <%= eventLock.supporter ? 'btn-success' : 'btn-primary' %> mt-3">
+                        <% if (eventLock.supporter) { %><i class="fas fa-heart me-2"></i><% } %><%= eventLock.ctaLabel %>
+                    </a>
+                    <% } %>
+                </div>
+            </div>
+            <% } else if (event.description) { %>
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-body p-4">
                     <h5 class="fw-bold mb-3"><i class="fas fa-info-circle me-2 text-primary"></i>About This Event</h5>
@@ -162,11 +191,25 @@
                     <% } %>
 
                     <!-- Calendar -->
+                    <% if (eventLock) { %>
+                    <div class="d-grid">
+                        <% if (eventLock.ctaUrl) { %>
+                        <a href="<%= eventLock.ctaUrl %>" class="btn <%= eventLock.supporter ? 'btn-success' : 'btn-primary' %> btn-sm">
+                            <i class="fas fa-unlock me-2"></i><%= eventLock.ctaLabel %>
+                        </a>
+                        <% } else { %>
+                        <span class="text-muted small d-block text-center">
+                            <i class="fas fa-lock me-1"></i>Restricted to <%= eventLock.rankList %>
+                        </span>
+                        <% } %>
+                    </div>
+                    <% } else { %>
                     <div class="d-grid">
                         <a href="<%= gcalUrl %>" target="_blank" rel="noopener noreferrer" class="btn btn-outline-danger btn-sm">
                             <i class="fab fa-google me-2"></i>Add to Google Calendar
                         </a>
                     </div>
+                    <% } %>
                 </div>
             </div>
         </div>

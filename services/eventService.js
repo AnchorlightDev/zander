@@ -5,6 +5,7 @@
 
 import { prisma } from "../controllers/databaseController.js";
 import { sanitizeForumHtml } from "../lib/htmlSanitize.js";
+import { EVENT_VISIBILITY, normaliseRankSlugs } from "../lib/eventAccess.js";
 
 // Valid status transitions
 const STATUS_TRANSITIONS = {
@@ -93,6 +94,33 @@ export async function logEventAudit(eventId, actorId, actorName, action, details
 }
 
 /**
+ * Replace an event's allowed-rank list.
+ *
+ * Delete-then-insert rather than a diff: the list is a handful of rows edited
+ * by hand in the dashboard, so the simpler form is worth more than the saved
+ * writes.
+ */
+async function syncRankAccess(eventId, slugs) {
+  const rankSlugs = normaliseRankSlugs(slugs);
+
+  await prisma.event_rank_access.deleteMany({ where: { eventId: parseInt(eventId) } });
+
+  if (rankSlugs.length > 0) {
+    await prisma.event_rank_access.createMany({
+      data: rankSlugs.map((rankSlug) => ({ eventId: parseInt(eventId), rankSlug })),
+    });
+  }
+
+  return rankSlugs;
+}
+
+/** Fall back to "public" for anything not in the known set, so a bad payload cannot invent a visibility. */
+function coerceVisibility(value, fallback = "public") {
+  const v = String(value ?? "").trim().toLowerCase();
+  return EVENT_VISIBILITY.includes(v) ? v : fallback;
+}
+
+/**
  * Get a list of events with optional filters.
  */
 export async function getEvents({
@@ -134,6 +162,7 @@ export async function getEvents({
       include: {
         hosts: true,
         template: { select: { templateId: true, title: true } },
+        rankAccess: true,
       },
       orderBy: { startAt: "asc" },
       skip: (page - 1) * limit,
@@ -162,7 +191,7 @@ export async function getEventsInRange(startDate, endDate, includeDeleted = fals
 
   return prisma.events.findMany({
     where,
-    include: { hosts: true },
+    include: { hosts: true, rankAccess: true },
     orderBy: { startAt: "asc" },
   });
 }
@@ -179,6 +208,7 @@ export async function getEventById(eventId, includeDeleted = false) {
       announcements: { orderBy: { scheduledFor: "asc" } },
       auditLogs: { orderBy: { createdAt: "desc" }, take: 50 },
       template: { select: { templateId: true, title: true } },
+      rankAccess: true,
     },
   });
 
@@ -189,27 +219,69 @@ export async function getEventById(eventId, includeDeleted = false) {
 }
 
 /**
- * Get a single published event by slug (public-facing).
+ * The `where` fragment describing which published events a given visitor is
+ * allowed to see *at all* (they may still only get a locked teaser).
+ *
+ * Done in SQL rather than by filtering the result set in JS so pagination
+ * counts stay correct — post-filtering would hand the listing page a short
+ * page and a total that includes events the visitor can never see.
+ *
+ * @param viewerRanks Normalised rank slugs from lib/eventAccess.js.
+ * @param isStaff     Staff see rank-locked and private events unredacted.
  */
-export async function getPublishedEventBySlug(slug) {
+function publicVisibilityWhere(viewerRanks = [], isStaff = false) {
+  if (isStaff) return {};
+
+  const clauses = [
+    { visibility: "public" },
+    // Locked but advertised — rendered as a teaser with an unlock prompt.
+    { visibility: "rank", teaserPublic: true },
+    // A rank-locked event with no ranks chosen locks out the people it was
+    // built for, so it falls back to public rather than vanishing.
+    { visibility: "rank", rankAccess: { none: {} } },
+  ];
+
+  if (viewerRanks.length > 0) {
+    clauses.push({
+      visibility: "rank",
+      rankAccess: { some: { rankSlug: { in: viewerRanks } } },
+    });
+  }
+
+  return { OR: clauses };
+}
+
+/**
+ * Get a single published event by slug (public-facing).
+ *
+ * Returns rank-locked events too — deciding whether to redact them is the
+ * route's job, via resolveEventAccess() — but still withholds 'private' ones
+ * from non-staff.
+ */
+export async function getPublishedEventBySlug(slug, viewerRanks = [], isStaff = false) {
   return prisma.events.findFirst({
-    where: { slug, status: "published", deletedAt: null, visibility: "public" },
-    include: { hosts: true },
+    where: {
+      slug,
+      status: "published",
+      deletedAt: null,
+      ...publicVisibilityWhere(viewerRanks, isStaff),
+    },
+    include: { hosts: true, rankAccess: true },
   });
 }
 
 /**
  * Get upcoming published events for the public listing.
  */
-export async function getUpcomingPublishedEvents(limit = 20) {
+export async function getUpcomingPublishedEvents(limit = 20, viewerRanks = [], isStaff = false) {
   return prisma.events.findMany({
     where: {
       status: "published",
       deletedAt: null,
-      visibility: "public",
       endAt: { gte: new Date() },
+      ...publicVisibilityWhere(viewerRanks, isStaff),
     },
-    include: { hosts: true },
+    include: { hosts: true, rankAccess: true },
     orderBy: { startAt: "asc" },
     take: limit,
   });
@@ -218,13 +290,17 @@ export async function getUpcomingPublishedEvents(limit = 20) {
 /**
  * Get all published events for listing (past + upcoming).
  */
-export async function getAllPublishedEvents(page = 1, limit = 20) {
-  const where = { status: "published", deletedAt: null, visibility: "public" };
+export async function getAllPublishedEvents(page = 1, limit = 20, viewerRanks = [], isStaff = false) {
+  const where = {
+    status: "published",
+    deletedAt: null,
+    ...publicVisibilityWhere(viewerRanks, isStaff),
+  };
   const [total, events] = await Promise.all([
     prisma.events.count({ where }),
     prisma.events.findMany({
       where,
-      include: { hosts: true },
+      include: { hosts: true, rankAccess: true },
       orderBy: { startAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
@@ -249,7 +325,8 @@ export async function createEvent(data, actorId, actorName) {
       endAt: new Date(data.endAt),
       timezone: data.timezone || "UTC",
       status: "draft",
-      visibility: data.visibility || "public",
+      visibility: coerceVisibility(data.visibility),
+      teaserPublic: data.teaserPublic !== undefined ? Boolean(data.teaserPublic) : true,
       locationLabel: data.locationLabel || null,
       locationType: data.locationType || null,
       locationDiscordChannelId: data.locationDiscordChannelId || null,
@@ -264,6 +341,12 @@ export async function createEvent(data, actorId, actorName) {
       templateId: data.templateId || null,
     },
   });
+
+  // Allowed ranks (only meaningful for visibility === "rank", but stored
+  // either way so switching visibility back and forth keeps the selection)
+  if (data.allowedRanks !== undefined) {
+    await syncRankAccess(event.eventId, data.allowedRanks);
+  }
 
   // Create hosts
   if (Array.isArray(data.hosts) && data.hosts.length > 0) {
@@ -318,7 +401,9 @@ export async function updateEvent(eventId, data, actorId, actorName) {
   if (data.startAt !== undefined) updateData.startAt = new Date(data.startAt);
   if (data.endAt !== undefined) updateData.endAt = new Date(data.endAt);
   if (data.timezone !== undefined) updateData.timezone = data.timezone;
-  if (data.visibility !== undefined) updateData.visibility = data.visibility;
+  if (data.visibility !== undefined)
+    updateData.visibility = coerceVisibility(data.visibility, existing.visibility);
+  if (data.teaserPublic !== undefined) updateData.teaserPublic = Boolean(data.teaserPublic);
   if (data.locationLabel !== undefined) updateData.locationLabel = data.locationLabel;
   if (data.locationType !== undefined) updateData.locationType = data.locationType || null;
   if (data.locationDiscordChannelId !== undefined) updateData.locationDiscordChannelId = data.locationDiscordChannelId || null;
@@ -334,6 +419,11 @@ export async function updateEvent(eventId, data, actorId, actorName) {
     where: { eventId: parseInt(eventId) },
     data: updateData,
   });
+
+  // Update allowed ranks if provided
+  if (data.allowedRanks !== undefined) {
+    await syncRankAccess(eventId, data.allowedRanks);
+  }
 
   // Update hosts if provided
   if (Array.isArray(data.hosts)) {
@@ -854,6 +944,7 @@ export async function duplicateEvent(eventId, actorId, actorName) {
       timezone: source.timezone,
       status: "draft",
       visibility: source.visibility,
+      teaserPublic: source.teaserPublic,
       locationLabel: source.locationLabel,
       serverName: source.serverName,
       serverIp: source.serverIp,
@@ -866,6 +957,12 @@ export async function duplicateEvent(eventId, actorId, actorName) {
       templateId: source.templateId,
     },
   });
+
+  // Copy the rank lock — a duplicated supporter event that silently went
+  // public would leak the original.
+  if (source.rankAccess?.length > 0) {
+    await syncRankAccess(newEvent.eventId, source.rankAccess);
+  }
 
   // Copy hosts
   if (source.hosts.length > 0) {

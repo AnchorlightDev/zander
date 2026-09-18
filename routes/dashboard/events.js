@@ -13,6 +13,7 @@ import {
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { hasPermission as hasPermissionNode } from "../../lib/discord/permissions.mjs";
 import { getEventById } from "../../services/eventService.js";
+import { getSelectableRanks } from "../../services/rankMetaService.js";
 import { enrichHostsWithAvatars } from "../../lib/avatarHelpers.js";
 import { sanitizeForumHtml } from "../../lib/htmlSanitize.js";
 
@@ -161,8 +162,9 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     if (!await isFeatureWebRouteEnabled(app, features.events, req, res, features)) return;
     if (!await hasPermission("zander.web.events.edit", req, res, features)) return;
 
-    const [templatesData, globalImage, announcementWeb] = await Promise.all([
+    const [templatesData, selectableRanks, globalImage, announcementWeb] = await Promise.all([
       fetchJson(fetch, `${process.env.siteAddress}/api/events/templates/get`, { data: [] }),
+      getSelectableRanks(),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
@@ -170,6 +172,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-editor", {
         pageTitle: "Dashboard - Create Event",
+        selectableRanks,
         config,
         features,
         req,
@@ -194,9 +197,10 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     const eventId = req.query.eventId;
     if (!eventId) return res.redirect("/dashboard/events/list");
 
-    const [apiData, templatesData, globalImage, announcementWeb] = await Promise.all([
+    const [apiData, templatesData, selectableRanks, globalImage, announcementWeb] = await Promise.all([
       fetchJson(fetch, `${process.env.siteAddress}/api/events/single?eventId=${eventId}`, null),
       fetchJson(fetch, `${process.env.siteAddress}/api/events/templates/get`, { data: [] }),
+      getSelectableRanks(),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
@@ -221,6 +225,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-editor", {
         pageTitle: `Dashboard - Edit Event`,
+        selectableRanks,
         config,
         features,
         req,
@@ -320,7 +325,8 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     if (!await isFeatureWebRouteEnabled(app, features.events, req, res, features)) return;
     if (!await hasPermission("zander.web.events.edit", req, res, features)) return;
 
-    const [globalImage, announcementWeb] = await Promise.all([
+    const [selectableRanks, globalImage, announcementWeb] = await Promise.all([
+      getSelectableRanks(),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
@@ -330,6 +336,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-template-editor", {
         pageTitle: "Dashboard - Create Event Template",
+        selectableRanks,
         config,
         features,
         req,
@@ -420,8 +427,9 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     const templateId = req.query.templateId;
     if (!templateId) return res.redirect("/dashboard/events/templates");
 
-    const [apiData, globalImage, announcementWeb] = await Promise.all([
+    const [apiData, selectableRanks, globalImage, announcementWeb] = await Promise.all([
       fetchJson(fetch, `${process.env.siteAddress}/api/events/templates/single?templateId=${templateId}`, null),
+      getSelectableRanks(),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
@@ -437,6 +445,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-template-editor", {
         pageTitle: "Dashboard - Edit Event Template",
+        selectableRanks,
         config,
         features,
         req,

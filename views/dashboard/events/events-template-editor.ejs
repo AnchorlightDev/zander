@@ -117,6 +117,65 @@
                                     <label class="form-check-label" for="isActiveCheck">Template active</label>
                                 </div>
                             </div>
+                            <div class="col-md-8">
+                                <label class="form-label fw-semibold">Default Visibility</label>
+                                <select class="form-select" name="visibility" id="tmplVisibilitySelect">
+                                    <option value="public" <%= (tmpl.visibility || 'public') === 'public' ? 'selected' : '' %>>Public — anyone can see it</option>
+                                    <option value="rank" <%= tmpl.visibility === 'rank' ? 'selected' : '' %>>Rank-locked — details for chosen ranks</option>
+                                    <option value="private" <%= tmpl.visibility === 'private' ? 'selected' : '' %>>Private — hidden from the public site</option>
+                                </select>
+                                <small class="text-muted">Applied to every draft this template generates.</small>
+                            </div>
+                        </div>
+
+                        <!-- Rank lock (shown only for visibility = rank) -->
+                        <% const tmplLockedRanks = (tmpl.rankAccess || []).map(r => String(r.rankSlug || '').toLowerCase()); %>
+                        <div class="border rounded-3 p-3 mt-3 bg-light" id="tmplRankLockPanel" style="display:none;">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-lock me-2 text-secondary"></i>
+                                <span class="fw-semibold">Who can see the details?</span>
+                            </div>
+
+                            <% if (!selectableRanks || selectableRanks.length === 0) { %>
+                            <div class="alert alert-warning mb-0 small">
+                                No LuckPerms groups could be loaded, so no ranks can be chosen. Generated drafts will behave as public until this is fixed.
+                            </div>
+                            <% } else { %>
+                            <p class="text-muted small">
+                                Anyone holding <strong>any one</strong> of the selected ranks sees the full event. Ranks marked
+                                <span class="badge bg-success">Supporter</span> are purchasable, so those events show a
+                                "Support the Server" button linking to the webstore.
+                            </p>
+                            <div class="row g-2 mb-3" style="max-height:220px;overflow-y:auto;">
+                                <% selectableRanks.forEach(rank => { %>
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input js-tmpl-rank-check" type="checkbox"
+                                               value="<%= rank.rankSlug %>"
+                                               id="tmplrank_<%= rank.rankSlug %>"
+                                               <%= tmplLockedRanks.includes(rank.rankSlug) ? 'checked' : '' %>>
+                                        <label class="form-check-label small" for="tmplrank_<%= rank.rankSlug %>">
+                                            <%= rank.displayName %>
+                                            <% if (rank.isDonator) { %><span class="badge bg-success ms-1" style="font-size:.6rem;">Supporter</span><% } %>
+                                            <% if (rank.isStaff) { %><span class="badge bg-primary ms-1" style="font-size:.6rem;">Staff</span><% } %>
+                                        </label>
+                                    </div>
+                                </div>
+                                <% }) %>
+                            </div>
+                            <% } %>
+
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="tmplTeaserPublicCheck"
+                                       <%= tmpl.teaserPublic === false ? '' : 'checked' %>>
+                                <label class="form-check-label" for="tmplTeaserPublicCheck">
+                                    <span class="fw-semibold">Show a teaser to everyone else</span>
+                                    <span class="d-block text-muted small">
+                                        On: generated events appear publicly with title, banner and time, but the details are
+                                        replaced with an unlock prompt. Off: they are invisible without the rank.
+                                    </span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -768,6 +827,10 @@ document.getElementById('templateForm').addEventListener('submit', async (e) => 
     const isOnce = body.recurrenceType === 'once';
     body.autoGenerateDrafts = isOnce ? false : document.getElementById('autoGenCheck').checked;
     body.isActive = document.getElementById('isActiveCheck').checked;
+
+    // Rank lock defaults carried onto every generated draft
+    body.allowedRanks = Array.from(document.querySelectorAll('.js-tmpl-rank-check:checked')).map(c => c.value);
+    body.teaserPublic = document.getElementById('tmplTeaserPublicCheck').checked;
     body.recurrenceEveryDays = body.recurrenceEveryDays ? parseInt(body.recurrenceEveryDays) : null;
     body.defaultDurationMins = body.defaultDurationMins ? parseInt(body.defaultDurationMins) : null;
     body.draftAdvanceDays = parseInt(body.draftAdvanceDays) || 7;
@@ -973,4 +1036,18 @@ function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, st
 }
 setupImageUpload('bannerUrlInput', 'bannerFileInput', 'bannerUploadBtn', 'bannerUrlManual', 'bannerPreview', 'bannerUploadStatus', 'bannerClearBtn', 'zander/events/banners');
 setupImageUpload('logoUrlInput', 'logoFileInput', 'logoUploadBtn', 'logoUrlManual', 'logoPreview', 'logoUploadStatus', 'logoClearBtn', 'zander/events/logos');
+</script>
+
+<script>
+// Mirrors the event editor: the rank panel only applies to "rank" visibility,
+// but stays in the DOM so toggling away and back does not lose the selection.
+(function initTemplateRankLockPanel() {
+    const select = document.getElementById('tmplVisibilitySelect');
+    const panel  = document.getElementById('tmplRankLockPanel');
+    if (!select || !panel) return;
+
+    const sync = () => { panel.style.display = select.value === 'rank' ? '' : 'none'; };
+    select.addEventListener('change', sync);
+    sync();
+})();
 </script>

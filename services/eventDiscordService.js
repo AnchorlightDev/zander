@@ -6,6 +6,55 @@
 import { client } from "../controllers/discordController.js";
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildScheduledEventEntityType, GuildScheduledEventPrivacyLevel } from "discord.js";
 import { updateSyncStatus, logEventAudit } from "./eventService.js";
+import { getRankMetaMap, getDonatorRankSlugs } from "./rankMetaService.js";
+import {
+  resolveEventAccess,
+  redactLockedEvent,
+  isSupporterEvent,
+  buildLockCopy,
+} from "../lib/eventAccess.js";
+
+/**
+ * Apply an event's rank lock before it is sent to Discord.
+ *
+ * The announcement channel and the guild scheduled-event list are public, so
+ * posting a rank-locked event's description, server IP and host line-up there
+ * would hand away exactly what the lock exists to withhold.  A locked event is
+ * announced as the same teaser the website shows, with the unlock prompt and
+ * the usual "View Event Online" button pointing at the page that sells it.
+ *
+ * Returns `null` when the event must not be announced at all -- i.e. it is
+ * private, or rank-locked with the public teaser switched off.
+ */
+async function applyRankLock(event, siteBaseUrl = process.env.siteAddress) {
+  // A channel has no single viewer to check ranks against, so the
+  // least-privileged reader is the only safe assumption.
+  const access = resolveEventAccess(event, []);
+
+  if (!access.visible) return null;
+  if (!access.locked) return { event, lock: null };
+
+  const [rankMeta, donatorSlugs] = await Promise.all([
+    getRankMetaMap(),
+    getDonatorRankSlugs(),
+  ]);
+
+  const lock = buildLockCopy(
+    access.requiredRanks,
+    rankMeta,
+    isSupporterEvent(access.requiredRanks, donatorSlugs),
+    true // Discord readers are already "signed in" as far as the copy goes
+  );
+
+  // buildLockCopy returns a site-relative path for the website; a Discord
+  // embed needs it absolute.
+  if (lock.ctaUrl && siteBaseUrl) {
+    const base = siteBaseUrl.endsWith("/") ? siteBaseUrl.slice(0, -1) : siteBaseUrl;
+    lock.ctaUrl = `${base}${lock.ctaUrl}`;
+  }
+
+  return { event: redactLockedEvent(event), lock };
+}
 
 /** Convert HTML from Summernote to Discord-compatible markdown. */
 export function htmlToMarkdown(html) {
@@ -83,7 +132,7 @@ export function toDiscordCoverImage(url) {
 /**
  * Build an embed for an event announcement/publication.
  */
-function buildEventEmbed(event) {
+function buildEventEmbed(event, lock = null) {
   const startTimestamp = Math.floor(new Date(event.startAt).getTime() / 1000);
   const endTimestamp = Math.floor(new Date(event.endAt).getTime() / 1000);
 
@@ -106,6 +155,17 @@ function buildEventEmbed(event) {
   if (event.serverName) {
     const serverValue = event.serverIp ? `${event.serverName}\n\`${event.serverIp}\`` : event.serverName;
     embed.addFields({ name: "Server", value: serverValue, inline: true });
+  }
+
+  if (lock) {
+    embed.setDescription(lock.body);
+    embed.addFields({
+      name: "🔒 " + lock.heading,
+      value: lock.ctaUrl
+        ? `[${lock.ctaLabel}](${lock.ctaUrl})`
+        : `Restricted to ${lock.rankList}`,
+      inline: false,
+    });
   }
 
   embed.setImage(event.bannerUrl || null);
@@ -194,12 +254,21 @@ export async function postEventDiscordMessage(event, channelId, siteBaseUrl) {
   if (!client?.isReady?.()) throw new Error("Discord client not ready");
   if (!channelId) throw new Error("No channel ID provided");
 
+  const gated = await applyRankLock(event, siteBaseUrl);
+  if (!gated) {
+    await logEventAudit(
+      event.eventId, null, "System", "discord_message_skipped",
+      "Event is not publicly visible — no Discord announcement posted"
+    );
+    return null;
+  }
+
   const channel = await client.channels.fetch(channelId);
   if (!channel?.isTextBased?.()) {
     throw new Error(`Channel ${channelId} is not text-based`);
   }
 
-  const embed = buildEventEmbed(event);
+  const embed = buildEventEmbed(gated.event, gated.lock);
   const messagePayload = { embeds: [embed] };
   if (siteBaseUrl && event.slug) {
     messagePayload.components = [buildEventButton(event, siteBaseUrl)];
@@ -235,7 +304,15 @@ export async function editEventDiscordMessage(event, channelId, messageId, siteB
   }
 
   const msg = await channel.messages.fetch(messageId);
-  const embed = buildEventEmbed(event);
+
+  // An event that has since been locked down must have its already-posted
+  // announcement redacted in place, not merely skipped on future posts.
+  const gated = (await applyRankLock(event, siteBaseUrl)) || {
+    event: redactLockedEvent(event),
+    lock: null,
+  };
+
+  const embed = buildEventEmbed(gated.event, gated.lock);
   const editPayload = { embeds: [embed] };
   if (siteBaseUrl && event.slug) {
     editPayload.components = [buildEventButton(event, siteBaseUrl)];
@@ -261,9 +338,20 @@ export async function createGuildScheduledEvent(event, guildId) {
   if (!client?.isReady?.()) throw new Error("Discord client not ready");
   if (!guildId) throw new Error("No guild ID provided");
 
+  const gated = await applyRankLock(event);
+  if (!gated) {
+    await logEventAudit(
+      event.eventId, null, "System", "discord_guild_event_skipped",
+      "Event is not publicly visible — no Discord scheduled event created"
+    );
+    return null;
+  }
+
   const guild = await client.guilds.fetch(guildId);
   if (!guild) throw new Error(`Guild ${guildId} not found`);
 
+  // The voice channel itself is role-gated on Discord's side, so it stays on a
+  // locked event; only the written detail is withheld.
   const isVoiceChannel = event.locationType === "discord" && event.locationDiscordChannelId;
 
   const eventData = {
@@ -271,7 +359,11 @@ export async function createGuildScheduledEvent(event, guildId) {
     scheduledStartTime: new Date(event.startAt),
     scheduledEndTime: new Date(event.endAt),
     privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
-    description: event.description ? htmlToMarkdown(event.description).slice(0, 1000) : undefined,
+    description: gated.lock
+      ? gated.lock.body.slice(0, 1000)
+      : event.description
+        ? htmlToMarkdown(event.description).slice(0, 1000)
+        : undefined,
     ...(isVoiceChannel
       ? {
           entityType: GuildScheduledEventEntityType.Voice,
@@ -280,7 +372,9 @@ export async function createGuildScheduledEvent(event, guildId) {
       : {
           entityType: GuildScheduledEventEntityType.External,
           entityMetadata: {
-            location: event.locationLabel || event.serverIp || "Online",
+            location: gated.lock
+              ? "Members only"
+              : event.locationLabel || event.serverIp || "Online",
           },
         }),
   };
@@ -334,13 +428,23 @@ export async function editGuildScheduledEvent(event, guildId, guildEventId) {
   const guildEvent = await guild.scheduledEvents.fetch(guildEventId);
   if (!guildEvent) throw new Error(`Guild event ${guildEventId} not found`);
 
+  // A newly locked event must lose its description here too, so `null` (not
+  // publicly visible at all) still redacts rather than leaving the old text.
+  const gated = (await applyRankLock(event)) || { event, lock: null, hidden: true };
+
   const isVoiceChannel = event.locationType === "discord" && event.locationDiscordChannelId;
 
   const editData = {
     name: event.title,
     scheduledStartTime: new Date(event.startAt),
     scheduledEndTime: new Date(event.endAt),
-    description: event.description ? htmlToMarkdown(event.description).slice(0, 1000) : undefined,
+    description: gated.lock
+      ? gated.lock.body.slice(0, 1000)
+      : gated.hidden
+        ? undefined
+        : event.description
+          ? htmlToMarkdown(event.description).slice(0, 1000)
+          : undefined,
     ...(isVoiceChannel
       ? {
           entityType: GuildScheduledEventEntityType.Voice,
@@ -349,7 +453,9 @@ export async function editGuildScheduledEvent(event, guildId, guildEventId) {
       : {
           entityType: GuildScheduledEventEntityType.External,
           entityMetadata: {
-            location: event.locationLabel || event.serverIp || "Online",
+            location: gated.lock
+              ? "Members only"
+              : event.locationLabel || event.serverIp || "Online",
           },
         }),
   };

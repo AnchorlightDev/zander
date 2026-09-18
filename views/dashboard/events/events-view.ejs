@@ -13,6 +13,17 @@
                     </span>
                     <span class="badge bg-secondary ms-1"><%= ev.eventType %></span>
                     <% if (ev.featured) { %><span class="badge bg-warning text-dark ms-1"><i class="fas fa-star me-1"></i>Featured</span><% } %>
+                    <% if (ev.visibility === 'rank') { %>
+                    <span class="badge bg-info text-dark ms-1">
+                        <i class="fas fa-lock me-1"></i>Rank-locked:
+                        <%= (ev.rankAccess || []).map(r => r.rankSlug).join(', ') || 'no ranks chosen' %>
+                    </span>
+                    <span class="badge bg-light text-dark border ms-1">
+                        <%= ev.teaserPublic === false ? 'Hidden from everyone else' : 'Public teaser shown' %>
+                    </span>
+                    <% } else if (ev.visibility === 'private') { %>
+                    <span class="badge bg-dark ms-1"><i class="fas fa-eye-slash me-1"></i>Private</span>
+                    <% } %>
                 </div>
                 <div class="btn-toolbar mb-2 mb-md-0 gap-2">
                     <a href="/dashboard/events/list" class="btn btn-sm btn-outline-secondary">

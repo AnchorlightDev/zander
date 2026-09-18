@@ -32,6 +32,13 @@
     justify-content: center;
 }
 .btn-xs { padding: 0.15rem 0.4rem; font-size: 0.75rem; }
+.event-locked .event-banner-img,
+.event-locked .event-banner-placeholder { filter: saturate(.45) brightness(.8); }
+.event-lock-note {
+    border-top: 1px dashed var(--bs-border-color);
+    margin-top: .75rem;
+    padding-top: .75rem;
+}
 </style>
 
 <div class="container py-5">
@@ -47,7 +54,7 @@
         <div class="row g-4">
             <% upcomingEvents.forEach(ev => { %>
             <div class="col-md-6 col-lg-4">
-                <div class="card border-0 shadow-sm h-100 event-card">
+                <div class="card border-0 shadow-sm h-100 event-card<%= ev.lock ? ' event-locked' : '' %>">
                     <% if (ev.bannerUrl) { %>
                         <img src="<%= ev.bannerUrl %>" class="event-banner-img" alt="<%= ev.title %>">
                     <% } else { %>
@@ -56,9 +63,16 @@
                         </div>
                     <% } %>
                     <div class="card-body d-flex flex-column">
-                        <% if (ev.featured) { %>
-                            <span class="badge bg-warning text-dark mb-2" style="width:fit-content"><i class="fas fa-star me-1"></i>Featured</span>
-                        <% } %>
+                        <div class="d-flex flex-wrap gap-1 mb-2">
+                            <% if (ev.featured) { %>
+                                <span class="badge bg-warning text-dark"><i class="fas fa-star me-1"></i>Featured</span>
+                            <% } %>
+                            <% if (ev.lock) { %>
+                                <span class="badge <%= ev.lock.supporter ? 'bg-success' : 'bg-secondary' %>">
+                                    <i class="fas fa-lock me-1"></i><%= ev.lock.heading %>
+                                </span>
+                            <% } %>
+                        </div>
                         <h5 class="card-title mb-2">
                             <a href="/events/<%= ev.slug %>" class="text-decoration-none text-body stretched-link"><%= ev.title %></a>
                         </h5>
@@ -75,6 +89,11 @@
                         <% if (ev.hosts && ev.hosts.length > 0) { %>
                             <div class="text-muted small mt-1">
                                 <i class="fas fa-user me-1"></i><%= ev.hosts.map(h => h.displayName || 'Unknown').join(', ') %>
+                            </div>
+                        <% } %>
+                        <% if (ev.lock) { %>
+                            <div class="event-lock-note small text-muted">
+                                <i class="fas fa-lock me-1"></i>Details unlock for <%= ev.lock.rankList %> members.
                             </div>
                         <% } %>
                     </div>

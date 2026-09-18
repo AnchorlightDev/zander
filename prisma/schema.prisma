@@ -635,7 +635,11 @@ model events {
   endAt               DateTime
   timezone            String    @default("UTC") @db.VarChar(64)
   status              String    @default("draft") @db.VarChar(32)
+  /// "public" | "private" | "rank" — "rank" restricts the detail view to the
+  /// LuckPerms groups listed in rankAccess.
   visibility          String    @default("public") @db.VarChar(32)
+  /// Rank-locked events only: show a locked teaser publicly, or hide entirely.
+  teaserPublic        Boolean   @default(true)
   locationLabel       String?   @db.VarChar(255)
   locationType        String?   @db.VarChar(32)
   locationDiscordChannelId String? @db.VarChar(64)
@@ -669,6 +673,18 @@ model events {
   actions             event_actions[]
   announcements       event_announcements[]
   auditLogs           event_audit_logs[]
+  rankAccess          event_rank_access[]
+}
+
+model event_rank_access {
+  id       Int    @id @default(autoincrement())
+  eventId  Int
+  rankSlug String @db.VarChar(64)
+
+  event    events @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+
+  @@unique([eventId, rankSlug])
+  @@index([rankSlug])
 }
 
 model event_templates {
@@ -696,6 +712,9 @@ model event_templates {
   tags                Json?
   creatorId           Int
   isActive            Boolean   @default(true)
+  /// Defaults applied to every draft this template generates — see events.
+  visibility          String    @default("public") @db.VarChar(32)
+  teaserPublic        Boolean   @default(true)
   deletedAt           DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
@@ -703,6 +722,17 @@ model event_templates {
   events              events[]
   defaultHosts        event_template_hosts[]
   announcements       event_template_announcements[]
+  rankAccess          event_template_rank_access[]
+}
+
+model event_template_rank_access {
+  id         Int             @id @default(autoincrement())
+  templateId Int
+  rankSlug   String          @db.VarChar(64)
+
+  template   event_templates @relation(fields: [templateId], references: [templateId], onDelete: Cascade)
+
+  @@unique([templateId, rankSlug])
 }
 
 model event_template_announcements {

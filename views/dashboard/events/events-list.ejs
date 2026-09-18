@@ -80,6 +80,13 @@
                                     <td data-label="Title">
                                         <strong><a href="/dashboard/events/view?eventId=<%= ev.eventId %>"><%= ev.title %></a></strong>
                                         <% if (ev.featured) { %><span class="badge bg-warning text-dark ms-1"><i class="fas fa-star fa-fw"></i></span><% } %>
+                                        <% if (ev.visibility === 'rank') { %>
+                                        <span class="badge bg-info text-dark ms-1" title="Rank-locked<%= ev.teaserPublic === false ? ' (hidden from everyone else)' : ' (teaser shown publicly)' %>">
+                                            <i class="fas fa-lock fa-fw"></i><%= (ev.rankAccess || []).length %>
+                                        </span>
+                                        <% } else if (ev.visibility === 'private') { %>
+                                        <span class="badge bg-dark ms-1" title="Private — not on the public site"><i class="fas fa-eye-slash fa-fw"></i></span>
+                                        <% } %>
                                         <% if (ev.templateId) { %><small class="text-muted d-block">From template</small><% } %>
                                     </td>
                                     <td data-label="Type"><span class="badge bg-secondary"><%= ev.eventType %></span></td>
