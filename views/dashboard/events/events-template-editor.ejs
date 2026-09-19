@@ -258,7 +258,12 @@
                                 <span id="bannerUploadStatus" class="small d-none"></span>
                             </div>
                             <input type="text" inputmode="url" class="form-control form-control-sm" id="bannerUrlManual" value="<%= tmpl.bannerUrl || '' %>" placeholder="https://…">
-                            <small class="text-muted">Recommended: <strong>1920×480px</strong> (4:1) for website; <strong>1280×720px</strong> (16:9) for Discord. PNG/JPG, max 8 MB.</small>
+                            <small class="text-muted">
+									Recommended: <strong>1280×512px</strong> (5:2) — one image that works everywhere.
+									This is the size Discord uses for event covers, so it passes through untouched, and the
+									website shows it whole. Keep the important artwork near the centre: very wide screens
+									trim the top and bottom edges evenly. PNG/JPG, max 8 MB.
+								</small>
                             <div id="bannerPreview" class="mt-2 <%= tmpl.bannerUrl ? '' : 'd-none' %>">
                                 <div class="position-relative d-inline-block">
                                     <img src="<%= tmpl.bannerUrl || '' %>" class="img-fluid rounded" style="max-height:200px" alt="Banner preview">

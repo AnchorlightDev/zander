@@ -52,9 +52,11 @@
     display: block;
     width: 100%;
     height: auto;              /* natural ratio -- never crops */
-    /* Only bites on very wide screens, where a 4:1 banner would otherwise
-       grow past the fold before any of the event detail is visible. */
-    max-height: 460px;
+    /* Sized so the recommended 1280x512 (5:2) banner shows whole at a typical
+       desktop width. Beyond that it trims evenly top and bottom rather than
+       growing past the fold before any event detail is visible -- which is why
+       the editor tells organisers to keep key artwork centred. */
+    max-height: 520px;
     object-fit: cover;
     object-position: center;
 }
