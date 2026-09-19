@@ -24,16 +24,20 @@
             up.  That is NOT the whole story for the shipped jar: shading
             copies a dependency's class files verbatim and never recompiles
             them, so the jar can only run on a JVM new enough for its NEWEST
-            bundled class.  StoneLib is compiled for 25 (it builds against
-            paper-api 26.2, which is itself Java 25), so this plugin requires a
-            Java 25 proxy despite targeting 21 here.  Running it on Java 21
-            fails at first use with
+            bundled class.  Setting <release> here does nothing for those.
+
+            StoneLib used to be built for 25, which silently forced this plugin
+            onto a Java 25 proxy however this module was configured; on Java 21
+            it failed at first use with
 
                 UnsupportedClassVersionError: ...stonelib/http/Request
                 has been compiled by a more recent version of the Java Runtime
 
-            which is an Error, not an Exception, so it bypasses ordinary
-            catch (Exception) handlers.
+            which is an Error, not an Exception, so it bypassed ordinary
+            catch (Exception) handlers and surfaced as a dead feature rather
+            than a startup failure.  StoneLib 2.2.1 builds for 21, so the whole
+            shaded jar now loads on 21.  Keep the StoneLib dependency below on
+            a 21-targeted build; raising it re-breaks this silently.
         -->
         <java.version>21</java.version>
         <maven.compiler.source>21</maven.compiler.source>
@@ -139,7 +143,7 @@
         <dependency>
             <groupId>dev.anchorlight</groupId>
             <artifactId>StoneLib</artifactId>
-            <version>2.1.0</version>
+            <version>2.2.1</version>
             <scope>compile</scope>
             <exclusions>
                 <exclusion>
