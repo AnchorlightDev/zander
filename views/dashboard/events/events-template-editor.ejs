@@ -129,14 +129,15 @@
                         </div>
 
                         <!-- Rank lock (shown only for visibility = rank) -->
-                        <% const tmplLockedRanks = (tmpl.rankAccess || []).map(r => String(r.rankSlug || '').toLowerCase()); %>
+                        <% const tmplRanksForPicker = (typeof selectableRanks !== 'undefined' && Array.isArray(selectableRanks)) ? selectableRanks : []; %>
+                            <% const tmplLockedRanks = (tmpl.rankAccess || []).map(r => String(r.rankSlug || '').toLowerCase()); %>
                         <div class="border rounded-3 p-3 mt-3 bg-light" id="tmplRankLockPanel" style="display:none;">
                             <div class="d-flex align-items-center mb-2">
                                 <i class="fas fa-lock me-2 text-secondary"></i>
                                 <span class="fw-semibold">Who can see the details?</span>
                             </div>
 
-                            <% if (!selectableRanks || selectableRanks.length === 0) { %>
+                            <% if (tmplRanksForPicker.length === 0) { %>
                             <div class="alert alert-warning mb-0 small">
                                 No LuckPerms groups could be loaded, so no ranks can be chosen. Generated drafts will behave as public until this is fixed.
                             </div>
@@ -147,7 +148,7 @@
                                 "Support the Server" button linking to the webstore.
                             </p>
                             <div class="row g-2 mb-3" style="max-height:220px;overflow-y:auto;">
-                                <% selectableRanks.forEach(rank => { %>
+                                <% tmplRanksForPicker.forEach(rank => { %>
                                 <div class="col-md-4 col-sm-6">
                                     <div class="form-check">
                                         <input class="form-check-input js-tmpl-rank-check" type="checkbox"
@@ -994,6 +995,7 @@ function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, st
     uploadBtn.addEventListener('click', async () => {
         const file = fileInput.files[0];
         if (!file) return;
+        let ok = false;
         uploadBtn.disabled = true;
         statusEl.className = 'small text-info';
         statusEl.textContent = 'Uploading…';
@@ -1012,6 +1014,7 @@ function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, st
                 statusEl.className = 'small text-success';
                 statusEl.textContent = 'Uploaded!';
                 fileInput.value = '';
+                ok = true;
             } else {
                 statusEl.className = 'small text-danger';
                 statusEl.textContent = json.message || 'Upload failed';
@@ -1020,8 +1023,17 @@ function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, st
             statusEl.className = 'small text-danger';
             statusEl.textContent = 'Upload failed';
         }
-        uploadBtn.disabled = true;
-        setTimeout(() => statusEl.classList.add('d-none'), 4000);
+
+        // A failed upload leaves the form looking perfectly fine while the
+        // image field stays empty, so the event saves with no banner and
+        // nothing says why.  Keep the reason on screen and let them retry the
+        // file they already picked; only the success note auto-hides.
+        if (ok) {
+            uploadBtn.disabled = true;
+            setTimeout(() => statusEl.classList.add('d-none'), 4000);
+        } else {
+            uploadBtn.disabled = !fileInput.files.length;
+        }
     });
 
     manual.addEventListener('change', () => setUrl(manual.value.trim()));

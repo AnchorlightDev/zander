@@ -17,6 +17,48 @@ import { getSelectableRanks } from "../../services/rankMetaService.js";
 import { enrichHostsWithAvatars } from "../../lib/avatarHelpers.js";
 import { sanitizeForumHtml } from "../../lib/htmlSanitize.js";
 
+/**
+ * Render the dashboard error page instead of letting a route reject.
+ *
+ * Fastify's default handler answers a rejected route with a bare 500, which
+ * the browser shows as a blank page -- the failure is invisible to whoever hit
+ * it and the reason only exists in the server log.  These editor routes now
+ * depend on LuckPerms (an external database this app does not own) for the
+ * rank picker, so "one dependency is down" has to degrade into something
+ * readable rather than nothing at all.
+ */
+async function renderRouteError(app, res, error, context, config, features, req) {
+  console.error(`[dashboard/events] ${context}:`, error);
+  res.status(500).header("content-type", "text/html; charset=utf-8").send(
+    await app.view("session/error", {
+      pageTitle: "Error",
+      pageDescription: `Error loading ${context}`,
+      config,
+      req,
+      error,
+      features,
+      globalImage: await getGlobalImage(),
+      announcementWeb: await getWebAnnouncement(),
+    })
+  );
+}
+
+/**
+ * Selectable ranks for the editor's rank picker, never throwing.
+ *
+ * A LuckPerms outage must not take down event editing: the picker degrades to
+ * an empty list (the editor shows an explanatory warning in that case) rather
+ * than failing the whole page.
+ */
+async function selectableRanksOrEmpty(context) {
+  try {
+    return await getSelectableRanks();
+  } catch (error) {
+    console.error(`[dashboard/events] rank picker unavailable for ${context}:`, error);
+    return [];
+  }
+}
+
 /** Fetch a URL with the internal API key and parse JSON, returning fallback on error. */
 async function fetchJson(fetchFn, url, fallback = null) {
   try {
@@ -162,9 +204,10 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     if (!await isFeatureWebRouteEnabled(app, features.events, req, res, features)) return;
     if (!await hasPermission("zander.web.events.edit", req, res, features)) return;
 
+    try {
     const [templatesData, selectableRanks, globalImage, announcementWeb] = await Promise.all([
       fetchJson(fetch, `${process.env.siteAddress}/api/events/templates/get`, { data: [] }),
-      getSelectableRanks(),
+      selectableRanksOrEmpty("create event"),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
@@ -185,6 +228,9 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
         announcementWeb,
       })
     );
+    } catch (error) {
+      await renderRouteError(app, res, error, "the event editor", config, features, req);
+    }
   });
 
   // ============================================================================
@@ -197,10 +243,11 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     const eventId = req.query.eventId;
     if (!eventId) return res.redirect("/dashboard/events/list");
 
+    try {
     const [apiData, templatesData, selectableRanks, globalImage, announcementWeb] = await Promise.all([
       fetchJson(fetch, `${process.env.siteAddress}/api/events/single?eventId=${eventId}`, null),
       fetchJson(fetch, `${process.env.siteAddress}/api/events/templates/get`, { data: [] }),
-      getSelectableRanks(),
+      selectableRanksOrEmpty("edit event"),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
@@ -238,6 +285,9 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
         announcementWeb,
       })
     );
+    } catch (error) {
+      await renderRouteError(app, res, error, "the event editor", config, features, req);
+    }
   });
 
   // ============================================================================
@@ -326,7 +376,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     if (!await hasPermission("zander.web.events.edit", req, res, features)) return;
 
     const [selectableRanks, globalImage, announcementWeb] = await Promise.all([
-      getSelectableRanks(),
+      selectableRanksOrEmpty("create template"),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
@@ -429,7 +479,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
 
     const [apiData, selectableRanks, globalImage, announcementWeb] = await Promise.all([
       fetchJson(fetch, `${process.env.siteAddress}/api/events/templates/single?templateId=${templateId}`, null),
-      getSelectableRanks(),
+      selectableRanksOrEmpty("edit template"),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
