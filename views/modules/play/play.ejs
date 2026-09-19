@@ -7,4 +7,165 @@
 
 <%- include("playHeroHeader.ejs") %>
 
-<%- include("../../modules/footer.ejs") %>  
+<%#
+	GEO/SEO: the addresses and the steps are real text in the HTML (not only
+	values inside disabled inputs) so search and AI engines can extract them.
+	Keep them that way if this section is reworked again.
+%>
+<section class="section" id="how-to-join">
+	<div class="container">
+
+		<div class="row justify-content-center">
+			<div class="col-lg-8 text-center">
+				<span class="subtitle text-uppercase">Get started</span>
+				<h2 class="mt-2 mb-3">How to join <%= config.siteConfiguration.siteName %></h2>
+				<p class="text-muted mb-0">
+					Copy the address for your edition of Minecraft, add it to your server list, and you're in.
+				</p>
+			</div>
+		</div>
+
+		<% if (apiData.success == false) { %>
+		<div class="row justify-content-center mt-5">
+			<div class="col-lg-8">
+				<%- include("../../partials/alert.ejs", { alertType: "danger", content: apiData.message }) %>
+			</div>
+		</div>
+		<% } else { %>
+
+		<!-- Server addresses -->
+		<div class="row justify-content-center g-4 mt-2">
+			<% apiData.data.forEach(function (server) { %>
+			<div class="col-md-6 col-lg-5">
+				<div class="card border-0 shadow-sm h-100">
+					<div class="card-body p-4 text-center">
+						<h3 class="h5 fw-bold mb-3"><%= server.displayName %></h3>
+						<div class="input-group">
+							<input type="text"
+							       class="form-control text-center font-monospace js-address"
+							       value="<%= server.serverConnectionAddress %>"
+							       readonly
+							       aria-label="<%= server.displayName %> server address">
+							<button class="btn btn-main js-copy-address" type="button"
+							        data-address="<%= server.serverConnectionAddress %>"
+							        aria-label="Copy the <%= server.displayName %> server address">
+								<i class="fas fa-copy"></i>
+							</button>
+						</div>
+						<small class="text-muted d-block mt-2">Tap the field to select, or use the copy button.</small>
+					</div>
+				</div>
+			</div>
+			<% }) %>
+		</div>
+		<% } %>
+
+		<!-- Steps -->
+		<div class="row justify-content-center mt-5">
+			<div class="col-lg-8">
+				<ol class="play-steps">
+					<li>Open Minecraft (Java or Bedrock Edition) and choose <em>Multiplayer &rarr; Add Server</em>.</li>
+					<li>Enter the server address<% if (typeof servers !== 'undefined' && servers && servers.length) { %> shown above<% } %>.</li>
+					<li>Save, then select the server and click <em>Join</em>.</li>
+					<% if (config.siteConfiguration.platforms && config.siteConfiguration.platforms.discord) { %>
+					<li>
+						Optional: join the
+						<a href="<%= config.siteConfiguration.platforms.discord %>" target="_blank" rel="noopener">community Discord</a>
+						for help and announcements.
+					</li>
+					<% } %>
+				</ol>
+			</div>
+		</div>
+
+	</div>
+</section>
+
+<% if (config.discord && config.discord.guildId) { %>
+<section class="section-sm gray-bg">
+	<div class="container">
+		<div class="row justify-content-center">
+			<div class="col-lg-8 text-center">
+				<span class="subtitle text-uppercase">Community</span>
+				<h2 class="mt-2 mb-4">Join the Community Discord</h2>
+				<div class="d-flex justify-content-center">
+					<iframe src="https://discord.com/widget?id=<%= config.discord.guildId %>&theme=dark"
+					        width="350" height="500"
+					        title="Community Discord"
+					        allowtransparency="true" frameborder="0"
+					        style="max-width: 100%; border-radius: .5rem;"
+					        sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"></iframe>
+				</div>
+			</div>
+		</div>
+	</div>
+</section>
+<% } %>
+
+<style>
+/* Numbered steps: the theme has no list styling, so the default markers sat
+   flush against the text and read as an afterthought. */
+.play-steps {
+	counter-reset: play-step;
+	list-style: none;
+	padding-left: 0;
+	margin-bottom: 0;
+}
+.play-steps > li {
+	counter-increment: play-step;
+	position: relative;
+	padding-left: 3.25rem;
+	min-height: 2.25rem;
+	margin-bottom: 1.25rem;
+	line-height: 1.6;
+}
+.play-steps > li:last-child { margin-bottom: 0; }
+.play-steps > li::before {
+	content: counter(play-step);
+	position: absolute;
+	left: 0;
+	top: -0.15rem;
+	width: 2.25rem;
+	height: 2.25rem;
+	border-radius: 50%;
+	background: #2f508c;
+	color: #fff;
+	font-weight: 700;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.js-address { background-color: #fff; }
+</style>
+
+<script>
+// Copy the server address. Clipboard API needs a secure context, so fall back
+// to selecting the field, which is what a phone user would do anyway.
+document.querySelectorAll('.js-copy-address').forEach(function (btn) {
+	btn.addEventListener('click', function () {
+		var address = btn.dataset.address || '';
+		var field = btn.closest('.input-group').querySelector('.js-address');
+		var done = function () {
+			var original = btn.innerHTML;
+			btn.innerHTML = '<i class="fas fa-check"></i>';
+			setTimeout(function () { btn.innerHTML = original; }, 1500);
+		};
+
+		if (navigator.clipboard && window.isSecureContext) {
+			navigator.clipboard.writeText(address).then(done).catch(function () {
+				if (field) field.select();
+			});
+		} else if (field) {
+			field.select();
+			try { document.execCommand('copy'); done(); } catch (e) { /* leave it selected */ }
+		}
+	});
+});
+
+// Selecting the whole address on focus saves a fiddly drag on mobile.
+document.querySelectorAll('.js-address').forEach(function (field) {
+	field.addEventListener('focus', function () { field.select(); });
+});
+</script>
+
+<%- include("../../modules/footer.ejs") %>

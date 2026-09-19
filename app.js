@@ -36,7 +36,11 @@ import {
   buildSessionCookieOptions,
 } from "./lib/securityConfig.js";
 import { checkRateLimit } from "./lib/rateLimiter.mjs";
-import { createCspOnSendHook } from "./lib/csp.js";
+import {
+  createCspOnSendHook,
+  registerCspReportParser,
+  normaliseCspReports,
+} from "./lib/csp.js";
 
 const config = require("./config.json");
 const features = require("./features.json");
@@ -301,6 +305,8 @@ const buildApp = async () => {
     next();
   });
 
+  registerCspReportParser(app);
+
   // CSP violation collector — public by necessity: the browser posts these
   // with no credentials. Rate limited because it is an unauthenticated write
   // path, and only the fields worth acting on are logged.
@@ -310,16 +316,8 @@ const buildApp = async () => {
     async function (req, res) {
       if (!checkRateLimit(req, res, { windowMs: 60_000, max: 60 })) return;
 
-      const report = req.body?.["csp-report"] ?? req.body ?? {};
-      const directive = report["violated-directive"] || report.effectiveDirective;
-      const blocked = report["blocked-uri"] || report.blockedURL;
-      const document = report["document-uri"] || report.documentURL;
-
-      if (directive) {
-        app.log.warn(
-          { directive, blocked, document },
-          "[CSP] report-only violation"
-        );
+      for (const report of normaliseCspReports(req.body)) {
+        app.log.warn(report, "[CSP] report-only violation");
       }
 
       // 204: the browser ignores the body and this keeps the endpoint cheap.

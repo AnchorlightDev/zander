@@ -50,6 +50,23 @@ describe("buildContentSecurityPolicy", () => {
     }
   });
 
+  it("allows every image host the app can emit", () => {
+    for (const host of CSP_SOURCES.img) {
+      expect(directive("img-src")).toContain(host);
+    }
+  });
+
+  // A missing img-src host is invisible while the policy is report-only and
+  // then blanks the image the moment it is enforced.  These three were all
+  // absent until a report-only violation surfaced the gravatar one.
+  it.each([
+    ["https://gravatar.com", "user and staff avatars"],
+    ["https://mc-heads.net", "Minecraft head renders in controllers/staffController.js"],
+    ["https://res.cloudinary.com", "everything uploaded via /api/upload/image"],
+  ])("allows %s (%s)", (host) => {
+    expect(directive("img-src")).toContain(host);
+  });
+
   it("includes the report endpoint when given one", () => {
     expect(policy).toContain("report-uri /api/csp-report");
   });
