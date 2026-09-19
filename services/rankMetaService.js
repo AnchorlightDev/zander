@@ -124,3 +124,81 @@ export function invalidateRankMetaCache() {
   cache = null;
   cachedAt = 0;
 }
+
+/**
+ * The permission strings that would grant `node`, including wildcard ancestors.
+ *
+ * Mirrors the matching in permissionMatch() (controllers/forumController.js)
+ * and hasPermission() (api/common.js): an exact node, a bare "*", or any
+ * ancestor wildcard.  Building the list explicitly lets the lookup below use
+ * an indexed IN clause instead of scanning every group permission row.
+ *
+ * Exported for testing -- it is the part with the fiddly edge cases.
+ */
+export function grantingPermissionStrings(node) {
+  const target = String(node ?? "").trim().toLowerCase();
+  if (!target) return [];
+
+  const candidates = new Set([target, "*"]);
+
+  // STRICT ancestors only -- "a.b.*" but not "a.b.c.*" for node "a.b.c".
+  //
+  // The two matchers in this codebase disagree about that last one.
+  // permissionMatch (controllers/forumController.js) strips only the "*" and
+  // tests startsWith, so "a.b.c.*" does NOT grant "a.b.c"; hasPermission
+  // (api/common.js) strips ".*" and also accepts an exact base match, so
+  // there it does.  Naming a rank that the forum check would still reject
+  // would be worse than saying nothing, so this follows the stricter of the
+  // two.  Under-reporting is the safe direction: the caller falls back to a
+  // 404 rather than advertising a rank that does not actually open the door.
+  const parts = target.split(".");
+  for (let i = 1; i < parts.length; i++) {
+    candidates.add(parts.slice(0, i).join(".") + ".*");
+  }
+
+  return [...candidates];
+}
+
+/**
+ * Which LuckPerms groups grant a given permission node.
+ *
+ * Used to turn "you lack zander.web.forums.supporter" into "this is for
+ * Supporter members, here is where to get it" -- a forum category stores a
+ * permission node, but the person reading it needs a rank name.
+ *
+ * Returns rank metadata rows (highest weight first), never throws, and
+ * returns [] for a node nothing grants.
+ */
+export async function getGroupsGrantingPermission(node) {
+  const candidates = grantingPermissionStrings(node);
+  if (candidates.length === 0) return [];
+
+  let rows = [];
+  try {
+    rows = await queryLuckPermsDb(
+      `SELECT DISTINCT name FROM ${LUCKPERMS_GROUP_PERMISSIONS_TABLE}
+        WHERE server = 'global' AND world = 'global'
+          AND value = 1
+          AND permission IN (${candidates.map(() => "?").join(", ")})`,
+      candidates
+    );
+  } catch (err) {
+    // LuckPerms is a database this app does not own; a page that merely wants
+    // to name a rank must not fail because that database is unreachable.
+    console.error("[RankMeta] failed to resolve groups granting a permission:", err);
+    return [];
+  }
+
+  const meta = await getRankMetaMap();
+  return rows
+    .map((row) => {
+      const slug = String(row.name || "").toLowerCase();
+      return meta.get(slug) || { rankSlug: slug, displayName: slug };
+    })
+    .filter((r) => r.rankSlug)
+    .sort(
+      (a, b) =>
+        (b.priority ?? 0) - (a.priority ?? 0) ||
+        a.rankSlug.localeCompare(b.rankSlug)
+    );
+}

@@ -25,23 +25,27 @@
                     <span class="badge bg-dark ms-1"><i class="fas fa-eye-slash me-1"></i>Private</span>
                     <% } %>
                 </div>
+                <%
+                  // Draft/pending: creator or reviewer can cancel their own event;
+                  // approved/published: reviewer only.
+                  const canCancel = ['draft','pending_review'].includes(ev.status) ||
+                                    (['approved','published'].includes(ev.status) && isReviewer);
+                  const canRevert = ['pending_review','approved'].includes(ev.status) && isReviewer;
+                %>
+                <%#
+                  Toolbar: the one action this event is waiting on stays a button,
+                  everything else moves into the Actions menu.  Nine buttons wrapped
+                  onto two rows and buried Approve among six greys, which is the
+                  opposite of what a review queue needs.
+                %>
                 <div class="btn-toolbar mb-2 mb-md-0 gap-2">
                     <a href="/dashboard/events/list" class="btn btn-sm btn-outline-secondary">
                         <i class="fas fa-arrow-left fa-fw me-1"></i>Back
                     </a>
-                    <% if (canEdit) { %>
-                        <a href="/dashboard/events/edit?eventId=<%= ev.eventId %>" class="btn btn-sm btn-warning">
-                            <i class="fas fa-edit fa-fw me-1"></i>Edit
-                        </a>
-                    <% } %>
+
                     <% if (ev.status === 'draft' || ev.status === 'rejected') { %>
                         <button class="btn btn-sm btn-primary btn-submit-review" data-event-id="<%= ev.eventId %>">
                             <i class="fas fa-paper-plane me-1"></i>Submit for Review
-                        </button>
-                    <% } %>
-                    <% if (ev.status === 'approved' && isReviewer) { %>
-                        <button class="btn btn-sm btn-success btn-publish" data-event-id="<%= ev.eventId %>">
-                            <i class="fas fa-globe me-1"></i>Publish
                         </button>
                     <% } %>
                     <% if (ev.status === 'pending_review' && isReviewer) { %>
@@ -51,36 +55,63 @@
                         <button class="btn btn-sm btn-danger btn-reject-view" data-event-id="<%= ev.eventId %>">
                             <i class="fas fa-times me-1"></i>Reject
                         </button>
-                        <button class="btn btn-sm btn-outline-secondary btn-revert-draft" data-event-id="<%= ev.eventId %>">
-                            <i class="fas fa-rotate-left me-1"></i>Revert to Draft
+                    <% } %>
+                    <% if (ev.status === 'approved' && isReviewer) { %>
+                        <button class="btn btn-sm btn-success btn-publish" data-event-id="<%= ev.eventId %>">
+                            <i class="fas fa-globe me-1"></i>Publish
                         </button>
                     <% } %>
-                    <% if (['pending_review', 'approved'].includes(ev.status) && isReviewer) { %>
-                        <button class="btn btn-sm btn-outline-warning btn-revert-draft" data-event-id="<%= ev.eventId %>">
-                            <i class="fas fa-undo me-1"></i>Revert to Draft
-                        </button>
-                    <% } %>
-                    <%
-                      // Draft/pending: creator or reviewer can cancel their own event; approved/published: reviewer only
-                      const canCancel = ['draft','pending_review'].includes(ev.status) ||
-                                        (['approved','published'].includes(ev.status) && isReviewer);
-                    %>
-                    <% if (canCancel) { %>
-                        <button class="btn btn-sm btn-outline-danger btn-cancel" data-event-id="<%= ev.eventId %>">
-                            <i class="fas fa-ban me-1"></i>Cancel
-                        </button>
-                    <% } %>
-                    <button class="btn btn-sm btn-outline-secondary btn-duplicate" data-event-id="<%= ev.eventId %>">
-                        <i class="fas fa-copy me-1"></i>Duplicate
-                    </button>
-                    <a href="/dashboard/events/preview?eventId=<%= ev.eventId %>" target="_blank" class="btn btn-sm btn-outline-info">
-                        <i class="fas fa-eye me-1"></i>Preview
-                    </a>
-                    <% if (ev.status === 'published') { %>
-                        <a href="/events/<%= ev.slug %>" target="_blank" class="btn btn-sm btn-outline-success">
-                            <i class="fas fa-external-link-alt me-1"></i>Public Page
+
+                    <% if (canEdit) { %>
+                        <a href="/dashboard/events/edit?eventId=<%= ev.eventId %>" class="btn btn-sm btn-warning">
+                            <i class="fas fa-edit fa-fw me-1"></i>Edit
                         </a>
                     <% } %>
+
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                                id="eventActionsMenu" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-ellipsis-h fa-fw me-1"></i>Actions
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="eventActionsMenu">
+                            <li>
+                                <a class="dropdown-item" href="/dashboard/events/preview?eventId=<%= ev.eventId %>" target="_blank">
+                                    <i class="fas fa-eye fa-fw me-2 text-info"></i>Preview
+                                </a>
+                            </li>
+                            <% if (ev.status === 'published') { %>
+                            <li>
+                                <a class="dropdown-item" href="/events/<%= ev.slug %>" target="_blank">
+                                    <i class="fas fa-external-link-alt fa-fw me-2 text-success"></i>Public Page
+                                </a>
+                            </li>
+                            <% } %>
+
+                            <li><hr class="dropdown-divider"></li>
+
+                            <li>
+                                <button class="dropdown-item btn-duplicate" type="button" data-event-id="<%= ev.eventId %>">
+                                    <i class="fas fa-copy fa-fw me-2 text-secondary"></i>Duplicate
+                                </button>
+                            </li>
+                            <% if (canRevert) { %>
+                            <li>
+                                <button class="dropdown-item btn-revert-draft" type="button" data-event-id="<%= ev.eventId %>">
+                                    <i class="fas fa-undo fa-fw me-2 text-warning"></i>Revert to Draft
+                                </button>
+                            </li>
+                            <% } %>
+
+                            <% if (canCancel) { %>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button class="dropdown-item text-danger btn-cancel" type="button" data-event-id="<%= ev.eventId %>">
+                                    <i class="fas fa-ban fa-fw me-2"></i>Cancel Event
+                                </button>
+                            </li>
+                            <% } %>
+                        </ul>
+                    </div>
                 </div>
             </div>
       <%- include("../../admin/_notices.ejs") %>
@@ -381,42 +412,42 @@ async function eventAction(endpoint, body, redirect) {
     else alert('Error: ' + data.message);
 }
 
-document.querySelector('.btn-submit-review')?.addEventListener('click', e => {
+document.querySelectorAll('.btn-submit-review').forEach(el => el.addEventListener('click', e => {
     if (!confirm('Submit for review?')) return;
-    eventAction('/api/events/submit-review', { eventId: e.target.dataset.eventId }, window.location.href);
-});
+    eventAction('/api/events/submit-review', { eventId: e.currentTarget.dataset.eventId }, window.location.href);
+}));
 
-document.querySelector('.btn-approve')?.addEventListener('click', e => {
+document.querySelectorAll('.btn-approve').forEach(el => el.addEventListener('click', e => {
     if (!confirm('Approve this event?')) return;
-    eventAction('/api/events/approve', { eventId: e.target.dataset.eventId }, window.location.href);
-});
+    eventAction('/api/events/approve', { eventId: e.currentTarget.dataset.eventId }, window.location.href);
+}));
 
 let rejectEventId = null;
-document.querySelector('.btn-reject-view')?.addEventListener('click', e => {
-    rejectEventId = e.target.dataset.eventId;
+document.querySelectorAll('.btn-reject-view').forEach(el => el.addEventListener('click', e => {
+    rejectEventId = e.currentTarget.dataset.eventId;
     new bootstrap.Modal(document.getElementById('rejectModal')).show();
-});
+}));
 document.getElementById('confirmReject')?.addEventListener('click', async () => {
     if (!rejectEventId) return;
     const note = document.getElementById('rejectionNote').value;
     eventAction('/api/events/reject', { eventId: rejectEventId, rejectionNote: note }, window.location.href);
 });
 
-document.querySelector('.btn-revert-draft')?.addEventListener('click', e => {
+document.querySelectorAll('.btn-revert-draft').forEach(el => el.addEventListener('click', e => {
     if (!confirm('Revert this event to draft? The submitter will need to re-submit for review.')) return;
-    eventAction('/api/events/revert-to-draft', { eventId: e.target.dataset.eventId }, window.location.href);
-});
+    eventAction('/api/events/revert-to-draft', { eventId: e.currentTarget.dataset.eventId }, window.location.href);
+}));
 
-document.querySelector('.btn-publish')?.addEventListener('click', e => {
+document.querySelectorAll('.btn-publish').forEach(el => el.addEventListener('click', e => {
     if (!confirm('Publish this event? This will trigger Discord and website sync.')) return;
-    eventAction('/api/events/publish', { eventId: e.target.dataset.eventId }, window.location.href);
-});
+    eventAction('/api/events/publish', { eventId: e.currentTarget.dataset.eventId }, window.location.href);
+}));
 
-document.querySelector('.btn-cancel')?.addEventListener('click', e => {
+document.querySelectorAll('.btn-cancel').forEach(el => el.addEventListener('click', e => {
     const reason = prompt('Reason for cancellation (optional):');
     if (reason === null) return;
-    eventAction('/api/events/cancel', { eventId: e.target.dataset.eventId, reason }, window.location.href);
-});
+    eventAction('/api/events/cancel', { eventId: e.currentTarget.dataset.eventId, reason }, window.location.href);
+}));
 
 document.querySelector('.btn-resync-discord')?.addEventListener('click', () => {
     document.getElementById('resyncResult')?.classList.add('d-none');
@@ -464,17 +495,17 @@ document.getElementById('confirmResync')?.addEventListener('click', async () => 
     }
 });
 
-document.querySelector('.btn-duplicate')?.addEventListener('click', async e => {
+document.querySelectorAll('.btn-duplicate').forEach(el => el.addEventListener('click', async e => {
     const res = await fetch('/api/events/duplicate', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId: e.target.dataset.eventId }),
+        body: JSON.stringify({ eventId: e.currentTarget.dataset.eventId }),
     });
     const data = await res.json();
     if (data.success) window.location.href = `/dashboard/events/view?eventId=${data.data.eventId}`;
     else alert('Error: ' + data.message);
-});
+}));
 </script>
 
 <script>
