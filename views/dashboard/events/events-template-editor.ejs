@@ -257,7 +257,7 @@
                                 <small class="text-muted flex-grow-1">Or enter URL directly:</small>
                                 <span id="bannerUploadStatus" class="small d-none"></span>
                             </div>
-                            <input type="url" class="form-control form-control-sm" id="bannerUrlManual" value="<%= tmpl.bannerUrl || '' %>" placeholder="https://…">
+                            <input type="text" inputmode="url" class="form-control form-control-sm" id="bannerUrlManual" value="<%= tmpl.bannerUrl || '' %>" placeholder="https://…">
                             <small class="text-muted">Recommended: <strong>1920×480px</strong> (4:1) for website; <strong>1280×720px</strong> (16:9) for Discord. PNG/JPG, max 8 MB.</small>
                             <div id="bannerPreview" class="mt-2 <%= tmpl.bannerUrl ? '' : 'd-none' %>">
                                 <div class="position-relative d-inline-block">
@@ -279,7 +279,7 @@
                                 <small class="text-muted flex-grow-1">Or enter URL directly:</small>
                                 <span id="logoUploadStatus" class="small d-none"></span>
                             </div>
-                            <input type="url" class="form-control form-control-sm" id="logoUrlManual" value="<%= tmpl.logoUrl || '' %>" placeholder="https://…">
+                            <input type="text" inputmode="url" class="form-control form-control-sm" id="logoUrlManual" value="<%= tmpl.logoUrl || '' %>" placeholder="https://…">
                             <small class="text-muted">Recommended: <strong>512×512px</strong> (1:1 square). PNG with transparency preferred. Max 8 MB.</small>
                             <div id="logoPreview" class="mt-2 <%= tmpl.logoUrl ? '' : 'd-none' %>">
                                 <div class="position-relative d-inline-block">
@@ -435,7 +435,7 @@
                                     <!-- Tip/Web/Popup: Link -->
                                     <div class="col-md-8 ann-link-group <%= !hasLink ? 'd-none' : '' %>">
                                         <label class="form-label small">Link URL <small class="text-muted">(optional)</small></label>
-                                        <input type="url" class="form-control form-control-sm ann-link" placeholder="https://…" value="<%= ann.link || '' %>">
+                                        <input type="text" inputmode="url" class="form-control form-control-sm ann-link" placeholder="https://…" value="<%= ann.link || '' %>">
                                     </div>
                                     <!-- Popup: Button text & image -->
                                     <div class="col-md-4 ann-popup-group <%= !isPopup ? 'd-none' : '' %>">
@@ -444,7 +444,7 @@
                                     </div>
                                     <div class="col-12 ann-popup-group <%= !isPopup ? 'd-none' : '' %>">
                                         <label class="form-label small">Popup Image URL</label>
-                                        <input type="url" class="form-control form-control-sm ann-popupImageUrl" placeholder="https://…" value="<%= ann.popupImageUrl || '' %>">
+                                        <input type="text" inputmode="url" class="form-control form-control-sm ann-popupImageUrl" placeholder="https://…" value="<%= ann.popupImageUrl || '' %>">
                                     </div>
                                     <!-- Enabled -->
                                     <div class="col-md-3 d-flex align-items-end">
@@ -555,7 +555,7 @@
                         <!-- Tip/Web/Popup: Link -->
                         <div class="col-md-8 ann-link-group d-none">
                             <label class="form-label small">Link URL <small class="text-muted">(optional)</small></label>
-                            <input type="url" class="form-control form-control-sm ann-link" placeholder="https://…" value="">
+                            <input type="text" inputmode="url" class="form-control form-control-sm ann-link" placeholder="https://…" value="">
                         </div>
                         <!-- Popup: Button text -->
                         <div class="col-md-4 ann-popup-group d-none">
@@ -565,7 +565,7 @@
                         <!-- Popup: Image URL -->
                         <div class="col-12 ann-popup-group d-none">
                             <label class="form-label small">Popup Image URL <small class="text-muted">(optional)</small></label>
-                            <input type="url" class="form-control form-control-sm ann-popupImageUrl" placeholder="https://…" value="">
+                            <input type="text" inputmode="url" class="form-control form-control-sm ann-popupImageUrl" placeholder="https://…" value="">
                         </div>
                         <!-- Enabled -->
                         <div class="col-md-3 d-flex align-items-end">
@@ -807,6 +807,29 @@ document.querySelectorAll('#templateHostsContainer .host-row').forEach(initTempl
 })();
 
 // Form submission
+
+// A field that fails HTML5 validation while its tab is hidden cannot be
+// focused, so the browser blocks the submit, logs "An invalid form control is
+// not focusable" to the console, and the page simply does nothing -- no error,
+// no save.  Reveal the offending field's tab so the message is visible and the
+// user can see why nothing happened.
+(function revealInvalidFieldsTab(formId) {
+    const form = document.getElementById(formId);
+    if (!form) return;
+
+    form.addEventListener('invalid', (e) => {
+        const pane = e.target.closest('.tab-pane');
+        if (pane && !pane.classList.contains('active')) {
+            const trigger = document.querySelector('[data-bs-target="#' + pane.id + '"], [href="#' + pane.id + '"]');
+            if (trigger && window.bootstrap?.Tab) {
+                window.bootstrap.Tab.getOrCreateInstance(trigger).show();
+                // Re-report once the pane is visible, so the browser can focus it.
+                setTimeout(() => e.target.reportValidity(), 200);
+            }
+        }
+    }, true); // capture: 'invalid' does not bubble
+})('templateForm');
+
 document.getElementById('templateForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
