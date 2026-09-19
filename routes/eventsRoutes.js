@@ -7,6 +7,7 @@ import { getGlobalImage, isFeatureWebRouteEnabled } from "../api/common.js";
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import { getUpcomingPublishedEvents, getAllPublishedEvents, getPublishedEventBySlug } from "../services/eventService.js";
 import { enrichHostsWithAvatars } from "../lib/avatarHelpers.js";
+import { renderDiscordTimestamps } from "../lib/discordTimestamps.js";
 import { getRankMetaMap, getDonatorRankSlugs } from "../services/rankMetaService.js";
 import {
   viewerRankSlugs,
@@ -135,6 +136,11 @@ export default function eventsRoutes(app, config, features) {
 
       // Enrich hosts with avatar URLs (empty on a locked teaser)
       event.hosts = await enrichHostsWithAvatars(event.hosts || []);
+
+      // Descriptions are authored once for both Discord and the web, so they
+      // carry Discord's <t:...> timestamp tokens.  Substitute them at render
+      // time only -- the stored copy keeps the raw tokens for Discord.
+      event.description = renderDiscordTimestamps(event.description);
 
       // Build ICS/calendar data
       const startTs = Math.floor(new Date(event.startAt).getTime() / 1000);

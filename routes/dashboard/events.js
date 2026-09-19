@@ -16,6 +16,7 @@ import { getEventById } from "../../services/eventService.js";
 import { getSelectableRanks } from "../../services/rankMetaService.js";
 import { enrichHostsWithAvatars } from "../../lib/avatarHelpers.js";
 import { sanitizeForumHtml } from "../../lib/htmlSanitize.js";
+import { renderDiscordTimestamps } from "../../lib/discordTimestamps.js";
 
 /**
  * Render the dashboard error page instead of letting a route reject.
@@ -325,6 +326,9 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     // sanitized in eventService, but rows created before that are not, so
     // sanitize again here — sanitizeForumHtml is idempotent.
     ev.description = ev.description ? sanitizeForumHtml(ev.description) : ev.description;
+    // Render Discord's <t:...> tokens so the dashboard shows the same times a
+    // visitor will see, rather than the raw token text.
+    ev.description = renderDiscordTimestamps(ev.description);
 
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-view", {
@@ -423,6 +427,8 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
       }
 
       event.hosts = await enrichHostsWithAvatars(event.hosts || []);
+      // Preview must match the live page, tokens included.
+      event.description = renderDiscordTimestamps(event.description);
 
       const startTs = Math.floor(new Date(event.startAt).getTime() / 1000);
       const endTs = Math.floor(new Date(event.endAt).getTime() / 1000);

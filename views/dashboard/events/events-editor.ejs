@@ -1141,6 +1141,19 @@ document.getElementById('eventForm').addEventListener('submit', async (e) => {
     // Announcements
     body.announcements = collectAnnouncements();
 
+    // Image fields.
+    //
+    // The visible URL boxes are not form fields -- each pairs with a hidden
+    // input that only gets written by setUrl(), which fires on the visible
+    // box's 'change' event.  A URL typed and then submitted without the box
+    // ever losing focus therefore never reached the hidden field, and the
+    // event saved with no banner and no indication why.  Read the visible
+    // boxes directly at submit time so what you can see is what gets saved.
+    [['bannerUrlManual', 'bannerUrl'], ['logoUrlManual', 'logoUrl']].forEach(([manualId, field]) => {
+        const manual = document.getElementById(manualId);
+        if (manual) body[field] = manual.value.trim();
+    });
+
     // Boolean
     body.featured = document.getElementById('featuredCheck').checked;
 
