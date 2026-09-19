@@ -158,7 +158,13 @@ function buildEventEmbed(event, lock = null) {
   }
 
   if (lock) {
-    embed.setDescription(lock.body);
+    // redactLockedEvent already swapped in teaserDescription when the
+    // organiser wrote one, so a teaser reaches here as event.description.
+    // Generated copy is only the fallback.
+    const teaser = event.description
+      ? htmlToMarkdown(event.description).slice(0, 2048)
+      : lock.body;
+    embed.setDescription(teaser);
     embed.addFields({
       name: "🔒 " + lock.heading,
       value: lock.ctaUrl
@@ -359,8 +365,12 @@ export async function createGuildScheduledEvent(event, guildId) {
     scheduledStartTime: new Date(event.startAt),
     scheduledEndTime: new Date(event.endAt),
     privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
+    // A locked event shows the organiser's teaser if there is one (carried on
+    // gated.event.description), otherwise the generated lock copy.
     description: gated.lock
-      ? gated.lock.body.slice(0, 1000)
+      ? (gated.event.description
+          ? htmlToMarkdown(gated.event.description).slice(0, 1000)
+          : gated.lock.body.slice(0, 1000))
       : event.description
         ? htmlToMarkdown(event.description).slice(0, 1000)
         : undefined,
@@ -439,7 +449,9 @@ export async function editGuildScheduledEvent(event, guildId, guildEventId) {
     scheduledStartTime: new Date(event.startAt),
     scheduledEndTime: new Date(event.endAt),
     description: gated.lock
-      ? gated.lock.body.slice(0, 1000)
+      ? (gated.event.description
+          ? htmlToMarkdown(gated.event.description).slice(0, 1000)
+          : gated.lock.body.slice(0, 1000))
       : gated.hidden
         ? undefined
         : event.description

@@ -7,6 +7,7 @@ import {
   redactLockedEvent,
   isSupporterEvent,
   buildLockCopy,
+  describeRequiredRanks,
 } from "../../lib/eventAccess.js";
 
 const rankMeta = new Map([
@@ -172,6 +173,24 @@ describe("redactLockedEvent", () => {
     expect(event.description).toBe("<p>Secret details</p>");
     expect(event.hosts).toHaveLength(1);
   });
+
+  it("shows the organiser's teaser copy in place of the gated description", () => {
+    const teaser = redactLockedEvent(
+      lockedEvent({ teaserDescription: "<p>One chunk. Then the world.</p>" })
+    );
+    expect(teaser.description).toBe("<p>One chunk. Then the world.</p>");
+    expect(teaser.description).not.toContain("Secret details");
+  });
+
+  it("still withholds everything else when a teaser is set", () => {
+    const teaser = redactLockedEvent(lockedEvent({ teaserDescription: "<p>Blurb</p>" }));
+    expect(teaser.serverIp).toBeNull();
+    expect(teaser.hosts).toEqual([]);
+  });
+
+  it("falls back to generated copy when no teaser was written", () => {
+    expect(redactLockedEvent(lockedEvent()).description).toBeNull();
+  });
 });
 
 describe("isSupporterEvent", () => {
@@ -219,8 +238,62 @@ describe("buildLockCopy", () => {
     expect(buildLockCopy(["mystery"], rankMeta, false, true).rankList).toBe("mystery");
   });
 
-  it("reads naturally with several ranks", () => {
-    const copy = buildLockCopy(["supporter", "patron", "admin"], rankMeta, true, true);
-    expect(copy.rankList).toBe("Supporter, Patron or Admin");
+  it("reads naturally with several purchasable ranks", () => {
+    const copy = buildLockCopy(["supporter", "patron"], rankMeta, true, true);
+    expect(copy.rankList).toBe("Patron or Supporter");
+  });
+});
+
+describe("describeRequiredRanks", () => {
+  // Weighted so "cheapest first" is unambiguous rather than alphabetical.
+  const tiers = new Map([
+    ["iron",     { rankSlug: "iron",     displayName: "Iron",     isDonator: true, priority: 10 }],
+    ["gold",     { rankSlug: "gold",     displayName: "Gold",     isDonator: true, priority: 20 }],
+    ["diamond",  { rankSlug: "diamond",  displayName: "Diamond",  isDonator: true, priority: 30 }],
+    ["emerald",  { rankSlug: "emerald",  displayName: "Emerald",  isDonator: true, priority: 40 }],
+    ["admin",    { rankSlug: "admin",    displayName: "Administrator", isStaff: true, priority: 900 }],
+    ["mod",      { rankSlug: "mod",      displayName: "Moderator",     isStaff: true, priority: 800 }],
+  ]);
+
+  it("drops staff ranks from a supporter prompt, since no reader can buy one", () => {
+    const out = describeRequiredRanks(["admin", "mod", "iron"], tiers, true);
+    expect(out).toBe("Iron");
+    expect(out).not.toContain("Administrator");
+  });
+
+  it("names the cheapest tier first", () => {
+    expect(describeRequiredRanks(["diamond", "iron", "gold"], tiers, true)).toBe(
+      "Iron, Gold or Diamond"
+    );
+  });
+
+  it("collapses a long list rather than enumerating every tier", () => {
+    // The real case: every donator tier plus every staff rank was printed in
+    // full, which read as noise and answered nothing.
+    const out = describeRequiredRanks(
+      ["emerald", "diamond", "gold", "iron", "admin", "mod"],
+      tiers,
+      true
+    );
+    expect(out).toBe("Iron, Gold, Diamond and above");
+  });
+
+  it("keeps staff names on a non-supporter event, where they are the answer", () => {
+    expect(describeRequiredRanks(["admin", "mod"], tiers, false)).toBe(
+      "Moderator or Administrator"
+    );
+  });
+
+  it("falls back to every rank when none are purchasable", () => {
+    // Guards against an empty prompt if the donator flags are missing.
+    expect(describeRequiredRanks(["admin"], tiers, true)).toBe("Administrator");
+  });
+
+  it("uses the slug when a rank has no metadata", () => {
+    expect(describeRequiredRanks(["mystery"], tiers, true)).toBe("mystery");
+  });
+
+  it("describes an empty list without naming anything", () => {
+    expect(describeRequiredRanks([], tiers, true)).toBe("a special rank");
   });
 });

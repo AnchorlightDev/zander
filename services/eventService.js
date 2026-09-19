@@ -320,6 +320,7 @@ export async function createEvent(data, actorId, actorName) {
       title: data.title,
       slug,
       description: data.description ? sanitizeForumHtml(data.description) : null,
+      teaserDescription: data.teaserDescription ? sanitizeForumHtml(data.teaserDescription) : null,
       eventType: data.eventType || "once",
       startAt: new Date(data.startAt),
       endAt: new Date(data.endAt),
@@ -397,6 +398,12 @@ export async function updateEvent(eventId, data, actorId, actorName) {
   // it unescaped (<%- ev.description %>).
   if (data.description !== undefined)
     updateData.description = data.description ? sanitizeForumHtml(data.description) : null;
+  // Rendered unescaped wherever a locked event is shown, so sanitized on write
+  // for the same reason as description.
+  if (data.teaserDescription !== undefined)
+    updateData.teaserDescription = data.teaserDescription
+      ? sanitizeForumHtml(data.teaserDescription)
+      : null;
   if (data.eventType !== undefined) updateData.eventType = data.eventType;
   if (data.startAt !== undefined) updateData.startAt = new Date(data.startAt);
   if (data.endAt !== undefined) updateData.endAt = new Date(data.endAt);
@@ -938,6 +945,7 @@ export async function duplicateEvent(eventId, actorId, actorName) {
       title: `${source.title} (Copy)`,
       slug,
       description: source.description,
+      teaserDescription: source.teaserDescription,
       eventType: source.eventType,
       startAt: source.startAt,
       endAt: source.endAt,

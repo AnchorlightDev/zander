@@ -121,6 +121,17 @@
                                 </div>
                                 <% } %>
 
+
+                                <div class="mt-3">
+                                    <label class="form-label fw-semibold" for="teaserDescriptionInput">Teaser description</label>
+                                    <div id="teaserDescriptionEditor"><%- ev.teaserDescription || '' %></div>
+                                    <small class="text-muted d-block mt-1">
+                                        Shown to anyone without the rank &mdash; on the website, in the Discord announcement
+                                        and on the Discord scheduled event. Say what the event is and why the rank is worth
+                                        having; leave it empty to fall back to a generated line naming the rank.
+                                    </small>
+                                </div>
+
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" id="teaserPublicCheck"
                                            <%= ev.teaserPublic === false ? '' : 'checked' %>>
@@ -1127,6 +1138,10 @@ document.getElementById('eventForm').addEventListener('submit', async (e) => {
     // Sync Summernote description content
     if (typeof $.fn.summernote !== 'undefined') {
         body.description = $('#descriptionEditor').summernote('code');
+        // Summernote leaves an empty editor as "<p><br></p>"; store that as
+        // empty so the lock falls back to generated copy rather than a blank.
+        const teaserHtml = $('#teaserDescriptionEditor').summernote('code');
+        body.teaserDescription = /^\s*(<p>(<br\s*\/?>)?<\/p>)?\s*$/i.test(teaserHtml) ? '' : teaserHtml;
     }
 
     // Convert local datetimes to UTC ISO strings using the selected timezone
@@ -1284,6 +1299,19 @@ $(document).ready(function () {
             { title: 'Heading 3', tag: 'h3', className: '', value: 'h3' },
             { title: 'Heading 4', tag: 'h4', className: '', value: 'h4' },
             { title: 'Quote', tag: 'blockquote', className: 'blockquote', value: 'blockquote' },
+        ],
+    });
+
+    // The teaser is published copy in its own right (it is what a non-member
+    // reads on the site and in Discord), so it gets rich text too -- a lighter
+    // toolbar, since it should stay short.
+    $('#teaserDescriptionEditor').summernote({
+        height: 140,
+        toolbar: [
+            ['font', ['bold', 'italic', 'underline']],
+            ['para', ['ul', 'ol']],
+            ['insert', ['link']],
+            ['view', ['codeview']],
         ],
     });
 });

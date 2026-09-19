@@ -355,6 +355,20 @@
                                       <button type="submit" class="btn btn-sm btn-outline-secondary" title="Reset to template amount"><i class="fa-solid fa-rotate-left"></i></button>
                                     </form>
                                   <% } %>
+                                  <%#
+                                    Standing items had no delete control at all, so the only
+                                    removable rows were one-offs -- the route below has always
+                                    existed, it just was not reachable from the table.
+                                    The label goes in a data attribute rather than into an
+                                    inline confirm() string, so an apostrophe in a line item
+                                    name cannot break the handler.
+                                  %>
+                                  <form method="post" action="/dashboard/finance/budget/<%= b.budgetId %>/delete" class="d-inline js-delete-budget-item"
+                                        data-label="<%= b.label || 'this item' %>">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete standing budget item">
+                                      <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                  </form>
                                 <% } %>
                               </div>
                             </td>
@@ -948,6 +962,22 @@
       document.getElementById('editAccountOpening').value = btn.dataset.opening || '0.00';
       document.getElementById('editAccountNotes').value = btn.dataset.notes || '';
       document.getElementById('editAccountActive').checked = btn.dataset.active === '1';
+    });
+
+    // Deleting a standing item is not scoped to the month you are looking at:
+    // it drops the line from every month, past ones included, and cascades
+    // away any per-month overrides. Say so, rather than asking "Delete?".
+    document.querySelectorAll('.js-delete-budget-item').forEach(function (form) {
+      form.addEventListener('submit', function (e) {
+        var label = form.dataset.label || 'this item';
+        var gap = String.fromCharCode(10, 10);
+        var ok = confirm(
+          'Delete "' + label + '" from the operations budget?' + gap +
+          'This removes the line from every month, including past months, and ' +
+          'discards any per-month overrides for it. It cannot be undone.'
+        );
+        if (!ok) e.preventDefault();
+      });
     });
   </script>
 <% } %>

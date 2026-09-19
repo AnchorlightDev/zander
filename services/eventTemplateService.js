@@ -63,6 +63,7 @@ export async function createTemplate(data, creatorId) {
     data: {
       title: data.title,
       description: data.description || null,
+      teaserDescription: data.teaserDescription || null,
       defaultStartTime: data.defaultStartTime || null,
       defaultEndTime: data.defaultEndTime || null,
       defaultDurationMins: data.defaultDurationMins || null,
@@ -130,6 +131,7 @@ export async function updateTemplate(templateId, data, actorId) {
 
   if (data.title !== undefined) updateData.title = data.title;
   if (data.description !== undefined) updateData.description = data.description;
+  if (data.teaserDescription !== undefined) updateData.teaserDescription = data.teaserDescription;
   if (data.defaultStartTime !== undefined) updateData.defaultStartTime = data.defaultStartTime;
   if (data.defaultEndTime !== undefined) updateData.defaultEndTime = data.defaultEndTime;
   if (data.defaultDurationMins !== undefined) updateData.defaultDurationMins = data.defaultDurationMins;
@@ -237,6 +239,7 @@ export async function generateDraftFromTemplate(template, targetDate, actorId = 
   const eventData = {
     title: template.title,
     description: template.description,
+    teaserDescription: template.teaserDescription,
     eventType: "standard",
     startAt: startAt.toISOString(),
     endAt: endAt.toISOString(),

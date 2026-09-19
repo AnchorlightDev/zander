@@ -166,6 +166,18 @@
                             </div>
                             <% } %>
 
+
+                                <div class="mt-3">
+                                    <label class="form-label fw-semibold" for="teaserDescriptionInput">Teaser description</label>
+                                    <textarea class="form-control" id="teaserDescriptionInput" name="teaserDescription" rows="4"
+                                              placeholder="What everyone else sees instead of the full description."><%= tmpl.teaserDescription || '' %></textarea>
+                                    <small class="text-muted d-block mt-1">
+                                        Shown to anyone without the rank &mdash; on the website, in the Discord announcement
+                                        and on the Discord scheduled event. Say what the event is and why the rank is worth
+                                        having; leave it empty to fall back to a generated line naming the rank.
+                                    </small>
+                                </div>
+
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="tmplTeaserPublicCheck"
                                        <%= tmpl.teaserPublic === false ? '' : 'checked' %>>

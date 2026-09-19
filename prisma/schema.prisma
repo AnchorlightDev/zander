@@ -630,6 +630,10 @@ model events {
   title               String    @db.VarChar(255)
   slug                String    @unique @db.VarChar(300)
   description         String?   @db.LongText
+  /// Shown in place of `description` to anyone who cannot see a rank-locked
+  /// event -- website, Discord embed and Discord scheduled event alike.
+  /// NULL falls back to generated lock copy.
+  teaserDescription   String?   @db.LongText
   eventType           String    @default("once") @db.VarChar(32)
   startAt             DateTime
   endAt               DateTime
@@ -691,6 +695,7 @@ model event_templates {
   templateId          Int       @id @default(autoincrement())
   title               String    @db.VarChar(255)
   description         String?   @db.LongText
+  teaserDescription   String?   @db.LongText
   defaultStartTime    String?   @db.VarChar(8)
   defaultEndTime      String?   @db.VarChar(8)
   defaultDurationMins Int?

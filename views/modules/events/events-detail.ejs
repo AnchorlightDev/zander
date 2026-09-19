@@ -110,7 +110,17 @@
                         <i class="fas fa-lock fa-lg"></i>
                     </div>
                     <h5 class="fw-bold mb-2"><%= eventLock.heading %></h5>
+                    <%#
+                        redactLockedEvent swaps the gated description for the
+                        organiser's teaser copy when one was written, so prefer
+                        it here and keep the generated line as the fallback.
+                        Sanitized on write in eventService, same as description.
+                    %>
+                    <% if (event.description) { %>
+                    <div class="event-description text-start mx-auto" style="max-width:52ch;"><%- event.description %></div>
+                    <% } else { %>
                     <p class="text-muted mb-0 mx-auto" style="max-width:46ch;"><%= eventLock.body %></p>
+                    <% } %>
                     <% if (eventLock.ctaUrl) { %>
                     <a href="<%= eventLock.ctaUrl %>" class="btn <%= eventLock.supporter ? 'btn-success' : 'btn-primary' %> mt-3">
                         <% if (eventLock.supporter) { %><i class="fas fa-heart me-2"></i><% } %><%= eventLock.ctaLabel %>
