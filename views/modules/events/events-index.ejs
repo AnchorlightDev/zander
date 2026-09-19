@@ -19,12 +19,15 @@
     box-shadow: 0 8px 24px rgba(0,0,0,.12) !important;
 }
 .event-banner-img {
-    height: 180px;
+    /* Cards in a row share a width, so a ratio keeps them uniform while still
+       adapting to the viewport -- a fixed 180px cropped hard on a phone. */
+    width: 100%;
+    aspect-ratio: 16 / 9;
     object-fit: cover;
     border-radius: .375rem .375rem 0 0;
 }
 .event-banner-placeholder {
-    height: 180px;
+    aspect-ratio: 16 / 9;
     background: linear-gradient(135deg, var(--bs-primary) 0%, #1a3a6e 100%);
     border-radius: .375rem .375rem 0 0;
     display: flex;

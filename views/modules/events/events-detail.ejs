@@ -16,15 +16,29 @@
 </div>
 <% } %>
 
+<%#
+    Banner hero.
+
+    Rendered as a real <img> at its natural aspect ratio rather than a
+    fixed-height background.  The old version was height:320px with
+    background-size:cover, which on a phone cropped a wide banner down to its
+    centre fifth, and on a wide desktop cut a third off a 4:1 banner.  Letting
+    the image keep its own ratio means whatever an organiser uploads is shown
+    whole, at any width.
+
+    The title overlays the image only from md up, where there is vertical room
+    for it; on a phone the banner would be too short to read a title over, so
+    it sits underneath in normal flow.
+%>
 <% if (event.bannerUrl) { %>
-<div style="background:url('<%= event.bannerUrl %>') center/cover no-repeat;height:320px;position:relative;overflow:hidden;">
-    <div style="position:absolute;inset:0;background:linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.85) 100%);"></div>
-    <div class="container h-100 d-flex align-items-end pb-4 position-relative">
-        <div>
+<div class="event-hero">
+    <img src="<%= event.bannerUrl %>" alt="<%= event.title %>" class="event-hero-img">
+    <div class="event-hero-caption">
+        <div class="container">
             <% if (event.featured) { %><span class="badge bg-warning text-dark mb-2"><i class="fas fa-star me-1"></i>Featured</span><% } %>
             <% if (eventLock) { %><span class="badge <%= eventLock.supporter ? 'bg-success' : 'bg-secondary' %> mb-2 ms-1"><i class="fas fa-lock me-1"></i><%= eventLock.heading %></span><% } %>
             <% if (event.featured || eventLock) { %><br><% } %>
-            <h1 class="fw-bold mb-0" style="color:#ffffff;font-size:clamp(1.5rem, 4vw, 2.5rem);text-shadow:0 2px 12px rgba(0,0,0,0.8);"><%= event.title %></h1>
+            <h1 class="event-hero-title fw-bold mb-0"><%= event.title %></h1>
         </div>
     </div>
 </div>
@@ -33,6 +47,36 @@
 <% } %>
 
 <style>
+.event-hero { position: relative; background: #1c2f53; }
+.event-hero-img {
+    display: block;
+    width: 100%;
+    height: auto;              /* natural ratio -- never crops */
+    /* Only bites on very wide screens, where a 4:1 banner would otherwise
+       grow past the fold before any of the event detail is visible. */
+    max-height: 460px;
+    object-fit: cover;
+    object-position: center;
+}
+.event-hero-caption { padding: 1rem 0; }
+.event-hero-title { font-size: clamp(1.35rem, 5vw, 2.5rem); }
+
+@media (min-width: 768px) {
+    .event-hero-caption {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding-bottom: 1.5rem;
+        background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.85) 100%);
+        padding-top: 4rem;
+    }
+    .event-hero-title {
+        color: #ffffff;
+        text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+    }
+}
+
 .event-description img { max-width: 100%; }
 .event-description p:last-child { margin-bottom: 0; }
 .info-row { display: flex; gap: .75rem; padding: .6rem 0; border-bottom: 1px solid var(--bs-border-color); }
