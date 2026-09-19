@@ -1,5 +1,5 @@
 import { Command, RegisterBehavior } from "@sapphire/framework";
-import { Colors, EmbedBuilder } from "discord.js";
+import { Colors, EmbedBuilder, MessageFlags } from "discord.js";
 import moment from "moment";
 import {
   getProfilePicture,
@@ -53,7 +53,7 @@ export class ProfileCommand extends Command {
       return interaction.reply({
         content:
           "Please provide either a Minecraft username or a Discord user/tag to look up a profile.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 

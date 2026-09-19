@@ -6,6 +6,7 @@ import {
   Colors,
   ComponentType,
   EmbedBuilder,
+  MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
   WebhookClient,
@@ -673,7 +674,7 @@ export class PunishCommand extends Command {
     const subcommand = interaction.options.getSubcommand();
 
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     } catch (error) {
       console.error("Failed to defer punish command reply:", error);
       return;

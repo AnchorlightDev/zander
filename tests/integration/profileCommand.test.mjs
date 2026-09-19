@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { MessageFlags } from "discord.js";
 
 // Mock @sapphire/framework so Command is a plain base class
 vi.mock("@sapphire/framework", () => ({
@@ -91,7 +92,7 @@ describe("profile command", () => {
     const interaction = buildInteraction();
     await cmd.chatInputRun(interaction);
     expect(interaction.reply).toHaveBeenCalledWith(
-      expect.objectContaining({ ephemeral: true, content: expect.stringContaining("Please provide") })
+      expect.objectContaining({ flags: MessageFlags.Ephemeral, content: expect.stringContaining("Please provide") })
     );
     // Nothing to look up, so it must answer before deferring.
     expect(interaction.deferReply).not.toHaveBeenCalled();

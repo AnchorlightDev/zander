@@ -11,18 +11,22 @@
                     <a href="/dashboard/events/list" class="btn btn-sm btn-outline-secondary">
                         <i class="fas fa-list fa-fw me-1"></i>List View
                     </a>
+                    <% if (hasReviewPermission) { %>
                     <a href="/dashboard/events/review" class="btn btn-sm btn-outline-warning" id="reviewQueueBtn">
                         <i class="fas fa-clock fa-fw me-1"></i>Review Queue
                     </a>
+                    <% } %>
                     <%- include("../../partials/documentationLink.ejs", {
                         doclink: "https://modularsoft.org/docs/products/zander/features/events/"
                     }) %>
                     <a href="/dashboard/events/templates" class="btn btn-sm btn-outline-info">
                         <i class="fas fa-copy fa-fw me-1"></i>Templates
                     </a>
+                    <% if (hasEditPermission) { %>
                     <a href="/dashboard/events/create" class="btn btn-sm btn-primary">
                         <i class="fas fa-plus fa-fw me-1"></i>New Event
                     </a>
+                    <% } %>
                 </div>
             </div>
       <%- include("../../admin/_notices.ejs") %>
@@ -101,7 +105,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     calendar.render();
 
-    // Update review queue badge
+    // Update review queue badge.  Reviewers only: /api/events/pending-review
+    // requires zander.web.events.review, so firing it for a view-only user is
+    // a guaranteed 403 (and an [apiAuth] denial log line) on every page load.
+    <% if (hasReviewPermission) { %>
     fetch('/api/events/pending-review', {})
         .then(r => r.json())
         .then(data => {
@@ -110,5 +117,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 btn.innerHTML = `<i class="fas fa-clock fa-fw me-1"></i>Review Queue <span class="badge bg-danger">${data.data.length}</span>`;
             }
         }).catch(() => {});
+    <% } %>
 });
 </script>

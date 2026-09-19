@@ -1,5 +1,5 @@
 import { Command, RegisterBehavior } from "@sapphire/framework";
-import { Colors, EmbedBuilder } from "discord.js";
+import { Colors, EmbedBuilder, MessageFlags } from "discord.js";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const config = require("../config.json");
@@ -54,13 +54,13 @@ export class StaffHelpCommand extends Command {
       return interaction.reply({
         content:
           "We were unable to send your assistance request. Please try again later.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     interaction.reply({
       embeds: [staffAssistanceConfirmed],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }

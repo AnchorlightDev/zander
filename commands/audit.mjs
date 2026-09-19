@@ -1,5 +1,5 @@
 import { Command } from "@sapphire/framework";
-import { Colors, EmbedBuilder } from "discord.js";
+import { Colors, EmbedBuilder, MessageFlags } from "discord.js";
 import fetch from "node-fetch";
 import { resolveDiscordUserId } from "../lib/discord/resolveDiscordMember.mjs";
 import { hasPermission } from "../lib/discord/permissions.mjs";
@@ -53,7 +53,7 @@ export class AuditCommand extends Command {
     const discordTag = interaction.options.getString("discord_tag");
 
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     } catch (error) {
       console.error("Failed to defer audit command reply", error);
       return;

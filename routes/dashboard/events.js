@@ -108,6 +108,10 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
       getWebAnnouncement(),
     ]);
 
+    const userPerms = req.session.user?.permissions || [];
+    const hasReviewPermission = hasPermissionNode(userPerms, "zander.web.events.review");
+    const hasEditPermission = hasPermissionNode(userPerms, "zander.web.events.edit") || hasReviewPermission;
+
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-calendar", {
         pageTitle: "Dashboard - Events Calendar",
@@ -116,6 +120,8 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
         req,
         globalImage,
         announcementWeb,
+        hasReviewPermission,
+        hasEditPermission,
       })
     );
   });

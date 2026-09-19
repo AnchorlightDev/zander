@@ -1,5 +1,5 @@
 import { Command, RegisterBehavior } from "@sapphire/framework";
-import { Colors, EmbedBuilder } from "discord.js";
+import { Colors, EmbedBuilder, MessageFlags } from "discord.js";
 import fetch from "node-fetch";
 import { UserGetter } from "../controllers/userController.js";
 import { createRequire } from "module";
@@ -47,7 +47,7 @@ export class ReportCommand extends Command {
 
       return interaction.reply({
         embeds: [errorEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -69,7 +69,7 @@ export class ReportCommand extends Command {
 
       return interaction.reply({
         embeds: [errorEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -99,7 +99,7 @@ export class ReportCommand extends Command {
 
       interaction.reply({
         embeds: [errorEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     } else {
       const successEmbed = new EmbedBuilder()
@@ -111,7 +111,7 @@ export class ReportCommand extends Command {
 
       interaction.reply({
         embeds: [successEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   }

@@ -1,5 +1,5 @@
 import { Listener } from "@sapphire/framework";
-import { RESTJSONErrorCodes } from "discord.js";
+import { MessageFlags, RESTJSONErrorCodes } from "discord.js";
 import {
   handleTicketClose,
   handleTicketCloseCancel,
@@ -71,12 +71,12 @@ export class SupportTicketInteractionsListener extends Listener {
         if (interaction.deferred || interaction.replied) {
           await interaction.followUp({
             content: "Something went wrong while processing that ticket action.",
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         } else {
           await interaction.reply({
             content: "Something went wrong while processing that ticket action.",
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
       } catch (replyError) {

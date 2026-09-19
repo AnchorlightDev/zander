@@ -1,5 +1,5 @@
 import { Command } from "@sapphire/framework";
-import { Colors, EmbedBuilder, SlashCommandBuilder } from "discord.js";
+import { Colors, EmbedBuilder, MessageFlags, SlashCommandBuilder } from "discord.js";
 import { hasPermission } from "../lib/discord/permissions.mjs";
 import { describeRankRoleSync, syncMemberRankRoles, stripAllTrackedRankRoles } from "../lib/discord/rankRoleSync.mjs";
 import { UserGetter, getUserPermissions, linkDiscordAccount, mergePlaceholderUser, resolveDiscordLinkConflict, unlinkDiscordAccount } from "../controllers/userController.js";
@@ -34,7 +34,7 @@ export class ForceLinkCommand extends Command {
   }
 
   async chatInputRun(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     // Permission gate — executor must be linked and have the node
     const userGetter = new UserGetter();

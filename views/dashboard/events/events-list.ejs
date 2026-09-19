@@ -11,9 +11,11 @@
                     <a href="/dashboard/events" class="btn btn-sm btn-outline-secondary">
                         <i class="fas fa-calendar fa-fw me-1"></i>Calendar
                     </a>
+                    <% if (hasReviewPermission) { %>
                     <a href="/dashboard/events/review" class="btn btn-sm btn-outline-warning">
                         <i class="fas fa-clock fa-fw me-1"></i>Review Queue
                     </a>
+                    <% } %>
                     <% if (hasEditPermission) { %>
                     <a href="/dashboard/events/create" class="btn btn-sm btn-primary">
                         <i class="fas fa-plus fa-fw me-1"></i>New Event

@@ -5,6 +5,7 @@ import {
   ButtonStyle,
   Colors,
   EmbedBuilder,
+  MessageFlags,
 } from "discord.js";
 import fetch from "node-fetch";
 import {
@@ -204,7 +205,7 @@ export class BridgeCommand extends Command {
 
       return interaction.reply({
         embeds: [errorEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -222,7 +223,7 @@ export class BridgeCommand extends Command {
 
       return interaction.reply({
         embeds: [errorEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -237,7 +238,7 @@ export class BridgeCommand extends Command {
 
       return interaction.reply({
         embeds: [errorEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -278,7 +279,7 @@ export class BridgeCommand extends Command {
       const limit = interaction.options.getInteger("limit") || 10;
       const claim = interaction.options.getBoolean("claim") || false;
 
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const statusMap = {
         pending: { label: "Pending", color: Colors.Blurple },
@@ -471,7 +472,7 @@ export class BridgeCommand extends Command {
           actioningUser: userGetData.userId,
         };
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const response = await postBridge(
           "/api/bridge/processor/command/add",
@@ -512,7 +513,7 @@ export class BridgeCommand extends Command {
           return interaction.editReply({ embeds: [errorEmbed] });
         }
 
-        return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       }
     }
 
@@ -522,7 +523,7 @@ export class BridgeCommand extends Command {
       try {
         const metadata = metadataFromOption("metadata");
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const payload = {
           routineSlug,
@@ -575,7 +576,7 @@ export class BridgeCommand extends Command {
           return interaction.editReply({ embeds: [errorEmbed] });
         }
 
-        return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       }
     }
 
@@ -588,7 +589,7 @@ export class BridgeCommand extends Command {
       try {
         const metadata = metadataFromOption("metadata");
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const payload = {
           status,
@@ -635,7 +636,7 @@ export class BridgeCommand extends Command {
           return interaction.editReply({ embeds: [errorEmbed] });
         }
 
-        return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       }
     }
 
@@ -643,7 +644,7 @@ export class BridgeCommand extends Command {
       const taskId = interaction.options.getInteger("taskid");
 
       try {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const payload = {
           actioningUser: userGetData.userId,
@@ -675,7 +676,7 @@ export class BridgeCommand extends Command {
           return interaction.editReply({ embeds: [errorEmbed] });
         }
 
-        return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       }
     }
 
@@ -720,7 +721,7 @@ export class BridgeCommand extends Command {
         await interaction.reply({
           embeds: [confirmationEmbed],
           components: [actionRow],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
 
         const filter = (i) =>
@@ -808,7 +809,7 @@ export class BridgeCommand extends Command {
           )
           .setColor(Colors.Red);
 
-        return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       }
     }
   }

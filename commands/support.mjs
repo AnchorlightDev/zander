@@ -3,6 +3,7 @@ const require = createRequire(import.meta.url);
 const config = require("../config.json");
 import { Command } from "@sapphire/framework";
 import {
+  MessageFlags,
   SlashCommandBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -205,7 +206,7 @@ export class SupportCommand extends Command {
         if (interaction.deferred || interaction.replied) {
           await interaction.editReply({ content: "Something went wrong while processing that command." });
         } else {
-          await interaction.reply({ content: "Something went wrong while processing that command.", ephemeral: true });
+          await interaction.reply({ content: "Something went wrong while processing that command.", flags: MessageFlags.Ephemeral });
         }
       } catch (replyError) {
         console.error("ticket command: failed to send error reply", replyError);
@@ -231,11 +232,11 @@ export class SupportCommand extends Command {
       if (!userOption && !roleOptions.length) {
         return interaction.reply({
           content: "Provide a user or role to add to this ticket.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const ticketDetails = await getTicketDetailsByChannel(interaction.channel.id);
 
@@ -407,11 +408,11 @@ export class SupportCommand extends Command {
       if (!userOption && !roleOptions.length) {
         return interaction.reply({
           content: "Provide a user or role to remove from this ticket.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const ticketDetails = await getTicketDetailsByChannel(interaction.channel.id);
 
@@ -508,7 +509,7 @@ export class SupportCommand extends Command {
       if (!ticketDetails) {
         return interaction.reply({
           content: "This channel is not linked to a ticket.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -521,11 +522,11 @@ export class SupportCommand extends Command {
       if (!hasPermission) {
         return interaction.reply({
           content: "You need support staff permissions to update ticket status.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const username = interaction.user.tag;
       const staffUserId = await getUserIdByDiscordId(interaction.user.id);
@@ -594,7 +595,7 @@ export class SupportCommand extends Command {
       if (!ticketDetails) {
         return interaction.reply({
           content: "This channel is not linked to a ticket.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -608,11 +609,11 @@ export class SupportCommand extends Command {
       if (!isStaff && !isOwner) {
         return interaction.reply({
           content: "Only ticket staff or the ticket owner can close this ticket.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const username = interaction.user.tag;
       const actorUserId = await getUserIdByDiscordId(interaction.user.id);
@@ -661,7 +662,7 @@ export class SupportCommand extends Command {
         if (!deleted) {
           await interaction.followUp({
             content: "The ticket was closed, but the channel could not be deleted. Staff can retry the cleanup.",
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           }).catch(() => {});
         }
       } catch (closeError) {
@@ -675,7 +676,7 @@ export class SupportCommand extends Command {
       if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageChannels)) {
         return interaction.reply({
           content: "You need Manage Channels permission to create a manual ticket.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -702,11 +703,11 @@ export class SupportCommand extends Command {
       if (!ownerUserId) {
         return interaction.reply({
           content: "Unable to link your account to a ticket record. Please try again.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       let targetUserId = await getUserIdByDiscordId(targetUser.id);
 
@@ -852,7 +853,7 @@ export class SupportCommand extends Command {
       if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageChannels)) {
         return interaction.reply({
           content: "You need Manage Channels permission to post a ticket panel.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -924,7 +925,7 @@ export class SupportCommand extends Command {
         content: `Posted a Create Ticket panel in ${targetChannel} using the ${
           ticketCategory ? `\`${ticketCategory.name}\`` : "default"
         } ticket category.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   }
