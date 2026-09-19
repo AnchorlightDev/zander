@@ -101,25 +101,54 @@
                                     <td data-label="Actions">
                                         <%
                                             var canEditThis = hasEditPermission || hasReviewPermission;
+                                            // The three separate Edit blocks this replaces all pointed at
+                                            // the same href; only the label and the gating differed.
+                                            var canEditNow =
+                                                (canEditThis && ['draft','rejected','published'].includes(ev.status)) ||
+                                                (hasReviewPermission && ['pending_review','approved'].includes(ev.status));
+                                            var editLabel = ev.status === 'published' ? 'Edit Live' : 'Edit';
                                         %>
-                                        <div class="d-flex flex-wrap gap-1">
-                                            <a href="/dashboard/events/view?eventId=<%= ev.eventId %>" class="btn btn-xs btn-outline-secondary">View</a>
-                                            <% if (canEditThis && ['draft','rejected'].includes(ev.status)) { %>
-                                                <a href="/dashboard/events/edit?eventId=<%= ev.eventId %>" class="btn btn-xs btn-warning">Edit</a>
+                                        <div class="d-flex gap-1 justify-content-end">
+                                            <% if (canEditNow) { %>
+                                                <a href="/dashboard/events/edit?eventId=<%= ev.eventId %>" class="btn btn-xs btn-warning"><%= editLabel %></a>
                                             <% } %>
-                                            <% if (hasReviewPermission && ['pending_review','approved'].includes(ev.status)) { %>
-                                                <a href="/dashboard/events/edit?eventId=<%= ev.eventId %>" class="btn btn-xs btn-warning">Edit</a>
-                                            <% } %>
-                                            <% if (ev.status === 'published') { %>
-                                                <% if (canEditThis) { %>
-                                                    <a href="/dashboard/events/edit?eventId=<%= ev.eventId %>" class="btn btn-xs btn-warning">Edit Live</a>
-                                                <% } %>
-                                                <a href="/events/<%= ev.slug %>" target="_blank" class="btn btn-xs btn-outline-success">Public</a>
-                                            <% } %>
-                                            <button type="button" class="btn btn-xs btn-outline-secondary btn-duplicate-event" data-event-id="<%= ev.eventId %>" data-event-title="<%= ev.title %>">Duplicate</button>
-                                            <% if (canEditThis) { %>
-                                                <button type="button" class="btn btn-xs btn-outline-danger btn-delete-event" data-event-id="<%= ev.eventId %>" data-event-title="<%= ev.title %>">Delete</button>
-                                            <% } %>
+                                            <div class="dropdown">
+                                                <button class="btn btn-xs btn-outline-secondary dropdown-toggle js-row-actions" type="button"
+                                                        data-bs-toggle="dropdown" aria-expanded="false"
+                                                        aria-label="Actions for <%= ev.title %>">
+                                                    <i class="fas fa-ellipsis-h"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                    <li>
+                                                        <a class="dropdown-item" href="/dashboard/events/view?eventId=<%= ev.eventId %>">
+                                                            <i class="fas fa-eye fa-fw me-2 text-secondary"></i>View
+                                                        </a>
+                                                    </li>
+                                                    <% if (ev.status === 'published') { %>
+                                                    <li>
+                                                        <a class="dropdown-item" href="/events/<%= ev.slug %>" target="_blank">
+                                                            <i class="fas fa-external-link-alt fa-fw me-2 text-success"></i>Public Page
+                                                        </a>
+                                                    </li>
+                                                    <% } %>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <button type="button" class="dropdown-item btn-duplicate-event"
+                                                                data-event-id="<%= ev.eventId %>" data-event-title="<%= ev.title %>">
+                                                            <i class="fas fa-copy fa-fw me-2 text-secondary"></i>Duplicate
+                                                        </button>
+                                                    </li>
+                                                    <% if (canEditThis) { %>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <button type="button" class="dropdown-item text-danger btn-delete-event"
+                                                                data-event-id="<%= ev.eventId %>" data-event-title="<%= ev.title %>">
+                                                            <i class="fas fa-trash fa-fw me-2"></i>Delete
+                                                        </button>
+                                                    </li>
+                                                    <% } %>
+                                                </ul>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -153,8 +182,27 @@ document.querySelectorAll('.js-datetime').forEach(el => {
     }) : (el.dataset.fallback || '');
 });
 
+// The table lives inside .table-responsive (overflow-x: auto), which clips a
+// dropdown menu to the scroll box -- the menu on the last rows would be cut
+// off or unreachable. Popper's "fixed" strategy takes the menu out of that
+// clipping context. Bootstrap only accepts this through popperConfig, so the
+// instances are created up front rather than lazily on first click.
+// Guarded: the duplicate and delete handlers are registered below this, so an
+// exception here (Bootstrap's CDN blocked, say) would silently take them with
+// it. The menus still open without the fixed strategy, just clipped.
+if (window.bootstrap?.Dropdown) {
+    document.querySelectorAll('.js-row-actions').forEach(el => {
+        bootstrap.Dropdown.getOrCreateInstance(el, {
+            popperConfig: { strategy: 'fixed' },
+        });
+    });
+}
+
 document.querySelectorAll('.btn-duplicate-event').forEach(btn => {
     btn.addEventListener('click', async () => {
+        // Keep the markup: these are dropdown items with an icon now, and
+        // textContent would strip it for good on the failure path.
+        const original = btn.innerHTML;
         btn.disabled = true;
         btn.textContent = '…';
         try {
@@ -170,12 +218,12 @@ document.querySelectorAll('.btn-duplicate-event').forEach(btn => {
             } else {
                 alert('Duplicate failed: ' + data.message);
                 btn.disabled = false;
-                btn.textContent = 'Duplicate';
+                btn.innerHTML = original;
             }
         } catch {
             alert('Duplicate failed. Please try again.');
             btn.disabled = false;
-            btn.textContent = 'Duplicate';
+            btn.innerHTML = original;
         }
     });
 });
@@ -184,6 +232,7 @@ document.querySelectorAll('.btn-delete-event').forEach(btn => {
     btn.addEventListener('click', async () => {
         const title = btn.dataset.eventTitle;
         if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+        const original = btn.innerHTML;
         btn.disabled = true;
         btn.textContent = '…';
         try {
@@ -199,12 +248,12 @@ document.querySelectorAll('.btn-delete-event').forEach(btn => {
             } else {
                 alert('Delete failed: ' + data.message);
                 btn.disabled = false;
-                btn.textContent = 'Delete';
+                btn.innerHTML = original;
             }
         } catch {
             alert('Delete failed. Please try again.');
             btn.disabled = false;
-            btn.textContent = 'Delete';
+            btn.innerHTML = original;
         }
     });
 });
