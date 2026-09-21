@@ -69,6 +69,14 @@ import("./cron/webstoreCommandSyncCron.js");
 import("./cron/badgeLuckpermsSyncCron.js");
 import("./cron/rankDiscordRoleSyncCron.js");
 import("./cron/shopItemIndexCron.js");
+// Meetings phase two. Each of these gates itself on its own
+// config.meetings.* key, per the convention for this folder.
+import("./cron/meetingTranscriptionCron.js");
+import("./cron/meetingNotificationCron.js");
+import("./cron/meetingDeadlineCron.js");
+import("./cron/meetingArchiveCron.js");
+import("./cron/meetingJanitorCron.js");
+import("./cron/meetingRetentionCron.js");
 
 //
 // Website Related

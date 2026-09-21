@@ -111,132 +111,132 @@ enum supportTickets_status {
 // =============================================================================
 
 model users {
-  userId                       Int                        @id @default(autoincrement())
-  uuid                         String                     @unique @db.VarChar(36)
-  username                     String                     @db.VarChar(16)
-  discordId                    String?                    @db.VarChar(32)
-  email                        String?                    @unique @db.VarChar(254)
-  password_hash                String?                    @db.VarChar(255)
-  email_verified               Boolean                    @default(false)
-  email_verified_at            DateTime?
-  joined                       DateTime                   @default(now())
-  profilePicture_type          users_profilePicture_type? @default(CRAFTATAR)
-  profilePicture_email         String?                    @db.VarChar(70)
-  account_registered           DateTime?
-  account_disabled             Boolean                    @default(false)
-  is_placeholder               Boolean                    @default(false)
-  social_aboutMe               String?                    @db.MediumText
-  social_interests             String?                    @db.VarChar(50)
-  social_discord               String?                    @db.VarChar(32)
-  social_steam                 String?                    @db.VarChar(100)
-  social_twitch                String?                    @db.VarChar(25)
-  social_youtube               String?                    @db.VarChar(100)
-  social_twitter_x             String?                    @db.VarChar(15)
-  social_instagram             String?                    @db.VarChar(30)
-  social_reddit                String?                    @db.VarChar(38)
-  social_spotify               String?                    @db.VarChar(100)
-  audit_lastDiscordMessage     DateTime?
-  audit_lastDiscordVoice       DateTime?
-  audit_lastMinecraftLogin     DateTime?
-  audit_lastMinecraftMessage   DateTime?
+  userId                        Int                        @id @default(autoincrement())
+  uuid                          String                     @unique @db.VarChar(36)
+  username                      String                     @db.VarChar(16)
+  discordId                     String?                    @db.VarChar(32)
+  email                         String?                    @unique @db.VarChar(254)
+  password_hash                 String?                    @db.VarChar(255)
+  email_verified                Boolean                    @default(false)
+  email_verified_at             DateTime?
+  joined                        DateTime                   @default(now())
+  profilePicture_type           users_profilePicture_type? @default(CRAFTATAR)
+  profilePicture_email          String?                    @db.VarChar(70)
+  account_registered            DateTime?
+  account_disabled              Boolean                    @default(false)
+  is_placeholder                Boolean                    @default(false)
+  social_aboutMe                String?                    @db.MediumText
+  social_interests              String?                    @db.VarChar(50)
+  social_discord                String?                    @db.VarChar(32)
+  social_steam                  String?                    @db.VarChar(100)
+  social_twitch                 String?                    @db.VarChar(25)
+  social_youtube                String?                    @db.VarChar(100)
+  social_twitter_x              String?                    @db.VarChar(15)
+  social_instagram              String?                    @db.VarChar(30)
+  social_reddit                 String?                    @db.VarChar(38)
+  social_spotify                String?                    @db.VarChar(100)
+  audit_lastDiscordMessage      DateTime?
+  audit_lastDiscordVoice        DateTime?
+  audit_lastMinecraftLogin      DateTime?
+  audit_lastMinecraftMessage    DateTime?
   audit_lastMinecraftPunishment DateTime?
-  audit_lastDiscordPunishment  DateTime?
-  audit_lastWebsiteLogin       DateTime?
+  audit_lastDiscordPunishment   DateTime?
+  audit_lastWebsiteLogin        DateTime?
 
-  emailVerifications           userEmailVerifications[]
-  passwordResets               userPasswordResets[]
+  emailVerifications userEmailVerifications[]
+  passwordResets     userPasswordResets[]
 
   @@index([username])
   @@index([discordId])
 }
 
 model userEmailVerifications {
-  verificationId Int      @id @default(autoincrement())
+  verificationId Int       @id @default(autoincrement())
   userId         Int
-  codeHash       String   @db.VarChar(255)
+  codeHash       String    @db.VarChar(255)
   expiresAt      DateTime
-  consumed       Boolean  @default(false)
-  createdAt      DateTime @default(now())
+  consumed       Boolean   @default(false)
+  createdAt      DateTime  @default(now())
   consumedAt     DateTime?
 
-  user           users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  user users @relation(fields: [userId], references: [userId], onDelete: Cascade)
 }
 
 model userPasswordResets {
-  resetId    Int      @id @default(autoincrement())
+  resetId    Int       @id @default(autoincrement())
   userId     Int
-  codeHash   String   @db.VarChar(255)
+  codeHash   String    @db.VarChar(255)
   expiresAt  DateTime
-  consumed   Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  consumed   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
   consumedAt DateTime?
 
-  user       users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  user users @relation(fields: [userId], references: [userId], onDelete: Cascade)
 }
 
 model userVerifyLink {
-  verifyId   Int       @id @default(autoincrement())
-  uuid       String    @unique @db.VarChar(36)
-  username   String    @db.Text
-  linkCode   String?   @db.VarChar(6)
+  verifyId   Int      @id @default(autoincrement())
+  uuid       String   @unique @db.VarChar(36)
+  username   String   @db.Text
+  linkCode   String?  @db.VarChar(6)
   codeExpiry DateTime
 }
 
 model forumCategories {
-  categoryId       Int               @id @default(autoincrement())
+  categoryId       Int      @id @default(autoincrement())
   parentCategoryId Int?
-  name             String            @db.VarChar(120)
-  slug             String            @unique @db.VarChar(150)
-  description      String?           @db.Text
-  position         Int               @default(0)
-  viewPermission   String?           @db.VarChar(150)
-  postPermission   String?           @db.VarChar(150)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  name             String   @db.VarChar(120)
+  slug             String   @unique @db.VarChar(150)
+  description      String?  @db.Text
+  position         Int      @default(0)
+  viewPermission   String?  @db.VarChar(150)
+  postPermission   String?  @db.VarChar(150)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  parent           forumCategories?  @relation("CategoryChildren", fields: [parentCategoryId], references: [categoryId], onDelete: SetNull)
-  children         forumCategories[] @relation("CategoryChildren")
-  discussions      forumDiscussions[]
+  parent      forumCategories?   @relation("CategoryChildren", fields: [parentCategoryId], references: [categoryId], onDelete: SetNull)
+  children    forumCategories[]  @relation("CategoryChildren")
+  discussions forumDiscussions[]
 }
 
 model forumDiscussions {
-  discussionId Int             @id @default(autoincrement())
+  discussionId Int      @id @default(autoincrement())
   categoryId   Int
-  title        String          @db.VarChar(200)
-  slug         String          @db.VarChar(200)
+  title        String   @db.VarChar(200)
+  slug         String   @db.VarChar(200)
   createdBy    Int
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  lastPostAt   DateTime        @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastPostAt   DateTime @default(now())
   lastPostBy   Int?
-  isLocked     Int             @default(0) @db.TinyInt
-  isSticky     Int             @default(0) @db.TinyInt
-  isArchived   Int             @default(0) @db.TinyInt
+  isLocked     Int      @default(0) @db.TinyInt
+  isSticky     Int      @default(0) @db.TinyInt
+  isArchived   Int      @default(0) @db.TinyInt
 
-  category     forumCategories @relation(fields: [categoryId], references: [categoryId])
-  posts        forumPosts[]
-  poll         forumPolls?
+  category forumCategories @relation(fields: [categoryId], references: [categoryId])
+  posts    forumPosts[]
+  poll     forumPolls?
 
   @@unique([categoryId, slug])
 }
 
 model forumPosts {
-  postId       Int                  @id @default(autoincrement())
-  discussionId Int
-  parentPostId Int?
-  userId       Int
+  postId        Int      @id @default(autoincrement())
+  discussionId  Int
+  parentPostId  Int?
+  userId        Int
   replyToPostId Int?
-  content      String               @db.MediumText
-  isOriginal   Int                  @default(0) @db.TinyInt
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
+  content       String   @db.MediumText
+  isOriginal    Int      @default(0) @db.TinyInt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  discussion   forumDiscussions     @relation(fields: [discussionId], references: [discussionId])
-  parentPost   forumPosts?          @relation("PostReplies", fields: [parentPostId], references: [postId])
-  replies      forumPosts[]         @relation("PostReplies")
-  revisions    forumPostRevisions[]
-  replyToPost  forumPosts?          @relation("ForumPostReplies", fields: [replyToPostId], references: [postId], onDelete: SetNull)
-  replyToReplies forumPosts[]       @relation("ForumPostReplies")
+  discussion     forumDiscussions     @relation(fields: [discussionId], references: [discussionId])
+  parentPost     forumPosts?          @relation("PostReplies", fields: [parentPostId], references: [postId])
+  replies        forumPosts[]         @relation("PostReplies")
+  revisions      forumPostRevisions[]
+  replyToPost    forumPosts?          @relation("ForumPostReplies", fields: [replyToPostId], references: [postId], onDelete: SetNull)
+  replyToReplies forumPosts[]         @relation("ForumPostReplies")
 
   @@index([replyToPostId])
 }
@@ -248,60 +248,60 @@ model forumPostRevisions {
   previousContent String   @db.MediumText
   createdAt       DateTime @default(now())
 
-  post            forumPosts @relation(fields: [postId], references: [postId])
+  post forumPosts @relation(fields: [postId], references: [postId])
 }
 
 model forumPolls {
-  pollId          Int               @id @default(autoincrement())
-  discussionId    Int               @unique
-  question        String            @db.VarChar(500)
-  allowMultiple   Boolean           @default(false)
-  allowVoteChange Boolean           @default(false)
-  showVoters      Boolean           @default(false)
+  pollId          Int       @id @default(autoincrement())
+  discussionId    Int       @unique
+  question        String    @db.VarChar(500)
+  allowMultiple   Boolean   @default(false)
+  allowVoteChange Boolean   @default(false)
+  showVoters      Boolean   @default(false)
   expiresAt       DateTime?
   createdByUserId Int
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  discussion      forumDiscussions  @relation(fields: [discussionId], references: [discussionId], onDelete: Cascade)
-  options         forumPollOptions[]
-  votes           forumPollVotes[]
+  discussion forumDiscussions   @relation(fields: [discussionId], references: [discussionId], onDelete: Cascade)
+  options    forumPollOptions[]
+  votes      forumPollVotes[]
 }
 
 model forumPollOptions {
-  optionId    Int              @id @default(autoincrement())
-  pollId      Int
-  label       String           @db.VarChar(300)
-  imageUrl    String?          @db.VarChar(2000)
-  orderIndex  Int              @default(0)
-  createdAt   DateTime         @default(now())
+  optionId   Int      @id @default(autoincrement())
+  pollId     Int
+  label      String   @db.VarChar(300)
+  imageUrl   String?  @db.VarChar(2000)
+  orderIndex Int      @default(0)
+  createdAt  DateTime @default(now())
 
-  poll        forumPolls       @relation(fields: [pollId], references: [pollId], onDelete: Cascade)
-  votes       forumPollVotes[]
+  poll  forumPolls       @relation(fields: [pollId], references: [pollId], onDelete: Cascade)
+  votes forumPollVotes[]
 
   @@index([pollId])
 }
 
 model forumPollVotes {
-  voteId    Int              @id @default(autoincrement())
+  voteId    Int      @id @default(autoincrement())
   pollId    Int
   optionId  Int
   userId    Int
-  createdAt DateTime         @default(now())
+  createdAt DateTime @default(now())
 
-  poll      forumPolls       @relation(fields: [pollId], references: [pollId], onDelete: Cascade)
-  option    forumPollOptions @relation(fields: [optionId], references: [optionId], onDelete: Cascade)
+  poll   forumPolls       @relation(fields: [pollId], references: [pollId], onDelete: Cascade)
+  option forumPollOptions @relation(fields: [optionId], references: [optionId], onDelete: Cascade)
 
   @@unique([pollId, optionId, userId])
   @@index([pollId, userId])
 }
 
 model servers {
-  serverId              Int                 @id @default(autoincrement())
-  displayName           String?             @db.Text
-  serverConnectionAddress String?           @db.Text
-  serverType            servers_serverType?
-  position              Int?
+  serverId                Int                 @id @default(autoincrement())
+  displayName             String?             @db.Text
+  serverConnectionAddress String?             @db.Text
+  serverType              servers_serverType?
+  position                Int?
 }
 
 model serverStatus {
@@ -320,31 +320,31 @@ model gameSessions {
 }
 
 model announcements {
-  announcementId     Int                  @id @default(autoincrement())
-  enabled            Boolean              @default(true)
-  announcementType   announcements_type?
-  body               String?              @db.Text
+  announcementId      Int                 @id @default(autoincrement())
+  enabled             Boolean             @default(true)
+  announcementType    announcements_type?
+  body                String?             @db.Text
   colourMessageFormat String?             @db.Text
-  link               String?              @db.Text
-  popupButtonText    String?              @db.VarChar(60)
-  popupImageUrl      String?              @db.Text
-  startDate          DateTime?
-  endDate            DateTime?
-  updatedDate        DateTime?
+  link                String?             @db.Text
+  popupButtonText     String?             @db.VarChar(60)
+  popupImageUrl       String?             @db.Text
+  startDate           DateTime?
+  endDate             DateTime?
+  updatedDate         DateTime?
 }
 
 model scheduledDiscordMessages {
-  scheduleId        Int                             @id @default(autoincrement())
-  channelId         String                          @db.VarChar(50)
-  embedTitle        String?                         @db.VarChar(255)
-  embedDescription  String?                         @db.Text
-  embedColor        String?                         @db.VarChar(20)
-  scheduledFor      DateTime
-  createdBy         Int
-  createdAt         DateTime                        @default(now())
-  sentAt            DateTime?
-  status            scheduledDiscordMessages_status @default(scheduled)
-  lastError         String?                         @db.Text
+  scheduleId       Int                             @id @default(autoincrement())
+  channelId        String                          @db.VarChar(50)
+  embedTitle       String?                         @db.VarChar(255)
+  embedDescription String?                         @db.Text
+  embedColor       String?                         @db.VarChar(20)
+  scheduledFor     DateTime
+  createdBy        Int
+  createdAt        DateTime                        @default(now())
+  sentAt           DateTime?
+  status           scheduledDiscordMessages_status @default(scheduled)
+  lastError        String?                         @db.Text
 }
 
 model applications {
@@ -359,13 +359,13 @@ model applications {
 }
 
 model reports {
-  reportId              Int      @id @default(autoincrement())
-  reporterId            Int
-  reportedUser          String   @db.VarChar(30)
-  reportReason          String   @db.VarChar(100)
-  reportReasonEvidence  String?  @db.MediumText
-  reportPlatform        String   @db.VarChar(10)
-  reportDateTime        DateTime @default(now())
+  reportId             Int      @id @default(autoincrement())
+  reporterId           Int
+  reportedUser         String   @db.VarChar(30)
+  reportReason         String   @db.VarChar(100)
+  reportReasonEvidence String?  @db.MediumText
+  reportPlatform       String   @db.VarChar(10)
+  reportDateTime       DateTime @default(now())
 }
 
 model vault {
@@ -400,128 +400,128 @@ model executorTasks {
 }
 
 model executorRoutines {
-  executorRoutineId Int                    @id @default(autoincrement())
-  routineSlug       String                 @unique @db.VarChar(64)
-  displayName       String?                @db.VarChar(120)
-  description       String?                @db.Text
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
+  executorRoutineId Int      @id @default(autoincrement())
+  routineSlug       String   @unique @db.VarChar(64)
+  displayName       String?  @db.VarChar(120)
+  description       String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  steps             executorRoutineSteps[]
+  steps executorRoutineSteps[]
 }
 
 model executorRoutineSteps {
-  executorRoutineStepId Int              @id @default(autoincrement())
+  executorRoutineStepId Int      @id @default(autoincrement())
   executorRoutineId     Int
-  stepOrder             Int              @default(0)
-  slug                  String           @db.VarChar(64)
-  command               String           @db.Text
-  metadata              String?          @db.Text
-  createdAt             DateTime         @default(now())
+  stepOrder             Int      @default(0)
+  slug                  String   @db.VarChar(64)
+  command               String   @db.Text
+  metadata              String?  @db.Text
+  createdAt             DateTime @default(now())
 
-  routine               executorRoutines @relation(fields: [executorRoutineId], references: [executorRoutineId])
+  routine executorRoutines @relation(fields: [executorRoutineId], references: [executorRoutineId])
 }
 
 model logs {
-  logId           Int      @id @default(autoincrement())
-  creatorId       Int
-  logFeature      String?  @db.VarChar(30)
-  logType         String?  @db.VarChar(30)
-  description     String?  @db.Text
+  logId            Int      @id @default(autoincrement())
+  creatorId        Int
+  logFeature       String?  @db.VarChar(30)
+  logType          String?  @db.VarChar(30)
+  description      String?  @db.Text
   actionedDateTime DateTime @default(now())
 }
 
 model discord_punishments {
-  id                     Int                            @id @default(autoincrement())
+  id                     Int                           @id @default(autoincrement())
   type                   discord_punishments_type
-  platform               String                         @default("DISCORD") @db.VarChar(16)
-  target_discord_user_id String?                        @db.VarChar(24)
-  target_discord_tag     String?                        @db.VarChar(100)
+  platform               String                        @default("DISCORD") @db.VarChar(16)
+  target_discord_user_id String?                       @db.VarChar(24)
+  target_discord_tag     String?                       @db.VarChar(100)
   target_player_id       Int?
-  actor_discord_user_id  String?                        @db.VarChar(24)
+  actor_discord_user_id  String?                       @db.VarChar(24)
   actor_player_id        Int?
-  actor_name_snapshot    String?                        @db.VarChar(100)
-  reason                 String                         @db.Text
-  created_at             DateTime                       @default(now())
+  actor_name_snapshot    String?                       @db.VarChar(100)
+  reason                 String                        @db.Text
+  created_at             DateTime                      @default(now())
   expires_at             DateTime?
   lifted_at              DateTime?
-  status                 discord_punishments_status     @default(ACTIVE)
+  status                 discord_punishments_status    @default(ACTIVE)
   appeal_id              Int?
   context                Json?
-  dm_status              discord_punishments_dm_status  @default(NOT_APPLICABLE)
+  dm_status              discord_punishments_dm_status @default(NOT_APPLICABLE)
 
-  appeals                discord_punishment_appeals[]
+  appeals discord_punishment_appeals[]
 }
 
 model discord_punishment_appeals {
-  id                     Int                                @id @default(autoincrement())
-  punishment_id          Int
-  discord_user_id        String                             @db.VarChar(24)
-  appeal_reason          String                             @db.Text
-  status                 discord_punishment_appeals_status  @default(PENDING)
-  reviewer_discord_user_id String?                          @db.VarChar(24)
-  reviewer_notes         String?                            @db.Text
-  created_at             DateTime                           @default(now())
-  reviewed_at            DateTime?
+  id                       Int                               @id @default(autoincrement())
+  punishment_id            Int
+  discord_user_id          String                            @db.VarChar(24)
+  appeal_reason            String                            @db.Text
+  status                   discord_punishment_appeals_status @default(PENDING)
+  reviewer_discord_user_id String?                           @db.VarChar(24)
+  reviewer_notes           String?                           @db.Text
+  created_at               DateTime                          @default(now())
+  reviewed_at              DateTime?
 
-  punishment             discord_punishments                @relation(fields: [punishment_id], references: [id], onDelete: Cascade)
+  punishment discord_punishments @relation(fields: [punishment_id], references: [id], onDelete: Cascade)
 }
 
 model user_platform_connections {
-  id                     Int       @id @default(autoincrement()) @db.UnsignedInt
-  user_id                Int
-  platform               String    @db.VarChar(32)
-  platform_account_id    String    @db.VarChar(128)
-  platform_channel_id    String?   @db.VarChar(128)
-  platform_username      String?   @db.VarChar(128)
-  platform_display_name  String?   @db.VarChar(128)
-  avatar_url             String?   @db.VarChar(512)
-  access_token           String?   @db.Text
-  refresh_token          String?   @db.Text
-  token_expires_at       DateTime?
-  is_active              Int       @default(1) @db.TinyInt
+  id                      Int       @id @default(autoincrement()) @db.UnsignedInt
+  user_id                 Int
+  platform                String    @db.VarChar(32)
+  platform_account_id     String    @db.VarChar(128)
+  platform_channel_id     String?   @db.VarChar(128)
+  platform_username       String?   @db.VarChar(128)
+  platform_display_name   String?   @db.VarChar(128)
+  avatar_url              String?   @db.VarChar(512)
+  access_token            String?   @db.Text
+  refresh_token           String?   @db.Text
+  token_expires_at        DateTime?
+  is_active               Int       @default(1) @db.TinyInt
   last_successful_sync_at DateTime?
-  last_sync_error        String?   @db.VarChar(255)
-  created_at             DateTime  @default(now())
-  updated_at             DateTime  @updatedAt
+  last_sync_error         String?   @db.VarChar(255)
+  created_at              DateTime  @default(now())
+  updated_at              DateTime  @updatedAt
 
   @@unique([user_id, platform])
 }
 
 model creator_content_items {
-  id                   Int      @id @default(autoincrement()) @db.UnsignedInt
-  user_id              Int
-  platform             String   @db.VarChar(32)
-  external_content_id  String   @db.VarChar(128)
-  external_channel_id  String?  @db.VarChar(128)
-  content_type         String   @db.VarChar(32)
-  title                String?  @db.VarChar(512)
-  description          String?  @db.Text
-  thumbnail_url        String?  @db.VarChar(512)
-  watch_url            String?  @db.VarChar(512)
-  viewer_count         Int?     @db.UnsignedInt
-  tags_json            String?  @db.Text
-  is_live              Int      @default(0) @db.TinyInt
-  published_at         DateTime?
-  started_at           DateTime?
-  ended_at             DateTime?
-  matched_rule         String?  @db.VarChar(128)
-  is_cfc_related       Int      @default(0) @db.TinyInt
-  is_publicly_visible  Int      @default(0) @db.TinyInt
-  last_seen_at         DateTime @default(now())
-  created_at           DateTime @default(now())
-  updated_at           DateTime @updatedAt
+  id                  Int       @id @default(autoincrement()) @db.UnsignedInt
+  user_id             Int
+  platform            String    @db.VarChar(32)
+  external_content_id String    @db.VarChar(128)
+  external_channel_id String?   @db.VarChar(128)
+  content_type        String    @db.VarChar(32)
+  title               String?   @db.VarChar(512)
+  description         String?   @db.Text
+  thumbnail_url       String?   @db.VarChar(512)
+  watch_url           String?   @db.VarChar(512)
+  viewer_count        Int?      @db.UnsignedInt
+  tags_json           String?   @db.Text
+  is_live             Int       @default(0) @db.TinyInt
+  published_at        DateTime?
+  started_at          DateTime?
+  ended_at            DateTime?
+  matched_rule        String?   @db.VarChar(128)
+  is_cfc_related      Int       @default(0) @db.TinyInt
+  is_publicly_visible Int       @default(0) @db.TinyInt
+  last_seen_at        DateTime  @default(now())
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
 
   @@unique([platform, external_content_id])
 }
 
 model creator_content_notifications {
-  id                   Int      @id @default(autoincrement()) @db.UnsignedInt
-  platform             String   @db.VarChar(32)
-  external_content_id  String   @db.VarChar(128)
-  notification_type    String   @db.VarChar(64)
-  discord_message_id   String?  @db.VarChar(32)
-  created_at           DateTime @default(now())
+  id                  Int      @id @default(autoincrement()) @db.UnsignedInt
+  platform            String   @db.VarChar(32)
+  external_content_id String   @db.VarChar(128)
+  notification_type   String   @db.VarChar(64)
+  discord_message_id  String?  @db.VarChar(32)
+  created_at          DateTime @default(now())
 
   @@unique([platform, external_content_id, notification_type])
 }
@@ -556,47 +556,47 @@ model player_command_queue {
 }
 
 model supportTicketCategories {
-  categoryId  Int                              @id @default(autoincrement())
-  name        String                           @db.VarChar(255)
-  description String?                          @db.Text
-  enabled     Boolean                          @default(true)
+  categoryId  Int     @id @default(autoincrement())
+  name        String  @db.VarChar(255)
+  description String? @db.Text
+  enabled     Boolean @default(true)
 
   tickets     supportTickets[]
   permissions supportTicketCategoryPermissions[]
 }
 
 model supportTickets {
-  ticketId         Int                     @id @default(autoincrement())
+  ticketId         Int                   @id @default(autoincrement())
   userId           Int
   categoryId       Int
-  title            String                  @db.VarChar(255)
-  status           supportTickets_status   @default(open)
-  discordChannelId String?                 @db.VarChar(255)
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
+  title            String                @db.VarChar(255)
+  status           supportTickets_status @default(open)
+  discordChannelId String?               @db.VarChar(255)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 
-  category         supportTicketCategories @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
-  messages         supportTicketMessages[]
+  category supportTicketCategories @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
+  messages supportTicketMessages[]
 }
 
 model supportTicketMessages {
-  messageId   Int            @id @default(autoincrement())
+  messageId   Int      @id @default(autoincrement())
   ticketId    Int
   userId      Int
-  message     String         @db.Text
+  message     String   @db.Text
   attachments Json?
-  isInternal  Int            @default(0) @db.TinyInt
-  createdAt   DateTime       @default(now())
+  isInternal  Int      @default(0) @db.TinyInt
+  createdAt   DateTime @default(now())
 
-  ticket      supportTickets @relation(fields: [ticketId], references: [ticketId], onDelete: Cascade)
+  ticket supportTickets @relation(fields: [ticketId], references: [ticketId], onDelete: Cascade)
 }
 
 model supportTicketCategoryPermissions {
-  permissionId Int                     @id @default(autoincrement())
+  permissionId Int    @id @default(autoincrement())
   categoryId   Int
-  roleId       String                  @db.VarChar(255)
+  roleId       String @db.VarChar(255)
 
-  category     supportTicketCategories @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
+  category supportTicketCategories @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
 }
 
 model userNotifications {
@@ -626,89 +626,93 @@ model pushSubscriptions {
 // =============================================================================
 
 model events {
-  eventId             Int       @id @default(autoincrement())
-  title               String    @db.VarChar(255)
-  slug                String    @unique @db.VarChar(300)
-  description         String?   @db.LongText
-  eventType           String    @default("once") @db.VarChar(32)
-  startAt             DateTime
-  endAt               DateTime
-  timezone            String    @default("UTC") @db.VarChar(64)
-  status              String    @default("draft") @db.VarChar(32)
-  visibility          String    @default("public") @db.VarChar(32)
-  /// Staff-only event, hidden from public listings.  Unused in phase one —
-  /// written by the meeting finalise -> event handoff (a later pass).
-  internal            Boolean   @default(false)
-  locationLabel       String?   @db.VarChar(255)
-  locationType        String?   @db.VarChar(32)
-  locationDiscordChannelId String? @db.VarChar(64)
-  serverName          String?   @db.VarChar(255)
-  serverIp            String?   @db.VarChar(255)
-  externalLinks       Json?
-  bannerUrl           String?   @db.VarChar(512)
-  logoUrl             String?   @db.VarChar(512)
-  tags                Json?
-  featured            Boolean   @default(false)
-  creatorId           Int
-  reviewerId          Int?
-  templateId          Int?
-  /// Back-link to the meeting poll this event was created from.  Nothing writes
-  /// it yet; the handoff is a later pass.
-  meetingPollId       Int?
-  rejectionNote       String?   @db.Text
-  discordMessageId    String?   @db.VarChar(32)
-  discordGuildEventId String?   @db.VarChar(32)
-  discordChannelId    String?   @db.VarChar(32)
-  discordSyncStatus   String?   @db.VarChar(16)
-  discordSyncError    String?   @db.Text
-  websiteSyncStatus   String?   @db.VarChar(16)
-  websiteSyncError    String?   @db.Text
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  approvedAt          DateTime?
-  publishedAt         DateTime?
-  cancelledAt         DateTime?
-  deletedAt           DateTime?
+  eventId                  Int       @id @default(autoincrement())
+  title                    String    @db.VarChar(255)
+  slug                     String    @unique @db.VarChar(300)
+  description              String?   @db.LongText
+  eventType                String    @default("once") @db.VarChar(32)
+  startAt                  DateTime
+  endAt                    DateTime
+  timezone                 String    @default("UTC") @db.VarChar(64)
+  status                   String    @default("draft") @db.VarChar(32)
+  visibility               String    @default("public") @db.VarChar(32)
+  /// Staff-only event, hidden from public listings.  Written by the meeting
+  /// finalise -> event handoff in services/meetingSessionService.js.
+  internal                 Boolean   @default(false)
+  locationLabel            String?   @db.VarChar(255)
+  locationType             String?   @db.VarChar(32)
+  locationDiscordChannelId String?   @db.VarChar(64)
+  serverName               String?   @db.VarChar(255)
+  serverIp                 String?   @db.VarChar(255)
+  externalLinks            Json?
+  bannerUrl                String?   @db.VarChar(512)
+  logoUrl                  String?   @db.VarChar(512)
+  tags                     Json?
+  featured                 Boolean   @default(false)
+  creatorId                Int
+  reviewerId               Int?
+  templateId               Int?
+  /// Back-link to the meeting poll this event was created from, written by the
+  /// finalise -> event handoff.  NULL for a meeting called with no poll behind
+  /// it, which is why the session hangs off the event and not off the poll.
+  meetingPollId            Int?
+  rejectionNote            String?   @db.Text
+  discordMessageId         String?   @db.VarChar(32)
+  discordGuildEventId      String?   @db.VarChar(32)
+  discordChannelId         String?   @db.VarChar(32)
+  discordSyncStatus        String?   @db.VarChar(16)
+  discordSyncError         String?   @db.Text
+  websiteSyncStatus        String?   @db.VarChar(16)
+  websiteSyncError         String?   @db.Text
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  approvedAt               DateTime?
+  publishedAt              DateTime?
+  cancelledAt              DateTime?
+  deletedAt                DateTime?
 
-  template            event_templates?      @relation(fields: [templateId], references: [templateId], onDelete: SetNull)
-  hosts               event_hosts[]
-  actions             event_actions[]
-  announcements       event_announcements[]
-  auditLogs           event_audit_logs[]
+  template       event_templates?      @relation(fields: [templateId], references: [templateId], onDelete: SetNull)
+  hosts          event_hosts[]
+  actions        event_actions[]
+  announcements  event_announcements[]
+  auditLogs      event_audit_logs[]
+  /// The recorded meeting hanging off this event, where there is one.  At most
+  /// one: a recurring meeting is one event row per occurrence.
+  meetingSession meetingSessions?
 }
 
 model event_templates {
-  templateId          Int       @id @default(autoincrement())
-  title               String    @db.VarChar(255)
-  description         String?   @db.LongText
-  defaultStartTime    String?   @db.VarChar(8)
-  defaultEndTime      String?   @db.VarChar(8)
-  defaultDurationMins Int?
-  timezone            String    @default("UTC") @db.VarChar(64)
-  recurrenceType      String    @default("weekly") @db.VarChar(32)
-  recurrenceDays      Json?
-  recurrenceEveryDays Int?
-  draftAdvanceDays    Int       @default(7)
-  autoGenerateDrafts  Boolean   @default(true)
-  lastGeneratedAt     DateTime?
-  nextGenerateAt      DateTime?
-  locationLabel       String?   @db.VarChar(255)
-  locationType        String?   @db.VarChar(32)
-  locationDiscordChannelId String? @db.VarChar(64)
-  serverName          String?   @db.VarChar(255)
-  serverIp            String?   @db.VarChar(255)
-  bannerUrl           String?   @db.VarChar(512)
-  logoUrl             String?   @db.VarChar(512)
-  tags                Json?
-  creatorId           Int
-  isActive            Boolean   @default(true)
-  deletedAt           DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  templateId               Int       @id @default(autoincrement())
+  title                    String    @db.VarChar(255)
+  description              String?   @db.LongText
+  defaultStartTime         String?   @db.VarChar(8)
+  defaultEndTime           String?   @db.VarChar(8)
+  defaultDurationMins      Int?
+  timezone                 String    @default("UTC") @db.VarChar(64)
+  recurrenceType           String    @default("weekly") @db.VarChar(32)
+  recurrenceDays           Json?
+  recurrenceEveryDays      Int?
+  draftAdvanceDays         Int       @default(7)
+  autoGenerateDrafts       Boolean   @default(true)
+  lastGeneratedAt          DateTime?
+  nextGenerateAt           DateTime?
+  locationLabel            String?   @db.VarChar(255)
+  locationType             String?   @db.VarChar(32)
+  locationDiscordChannelId String?   @db.VarChar(64)
+  serverName               String?   @db.VarChar(255)
+  serverIp                 String?   @db.VarChar(255)
+  bannerUrl                String?   @db.VarChar(512)
+  logoUrl                  String?   @db.VarChar(512)
+  tags                     Json?
+  creatorId                Int
+  isActive                 Boolean   @default(true)
+  deletedAt                DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
-  events              events[]
-  defaultHosts        event_template_hosts[]
-  announcements       event_template_announcements[]
+  events        events[]
+  defaultHosts  event_template_hosts[]
+  announcements event_template_announcements[]
 }
 
 model event_template_announcements {
@@ -730,18 +734,18 @@ model event_template_announcements {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  template            event_templates @relation(fields: [templateId], references: [templateId], onDelete: Cascade)
+  template event_templates @relation(fields: [templateId], references: [templateId], onDelete: Cascade)
 }
 
 model event_template_hosts {
-  id            Int             @id @default(autoincrement())
+  id            Int     @id @default(autoincrement())
   templateId    Int
   userId        Int?
-  discordUserId String?         @db.VarChar(32)
-  displayName   String?         @db.VarChar(100)
-  role          String          @default("host") @db.VarChar(32)
+  discordUserId String? @db.VarChar(32)
+  displayName   String? @db.VarChar(100)
+  role          String  @default("host") @db.VarChar(32)
 
-  template      event_templates @relation(fields: [templateId], references: [templateId], onDelete: Cascade)
+  template event_templates @relation(fields: [templateId], references: [templateId], onDelete: Cascade)
 }
 
 model event_hosts {
@@ -752,48 +756,48 @@ model event_hosts {
   displayName   String? @db.VarChar(100)
   role          String  @default("host") @db.VarChar(32)
 
-  event         events  @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+  event events @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
 }
 
 model event_actions {
-  id            Int      @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   eventId       Int
-  actionType    String   @db.VarChar(32)
-  trigger       String   @default("on_publish") @db.VarChar(32)
-  enabled       Boolean  @default(true)
+  actionType    String    @db.VarChar(32)
+  trigger       String    @default("on_publish") @db.VarChar(32)
+  enabled       Boolean   @default(true)
   config        Json?
   lastRunAt     DateTime?
-  lastRunStatus String?  @db.VarChar(16)
-  lastRunError  String?  @db.Text
+  lastRunStatus String?   @db.VarChar(16)
+  lastRunError  String?   @db.Text
 
-  event         events   @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+  event events @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
 }
 
 model event_announcements {
-  id                  Int      @id @default(autoincrement())
+  id                  Int       @id @default(autoincrement())
   eventId             Int
-  label               String?  @db.VarChar(100)
-  announcementType    String   @default("reminder") @db.VarChar(32)
-  platform            String   @default("discord") @db.VarChar(32)
-  channelId           String?  @db.VarChar(32)
-  contentTemplate     String?  @db.Text
-  body                String?  @db.Text
-  colourMessageFormat String?  @db.Text
-  link                String?  @db.Text
-  popupButtonText     String?  @db.VarChar(60)
-  popupImageUrl       String?  @db.Text
-  triggerType         String   @default("before_event") @db.VarChar(32)
+  label               String?   @db.VarChar(100)
+  announcementType    String    @default("reminder") @db.VarChar(32)
+  platform            String    @default("discord") @db.VarChar(32)
+  channelId           String?   @db.VarChar(32)
+  contentTemplate     String?   @db.Text
+  body                String?   @db.Text
+  colourMessageFormat String?   @db.Text
+  link                String?   @db.Text
+  popupButtonText     String?   @db.VarChar(60)
+  popupImageUrl       String?   @db.Text
+  triggerType         String    @default("before_event") @db.VarChar(32)
   offsetMinutes       Int?
-  scheduledFor    DateTime?
-  enabled         Boolean  @default(true)
-  status          String   @default("pending") @db.VarChar(16)
-  sentAt          DateTime?
-  lastError       String?  @db.Text
-  discordMessageId String? @db.VarChar(32)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  scheduledFor        DateTime?
+  enabled             Boolean   @default(true)
+  status              String    @default("pending") @db.VarChar(16)
+  sentAt              DateTime?
+  lastError           String?   @db.Text
+  discordMessageId    String?   @db.VarChar(32)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  event           events   @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+  event events @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
 }
 
 model event_audit_logs {
@@ -807,7 +811,7 @@ model event_audit_logs {
   afterSnapshot  Json?
   createdAt      DateTime @default(now())
 
-  event          events   @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+  event events @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
 }
 
 // =============================================================================
@@ -849,23 +853,23 @@ enum webstoreCommandRuns_status {
 
 /// One row per Stripe checkout session.
 model webstorePurchases {
-  purchaseId                   Int                              @id @default(autoincrement())
-  userId                       Int
-  itemSlug                     String                           @db.VarChar(120)
-  itemName                     String                           @db.VarChar(180)
-  purchaseType                 webstorePurchases_purchaseType
-  purchaserMinecraftUsername   String                           @db.VarChar(16)
-  recipientMinecraftUsername   String                           @db.VarChar(16)
-  status                       webstorePurchases_status         @default(pending)
-  stripeSessionId              String                           @unique @db.VarChar(255)
-  stripePaymentIntentId        String?                          @db.VarChar(255)
-  stripeSubscriptionId         String?                          @db.VarChar(255)
-  stripeCustomerId             String?                          @db.VarChar(255)
-  amountCents                  Int
-  currency                     String                           @db.VarChar(10)
-  isGift                       Int                              @default(0) @db.TinyInt
-  createdAt                    DateTime                         @default(now())
-  updatedAt                    DateTime                         @updatedAt
+  purchaseId                 Int                            @id @default(autoincrement())
+  userId                     Int
+  itemSlug                   String                         @db.VarChar(120)
+  itemName                   String                         @db.VarChar(180)
+  purchaseType               webstorePurchases_purchaseType
+  purchaserMinecraftUsername String                         @db.VarChar(16)
+  recipientMinecraftUsername String                         @db.VarChar(16)
+  status                     webstorePurchases_status       @default(pending)
+  stripeSessionId            String                         @unique @db.VarChar(255)
+  stripePaymentIntentId      String?                        @db.VarChar(255)
+  stripeSubscriptionId       String?                        @db.VarChar(255)
+  stripeCustomerId           String?                        @db.VarChar(255)
+  amountCents                Int
+  currency                   String                         @db.VarChar(10)
+  isGift                     Int                            @default(0) @db.TinyInt
+  createdAt                  DateTime                       @default(now())
+  updatedAt                  DateTime                       @updatedAt
 
   @@index([userId])
   @@index([status])
@@ -874,21 +878,21 @@ model webstorePurchases {
 
 /// Tracks the lifecycle of every active subscription.
 model webstoreSubscriptions {
-  subscriptionId               Int                           @id @default(autoincrement())
-  purchaseId                   Int
-  stripeSubscriptionId         String                        @unique @db.VarChar(255)
-  stripeCustomerId             String?                       @db.VarChar(255)
-  stripePriceId                String                        @db.VarChar(120)
-  recipientMinecraftUsername   String                        @db.VarChar(16)
-  purchaserMinecraftUsername   String                        @db.VarChar(16)
-  purchaserUserId              Int
-  status                       webstoreSubscriptions_status  @default(active)
-  currentPeriodStart           DateTime?
-  currentPeriodEnd             DateTime?
-  cancelAtPeriodEnd            Int                           @default(0) @db.TinyInt
-  cancelledAt                  DateTime?
-  createdAt                    DateTime                      @default(now())
-  updatedAt                    DateTime                      @updatedAt
+  subscriptionId             Int                          @id @default(autoincrement())
+  purchaseId                 Int
+  stripeSubscriptionId       String                       @unique @db.VarChar(255)
+  stripeCustomerId           String?                      @db.VarChar(255)
+  stripePriceId              String                       @db.VarChar(120)
+  recipientMinecraftUsername String                       @db.VarChar(16)
+  purchaserMinecraftUsername String                       @db.VarChar(16)
+  purchaserUserId            Int
+  status                     webstoreSubscriptions_status @default(active)
+  currentPeriodStart         DateTime?
+  currentPeriodEnd           DateTime?
+  cancelAtPeriodEnd          Int                          @default(0) @db.TinyInt
+  cancelledAt                DateTime?
+  createdAt                  DateTime                     @default(now())
+  updatedAt                  DateTime                     @updatedAt
 
   @@index([purchaseId])
   @@index([recipientMinecraftUsername])
@@ -897,24 +901,24 @@ model webstoreSubscriptions {
 
 /// Idempotency log for Stripe webhook events.
 model webstoreWebhookEvents {
-  webhookEventId  Int      @id @default(autoincrement())
-  stripeEventId   String   @unique @db.VarChar(255)
-  purchaseId      Int?
-  eventType       String   @db.VarChar(80)
-  payload         Json?
-  processedAt     DateTime @default(now())
+  webhookEventId Int      @id @default(autoincrement())
+  stripeEventId  String   @unique @db.VarChar(255)
+  purchaseId     Int?
+  eventType      String   @db.VarChar(80)
+  payload        Json?
+  processedAt    DateTime @default(now())
 
   @@index([purchaseId])
 }
 
 /// Maps Stripe price IDs to in-game command templates.
 model webstoreStripeCommands {
-  commandId       Int                            @id @default(autoincrement())
-  stripePriceId   String                         @db.VarChar(120)
-  action          webstoreStripeCommands_action  @default(grant)
-  commandTemplate String                         @db.Text
-  sortOrder       Int                            @default(0)
-  createdAt       DateTime                       @default(now())
+  commandId       Int                           @id @default(autoincrement())
+  stripePriceId   String                        @db.VarChar(120)
+  action          webstoreStripeCommands_action @default(grant)
+  commandTemplate String                        @db.Text
+  sortOrder       Int                           @default(0)
+  createdAt       DateTime                      @default(now())
 
   @@index([stripePriceId])
   @@index([action])
@@ -922,18 +926,18 @@ model webstoreStripeCommands {
 
 /// Tracks each individual command dispatched to executorTasks.
 model webstoreCommandRuns {
-  commandRunId         Int                         @id @default(autoincrement())
+  commandRunId         Int                           @id @default(autoincrement())
   purchaseId           Int
-  stripeSubscriptionId String?                     @db.VarChar(255)
+  stripeSubscriptionId String?                       @db.VarChar(255)
   action               webstoreStripeCommands_action @default(grant)
-  commandTemplate      String                      @db.Text
-  resolvedCommand      String                      @db.Text
+  commandTemplate      String                        @db.Text
+  resolvedCommand      String                        @db.Text
   executorTaskId       Int?
-  status               webstoreCommandRuns_status  @default(queued)
-  attempts             Int                         @default(0)
-  lastError            String?                     @db.Text
-  createdAt            DateTime                    @default(now())
-  updatedAt            DateTime                    @updatedAt
+  status               webstoreCommandRuns_status    @default(queued)
+  attempts             Int                           @default(0)
+  lastError            String?                       @db.Text
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
 
   @@index([purchaseId])
   @@index([executorTaskId])
@@ -942,14 +946,14 @@ model webstoreCommandRuns {
 
 /// Audit ledger — records both sides of every completed payment.
 model webstoreTransactions {
-  transactionId                  Int      @id @default(autoincrement())
-  purchaseId                     Int
-  userId                         Int
-  direction                      String   @db.VarChar(16)
-  counterpartyMinecraftUsername  String   @db.VarChar(16)
-  amountCents                    Int
-  currency                       String   @db.VarChar(10)
-  createdAt                      DateTime @default(now())
+  transactionId                 Int      @id @default(autoincrement())
+  purchaseId                    Int
+  userId                        Int
+  direction                     String   @db.VarChar(16)
+  counterpartyMinecraftUsername String   @db.VarChar(16)
+  amountCents                   Int
+  currency                      String   @db.VarChar(10)
+  createdAt                     DateTime @default(now())
 
   @@index([userId])
   @@index([purchaseId])
@@ -960,26 +964,26 @@ model webstoreTransactions {
 // =============================================================================
 
 model badges {
-  badgeId         Int           @id @default(autoincrement())
-  name            String        @db.VarChar(100)
-  description     String?       @db.Text
-  backgroundColor String        @default("#1a1a2e") @db.VarChar(7)
-  textColor       String        @default("#ffffff") @db.VarChar(7)
-  luckpermsGroup  String?       @db.VarChar(64)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  badgeId         Int      @id @default(autoincrement())
+  name            String   @db.VarChar(100)
+  description     String?  @db.Text
+  backgroundColor String   @default("#1a1a2e") @db.VarChar(7)
+  textColor       String   @default("#ffffff") @db.VarChar(7)
+  luckpermsGroup  String?  @db.VarChar(64)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  userBadges      user_badges[]
+  userBadges user_badges[]
 }
 
 model user_badges {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  badgeId   Int
-  earnedAt  DateTime @default(now())
-  isManual  Boolean  @default(false)
+  id       Int      @id @default(autoincrement())
+  userId   Int
+  badgeId  Int
+  earnedAt DateTime @default(now())
+  isManual Boolean  @default(false)
 
-  badge     badges   @relation(fields: [badgeId], references: [badgeId], onDelete: Cascade)
+  badge badges @relation(fields: [badgeId], references: [badgeId], onDelete: Cascade)
 
   @@unique([userId, badgeId])
   @@index([userId])
@@ -1019,35 +1023,35 @@ enum financeInvoices_status {
 
 /// Bank / payment accounts that money flows in and out of.
 model financeAccounts {
-  accountId            Int                            @id @default(autoincrement())
-  name                 String                         @db.VarChar(150)
-  accountType          financeAccounts_accountType    @default(bank)
-  openingBalanceCents  Int                            @default(0)
-  currency             String                         @default("USD") @db.VarChar(3)
-  isActive             Int                            @default(1) @db.TinyInt
-  notes                String?                        @db.Text
-  createdAt            DateTime                       @default(now())
-  updatedAt            DateTime                       @updatedAt
+  accountId           Int                         @id @default(autoincrement())
+  name                String                      @db.VarChar(150)
+  accountType         financeAccounts_accountType @default(bank)
+  openingBalanceCents Int                         @default(0)
+  currency            String                      @default("USD") @db.VarChar(3)
+  isActive            Int                         @default(1) @db.TinyInt
+  notes               String?                     @db.Text
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
 
-  transactions         financeTransactions[]          @relation("AccountTransactions")
-  transfersTo          financeTransactions[]          @relation("AccountTransfersTo")
-  payments             financePayments[]
-  balances             financeAccountBalances[]
+  transactions financeTransactions[]    @relation("AccountTransactions")
+  transfersTo  financeTransactions[]    @relation("AccountTransfersTo")
+  payments     financePayments[]
+  balances     financeAccountBalances[]
 }
 
 /// Dated snapshots of the real balance reported by Stripe / the bank, recorded
 /// by staff so the transaction ledger can be reconciled for the monthly report.
 model financeAccountBalances {
-  balanceId        Int      @id @default(autoincrement())
-  accountId        Int
-  asOfDate         DateTime @db.Date
-  balanceCents     Int      @default(0)
-  source           String   @default("manual") @db.VarChar(20)
-  note             String?  @db.VarChar(255)
-  createdByUserId  Int      @default(0)
-  createdAt        DateTime @default(now())
+  balanceId       Int      @id @default(autoincrement())
+  accountId       Int
+  asOfDate        DateTime @db.Date
+  balanceCents    Int      @default(0)
+  source          String   @default("manual") @db.VarChar(20)
+  note            String?  @db.VarChar(255)
+  createdByUserId Int      @default(0)
+  createdAt       DateTime @default(now())
 
-  account          financeAccounts @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  account financeAccounts @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
 
   @@index([accountId])
   @@index([accountId, asOfDate])
@@ -1055,21 +1059,21 @@ model financeAccountBalances {
 
 /// Hierarchical income / expense categories.
 model financeCategories {
-  categoryId         Int                    @id @default(autoincrement())
-  parentId           Int?
-  name               String                 @db.VarChar(100)
-  type               financeCategories_type @default(expense)
-  color              String                 @default("#6c757d") @db.VarChar(7)
-  isActive           Int                    @default(1) @db.TinyInt
-  isPublic           Int                    @default(0) @db.TinyInt
-  publicName         String?                @db.VarChar(100)
-  publicDescription  String?                @db.VarChar(255)
-  publicSortOrder    Int                    @default(0)
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
+  categoryId        Int                    @id @default(autoincrement())
+  parentId          Int?
+  name              String                 @db.VarChar(100)
+  type              financeCategories_type @default(expense)
+  color             String                 @default("#6c757d") @db.VarChar(7)
+  isActive          Int                    @default(1) @db.TinyInt
+  isPublic          Int                    @default(0) @db.TinyInt
+  publicName        String?                @db.VarChar(100)
+  publicDescription String?                @db.VarChar(255)
+  publicSortOrder   Int                    @default(0)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
-  parent    financeCategories?   @relation("CategoryParent", fields: [parentId], references: [categoryId], onDelete: SetNull)
-  children  financeCategories[]  @relation("CategoryParent")
+  parent   financeCategories?  @relation("CategoryParent", fields: [parentId], references: [categoryId], onDelete: SetNull)
+  children financeCategories[] @relation("CategoryParent")
 
   transactions         financeTransactions[]
   vendors              financeVendors[]
@@ -1092,25 +1096,25 @@ model financeTags {
 
 /// Vendors / suppliers that money is paid to or received from.
 model financeVendors {
-  vendorId          Int       @id @default(autoincrement())
-  name              String    @db.VarChar(150)
-  website           String?   @db.VarChar(255)
-  contactEmail      String?   @db.VarChar(180)
-  notes             String?   @db.Text
-  categoryId        Int?
-  faviconUrl        String?   @db.VarChar(500)
-  logoUrl           String?   @db.VarChar(500)
-  logoPublicId      String?   @db.VarChar(255)
-  isActive          Int       @default(1) @db.TinyInt
-  faviconFetchedAt  DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  vendorId         Int       @id @default(autoincrement())
+  name             String    @db.VarChar(150)
+  website          String?   @db.VarChar(255)
+  contactEmail     String?   @db.VarChar(180)
+  notes            String?   @db.Text
+  categoryId       Int?
+  faviconUrl       String?   @db.VarChar(500)
+  logoUrl          String?   @db.VarChar(500)
+  logoPublicId     String?   @db.VarChar(255)
+  isActive         Int       @default(1) @db.TinyInt
+  faviconFetchedAt DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  category     financeCategories?        @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
-  transactions financeTransactions[]
-  invoices     financeInvoices[]
-  payments     financePayments[]
-  attachments  financeAttachments[]
+  category      financeCategories?        @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
+  transactions  financeTransactions[]
+  invoices      financeInvoices[]
+  payments      financePayments[]
+  attachments   financeAttachments[]
   budgetEntries financeOperationsBudget[]
 
   @@index([categoryId])
@@ -1118,26 +1122,26 @@ model financeVendors {
 
 /// Individual income, expense and transfer transactions.
 model financeTransactions {
-  transactionId    Int                       @id @default(autoincrement())
-  type             financeTransactions_type  @default(expense)
-  amountCents      Int                       @default(0)
-  currency         String                    @default("USD") @db.VarChar(3)
-  accountId        Int
-  toAccountId      Int?
-  categoryId       Int?
-  vendorId         Int?
-  description      String                    @default("") @db.VarChar(500)
-  notes            String?                   @db.Text
-  transactionDate  DateTime                  @db.Date
-  isLocked         Int                       @default(0) @db.TinyInt
-  createdByUserId  Int
-  createdAt        DateTime                  @default(now())
-  updatedAt        DateTime                  @updatedAt
+  transactionId   Int                      @id @default(autoincrement())
+  type            financeTransactions_type @default(expense)
+  amountCents     Int                      @default(0)
+  currency        String                   @default("USD") @db.VarChar(3)
+  accountId       Int
+  toAccountId     Int?
+  categoryId      Int?
+  vendorId        Int?
+  description     String                   @default("") @db.VarChar(500)
+  notes           String?                  @db.Text
+  transactionDate DateTime                 @db.Date
+  isLocked        Int                      @default(0) @db.TinyInt
+  createdByUserId Int
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
 
-  account     financeAccounts   @relation("AccountTransactions", fields: [accountId], references: [accountId], onDelete: Restrict)
-  toAccount   financeAccounts?  @relation("AccountTransfersTo", fields: [toAccountId], references: [accountId], onDelete: SetNull)
-  category    financeCategories? @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
-  vendor      financeVendors?   @relation(fields: [vendorId], references: [vendorId], onDelete: SetNull)
+  account     financeAccounts          @relation("AccountTransactions", fields: [accountId], references: [accountId], onDelete: Restrict)
+  toAccount   financeAccounts?         @relation("AccountTransfersTo", fields: [toAccountId], references: [accountId], onDelete: SetNull)
+  category    financeCategories?       @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
+  vendor      financeVendors?          @relation(fields: [vendorId], references: [vendorId], onDelete: SetNull)
   tags        financeTransactionTags[]
   payments    financePayments[]
   attachments financeAttachments[]
@@ -1165,21 +1169,21 @@ model financeTransactionTags {
 
 /// Vendor invoices — represent money owed to or from a vendor.
 model financeInvoices {
-  invoiceId        Int                    @id @default(autoincrement())
-  vendorId         Int
-  invoiceNumber    String                 @default("") @db.VarChar(100)
-  issueDate        DateTime?              @db.Date
-  dueDate          DateTime?              @db.Date
-  amountCents      Int                    @default(0)
-  paidAmountCents  Int                    @default(0)
-  currency         String                 @default("USD") @db.VarChar(3)
-  status           financeInvoices_status @default(pending)
-  description      String?                @db.Text
-  createdByUserId  Int                    @default(0)
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
+  invoiceId       Int                    @id @default(autoincrement())
+  vendorId        Int
+  invoiceNumber   String                 @default("") @db.VarChar(100)
+  issueDate       DateTime?              @db.Date
+  dueDate         DateTime?              @db.Date
+  amountCents     Int                    @default(0)
+  paidAmountCents Int                    @default(0)
+  currency        String                 @default("USD") @db.VarChar(3)
+  status          financeInvoices_status @default(pending)
+  description     String?                @db.Text
+  createdByUserId Int                    @default(0)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
 
-  vendor      financeVendors      @relation(fields: [vendorId], references: [vendorId], onDelete: Restrict)
+  vendor      financeVendors       @relation(fields: [vendorId], references: [vendorId], onDelete: Restrict)
   payments    financePayments[]
   attachments financeAttachments[]
 
@@ -1203,10 +1207,10 @@ model financePayments {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  vendor      financeVendors      @relation(fields: [vendorId], references: [vendorId], onDelete: Restrict)
-  invoice     financeInvoices?    @relation(fields: [invoiceId], references: [invoiceId], onDelete: SetNull)
+  vendor      financeVendors       @relation(fields: [vendorId], references: [vendorId], onDelete: Restrict)
+  invoice     financeInvoices?     @relation(fields: [invoiceId], references: [invoiceId], onDelete: SetNull)
   transaction financeTransactions? @relation(fields: [transactionId], references: [transactionId], onDelete: SetNull)
-  account     financeAccounts     @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
+  account     financeAccounts      @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
 
   @@index([vendorId])
   @@index([invoiceId])
@@ -1217,18 +1221,18 @@ model financePayments {
 
 /// File attachments (PDFs, images) for transactions, invoices, or vendors.
 model financeAttachments {
-  attachmentId      Int      @id @default(autoincrement())
-  transactionId     Int?
-  invoiceId         Int?
-  vendorId          Int?
-  fileName          String   @default("") @db.VarChar(255)
-  fileUrl           String   @default("") @db.VarChar(500)
-  filePublicId      String   @default("") @db.VarChar(255)
-  mimeType          String   @default("application/pdf") @db.VarChar(100)
-  fileSizeBytes     Int      @default(0)
-  label             String?  @db.VarChar(100)
-  uploadedByUserId  Int      @default(0)
-  createdAt         DateTime @default(now())
+  attachmentId     Int      @id @default(autoincrement())
+  transactionId    Int?
+  invoiceId        Int?
+  vendorId         Int?
+  fileName         String   @default("") @db.VarChar(255)
+  fileUrl          String   @default("") @db.VarChar(500)
+  filePublicId     String   @default("") @db.VarChar(255)
+  mimeType         String   @default("application/pdf") @db.VarChar(100)
+  fileSizeBytes    Int      @default(0)
+  label            String?  @db.VarChar(100)
+  uploadedByUserId Int      @default(0)
+  createdAt        DateTime @default(now())
 
   transaction financeTransactions? @relation(fields: [transactionId], references: [transactionId], onDelete: Cascade)
   invoice     financeInvoices?     @relation(fields: [invoiceId], references: [invoiceId], onDelete: Cascade)
@@ -1241,21 +1245,21 @@ model financeAttachments {
 
 /// Monthly budget targets, optionally tied to a vendor or category.
 model financeOperationsBudget {
-  budgetId            Int      @id @default(autoincrement())
-  vendorId            Int?
-  categoryId          Int?
-  label               String   @default("") @db.VarChar(150)
-  publicDescription   String?  @db.VarChar(300)
-  monthlyBudgetCents  Int      @default(0)
-  currency            String   @default("USD") @db.VarChar(3)
-  cadence             String   @default("monthly") @db.VarChar(10)
-  annualMonth         Int?     @db.TinyInt
-  iconName            String?  @db.VarChar(50)
-  iconImageUrl        String?  @db.VarChar(500)
-  notes               String?  @db.Text
-  isActive            Int      @default(1) @db.TinyInt
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  budgetId           Int      @id @default(autoincrement())
+  vendorId           Int?
+  categoryId         Int?
+  label              String   @default("") @db.VarChar(150)
+  publicDescription  String?  @db.VarChar(300)
+  monthlyBudgetCents Int      @default(0)
+  currency           String   @default("USD") @db.VarChar(3)
+  cadence            String   @default("monthly") @db.VarChar(10)
+  annualMonth        Int?     @db.TinyInt
+  iconName           String?  @db.VarChar(50)
+  iconImageUrl       String?  @db.VarChar(500)
+  notes              String?  @db.Text
+  isActive           Int      @default(1) @db.TinyInt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   vendor   financeVendors?    @relation(fields: [vendorId], references: [vendorId], onDelete: SetNull)
   category financeCategories? @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
@@ -1296,20 +1300,20 @@ model financeOperationsBudgetMonthly {
 
 /// Published monthly financial summary reports.
 model financeMonthlyReports {
-  reportId            Int       @id @default(autoincrement())
-  year                Int       @db.SmallInt
-  month               Int       @db.TinyInt
-  totalIncomeCents    Int       @default(0)
-  totalExpensesCents  Int       @default(0)
-  netAmountCents      Int       @default(0)
-  isPublished         Int       @default(0) @db.TinyInt
-  isLocked            Int       @default(0) @db.TinyInt
-  publishedAt         DateTime?
-  publishedByUserId   Int?
-  notes               String?   @db.Text
-  reportData          Json?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  reportId           Int       @id @default(autoincrement())
+  year               Int       @db.SmallInt
+  month              Int       @db.TinyInt
+  totalIncomeCents   Int       @default(0)
+  totalExpensesCents Int       @default(0)
+  netAmountCents     Int       @default(0)
+  isPublished        Int       @default(0) @db.TinyInt
+  isLocked           Int       @default(0) @db.TinyInt
+  publishedAt        DateTime?
+  publishedByUserId  Int?
+  notes              String?   @db.Text
+  reportData         Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@unique([year, month])
   @@index([isPublished])
@@ -1433,4 +1437,262 @@ model meetingPollResponses {
 
   @@unique([pollId, userId, optionId])
   @@index([optionId])
+}
+
+// =============================================================================
+// Meeting sessions (migration 0043)
+//
+// ANCHOR RULE: every *OffsetMs field below is milliseconds from
+// meetingSessions.startedAt, never from the start of an audio file.  A session
+// can hold several recordings, each at its own startOffsetMs on that single
+// timeline.
+// =============================================================================
+
+/// The meeting itself.  One per `events` row — so a meeting with no poll behind
+/// it works, and a recurring meeting is one event (hence one session) per
+/// occurrence.
+model meetingSessions {
+  sessionId          Int       @id @default(autoincrement())
+  eventId            Int       @unique
+  /// draft | live | processing | published | closed | cancelled
+  status             String    @default("draft") @db.VarChar(16)
+  /// roster (attendees only) | open (any logged-in user)
+  audienceMode       String    @default("roster") @db.VarChar(16)
+  /// Written once when capture begins and never rewritten — it is the origin of
+  /// every offset in this module.
+  startedAt          DateTime?
+  endedAt            DateTime?
+  durationMs         BigInt?
+  responseDeadlineAt DateTime?
+  summary            String?   @db.Text
+  /// Default reveal mode for this session's notes: immediate | on_playback |
+  /// scheduled.  Individual notes may override it.
+  noteRevealMode     String    @default("immediate") @db.VarChar(16)
+  /// none | requested | building | ready | failed
+  archiveStatus      String    @default("none") @db.VarChar(16)
+  archivePath        String?   @db.VarChar(512)
+  /// Cloudinary public_id — destroy() takes the id, not the URL.
+  archivePublicId    String?   @db.VarChar(255)
+  archiveByteSize    BigInt?
+  archiveBuiltAt     DateTime?
+  /// Set by a human who checked the bundle opens.  Hosted audio may only be
+  /// deleted once this is non-null.
+  archiveConfirmedAt DateTime?
+  audioRemovedAt     DateTime?
+  createdByUserId    Int
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  event             events                     @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+  recordings        meetingRecordings[]
+  speakingIntervals meetingSpeakingIntervals[]
+  agendaItems       meetingAgendaItems[]
+  attendees         meetingSessionAttendees[]
+  comments          meetingComments[]
+  notes             meetingNotes[]
+  progress          meetingSessionProgress[]
+
+  @@index([status])
+  @@index([responseDeadlineAt])
+  @@index([archiveStatus])
+}
+
+/// Several per session is normal: a bot reconnect files a second row at a
+/// non-zero startOffsetMs rather than corrupting the first.
+model meetingRecordings {
+  recordingId        Int      @id @default(autoincrement())
+  sessionId          Int
+  /// discord_bot | upload | external
+  source             String   @default("discord_bot") @db.VarChar(16)
+  /// Cloudinary URL once uploaded; a local path while the file is still on disk
+  /// (or permanently, where Cloudinary is not configured).
+  storagePath        String   @db.VarChar(512)
+  /// Required to delete the asset.  Null while the file is local.
+  storagePublicId    String?  @db.VarChar(255)
+  mimeType           String?  @db.VarChar(64)
+  byteSize           BigInt?
+  durationMs         BigInt?
+  /// Where this file sits on the session timeline.
+  startOffsetMs      BigInt   @default(0)
+  trackUserId        Int?
+  trackIndex         Int      @default(0)
+  discordGuildId     String?  @db.VarChar(32)
+  discordChannelId   String?  @db.VarChar(32)
+  /// pending | running | done | failed | skipped
+  transcriptStatus   String   @default("pending") @db.VarChar(16)
+  transcriptPath     String?  @db.VarChar(512)
+  /// Cloudinary public_id of the transcript — uploaded `authenticated` like the
+  /// audio, so the URL alone cannot fetch it.
+  transcriptPublicId String?  @db.VarChar(255)
+  transcriptError    String?  @db.Text
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  session meetingSessions @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([transcriptStatus])
+  @@index([storagePublicId])
+}
+
+/// Who was speaking when, logged live.  Buys diarisation on a single mixed file
+/// without storing per-speaker audio.
+model meetingSpeakingIntervals {
+  intervalId    Int      @id @default(autoincrement())
+  sessionId     Int
+  /// Null when the speaker has no linked website account; discordUserId is
+  /// always kept so the interval stays attributable if they link one later.
+  userId        Int?
+  discordUserId String?  @db.VarChar(32)
+  startOffsetMs BigInt
+  endOffsetMs   BigInt?
+  createdAt     DateTime @default(now())
+
+  session meetingSessions @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
+  @@index([sessionId, startOffsetMs])
+  @@index([userId])
+}
+
+/// The agenda, doubling as the recording's chapter list — which is what makes a
+/// long recording navigable with no AI chaptering.
+model meetingAgendaItems {
+  itemId             Int      @id @default(autoincrement())
+  sessionId          Int
+  title              String   @db.VarChar(255)
+  /// The organiser's pre-meeting description.  Minutes go in meetingNotes.
+  brief              String?  @db.Text
+  orderIndex         Int      @default(0)
+  /// Stamped when the chair reaches the item.  Null = never discussed, which
+  /// has to stay distinguishable from an item that started at offset 0.
+  startOffsetMs      BigInt?
+  endOffsetMs        BigInt?
+  /// pending | discussed | deferred | decided
+  status             String   @default("pending") @db.VarChar(16)
+  /// Hide not-yet-reached items from catch-up viewers; the chair always sees
+  /// the whole agenda.
+  hiddenUntilReached Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  session  meetingSessions   @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  comments meetingComments[]
+  notes    meetingNotes[]
+
+  @@index([sessionId, orderIndex])
+}
+
+/// Who is expected — the generic equivalent of meetingPollInvitees.
+model meetingSessionAttendees {
+  attendeeId   Int       @id @default(autoincrement())
+  sessionId    Int
+  userId       Int
+  /// poll | role | manual
+  source       String    @default("role") @db.VarChar(16)
+  viaRankSlug  String?   @db.VarChar(36)
+  /// chair | speaker | attendee | observer.  Set by the chair, never inferred
+  /// from who spoke.
+  role         String    @default("attendee") @db.VarChar(16)
+  canRespond   Boolean   @default(true)
+  attendedLive Boolean   @default(false)
+  notifiedAt   DateTime?
+  /// Soft remove, so comments and notes survive a remove/re-add.
+  removedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  session meetingSessions @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([userId])
+}
+
+/// Live and catch-up comments in one table, so the discussion reads as a single
+/// thread.  postedLive is the only difference between them.
+model meetingComments {
+  commentId        Int       @id @default(autoincrement())
+  sessionId        Int
+  /// SetNull: deleting an agenda item must not delete its discussion.
+  agendaItemId     Int?
+  parentCommentId  Int?
+  userId           Int
+  /// text | voice
+  kind             String    @default("text") @db.VarChar(8)
+  /// Point on the session timeline.  Null = a general comment.
+  atOffsetMs       BigInt?
+  body             String?   @db.Text
+  audioPath        String?   @db.VarChar(512)
+  audioPublicId    String?   @db.VarChar(255)
+  audioDurationMs  BigInt?
+  transcript       String?   @db.Text
+  /// pending | running | done | failed | skipped
+  transcriptStatus String    @default("skipped") @db.VarChar(16)
+  /// public | attendees | speakers | private
+  visibility       String    @default("attendees") @db.VarChar(16)
+  postedLive       Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  /// Soft delete, so a reply thread stays readable.
+  deletedAt        DateTime?
+
+  session    meetingSessions     @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  agendaItem meetingAgendaItems? @relation(fields: [agendaItemId], references: [itemId], onDelete: SetNull)
+  parent     meetingComments?    @relation("MeetingCommentReplies", fields: [parentCommentId], references: [commentId], onDelete: Cascade)
+  replies    meetingComments[]   @relation("MeetingCommentReplies")
+
+  @@index([sessionId, atOffsetMs])
+  @@index([agendaItemId])
+  @@index([parentCommentId])
+  @@index([userId])
+  @@index([transcriptStatus])
+}
+
+/// The minutes.  A table, not a column on the agenda item: one item routinely
+/// carries notes at different visibilities, and each reveals on its own
+/// schedule.
+model meetingNotes {
+  noteId           Int       @id @default(autoincrement())
+  sessionId        Int
+  agendaItemId     Int?
+  authorUserId     Int
+  /// note | decision | action
+  kind             String    @default("note") @db.VarChar(16)
+  body             String    @db.Text
+  /// public | attendees | speakers | private
+  visibility       String    @default("attendees") @db.VarChar(16)
+  /// immediate | on_playback | scheduled
+  revealMode       String    @default("immediate") @db.VarChar(16)
+  /// Null falls back to the agenda item's startOffsetMs.
+  revealAtOffsetMs BigInt?
+  revealAt         DateTime?
+  orderIndex       Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  session    meetingSessions     @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  agendaItem meetingAgendaItems? @relation(fields: [agendaItemId], references: [itemId], onDelete: SetNull)
+
+  @@index([sessionId, orderIndex])
+  @@index([agendaItemId])
+  @@index([visibility])
+  @@index([authorUserId])
+}
+
+/// How far through each viewer has got.  Separate from attendees because an
+/// 'open' session has viewers who were never on the roster, and because this
+/// row is written far more often.
+model meetingSessionProgress {
+  sessionId    Int
+  userId       Int
+  lastOffsetMs BigInt    @default(0)
+  completedAt  DateTime?
+  /// Set on first comment or an explicit "I'm caught up".  This, not
+  /// lastOffsetMs, is what the outstanding-responses view reads.
+  respondedAt  DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  session meetingSessions @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
+  @@id([sessionId, userId])
+  @@index([userId])
 }

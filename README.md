@@ -41,11 +41,23 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 
 | Permission Node | Description |
 |---|---|
-| `zander.web.meetings.manage` | Create, edit, invite to, and finalise meeting polls |
+| `zander.web.meetings.manage` | Create and edit meeting polls and recorded sessions, manage rosters, finalise polls, and build or confirm archives |
+| `zander.web.meetings.record` | Start, pause and stop the meeting recorder, and stamp the agenda (`/meeting` in Discord) |
 
-Viewing and responding to a meeting poll requires no permission node — access is
-granted by being an invitee on that poll's roster, which is resolved from the
+`.record` is split from `.manage` so the person who chairs and records a meeting
+does not need full meetings administration — a team lead can run their own
+meeting without also being able to edit everyone else's.
+
+Viewing and responding requires no permission node at all. Access to a poll is
+granted by being an invitee on its roster; access to a recorded session is
+granted by being an attendee on that session (or by the session being set to
+`open`, which any logged-in user may view). Both rosters are resolved from the
 LuckPerms ranks the organiser selected.
+
+Within a session, an attendee's `role` — chair, speaker, attendee or observer —
+decides which minutes they can read. It is always set by the chair and is never
+inferred from who spoke, so a quiet presenter keeps speaker-level access and a
+talkative observer does not gain it.
 
 ### Webstore
 

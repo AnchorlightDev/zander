@@ -89,6 +89,48 @@
     "discordChannelId": "CHANNELID",
     "reviewChannelId": "CHANNELID"
   },
+  "meetings": {
+    "announceChannelId": "CHANNELID",
+    "scratchDir": null,
+    "ffmpegPath": "ffmpeg",
+    "ffprobePath": "ffprobe",
+    "excludedUserIds": [],
+    "responseDeadlineDays": 14,
+    "transcription": {
+      "enabled": true,
+      "provider": "disabled",
+      "model": "whisper-1",
+      "binary": "whisper",
+      "schedule": "*/10 * * * *",
+      "batchSize": 3
+    },
+    "notifications": {
+      "enabled": true,
+      "schedule": "*/15 * * * *",
+      "nagHoursBefore": 48
+    },
+    "deadlineCloser": {
+      "enabled": true,
+      "schedule": "10 * * * *"
+    },
+    "archive": {
+      "enabled": true,
+      "schedule": "*/20 * * * *",
+      "batchSize": 2
+    },
+    "janitor": {
+      "enabled": false,
+      "schedule": "30 4 * * *",
+      "minimumAgeHours": 24,
+      "dryRun": true
+    },
+    "retention": {
+      "enabled": false,
+      "schedule": "0 5 * * *",
+      "audioRetentionDays": 0,
+      "requireArchiveConfirmed": true
+    }
+  },
   "staffAuditReport": {
     "enabled": true,
     "dayOfWeek": "Monday",

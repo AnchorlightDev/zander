@@ -1,0 +1,132 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <div>
+          <h1 class="h2 mb-1">Meeting recordings</h1>
+          <p class="text-muted mb-0 small">
+            Recorded sessions with their agenda, minutes and discussion. Times are shown in your own timezone.
+          </p>
+        </div>
+        <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+          <a href="/dashboard/meetings" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-calendar-check fa-fw me-1"></i>Availability polls
+          </a>
+        </div>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <form method="get" action="/dashboard/meetings/sessions" class="row g-2 align-items-end mb-3">
+        <div class="col-sm-4">
+          <label class="form-label small text-muted mb-1" for="search">Search</label>
+          <input type="text" class="form-control form-control-sm" id="search" name="search"
+                 value="<%= search %>" placeholder="Meeting title">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label small text-muted mb-1" for="status">Status</label>
+          <select class="form-select form-select-sm" id="status" name="status">
+            <option value="">All</option>
+            <% ["draft", "live", "processing", "published", "closed", "cancelled"].forEach(value => { %>
+              <option value="<%= value %>" <%= statusFilter === value ? "selected" : "" %>><%= value %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <button type="submit" class="btn btn-sm btn-primary w-100">Filter</button>
+        </div>
+      </form>
+
+      <div class="table-responsive">
+        <table class="table align-middle meetings-table">
+          <thead>
+            <tr>
+              <th>Meeting</th>
+              <th>Held</th>
+              <th>Length</th>
+              <th>Attendees</th>
+              <th>Comments</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!sessions || sessions.length === 0) { %>
+              <tr>
+                <td colspan="7" class="text-center text-muted py-4">
+                  No recorded meetings yet. A session is created when a meeting poll is finalised,
+                  or by hand against an event.
+                </td>
+              </tr>
+            <% } else { %>
+              <% sessions.forEach(session => { %>
+                <tr>
+                  <td data-label="Meeting">
+                    <a href="/dashboard/meetings/session?sessionId=<%= session.sessionId %>">
+                      <%= session.event && session.event.title ? session.event.title : ("Session #" + session.sessionId) %>
+                    </a>
+                  </td>
+                  <td data-label="Held">
+                    <span class="js-datetime"
+                          data-iso="<%= session.startedAt ? new Date(session.startedAt).toISOString() : '' %>"
+                          data-fallback="Not started"></span>
+                  </td>
+                  <td data-label="Length">
+                    <% if (session.durationMs) { %>
+                      <%= Math.round(session.durationMs / 60000) %> min
+                    <% } else { %>
+                      <span class="text-muted">—</span>
+                    <% } %>
+                  </td>
+                  <td data-label="Attendees"><%= session._count ? session._count.attendees : 0 %></td>
+                  <td data-label="Comments"><%= session._count ? session._count.comments : 0 %></td>
+                  <td data-label="Status">
+                    <span class="badge bg-secondary"><%= session.status %></span>
+                    <% if (session.audioRemovedAt) { %>
+                      <span class="badge bg-light text-dark" title="Audio removed; notes and transcript kept">audio removed</span>
+                    <% } %>
+                  </td>
+                  <td data-label="" class="text-end">
+                    <% if (canManage) { %>
+                      <a class="btn btn-sm btn-outline-secondary"
+                         href="/dashboard/meetings/session/edit?sessionId=<%= session.sessionId %>">
+                        <i class="fas fa-pen fa-fw"></i>
+                      </a>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="text-muted small"><%= total %> session<%= total === 1 ? "" : "s" %>.</p>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+@media (max-width: 768px) {
+    .meetings-table thead { display: none; }
+    .meetings-table tr { display:block; border:1px solid #e6e6e6; border-radius:12px; padding:12px; margin-bottom:12px; }
+    .meetings-table td { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; border:none; padding:6px 0; font-size:0.9rem; }
+    .meetings-table td::before { content: attr(data-label); font-weight:600; color:#5f6b7a; min-width:90px; }
+}
+</style>
+<script>
+// Rendered client-side so every viewer sees the meeting in their own timezone —
+// this module exists for a roster spread across several of them.
+document.querySelectorAll('.js-datetime').forEach(el => {
+    const d = el.dataset.iso ? new Date(el.dataset.iso) : null;
+    el.textContent = d && !isNaN(d) ? d.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
+    }) : (el.dataset.fallback || '');
+});
+</script>

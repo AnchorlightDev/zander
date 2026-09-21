@@ -70,6 +70,44 @@ const SESSION_ALLOWED_ROUTES = new Map([
   ["GET /api/meetings/roster", MEETINGS_INVITEE],
   ["POST /api/meetings/respond", MEETINGS_INVITEE],
 
+  // Meeting sessions — manage
+  ["GET /api/meetings/session/outstanding", MEETINGS_MANAGE],
+  ["POST /api/meetings/session/create", MEETINGS_MANAGE],
+  ["POST /api/meetings/session/update", MEETINGS_MANAGE],
+  ["POST /api/meetings/session/publish", MEETINGS_MANAGE],
+  ["POST /api/meetings/session/close", MEETINGS_MANAGE],
+  ["POST /api/meetings/session/cancel", MEETINGS_MANAGE],
+  ["POST /api/meetings/session/delete", MEETINGS_MANAGE],
+  ["POST /api/meetings/finalize", MEETINGS_MANAGE],
+  ["POST /api/meetings/agenda/create", MEETINGS_MANAGE],
+  ["POST /api/meetings/agenda/update", MEETINGS_MANAGE],
+  ["POST /api/meetings/agenda/delete", MEETINGS_MANAGE],
+  ["POST /api/meetings/agenda/reorder", MEETINGS_MANAGE],
+  ["POST /api/meetings/agenda/advance", MEETINGS_MANAGE],
+  ["POST /api/meetings/attendees/refresh", MEETINGS_MANAGE],
+  ["POST /api/meetings/attendees/add", MEETINGS_MANAGE],
+  ["POST /api/meetings/attendees/remove", MEETINGS_MANAGE],
+  ["POST /api/meetings/attendees/role", MEETINGS_MANAGE],
+  ["POST /api/meetings/archive/request", MEETINGS_MANAGE],
+  ["POST /api/meetings/archive/confirm", MEETINGS_MANAGE],
+  ["POST /api/meetings/audio/remove", MEETINGS_MANAGE],
+
+  // Meeting sessions — attendee.  Same rule as the poll routes above: the
+  // handler checks roster membership itself, because being on a meeting is not
+  // a permission node.  Minute-taking is listed here too — createNote checks
+  // the caller's chair/speaker role on the session, which a node cannot express.
+  ["GET /api/meetings/sessions", MEETINGS_INVITEE],
+  ["GET /api/meetings/session", MEETINGS_INVITEE],
+  ["POST /api/meetings/notes/create", MEETINGS_INVITEE],
+  ["POST /api/meetings/notes/update", MEETINGS_INVITEE],
+  ["POST /api/meetings/notes/delete", MEETINGS_INVITEE],
+  ["POST /api/meetings/comments/create", MEETINGS_INVITEE],
+  ["POST /api/meetings/comments/update", MEETINGS_INVITEE],
+  ["POST /api/meetings/comments/delete", MEETINGS_INVITEE],
+  ["POST /api/meetings/comments/voice", MEETINGS_INVITEE],
+  ["POST /api/meetings/progress", MEETINGS_INVITEE],
+  ["POST /api/meetings/progress/responded", MEETINGS_INVITEE],
+
   // Templates
   ["POST /api/events/templates/delete", EVENTS_WRITE],
   ["POST /api/events/templates/generate-draft", EVENTS_WRITE],

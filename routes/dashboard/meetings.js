@@ -28,6 +28,16 @@ import {
   isInvitee,
 } from "../../services/meetingPollService.js";
 import { listRankSlugs } from "../../services/meetingRosterService.js";
+import {
+  getSession,
+  getSessionForViewer,
+  getSessions,
+  outstandingResponses,
+} from "../../services/meetingSessionService.js";
+import {
+  isCloudinaryConfigured,
+  signedAssetUrl,
+} from "../../services/cloudinaryService.js";
 
 const MANAGE_NODE = "zander.web.meetings.manage";
 
@@ -211,6 +221,186 @@ export default function dashboardMeetingsSiteRoute(app, fetch, config, db, featu
         poll,
         canManage,
         badgeClass: statusColors[poll.status] || "secondary",
+        globalImage,
+        announcementWeb,
+      })
+    );
+  });
+
+  // ==========================================================================
+  // Sessions — list
+  //
+  // Same direct-service approach as the poll pages above, and for the same
+  // reason: a recorded session is scoped per viewer, and a self-call to the
+  // JSON API would carry the internal client's identity rather than theirs.
+  // ==========================================================================
+  app.get("/dashboard/meetings/sessions", async (req, res) => {
+    if (!await isFeatureWebRouteEnabled(app, features.meetings, req, res, features)) return;
+    if (!await requireLogin(req, res)) return;
+
+    const canManage = userCanManage(req);
+    const statusFilter = req.query.status || "";
+    const search = req.query.search || "";
+
+    const [result, globalImage, announcementWeb] = await Promise.all([
+      getSessions({
+        status: statusFilter || null,
+        search: search || null,
+        attendeeUserId: canManage ? null : req.session.user.userId,
+        limit: 100,
+      }),
+      getGlobalImage(),
+      getWebAnnouncement(),
+    ]);
+
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("dashboard/meetings/session-list", {
+        pageTitle: "Dashboard - Meeting Recordings",
+        config,
+        features,
+        req,
+        sessions: result.sessions,
+        total: result.total,
+        statusFilter,
+        search,
+        canManage,
+        globalImage,
+        announcementWeb,
+      })
+    );
+  });
+
+  // ==========================================================================
+  // Sessions — player
+  // ==========================================================================
+  app.get("/dashboard/meetings/session", async (req, res) => {
+    if (!await isFeatureWebRouteEnabled(app, features.meetings, req, res, features)) return;
+    if (!await requireLogin(req, res)) return;
+
+    const sessionId = req.query.sessionId;
+    if (!sessionId) return res.redirect("/dashboard/meetings/sessions");
+
+    const canManage = userCanManage(req);
+
+    // Visibility and reveal are applied inside getSessionForViewer, in the
+    // query.  Nothing below filters rows, and nothing below is handed a row it
+    // is expected to hide — a note this viewer may not read has no body in the
+    // object the template receives.
+    const session = await getSessionForViewer(sessionId, {
+      userId: req.session.user.userId,
+      isManager: canManage,
+    });
+
+    if (!session) {
+      setBannerCookie("danger", "Meeting session not found", res);
+      return res.redirect("/dashboard/meetings/sessions");
+    }
+    if (session.forbidden) {
+      setBannerCookie("danger", "You are not on that meeting.", res);
+      return res.redirect("/dashboard/meetings/sessions");
+    }
+
+    // Signed here, after the roster check above has passed, and never stored:
+    // meeting audio is uploaded `authenticated`, so the stored path is an
+    // identifier and this is what actually grants access — for an hour.
+    const signable = isCloudinaryConfigured();
+    const recordings = session.recordings.map((recording) => ({
+      recordingId: recording.recordingId,
+      source: recording.source,
+      startOffsetMs: recording.startOffsetMs,
+      durationMs: recording.durationMs,
+      mimeType: recording.mimeType,
+      transcriptStatus: recording.transcriptStatus,
+      url:
+        signable && recording.storagePublicId
+          ? signedAssetUrl(recording.storagePublicId)
+          : recording.storagePath,
+    }));
+
+    const comments = session.comments.map((comment) => ({
+      ...comment,
+      audioUrl:
+        comment.audioPublicId && signable
+          ? signedAssetUrl(comment.audioPublicId)
+          : comment.audioPath,
+      audioPublicId: undefined,
+    }));
+
+    const [outstanding, globalImage, announcementWeb] = await Promise.all([
+      // The organiser's chase list is loaded only for an organiser: a plain
+      // attendee has no business knowing who else has not caught up.
+      canManage || session.viewer.isChair
+        ? outstandingResponses(session.sessionId).catch(() => null)
+        : Promise.resolve(null),
+      getGlobalImage(),
+      getWebAnnouncement(),
+    ]);
+
+    const statusColors = {
+      draft: "secondary",
+      live: "danger",
+      processing: "warning",
+      published: "success",
+      closed: "info",
+      cancelled: "secondary",
+    };
+
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("dashboard/meetings/session-player", {
+        pageTitle: `Dashboard - ${session.event?.title || "Meeting"}`,
+        config,
+        features,
+        req,
+        session,
+        recordings,
+        comments,
+        outstanding,
+        canManage,
+        badgeClass: statusColors[session.status] || "secondary",
+        globalImage,
+        announcementWeb,
+      })
+    );
+  });
+
+  // ==========================================================================
+  // Sessions — editor (agenda, roster, minutes, archive)
+  // ==========================================================================
+  app.get("/dashboard/meetings/session/edit", async (req, res) => {
+    if (!await isFeatureWebRouteEnabled(app, features.meetings, req, res, features)) return;
+    if (!await hasPermission(MANAGE_NODE, req, res, features)) return;
+
+    const sessionId = req.query.sessionId;
+    if (!sessionId) return res.redirect("/dashboard/meetings/sessions");
+
+    const bare = await getSession(sessionId);
+    if (!bare) {
+      setBannerCookie("danger", "Meeting session not found", res);
+      return res.redirect("/dashboard/meetings/sessions");
+    }
+
+    // Loaded as a manager, so the editor shows unrevealed notes and the full
+    // agenda — the organiser cannot schedule a reveal they cannot see.
+    const [session, rankSlugs, outstanding, globalImage, announcementWeb] = await Promise.all([
+      getSessionForViewer(sessionId, { userId: req.session.user.userId, isManager: true }),
+      listRankSlugs().catch((error) => {
+        console.error("[dashboard/meetings] rank list failed:", error.message);
+        return [];
+      }),
+      outstandingResponses(sessionId).catch(() => null),
+      getGlobalImage(),
+      getWebAnnouncement(),
+    ]);
+
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("dashboard/meetings/session-editor", {
+        pageTitle: `Dashboard - Edit ${session.event?.title || "Meeting"}`,
+        config,
+        features,
+        req,
+        session,
+        rankSlugs,
+        outstanding,
         globalImage,
         announcementWeb,
       })

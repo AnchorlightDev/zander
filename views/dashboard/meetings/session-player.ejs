@@ -1,0 +1,296 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<%
+  // Everything below has already been filtered by the service, in the query.
+  // A note this viewer may not read, or has not yet reached, is simply absent
+  // from `session.notes` — there is no hidden body in this markup to uncover,
+  // and nothing here is responsible for hiding anything.
+  //
+  // JSON goes into DOUBLE-quoted attributes, through escaped interpolation and
+  // never raw.  Meeting titles, agenda titles and comment bodies are free text
+  // written by other people; see tests/unit/meetingViewEscaping.test.mjs.
+  const playerAgenda = JSON.stringify(session.agendaItems.map(item => ({
+    itemId: item.itemId,
+    title: item.title,
+    startOffsetMs: item.startOffsetMs,
+    endOffsetMs: item.endOffsetMs,
+    status: item.status
+  })));
+
+  const playerRecordings = JSON.stringify(recordings.map(recording => ({
+    recordingId: recording.recordingId,
+    url: recording.url,
+    startOffsetMs: recording.startOffsetMs,
+    durationMs: recording.durationMs
+  })));
+
+  const playerComments = JSON.stringify(comments.map(comment => ({
+    commentId: comment.commentId,
+    username: comment.username,
+    atOffsetMs: comment.atOffsetMs,
+    kind: comment.kind
+  })));
+
+  const playerGaps = JSON.stringify(session.coverageGaps || []);
+
+  const canComment = session.status === "published" || session.status === "live";
+
+  function offsetLabel(ms) {
+    if (ms === null || ms === undefined) return "not discussed";
+    const total = Math.floor(Number(ms) / 1000);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    const pad = (v) => String(v).padStart(2, "0");
+    return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  }
+%>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <div>
+          <h1 class="h2 mb-1"><%= session.event && session.event.title ? session.event.title : ("Meeting session #" + session.sessionId) %></h1>
+          <span class="badge bg-<%= badgeClass %>"><%= session.status %></span>
+          <small class="text-muted ms-2">
+            Held <span class="js-datetime"
+                       data-iso="<%= session.startedAt ? new Date(session.startedAt).toISOString() : '' %>"
+                       data-fallback="— not started"></span>
+          </small>
+        </div>
+        <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+          <a href="/dashboard/meetings/sessions" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-arrow-left fa-fw me-1"></i>Back
+          </a>
+          <% if (canManage) { %>
+            <a href="/dashboard/meetings/session/edit?sessionId=<%= session.sessionId %>" class="btn btn-sm btn-warning">
+              <i class="fas fa-pen fa-fw me-1"></i>Edit
+            </a>
+          <% } %>
+        </div>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (session.status === "processing") { %>
+        <div class="alert alert-warning">
+          The recording has stopped and the audio is still being mixed down and uploaded.
+          This page will have audio on it shortly.
+        </div>
+      <% } %>
+
+      <% if (session.audioRemovedAt) { %>
+        <div class="alert alert-secondary">
+          The audio for this meeting has been removed under the retention policy.
+          The agenda, minutes, transcript and discussion below are unaffected.
+        </div>
+      <% } %>
+
+      <% if (session.summary) { %>
+        <p class="mb-3"><%= session.summary %></p>
+      <% } %>
+
+      <div class="row g-4">
+        <!-- ======================= Agenda / chapters ======================= -->
+        <div class="col-lg-4 order-lg-2">
+          <h2 class="h6 text-uppercase text-muted">Agenda</h2>
+          <div class="list-group mb-4">
+            <% if (session.agendaItems.length === 0) { %>
+              <div class="list-group-item text-muted small">No agenda was set for this meeting.</div>
+            <% } %>
+            <% session.agendaItems.forEach(item => { %>
+              <button type="button"
+                      class="list-group-item list-group-item-action"
+                      data-agenda-item="<%= item.itemId %>"
+                      data-start-offset-ms="<%= item.startOffsetMs === null ? '' : item.startOffsetMs %>"
+                      data-end-offset-ms="<%= item.endOffsetMs === null ? '' : item.endOffsetMs %>"
+                      <% if (item.startOffsetMs !== null) { %>data-seek-offset="<%= item.startOffsetMs %>"<% } %>
+                      <%= item.startOffsetMs === null ? "disabled" : "" %>>
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                  <span><%= item.title %></span>
+                  <small class="text-muted text-nowrap"><%= offsetLabel(item.startOffsetMs) %></small>
+                </div>
+                <% if (item.brief) { %>
+                  <small class="d-block text-muted"><%= item.brief %></small>
+                <% } %>
+              </button>
+            <% }) %>
+          </div>
+
+          <% if (outstanding) { %>
+            <!-- Organiser only: a plain attendee is never shown who else is behind. -->
+            <h2 class="h6 text-uppercase text-muted">Still to catch up</h2>
+            <div class="border rounded p-3 mb-4">
+              <p class="mb-2 small">
+                <strong><%= outstanding.respondedCount %></strong> of <strong><%= outstanding.total %></strong> have responded.
+              </p>
+              <% if (outstanding.outstanding.length === 0) { %>
+                <p class="text-success small mb-0">Everyone is caught up.</p>
+              <% } else { %>
+                <ul class="list-unstyled small mb-0">
+                  <% outstanding.outstanding.forEach(person => { %>
+                    <li><%= person.username || ("User #" + person.userId) %><%= person.notifiedAt ? "" : " (not yet notified)" %></li>
+                  <% }) %>
+                </ul>
+              <% } %>
+              <% if (outstanding.cannotRespond.length > 0) { %>
+                <hr class="my-2">
+                <p class="small text-muted mb-1">No website login — chase these another way:</p>
+                <ul class="list-unstyled small mb-0">
+                  <% outstanding.cannotRespond.forEach(person => { %>
+                    <li><%= person.username || ("User #" + person.userId) %></li>
+                  <% }) %>
+                </ul>
+              <% } %>
+            </div>
+          <% } %>
+        </div>
+
+        <!-- ======================= Player + discussion ======================= -->
+        <div class="col-lg-8 order-lg-1">
+          <div id="meetingPlayer"
+               class="mb-4"
+               data-session-id="<%= session.sessionId %>"
+               data-duration-ms="<%= session.durationMs || 0 %>"
+               data-can-comment="<%= canComment ? 'true' : 'false' %>"
+               data-last-offset-ms="<%= session.viewerProgress.lastOffsetMs %>"
+               data-recordings="<%= playerRecordings %>"
+               data-agenda="<%= playerAgenda %>"
+               data-comments="<%= playerComments %>"
+               data-gaps="<%= playerGaps %>"></div>
+
+          <% if (session.viewerProgress && !session.viewerProgress.respondedAt && canComment) { %>
+            <div class="d-flex justify-content-end mb-4">
+              <button type="button" class="btn btn-sm btn-outline-success" id="meetingMarkCaughtUp">
+                I'm caught up
+              </button>
+            </div>
+          <% } %>
+
+          <!-- ============================ Minutes ============================ -->
+          <h2 class="h5 mt-4 pt-3 border-top">Minutes</h2>
+          <% if (session.notes.length === 0) { %>
+            <p class="text-muted small">Nothing has been minuted here — or nothing that is visible to you yet.</p>
+          <% } else { %>
+            <ul class="list-unstyled">
+              <% session.notes.forEach(note => { %>
+                <li class="border-start border-3 ps-3 mb-3 border-<%= note.kind === 'decision' ? 'success' : note.kind === 'action' ? 'warning' : 'secondary' %>">
+                  <div class="small text-muted">
+                    <span class="text-uppercase"><%= note.kind %></span>
+                    · <%= note.authorName %>
+                    · <span class="badge bg-light text-dark"><%= note.visibility %></span>
+                  </div>
+                  <div><%= note.body %></div>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
+
+          <!-- =========================== Discussion =========================== -->
+          <h2 class="h5 mt-4 pt-3 border-top">Discussion</h2>
+          <p class="text-muted small">
+            Comments from the meeting itself and from people catching up afterwards, in one thread.
+            Click a comment's timestamp to jump the recording to that moment.
+          </p>
+
+          <% if (comments.length === 0) { %>
+            <p class="text-muted small">No comments yet.</p>
+          <% } %>
+
+          <% comments.forEach(comment => { %>
+            <div class="border rounded p-3 mb-2 <%= comment.parentCommentId ? 'ms-4' : '' %>" id="comment-<%= comment.commentId %>">
+              <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                <div class="small">
+                  <strong><%= comment.username %></strong>
+                  <% if (comment.atOffsetMs !== null) { %>
+                    <button type="button" class="btn btn-link btn-sm p-0 align-baseline"
+                            data-seek-offset="<%= comment.atOffsetMs %>"><%= offsetLabel(comment.atOffsetMs) %></button>
+                  <% } %>
+                  <span class="badge bg-light text-dark"><%= comment.postedLive ? "live" : "catch-up" %></span>
+                </div>
+                <small class="text-muted js-datetime"
+                       data-iso="<%= new Date(comment.createdAt).toISOString() %>"
+                       data-fallback=""></small>
+              </div>
+
+              <% if (comment.kind === "voice") { %>
+                <audio controls preload="none" class="w-100" src="<%= comment.audioUrl %>"></audio>
+                <% if (comment.transcript) { %>
+                  <p class="small text-muted mt-2 mb-0"><%= comment.transcript %></p>
+                <% } else if (comment.transcriptStatus === "pending" || comment.transcriptStatus === "running") { %>
+                  <p class="small text-muted mt-2 mb-0">Transcription pending.</p>
+                <% } %>
+              <% } else { %>
+                <p class="mb-0"><%= comment.body %></p>
+              <% } %>
+            </div>
+          <% }) %>
+
+          <% if (canComment) { %>
+            <div class="border rounded p-3 mt-3">
+              <form id="meetingCommentForm">
+                <div class="mb-2">
+                  <label class="form-label small text-muted mb-1" for="meetingCommentBody">
+                    Comment at <span id="meetingCommentOffsetLabel">0:00</span>
+                  </label>
+                  <textarea class="form-control" id="meetingCommentBody" name="body" rows="3"
+                            placeholder="What did you want to say about this bit?"></textarea>
+                  <input type="hidden" name="atOffsetMs" id="meetingCommentOffset" value="0">
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                  <select class="form-select form-select-sm w-auto" name="visibility">
+                    <option value="attendees">Attendees</option>
+                    <option value="public">Anyone who can see this meeting</option>
+                    <% if (session.viewer.isSpeaker) { %>
+                      <option value="speakers">Chairs and speakers only</option>
+                    <% } %>
+                    <option value="private">Just me</option>
+                  </select>
+                  <button type="submit" class="btn btn-sm btn-primary">Post comment</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="meetingVoiceRecord">
+                    <i class="fas fa-microphone fa-fw me-1"></i>Record a voice note
+                  </button>
+                </div>
+              </form>
+            </div>
+          <% } else { %>
+            <div class="alert alert-secondary mt-3 mb-0">
+              This meeting is <%= session.status %> and is no longer accepting comments.
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+.meeting-track {
+  position: relative;
+  height: 26px;
+  margin-top: 6px;
+  border-radius: 6px;
+  background: #f1f3f5;
+}
+.meeting-track-gap {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: repeating-linear-gradient(45deg, #e9ecef, #e9ecef 4px, #dee2e6 4px, #dee2e6 8px);
+}
+.meeting-track-chapter,
+.meeting-track-comment {
+  position: absolute;
+  border: none;
+  padding: 0;
+  transform: translateX(-50%);
+}
+.meeting-track-chapter { top: 0; width: 2px; height: 100%; background: #0d6efd; }
+.meeting-track-comment { top: 7px; width: 12px; height: 12px; border-radius: 50%; background: #6c757d; }
+.meeting-track-comment.is-voice { background: #198754; }
+</style>
+<script src="/js/meeting-session.js"></script>

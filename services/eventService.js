@@ -19,8 +19,13 @@ const STATUS_TRANSITIONS = {
 
 /**
  * Generate a URL-safe slug from a title + date, ensuring uniqueness.
+ *
+ * Exported so the meeting finalise -> event handoff
+ * (services/meetingSessionService.js) creates its event row with the same slug
+ * rules as every other event, rather than growing a second implementation that
+ * drifts.
  */
-async function generateSlug(title, startAt, existingSlug = null) {
+export async function generateSlug(title, startAt, existingSlug = null) {
   const base = title
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "")
