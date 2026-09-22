@@ -170,6 +170,34 @@ describe("the reviewer's name", () => {
   });
 });
 
+describe("a form that is not reviewed at all", () => {
+  it("does not promise an outcome that is never coming", () => {
+    const received = buildTicketMessage("received", { form: plainForm });
+
+    expect(received).toBe(DEFAULT_TICKET_MESSAGES.received);
+    expect(received).not.toMatch(/review|outcome|decision/i);
+    // The pending wording is the one that says staff will get back to you.
+    expect(received).not.toBe(DEFAULT_TICKET_MESSAGES.pending);
+  });
+
+  it("still honours a per-form override, sharing the pending slot", () => {
+    const form = { name: "Survey", ticketPendingMessage: "Thanks for the feedback!" };
+    expect(buildTicketMessage("received", { form })).toBe("Thanks for the feedback!");
+  });
+
+  it("names nobody and publishes no comment", () => {
+    const body = buildTicketMessage("received", {
+      form: plainForm,
+      reviewer: "Ben",
+      comment: "internal",
+      commentIsPublic: true,
+    });
+
+    expect(body).not.toContain("Ben");
+    expect(body).not.toContain("internal");
+  });
+});
+
 describe("a decision being undone", () => {
   it("does not reuse the wording that opens the ticket", () => {
     const reopened = buildTicketMessage("reopened", { form: wordedForm });

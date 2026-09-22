@@ -131,7 +131,9 @@
                     <a href="/dashboard/forms/submissions?formId=<%= form.formId %>">
                       <%= form.submissionCount %>
                     </a>
-                    <% if (form.pendingCount > 0) { %>
+                    <% if (form.requiresReview === false) { %>
+                      <span class="badge bg-light text-muted border ms-1">no review</span>
+                    <% } else if (form.pendingCount > 0) { %>
                       <span class="badge bg-warning text-dark ms-1"><%= form.pendingCount %> pending</span>
                     <% } %>
                   </td>

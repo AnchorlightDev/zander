@@ -65,7 +65,9 @@
               <p class="mb-2"><strong>Received:</strong> <%= new Date(submission.createdAt).toLocaleString() %></p>
               <p class="mb-2">
                 <strong>Status:</strong>
-                <% if (submission.status === "approved") { %>
+                <% if (submission.form.requiresReview === false && submission.status === "pending") { %>
+                  <span class="badge bg-secondary">Received</span>
+                <% } else if (submission.status === "approved") { %>
                   <span class="badge bg-success">Approved</span>
                 <% } else if (submission.status === "denied") { %>
                   <span class="badge bg-danger">Denied</span>
@@ -103,8 +105,16 @@
           </div>
 
           <div class="card mb-4">
-            <div class="card-header"><h5 class="mb-0">Review</h5></div>
+            <div class="card-header">
+              <h5 class="mb-0"><%= submission.form.requiresReview === false ? "Response" : "Review" %></h5>
+            </div>
             <div class="card-body">
+              <% if (submission.form.requiresReview === false) { %>
+                <p class="text-muted small mb-3">
+                  This form does not use approvals, so there is nothing to decide. The response is
+                  recorded above. You can still delete it below.
+                </p>
+              <% } else { %>
               <form method="post" action="/dashboard/forms/submissions/review">
                 <input type="hidden" name="submissionId" value="<%= submission.submissionId %>">
 
@@ -131,6 +141,7 @@
               </form>
 
               <hr>
+              <% } %>
 
               <form method="post" action="/dashboard/forms/submissions/delete"
                     onsubmit="return confirm('Permanently delete this submission?');">

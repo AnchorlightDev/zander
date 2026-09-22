@@ -65,7 +65,12 @@
                   <td data-label="Submitted by"><%= s.submitterName %></td>
                   <td data-label="Received"><%= new Date(s.createdAt).toLocaleString() %></td>
                   <td data-label="Status">
-                    <% if (s.status === "approved") { %>
+                    <%# A survey response is not waiting on anything, so it is
+                        never "Pending". It can still carry a decision if the
+                        form was switched to no-review after being reviewed. %>
+                    <% if (s.form.requiresReview === false && s.status === "pending") { %>
+                      <span class="badge bg-secondary">Received</span>
+                    <% } else if (s.status === "approved") { %>
                       <span class="badge bg-success">Approved</span>
                     <% } else if (s.status === "denied") { %>
                       <span class="badge bg-danger">Denied</span>
@@ -75,7 +80,9 @@
                   </td>
                   <td data-label="Action">
                     <a href="/dashboard/forms/submissions/view?submissionId=<%= s.submissionId %>"
-                       class="btn btn-sm btn-info">Review</a>
+                       class="btn btn-sm btn-info">
+                      <%= s.form.requiresReview === false ? "View" : "Review" %>
+                    </a>
                   </td>
                 </tr>
               <% }) %>

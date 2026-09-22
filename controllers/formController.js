@@ -143,6 +143,9 @@ function formWriteData(data) {
       ? parseDiscordIds(data.notifyDiscordUserIds)
       : null,
     allowMultiple: Boolean(data.allowMultiple),
+    // Defaults to true: an application needs deciding. A survey does not, and
+    // says so by turning this off.
+    requiresReview: data.requiresReview !== false,
     // Blank clears the gate rather than storing "", so requiresAccessCode has
     // one thing to test for.
     accessCode: String(data.accessCode ?? "").trim().slice(0, 190) || null,
@@ -318,7 +321,9 @@ export async function listSubmissions({ formId = null, status = null, limit = 20
     where,
     orderBy: [{ createdAt: "desc" }],
     take: Number(limit) || 200,
-    include: { form: { select: { formId: true, name: true, slug: true } } },
+    include: {
+      form: { select: { formId: true, name: true, slug: true, requiresReview: true } },
+    },
   });
 }
 
@@ -381,11 +386,17 @@ export async function deleteSubmission(submissionId) {
   });
 }
 
-/** Pending-count badge for the dashboard forms list. */
+/**
+ * Pending-count badge for the dashboard forms list.
+ *
+ * Only forms that actually need deciding. A feedback survey has nothing to
+ * approve, so counting its responses would put a badge on a queue that can
+ * never be emptied.
+ */
 export async function countPendingByForm() {
   const rows = await prisma.formSubmissions.groupBy({
     by: ["formId"],
-    where: { status: "pending" },
+    where: { status: "pending", form: { requiresReview: true } },
     _count: { submissionId: true },
   });
   return new Map(rows.map((r) => [r.formId, r._count.submissionId]));

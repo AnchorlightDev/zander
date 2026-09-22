@@ -76,6 +76,20 @@
                            <%= form && form.allowMultiple ? 'checked' : '' %>>
                     <label class="form-check-label" for="allowMultiple">Allow more than one submission per user</label>
                   </div>
+                  <%# Ticked by default, including on a new form: an application
+                      needs deciding, and only a survey says otherwise. %>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="requiresReview" name="requiresReview" value="1"
+                           <%= !form || form.requiresReview ? 'checked' : '' %>>
+                    <label class="form-check-label" for="requiresReview">
+                      Submissions need approving or denying
+                    </label>
+                  </div>
+                  <small class="form-text text-muted">
+                    Turn this off for feedback surveys. Responses are still collected and readable,
+                    but they stop showing as a pending queue with nothing that can ever clear it,
+                    and there is no approve/deny step.
+                  </small>
                 </div>
               </div>
 

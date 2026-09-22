@@ -208,6 +208,8 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         discordForumChannelId: body.discordForumChannelId,
         notifyDiscordUserIds: body.notifyDiscordUserIds,
         allowMultiple: body.allowMultiple === "1" || body.allowMultiple === "on",
+        // An unticked checkbox posts nothing, so absence means "no review".
+        requiresReview: body.requiresReview === "1" || body.requiresReview === "on",
         accessCode: body.accessCode,
         requirements: parseRequirementsPayload(body),
         useGlobalRequirements:
@@ -287,6 +289,8 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         discordForumChannelId: body.discordForumChannelId,
         notifyDiscordUserIds: body.notifyDiscordUserIds,
         allowMultiple: body.allowMultiple === "1" || body.allowMultiple === "on",
+        // An unticked checkbox posts nothing, so absence means "no review".
+        requiresReview: body.requiresReview === "1" || body.requiresReview === "on",
         accessCode: body.accessCode,
         requirements: parseRequirementsPayload(body),
         useGlobalRequirements:
@@ -394,6 +398,19 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
     }
 
     try {
+      // The decision UI is hidden for forms with approvals off, but a hidden
+      // control is not a check -- posting here directly would otherwise DM the
+      // applicant and post an approval into their ticket.
+      const existing = await getSubmission(submissionId);
+      if (!existing) {
+        setBannerCookie("danger", "Submission not found.", res);
+        return res.redirect("/dashboard/forms/submissions");
+      }
+      if (existing.form?.requiresReview === false) {
+        setBannerCookie("danger", "This form does not use approvals.", res);
+        return res.redirect(`/dashboard/forms/submissions/view?submissionId=${submissionId}`);
+      }
+
       await reviewSubmission({
         submissionId,
         status,

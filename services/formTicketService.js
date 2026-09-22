@@ -45,7 +45,9 @@ function buildOpeningMessage({ form, fields, answers, submissionId }) {
     lines.push("");
   }
 
-  lines.push(buildTicketMessage("pending", { form, submissionId }));
+  // A form nobody reviews must not open its ticket promising a decision.
+  const opening = form?.requiresReview === false ? "received" : "pending";
+  lines.push(buildTicketMessage(opening, { form, submissionId }));
   return lines.join("\n");
 }
 
