@@ -53,7 +53,7 @@
             alertType: "info",
             content: "You have already submitted this form. Only one submission per person is accepted."
           }) %>
-        <% } else if (!fields.length) { %>
+        <% } else if (!questionCount) { %>
           <%- include("../../partials/alert.ejs", {
             alertType: "warning",
             content: "This form has no questions yet. Please check back later."
@@ -61,7 +61,17 @@
         <% } else { %>
 
           <form method="post" action="/forms/<%= form.slug %>" id="publicForm">
-            <% fields.forEach(function (field) { %>
+            <% sections.forEach(function (section, sectionIndex) { %>
+            <fieldset class="form-page border-0 p-0 m-0" data-page="<%= sectionIndex %>"
+                      <% if (section.showIf) { %>data-showif="<%= JSON.stringify(section.showIf) %>"<% } %>>
+              <% if (section.title) { %>
+                <legend class="h4 mb-1"><%= section.title %></legend>
+                <% if (section.description) { %>
+                  <p class="text-muted" style="white-space: pre-wrap;"><%= section.description %></p>
+                <% } %>
+                <hr class="mb-4">
+              <% } %>
+            <% section.fields.forEach(function (field) { %>
               <%
                 // `values` is the rejected body on a validation re-render, so a
                 // long answer survives a mistake in another field.
@@ -70,7 +80,7 @@
                   ? submitted.indexOf(option) !== -1
                   : submitted === option;
               %>
-              <div class="mb-4 form-field"
+              <div class="mb-4 form-field<%= errorKeys.indexOf(field.fieldKey) !== -1 ? " form-field-error" : "" %>"
                    data-field-key="<%= field.fieldKey %>"
                    data-field-type="<%= field.fieldType %>"
                    <% if (field.showIf) { %>data-showif="<%= JSON.stringify(field.showIf) %>"<% } %>>
@@ -203,8 +213,22 @@
                 <% } %>
               </div>
             <% }) %>
+            </fieldset>
+            <% }) %>
 
-            <div class="d-flex align-items-center gap-3">
+            <%# Only rendered when the form actually has sections, so a form
+                built before they existed keeps its single Submit button and no
+                wizard chrome at all. %>
+            <% if (!singlePage) { %>
+              <div class="d-flex justify-content-between align-items-center border-top pt-3 mb-3"
+                   id="wizardNav">
+                <button type="button" class="btn btn-light" id="wizardBack">&larr; Back</button>
+                <span class="text-muted small" id="wizardProgress" aria-live="polite"></span>
+                <button type="button" class="btn btn-primary" id="wizardNext">Next &rarr;</button>
+              </div>
+            <% } %>
+
+            <div class="d-flex align-items-center gap-3" id="submitRow">
               <button type="submit" class="btn btn-primary" id="publicFormSubmit">Submit</button>
               <small class="text-muted" id="draftStatus" aria-live="polite"></small>
             </div>
@@ -286,16 +310,21 @@
 
   function applyConditions() {
     fieldEls.forEach(function (wrapper) {
-      if (!wrapper.dataset.showif) return;
+      // A section's condition governs its whole page, so it is tested first --
+      // a field inside a hidden page is hidden whatever its own condition
+      // says. The server collapses the same way.
+      var page = wrapper.closest ? wrapper.closest(".form-page") : null;
+      var visible = pageConditionMet(page);
 
-      var condition;
-      try {
-        condition = JSON.parse(wrapper.dataset.showif);
-      } catch (e) {
-        return;
+      if (visible && wrapper.dataset.showif) {
+        try {
+          var condition = JSON.parse(wrapper.dataset.showif);
+          visible = matches(answerFor(condition.fieldKey), condition.equals || []);
+        } catch (e) {
+          // Malformed condition: leave the field showing rather than trap it.
+        }
       }
 
-      var visible = matches(answerFor(condition.fieldKey), condition.equals || []);
       wrapper.style.display = visible ? "" : "none";
 
       // Disabled rather than just hidden: a disabled control is left out of
@@ -308,9 +337,137 @@
     });
   }
 
+  // A change can hide a field or a whole page, either of which changes what
+  // "next" means, so the wizard is re-rendered rather than just the fields.
   if (formEl) {
-    formEl.addEventListener("change", applyConditions);
+    formEl.addEventListener("change", function () { renderWizard(); });
+  }
+
+  // ── Multi-page navigation ───────────────────────────────────────────────
+  // Sections are page breaks in one flat form, not separate requests: every
+  // answer stays in the DOM the whole time, so Back never loses anything and
+  // the final POST carries the lot. The server validates everything again
+  // regardless -- none of this is a security boundary.
+  var pages = Array.prototype.slice.call(document.querySelectorAll(".form-page"));
+  var wizardNav = document.getElementById("wizardNav");
+  var backBtn = document.getElementById("wizardBack");
+  var nextBtn = document.getElementById("wizardNext");
+  var progressEl = document.getElementById("wizardProgress");
+  var submitRow = document.getElementById("submitRow");
+  var currentPage = 0;
+
+  /** A section's own display condition, governing the whole page. */
+  function pageConditionMet(page) {
+    if (!page || !page.dataset.showif) return true;
+    try {
+      var condition = JSON.parse(page.dataset.showif);
+      return matches(answerFor(condition.fieldKey), condition.equals || []);
+    } catch (e) {
+      return true;
+    }
+  }
+
+  /** Skipped when the section is conditioned out, or every field in it is hidden. */
+  function pageNavigable(page) {
+    if (!pageConditionMet(page)) return false;
+    var wrappers = page.querySelectorAll(".form-field");
+    if (!wrappers.length) return true;
+    for (var i = 0; i < wrappers.length; i++) {
+      if (wrappers[i].style.display !== "none") return true;
+    }
+    return false;
+  }
+
+  function navigablePages() {
+    var open = [];
+    for (var i = 0; i < pages.length; i++) {
+      if (pageNavigable(pages[i])) open.push(pages[i]);
+    }
+    return open;
+  }
+
+  /**
+   * Show or put away a page.
+   *
+   * `required` is lifted off the pages that are put away: a required control
+   * inside a display:none page cannot be focused, and the browser refuses to
+   * submit at all while trying to report it. It is restored when the page
+   * comes back, and Next validates each page before letting anyone past.
+   */
+  function setPageShown(page, shown) {
+    page.style.display = shown ? "" : "none";
+    Array.prototype.forEach.call(
+      page.querySelectorAll("input, select, textarea"),
+      function (control) {
+        if (shown) {
+          if (control.dataset.wasRequired === "1") {
+            control.required = true;
+            delete control.dataset.wasRequired;
+          }
+        } else if (control.required) {
+          control.dataset.wasRequired = "1";
+          control.required = false;
+        }
+      }
+    );
+  }
+
+  function renderWizard() {
+    if (!pages.length) return;
     applyConditions();
+
+    var open = navigablePages();
+    if (!open.length) open = [pages[0]];
+
+    // The page we were on may have just been conditioned away.
+    if (open.indexOf(pages[currentPage]) === -1) currentPage = pages.indexOf(open[0]);
+
+    for (var i = 0; i < pages.length; i++) setPageShown(pages[i], i === currentPage);
+
+    var position = open.indexOf(pages[currentPage]);
+    var isLast = position === open.length - 1;
+
+    if (progressEl) progressEl.textContent = "Step " + (position + 1) + " of " + open.length;
+    if (backBtn) backBtn.disabled = position <= 0;
+    if (nextBtn) nextBtn.style.display = isLast ? "none" : "";
+    if (submitRow) submitRow.style.display = isLast ? "" : "none";
+  }
+
+  function step(delta) {
+    var open = navigablePages();
+    var target = open[open.indexOf(pages[currentPage]) + delta];
+    if (!target) return;
+    currentPage = pages.indexOf(target);
+    renderWizard();
+    if (wizardNav && wizardNav.scrollIntoView) wizardNav.scrollIntoView({ block: "nearest" });
+  }
+
+  if (nextBtn) {
+    nextBtn.addEventListener("click", function () {
+      // Native validation a page at a time, so Next cannot step over a
+      // required answer the way a single end-of-form check would.
+      var controls = pages[currentPage].querySelectorAll("input, select, textarea");
+      for (var i = 0; i < controls.length; i++) {
+        if (!controls[i].disabled && !controls[i].checkValidity()) {
+          controls[i].reportValidity();
+          return;
+        }
+      }
+      step(1);
+    });
+  }
+
+  if (backBtn) {
+    backBtn.addEventListener("click", function () { step(-1); });
+  }
+
+  if (pages.length) {
+    // A server-side rejection reopens on the page holding the first failure,
+    // rather than dumping the applicant back at step one to find it.
+    var firstError = document.querySelector(".form-field-error");
+    var errorPage = firstError && firstError.closest ? firstError.closest(".form-page") : null;
+    if (errorPage) currentPage = pages.indexOf(errorPage);
+    renderWizard();
   }
 
   // ── Draft autosave ──────────────────────────────────────────────────────

@@ -11,7 +11,7 @@
 
 import { EmbedBuilder } from "discord.js";
 import { client } from "../controllers/discordController.js";
-import { formatAnswer, getAnswerImages } from "../lib/formFields.js";
+import { formatAnswer, getAnswerImages, isDisplayType } from "../lib/formFields.js";
 
 const STATUS_COLOURS = {
   pending: 0x5865f2,
@@ -34,7 +34,10 @@ function buildSubmissionEmbed({ form, fields, answers, submissionId, submitter }
     embed.setAuthor({ name: submitter });
   }
 
-  const shown = fields.slice(0, 25);
+  // Section breaks are page furniture on the public form; they have no answer,
+  // so they are not rows in the review embed either.
+  const answerable = fields.filter((field) => !isDisplayType(field.fieldType));
+  const shown = answerable.slice(0, 25);
   let previewImage = null;
 
   for (const field of shown) {
@@ -51,9 +54,9 @@ function buildSubmissionEmbed({ form, fields, answers, submissionId, submitter }
 
   if (previewImage) embed.setImage(previewImage);
 
-  if (fields.length > shown.length) {
+  if (answerable.length > shown.length) {
     embed.setDescription(
-      `Showing the first ${shown.length} of ${fields.length} answers - open the dashboard for the rest.`
+      `Showing the first ${shown.length} of ${answerable.length} answers - open the dashboard for the rest.`
     );
   }
 

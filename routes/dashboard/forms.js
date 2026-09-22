@@ -38,6 +38,7 @@ import {
   SHOW_IF_SOURCE_TYPES,
   formatAnswer,
   getAnswerImages,
+  isDisplayType,
   isValidSubmissionStatus,
   optionsToText,
 } from "../../lib/formFields.js";
@@ -317,14 +318,16 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         submission: decorated,
         // Pre-rendered so the template stays presentational -- the same
         // formatter the Discord embed uses, so both read identically.
-        answerRows: submission.form.fields.map((field) => ({
+        answerRows: submission.form.fields
+          .filter((field) => !isDisplayType(field.fieldType))
+          .map((field) => ({
           label: field.label,
           fieldType: field.fieldType,
           value: formatAnswer(field, submission.answers?.[field.fieldKey]),
           // Images are rendered as thumbnails rather than as the markdown
           // links formatAnswer produces for the Discord embed.
           images: getAnswerImages(field, submission.answers?.[field.fieldKey]),
-        })),
+          })),
       })
     );
   });

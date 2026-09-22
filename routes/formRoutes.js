@@ -42,7 +42,10 @@ import {
   getFieldConfig,
   getMaxImages,
   getScaleRange,
+  groupIntoSections,
   isAutoFillType,
+  isDisplayType,
+  isSinglePage,
   normaliseOptions,
   validateSubmission,
 } from "../lib/formFields.js";
@@ -66,6 +69,22 @@ export default function formSiteRoutes(app, config, features) {
         scale: getScaleRange(f),
         showIf: getFieldConfig(f).showIf ?? null,
       }));
+
+  /**
+   * The same list, split into the pages the wizard steps through.
+   *
+   * A form with no section markers yields exactly one untitled page, which the
+   * template renders without any wizard chrome -- so every form built before
+   * sections existed looks and behaves as it always did.
+   */
+  const pagesFor = (form) => {
+    const fields = visibleFields(form);
+    return {
+      sections: groupIntoSections(fields),
+      singlePage: isSinglePage(fields),
+      questionCount: fields.filter((f) => !isDisplayType(f.fieldType)).length,
+    };
+  };
 
   // Image answers must point at our own Cloudinary cloud; lib/formFields.js
   // reads no environment of its own, so the check is fed from here.
@@ -173,9 +192,10 @@ export default function formSiteRoutes(app, config, features) {
         globalImage: await getGlobalImage(),
         announcementWeb: await getWebAnnouncement(),
         form,
-        fields: visibleFields(form),
+        ...pagesFor(form),
         alreadySubmitted,
         errors: [],
+        errorKeys: [],
         values: draft?.answers ?? {},
         draftSavedAt: draft?.updatedAt ?? null,
       })
@@ -305,7 +325,10 @@ export default function formSiteRoutes(app, config, features) {
     if (gate) return gatePage(req, res, form, gate);
 
     const body = req.body || {};
-    const { ok, errors, answers } = validateSubmission(form.fields, body, { user, cloudName });
+    const { ok, errors, errorKeys, answers } = validateSubmission(form.fields, body, {
+      user,
+      cloudName,
+    });
 
     // Re-render in place rather than redirecting, so a long paragraph answer
     // is not lost to a validation slip on another field.
@@ -318,9 +341,12 @@ export default function formSiteRoutes(app, config, features) {
           globalImage: await getGlobalImage(),
           announcementWeb: await getWebAnnouncement(),
           form,
-          fields: visibleFields(form),
+          ...pagesFor(form),
           alreadySubmitted: false,
           errors,
+          // Names the fields that failed, so the wizard reopens on the page
+          // holding the first of them rather than back at step one.
+          errorKeys,
           values: body,
           draftSavedAt: null,
         })

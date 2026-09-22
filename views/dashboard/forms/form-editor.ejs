@@ -543,17 +543,30 @@
     var placeholder = row.querySelector(".f-placeholder").closest(".col-md-6");
     var maxLen = row.querySelector(".f-maxlength").closest(".col-md-4");
 
+    // A section break is page furniture, not a question: it has a heading and
+    // a description and collects nothing, so everything to do with answering
+    // is put away.
+    var isDisplay = Boolean(type && type.display);
+
     optionsWrap.style.display = type && type.hasOptions ? "" : "none";
     row.querySelector(".f-images-wrap").style.display = type && type.value === "images" ? "" : "none";
     row.querySelector(".f-scale-wrap").style.display = type && type.value === "scale" ? "" : "none";
 
+    var requiredCell = row.querySelector(".f-required").closest(".col-md-4");
+    if (requiredCell) requiredCell.style.display = isDisplay ? "none" : "";
+
     // Max length means nothing for the types whose answer is not free text.
-    var noLength = type && (type.value === "images" || type.value === "scale" || type.hasOptions);
+    var noLength = type && (type.value === "images" || type.value === "scale" || type.hasOptions || type.display);
 
     if (type && type.autoFill) {
       placeholder.style.display = "none";
       maxLen.style.display = "none";
       note.textContent = "Filled in automatically from the submitter's account.";
+    } else if (isDisplay) {
+      placeholder.style.display = "none";
+      maxLen.style.display = "none";
+      note.textContent = "Starts a new page. Label is the heading, help text sits underneath. "
+        + "A condition here hides the whole page, not just this line.";
     } else {
       placeholder.style.display = type && type.value === "images" ? "none" : "";
       maxLen.style.display = noLength ? "none" : "";

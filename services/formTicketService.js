@@ -24,7 +24,7 @@ import {
   getCategoryPermissions,
   syncParticipantsForMessage,
 } from "../controllers/supportTicketController.js";
-import { formatAnswer } from "../lib/formFields.js";
+import { formatAnswer, isDisplayType } from "../lib/formFields.js";
 import { buildTicketMessage } from "../lib/formTicketMessages.mjs";
 
 /**
@@ -38,6 +38,7 @@ function buildOpeningMessage({ form, fields, answers, submissionId }) {
   const lines = [`${form.name} - submission #${submissionId}`, ""];
 
   for (const field of fields) {
+    if (isDisplayType(field.fieldType)) continue;
     const value = formatAnswer(field, answers[field.fieldKey]);
     lines.push(`${field.label}:`);
     lines.push(value || "(not answered)");
