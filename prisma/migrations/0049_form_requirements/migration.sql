@@ -1,0 +1,25 @@
+-- Enforced eligibility rules for a form.
+--
+-- `applications.requirementsMarkdown` already existed, but it is prose: it
+-- tells someone what is expected and then lets them apply anyway. This is the
+-- enforced version, checked before the questions render and again on submit.
+--
+-- JSON rather than a column per rule: the set of rules is expected to grow,
+-- every rule is read back at once for a single form, and an absent key is the
+-- natural way to say "this check does not apply" -- which a NOT NULL column
+-- with a sentinel value would only obscure.
+--
+--   {
+--     "minPlaytimeHours": 20,
+--     "noPunishmentsDays": 90,
+--     "minMinecraftActiveDays": 12,
+--     "minMinecraftActiveWindowDays": 30,
+--     "minDiscordActiveDays": 8,
+--     "minDiscordMessages": 50,
+--     "minDiscordActiveWindowDays": 30
+--   }
+--
+-- Shape is validated in lib/formRequirements.mjs; unknown keys are dropped.
+-- NULL means no rules, which is every existing form.
+ALTER TABLE `forms`
+  ADD COLUMN `requirements` JSON NULL AFTER `accessCode`;

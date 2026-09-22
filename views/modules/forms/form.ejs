@@ -19,6 +19,19 @@
           <p class="mb-4" style="white-space: pre-wrap;"><%= form.description %></p>
         <% } %>
 
+        <% if (draftSavedAt) { %>
+          <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2"
+               role="alert">
+            <span>
+              We have put back the answers you saved on
+              <%= new Date(draftSavedAt).toLocaleString() %>.
+            </span>
+            <form method="post" action="/forms/<%= form.slug %>/draft/discard" class="m-0">
+              <button type="submit" class="btn btn-sm btn-outline-secondary">Start again</button>
+            </form>
+          </div>
+        <% } %>
+
         <% if (errors && errors.length) { %>
           <div class="alert alert-danger" role="alert">
             <strong>Please fix the following:</strong>
@@ -57,7 +70,10 @@
                   ? submitted.indexOf(option) !== -1
                   : submitted === option;
               %>
-              <div class="mb-4">
+              <div class="mb-4 form-field"
+                   data-field-key="<%= field.fieldKey %>"
+                   data-field-type="<%= field.fieldType %>"
+                   <% if (field.showIf) { %>data-showif="<%= JSON.stringify(field.showIf) %>"<% } %>>
                 <label class="form-label fw-bold" for="<%= field.fieldKey %>">
                   <%= field.label %>
                   <% if (field.isRequired) { %><span class="text-danger">*</span><% } %>
@@ -132,6 +148,46 @@
                          value="<%= submitted || '' %>">
                   <div class="form-text upload-status" data-for="<%= field.fieldKey %>"></div>
 
+                <% } else if (field.fieldType === "images") { %>
+                  <%# Each file is uploaded on pick and the returned metadata is
+                      accumulated in the hidden input as JSON, so the form body
+                      stays a plain urlencoded POST. The count is capped here and
+                      again server-side -- this limit is convenience, not control. %>
+                  <input type="file" class="form-control form-multi-upload"
+                         id="<%= field.fieldKey %>_file"
+                         data-target="<%= field.fieldKey %>"
+                         data-max="<%= field.maxImages %>"
+                         multiple
+                         accept="image/png,image/jpeg,image/gif,image/webp">
+                  <input type="hidden" id="<%= field.fieldKey %>" name="<%= field.fieldKey %>"
+                         value="<%= typeof submitted === 'string' ? submitted : JSON.stringify(submitted || []) %>">
+                  <div class="form-text">Up to <%= field.maxImages %> image<%= field.maxImages === 1 ? '' : 's' %>.</div>
+                  <div class="form-text upload-status" data-for="<%= field.fieldKey %>"></div>
+                  <div class="d-flex flex-wrap gap-2 mt-2 upload-previews" data-for="<%= field.fieldKey %>"></div>
+
+                <% } else if (field.fieldType === "scale") { %>
+                  <div class="d-flex align-items-end flex-wrap gap-3">
+                    <% if (field.scale.minLabel) { %>
+                      <span class="text-muted small pb-2"><%= field.scale.minLabel %></span>
+                    <% } %>
+                    <% for (let point = field.scale.min; point <= field.scale.max; point++) { %>
+                      <div class="text-center">
+                        <input class="form-check-input d-block mx-auto" type="radio"
+                               name="<%= field.fieldKey %>"
+                               id="<%= field.fieldKey %>_<%= point %>"
+                               value="<%= point %>"
+                               <%= String(submitted) === String(point) ? "checked" : "" %>
+                               <%= field.isRequired ? "required" : "" %>>
+                        <label class="form-check-label small" for="<%= field.fieldKey %>_<%= point %>">
+                          <%= point %>
+                        </label>
+                      </div>
+                    <% } %>
+                    <% if (field.scale.maxLabel) { %>
+                      <span class="text-muted small pb-2"><%= field.scale.maxLabel %></span>
+                    <% } %>
+                  </div>
+
                 <% } else { %>
                   <input type="<%= field.fieldType === 'number' ? 'number' : field.fieldType === 'date' ? 'date' : 'text' %>"
                          class="form-control"
@@ -148,7 +204,10 @@
               </div>
             <% }) %>
 
-            <button type="submit" class="btn btn-primary" id="publicFormSubmit">Submit</button>
+            <div class="d-flex align-items-center gap-3">
+              <button type="submit" class="btn btn-primary" id="publicFormSubmit">Submit</button>
+              <small class="text-muted" id="draftStatus" aria-live="polite"></small>
+            </div>
           </form>
 
         <% } %>
@@ -164,11 +223,268 @@
   // with a half-finished upload.
   var pending = 0;
   var submitBtn = document.getElementById("publicFormSubmit");
+  // Per-form folder, so a form's uploads are findable in Cloudinary later.
+  var UPLOAD_FOLDER = "zander/forms/<%= form.slug %>";
 
   function setPending(delta) {
     pending += delta;
     if (submitBtn) submitBtn.disabled = pending > 0;
   }
+
+  // ── Multi-image fields ──────────────────────────────────────────────────
+  // The hidden input holds the accumulated Cloudinary metadata as JSON; the
+  // server re-checks both the count and that every URL is on our own cloud, so
+  // nothing here is trusted as a limit.
+  // ── Conditional fields ──────────────────────────────────────────────────
+  // Live mirror of isFieldVisible in lib/formFields.js. The server evaluates
+  // the same conditions on submit, so this is convenience: a hidden field is
+  // neither required nor stored whatever the browser does here.
+  var formEl = document.getElementById("publicForm");
+  var fieldEls = Array.prototype.slice.call(document.querySelectorAll(".form-field"));
+
+  /** The answer currently entered for a field, as the condition compares it. */
+  function answerFor(key) {
+    var wrapper = null;
+    for (var i = 0; i < fieldEls.length; i++) {
+      if (fieldEls[i].dataset.fieldKey === key) wrapper = fieldEls[i];
+    }
+    if (!wrapper) return null;
+
+    var type = wrapper.dataset.fieldType;
+
+    if (type === "boolean") {
+      var tick = wrapper.querySelector('input[type="checkbox"]');
+      return tick && tick.checked ? "true" : "false";
+    }
+
+    if (type === "checkbox") {
+      return Array.prototype.map.call(
+        wrapper.querySelectorAll('input[type="checkbox"]:checked'),
+        function (input) { return input.value; }
+      );
+    }
+
+    if (type === "radio" || type === "scale") {
+      var picked = wrapper.querySelector('input[type="radio"]:checked');
+      return picked ? picked.value : null;
+    }
+
+    var control = wrapper.querySelector("select, textarea, input");
+    return control ? control.value : null;
+  }
+
+  function matches(answer, equals) {
+    if (answer === null || answer === undefined) return false;
+    if (Object.prototype.toString.call(answer) === "[object Array]") {
+      for (var i = 0; i < answer.length; i++) {
+        if (equals.indexOf(String(answer[i])) !== -1) return true;
+      }
+      return false;
+    }
+    return equals.indexOf(String(answer)) !== -1;
+  }
+
+  function applyConditions() {
+    fieldEls.forEach(function (wrapper) {
+      if (!wrapper.dataset.showif) return;
+
+      var condition;
+      try {
+        condition = JSON.parse(wrapper.dataset.showif);
+      } catch (e) {
+        return;
+      }
+
+      var visible = matches(answerFor(condition.fieldKey), condition.equals || []);
+      wrapper.style.display = visible ? "" : "none";
+
+      // Disabled rather than just hidden: a disabled control is left out of
+      // the POST entirely and skipped by the browser's own required-field
+      // check, so a hidden question cannot block the submit button.
+      Array.prototype.forEach.call(
+        wrapper.querySelectorAll("input, select, textarea"),
+        function (control) { control.disabled = !visible; }
+      );
+    });
+  }
+
+  if (formEl) {
+    formEl.addEventListener("change", applyConditions);
+    applyConditions();
+  }
+
+  // ── Draft autosave ──────────────────────────────────────────────────────
+  // Debounced, because the alternative is a request per keystroke. Failures
+  // are shown but never block: a draft that did not save is a lost
+  // convenience, not a lost submission.
+  var draftStatus = document.getElementById("draftStatus");
+  var draftTimer = null;
+
+  function collectDraft() {
+    var payload = {};
+
+    fieldEls.forEach(function (wrapper) {
+      var key = wrapper.dataset.fieldKey;
+      var type = wrapper.dataset.fieldType;
+
+      if (type === "images") {
+        var hidden = wrapper.querySelector('input[type="hidden"]');
+        payload[key] = hidden ? hidden.value : "[]";
+        return;
+      }
+
+      // Read hidden fields too: a condition flipped back and forth should not
+      // cost the applicant what they already typed.
+      var answer = answerFor(key);
+      if (type === "boolean") {
+        payload[key] = answer === "true";
+      } else if (answer !== null) {
+        payload[key] = answer;
+      }
+    });
+
+    return payload;
+  }
+
+  function saveDraft() {
+    if (draftStatus) draftStatus.textContent = "Saving...";
+
+    fetch("/forms/<%= form.slug %>/draft", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(collectDraft())
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (draftStatus) {
+          draftStatus.textContent = data && data.success
+            ? "Draft saved."
+            : "Draft not saved - your answers are still here.";
+        }
+      })
+      .catch(function () {
+        if (draftStatus) draftStatus.textContent = "Draft not saved - your answers are still here.";
+      });
+  }
+
+  function queueDraftSave() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, 1500);
+  }
+
+  if (formEl) {
+    formEl.addEventListener("input", queueDraftSave);
+    formEl.addEventListener("change", queueDraftSave);
+    // Nothing to autosave once it is on its way to becoming a submission.
+    formEl.addEventListener("submit", function () { clearTimeout(draftTimer); });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".form-multi-upload"), function (input) {
+    var targetId = input.dataset.target;
+    var max = parseInt(input.dataset.max, 10) || 10;
+    var hidden = document.getElementById(targetId);
+    var status = document.querySelector('.upload-status[data-for="' + targetId + '"]');
+    var previews = document.querySelector('.upload-previews[data-for="' + targetId + '"]');
+
+    function read() {
+      try {
+        var parsed = JSON.parse(hidden.value || "[]");
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function write(list) {
+      hidden.value = JSON.stringify(list);
+      render(list);
+    }
+
+    function render(list) {
+      previews.innerHTML = "";
+      list.forEach(function (image, index) {
+        var wrap = document.createElement("div");
+        wrap.className = "position-relative";
+        wrap.innerHTML =
+          '<img src="' + image.url + '" alt="Image ' + (index + 1) + '" ' +
+            'style="height:90px;width:auto;object-fit:cover;border-radius:4px;">' +
+          '<button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 py-0 px-1" ' +
+            'data-remove="' + index + '" aria-label="Remove image">&times;</button>';
+        previews.appendChild(wrap);
+      });
+      input.disabled = list.length >= max;
+    }
+
+    previews.addEventListener("click", function (event) {
+      var index = event.target.getAttribute("data-remove");
+      if (index === null) return;
+      var list = read();
+      list.splice(parseInt(index, 10), 1);
+      write(list);
+      if (status) status.textContent = "";
+    });
+
+    input.addEventListener("change", function () {
+      var files = Array.prototype.slice.call(input.files || []);
+      if (!files.length) return;
+
+      var list = read();
+      var room = max - list.length;
+      if (room <= 0) {
+        if (status) status.textContent = "You have already added " + max + ".";
+        input.value = "";
+        return;
+      }
+
+      var dropped = files.length - room;
+      files = files.slice(0, room);
+
+      if (status) status.textContent = "Uploading " + files.length + "...";
+      setPending(1);
+
+      // Sequential rather than parallel: a handful of 8 MB uploads at once is
+      // a worse experience than one at a time on a domestic connection.
+      files.reduce(function (chain, file) {
+        return chain.then(function () {
+          var body = new FormData();
+          body.append("folder", UPLOAD_FOLDER);
+          body.append("file", file);
+          return fetch("/api/upload/image", { method: "POST", body: body, credentials: "same-origin" })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (data && data.success && data.data && data.data.url) {
+                list.push({
+                  url: data.data.url,
+                  publicId: data.data.publicId,
+                  width: data.data.width,
+                  height: data.data.height
+                });
+                write(list);
+              } else if (status) {
+                status.textContent = (data && data.message) || "One image failed to upload.";
+              }
+            });
+        });
+      }, Promise.resolve())
+        .then(function () {
+          if (status && status.textContent.indexOf("Uploading") === 0) {
+            status.textContent = dropped > 0
+              ? "Added " + files.length + ". " + dropped + " skipped - the limit is " + max + "."
+              : "Uploaded.";
+          }
+        })
+        .catch(function () {
+          if (status) status.textContent = "Upload failed.";
+        })
+        .finally(function () {
+          input.value = "";
+          setPending(-1);
+        });
+    });
+
+    render(read());
+  });
 
   Array.prototype.forEach.call(document.querySelectorAll(".form-upload"), function (input) {
     input.addEventListener("change", function () {
@@ -182,7 +498,7 @@
       // `folder` must precede the file: req.file() on the server only sees
       // fields parsed before the file part.
       var body = new FormData();
-      body.append("folder", "zander/forms");
+      body.append("folder", UPLOAD_FOLDER);
       body.append("file", file);
 
       if (status) status.textContent = "Uploading...";

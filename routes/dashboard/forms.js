@@ -29,8 +29,15 @@ import {
 import { notifySubmissionReviewed } from "../../services/formDiscordService.js";
 import { postReviewToTicket } from "../../services/formTicketService.js";
 import {
+  REQUIREMENT_DEFS,
+  WINDOW_DEFS,
+  normaliseRequirements,
+} from "../../lib/formRequirements.mjs";
+import {
   FIELD_TYPES,
+  SHOW_IF_SOURCE_TYPES,
   formatAnswer,
+  getAnswerImages,
   isValidSubmissionStatus,
   optionsToText,
 } from "../../lib/formFields.js";
@@ -49,6 +56,29 @@ function parseFieldsPayload(raw) {
   } catch {
     return [];
   }
+}
+
+/**
+ * The requirement inputs, posted flat as `req_<key>`.
+ *
+ * Flat names rather than `requirements[key]` because Fastify's formbody parser
+ * does not turn bracket notation into nested objects -- it would arrive as a
+ * key literally called "requirements[minPlaytimeHours]".
+ *
+ * Blank means "do not apply this check", which is the same as absent; the
+ * controller hands the result to normaliseRequirements, so nothing here is
+ * relied on for range checking.
+ */
+const REQUIREMENT_KEYS = [...REQUIREMENT_DEFS, ...WINDOW_DEFS].map((def) => def.key);
+
+function parseRequirementsPayload(body = {}) {
+  const out = {};
+  for (const key of REQUIREMENT_KEYS) {
+    const raw = body[`req_${key}`];
+    if (raw === undefined || raw === null || String(raw).trim() === "") continue;
+    out[key] = Number(raw);
+  }
+  return out;
 }
 
 /** Attach usernames to submissions without an N+1 lookup per row. */
@@ -111,6 +141,8 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         form: null,
         fields: [],
         fieldTypes: FIELD_TYPES,
+        showIfSourceTypes: SHOW_IF_SOURCE_TYPES,
+        requirements: {},
         supportCategories,
         formAction: "/dashboard/forms/create",
       })
@@ -135,8 +167,14 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         successMessage: body.successMessage,
         discordChannelId: body.discordChannelId,
         allowMultiple: body.allowMultiple === "1" || body.allowMultiple === "on",
+        accessCode: body.accessCode,
+        requirements: parseRequirementsPayload(body),
+        reapplyCooldownDays: body.reapplyCooldownDays,
         createTicket: body.createTicket === "1" || body.createTicket === "on",
         ticketCategoryId: body.ticketCategoryId,
+        ticketPendingMessage: body.ticketPendingMessage,
+        ticketApprovedMessage: body.ticketApprovedMessage,
+        ticketDeniedMessage: body.ticketDeniedMessage,
       });
       await replaceFields(form.formId, parseFieldsPayload(body.fields));
 
@@ -173,6 +211,10 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         // The editor works in the newline-per-option text form, not JSON.
         fields: form.fields.map((f) => ({ ...f, optionsText: optionsToText(f.options) })),
         fieldTypes: FIELD_TYPES,
+        showIfSourceTypes: SHOW_IF_SOURCE_TYPES,
+        // Normalised on the way out too, so the editor shows the values that
+        // are actually enforced rather than whatever was typed.
+        requirements: normaliseRequirements(form.requirements) ?? {},
         formAction: `/dashboard/forms/${form.formId}/edit`,
       })
     );
@@ -197,8 +239,14 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         successMessage: body.successMessage,
         discordChannelId: body.discordChannelId,
         allowMultiple: body.allowMultiple === "1" || body.allowMultiple === "on",
+        accessCode: body.accessCode,
+        requirements: parseRequirementsPayload(body),
+        reapplyCooldownDays: body.reapplyCooldownDays,
         createTicket: body.createTicket === "1" || body.createTicket === "on",
         ticketCategoryId: body.ticketCategoryId,
+        ticketPendingMessage: body.ticketPendingMessage,
+        ticketApprovedMessage: body.ticketApprovedMessage,
+        ticketDeniedMessage: body.ticketDeniedMessage,
       });
       await replaceFields(formId, parseFieldsPayload(body.fields));
 
@@ -273,6 +321,9 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
           label: field.label,
           fieldType: field.fieldType,
           value: formatAnswer(field, submission.answers?.[field.fieldKey]),
+          // Images are rendered as thumbnails rather than as the markdown
+          // links formatAnswer produces for the Discord embed.
+          images: getAnswerImages(field, submission.answers?.[field.fieldKey]),
         })),
       })
     );

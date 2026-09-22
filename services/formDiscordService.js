@@ -11,7 +11,7 @@
 
 import { EmbedBuilder } from "discord.js";
 import { client } from "../controllers/discordController.js";
-import { formatAnswer } from "../lib/formFields.js";
+import { formatAnswer, getAnswerImages } from "../lib/formFields.js";
 
 const STATUS_COLOURS = {
   pending: 0x5865f2,
@@ -35,11 +35,21 @@ function buildSubmissionEmbed({ form, fields, answers, submissionId, submitter }
   }
 
   const shown = fields.slice(0, 25);
+  let previewImage = null;
+
   for (const field of shown) {
     let text = formatAnswer(field, answers[field.fieldKey]) || "*(blank)*";
     if (text.length > 1024) text = `${text.slice(0, 1021)}...`;
     embed.addFields({ name: String(field.label).slice(0, 256), value: text });
+
+    // An embed has room for exactly one image, so the first uploaded image
+    // on the form gets it; the rest stay as the links formatAnswer produced.
+    if (!previewImage) {
+      previewImage = getAnswerImages(field, answers[field.fieldKey])[0]?.url ?? null;
+    }
   }
+
+  if (previewImage) embed.setImage(previewImage);
 
   if (fields.length > shown.length) {
     embed.setDescription(

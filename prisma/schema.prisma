@@ -373,13 +373,20 @@ model forms {
   successMessage   String?  @db.Text
   discordChannelId String?  @db.VarChar(255)
   allowMultiple    Boolean  @default(false)
+  accessCode          String?  @db.VarChar(190)
+  requirements        Json?
+  reapplyCooldownDays Int?
   createTicket     Boolean  @default(false)
   ticketCategoryId Int?
+  ticketPendingMessage  String? @db.Text
+  ticketApprovedMessage String? @db.Text
+  ticketDeniedMessage   String? @db.Text
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now()) @updatedAt
 
   fields           formFields[]
   submissions      formSubmissions[]
+  drafts           formDrafts[]
   applications     applications[]
   ticketCategory   supportTicketCategories? @relation(fields: [ticketCategoryId], references: [categoryId], onDelete: SetNull)
 
@@ -397,12 +404,29 @@ model formFields {
   options     Json?
   isRequired  Boolean @default(false)
   maxLength   Int?
+  config      Json?
   position    Int     @default(0)
 
   form        forms   @relation(fields: [formId], references: [formId], onDelete: Cascade)
 
   @@unique([formId, fieldKey], map: "formFields_formId_fieldKey_key")
   @@index([formId, position], map: "formFields_formId_position_idx")
+}
+
+/// Autosaved, unsubmitted answers -- one row per person per form, overwritten
+/// in place and deleted once the form is actually submitted.
+model formDrafts {
+  draftId   Int      @id @default(autoincrement())
+  formId    Int
+  userId    Int
+  answers   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  form      forms    @relation(fields: [formId], references: [formId], onDelete: Cascade)
+
+  @@unique([formId, userId], map: "formDrafts_formId_userId_key")
+  @@index([userId], map: "formDrafts_userId_idx")
 }
 
 model formSubmissions {
@@ -413,6 +437,7 @@ model formSubmissions {
   answers          Json
   reviewedBy       Int?
   reviewNotes      String?   @db.Text
+  commentIsPublic  Boolean   @default(false)
   reviewedAt       DateTime?
   discordMessageId String?   @db.VarChar(255)
   ticketId         Int?
@@ -426,6 +451,18 @@ model formSubmissions {
 
   @@index([formId, status], map: "formSubmissions_formId_status_idx")
   @@index([userId], map: "formSubmissions_userId_idx")
+}
+
+/// Daily Discord message counts. A rollup, not a message log: no content and
+/// no per-message timestamps are kept -- see 0050_discord_activity_daily.
+model discordActivityDaily {
+  id            Int      @id @default(autoincrement())
+  discordUserId String   @db.VarChar(24)
+  activityDate  DateTime @db.Date
+  messageCount  Int      @default(0)
+
+  @@unique([discordUserId, activityDate], map: "discordActivityDaily_user_date_key")
+  @@index([discordUserId, activityDate], map: "discordActivityDaily_user_date_idx")
 }
 
 model reports {

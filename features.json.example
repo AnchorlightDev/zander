@@ -17,6 +17,7 @@
 
   "discord": {
     "punishments": true,
+    "activityTracking": true,
     "events": {
       "generalKenobi": true,
       "guildMemberBoost": true,

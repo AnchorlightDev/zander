@@ -29,7 +29,20 @@
                   <% answerRows.forEach(function (row) { %>
                     <dt><%= row.label %></dt>
                     <dd class="mb-3">
-                      <% if (!row.value) { %>
+                      <% if (row.fieldType === "images" && row.images.length) { %>
+                        <%# Thumbnails rather than the markdown links formatAnswer
+                            builds for Discord -- a reviewer wants to see these at
+                            a glance, and each one opens full size. %>
+                        <div class="d-flex flex-wrap gap-2">
+                          <% row.images.forEach(function (image, index) { %>
+                            <a href="<%= image.url %>" target="_blank" rel="noopener"
+                               title="Image <%= index + 1 %>">
+                              <img src="<%= image.url %>" alt="Image <%= index + 1 %>"
+                                   style="height: 120px; width: auto; object-fit: cover; border-radius: 4px;">
+                            </a>
+                          <% }) %>
+                        </div>
+                      <% } else if (!row.value) { %>
                         <span class="text-muted fst-italic">Not answered</span>
                       <% } else if (row.fieldType === "file") { %>
                         <a href="<%= row.value %>" target="_blank" rel="noopener"><%= row.value %></a>
@@ -60,6 +73,15 @@
                   <span class="badge bg-warning text-dark">Pending</span>
                 <% } %>
               </p>
+              <% if (submission.reviewNotes && !submission.commentIsPublic) { %>
+                <p class="mb-2">
+                  <small class="text-muted">
+                    The note on this submission was written when the field was staff-only, so it
+                    has not been shown to the applicant. Saving a new decision will publish
+                    whatever is in the comment box.
+                  </small>
+                </p>
+              <% } %>
               <% if (submission.reviewerName) { %>
                 <p class="mb-2"><strong>Reviewed by:</strong> <%= submission.reviewerName %></p>
               <% } %>
@@ -96,9 +118,13 @@
                 </div>
 
                 <div class="mb-3">
-                  <label class="form-label" for="reviewNotes">Notes</label>
+                  <label class="form-label" for="reviewNotes">Comment to applicant (optional)</label>
                   <textarea class="form-control" id="reviewNotes" name="reviewNotes" rows="4"
-                            placeholder="Internal notes about this decision."><%= submission.reviewNotes || "" %></textarea>
+                            placeholder="Shown to the applicant in their ticket."><%= submission.reviewNotes || "" %></textarea>
+                  <small class="form-text text-muted">
+                    <strong>The applicant will read this.</strong> It is posted into their ticket
+                    underneath the decision. Leave it blank to send the decision on its own.
+                  </small>
                 </div>
 
                 <button type="submit" class="btn btn-primary w-100">Save review</button>

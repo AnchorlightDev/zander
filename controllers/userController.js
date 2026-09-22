@@ -812,6 +812,32 @@ export async function getUserStats(userId) {
   };
 }
 
+/**
+ * Total playtime in raw seconds.
+ *
+ * getUserStats returns the same figure already, but run through
+ * convertSecondsToDuration into something like "3 hours" -- fine to print,
+ * useless to compare against a threshold. Parsing that string back into a
+ * number would break the moment the wording changed, so the requirements
+ * engine reads the seconds from here instead.
+ */
+export async function getUserPlaytimeSeconds(userId) {
+  const rows = await new Promise((resolve, reject) => {
+    db.query(
+      `SELECT SUM(TIME_TO_SEC(TIMEDIFF(COALESCE(sessionEnd, NOW()), sessionStart))) AS totalSeconds
+       FROM gameSessions WHERE userId = ?`,
+      [userId],
+      function (err, results) {
+        if (err) return reject(err);
+        resolve(results);
+      }
+    );
+  });
+
+  // SUM over no rows is NULL, which is a player who has never joined.
+  return Number(rows?.[0]?.totalSeconds ?? 0) || 0;
+}
+
 export function convertSecondsToDuration(seconds) {
   const MINUTE = 60;
   const HOUR = 60 * MINUTE;

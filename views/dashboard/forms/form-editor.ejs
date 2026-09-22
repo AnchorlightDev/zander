@@ -92,8 +92,8 @@
                   </div>
                   <small class="form-text text-muted">
                     The submitter gets a ticket they can follow, staff can reply in it, and the
-                    approve/deny decision is posted there automatically. Internal review notes are
-                    never forwarded.
+                    approve/deny decision is posted there automatically — along with the reviewer's
+                    comment, which the applicant reads.
                   </small>
                 </div>
                 <div class="mb-3 col-md-6" id="ticketCategoryField">
@@ -111,6 +111,141 @@
                     Decides who on staff can see the ticket, and which Discord category it lands in.
                   </small>
                 </div>
+              </div>
+
+              <div id="ticketMessagesFields">
+                <hr>
+                <h6>Ticket wording</h6>
+                <p class="text-muted small">
+                  What gets posted in the applicant's ticket at each stage. Leave any of them blank
+                  for a sensible default. You can use <code>{form}</code>, <code>{submissionId}</code>
+                  and <code>{reviewer}</code>.
+                </p>
+
+                <div class="mb-3">
+                  <label class="form-label" for="ticketPendingMessage">When the submission lands</label>
+                  <textarea class="form-control" id="ticketPendingMessage" name="ticketPendingMessage"
+                            rows="2"><%= form && form.ticketPendingMessage ? form.ticketPendingMessage : '' %></textarea>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label" for="ticketApprovedMessage">When it is approved</label>
+                  <textarea class="form-control" id="ticketApprovedMessage" name="ticketApprovedMessage"
+                            rows="2"><%= form && form.ticketApprovedMessage ? form.ticketApprovedMessage : '' %></textarea>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label" for="ticketDeniedMessage">When it is denied</label>
+                  <textarea class="form-control" id="ticketDeniedMessage" name="ticketDeniedMessage"
+                            rows="2"><%= form && form.ticketDeniedMessage ? form.ticketDeniedMessage : '' %></textarea>
+                  <small class="form-text text-muted">
+                    The reviewer's comment, if they leave one, is appended underneath this.
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Who can apply ──────────────────────────────────────────── -->
+          <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">Who can apply</h5></div>
+            <div class="card-body">
+
+              <div class="mb-4">
+                <label class="form-label" for="accessCode">Access code</label>
+                <input type="text" class="form-control" id="accessCode" name="accessCode" maxlength="190"
+                       autocomplete="off"
+                       value="<%= form && form.accessCode ? form.accessCode : '' %>">
+                <small class="form-text text-muted">
+                  One shared code for the whole form. Anyone without it sees a code prompt instead of
+                  the questions. Leave blank for no code. There is no lockout on wrong attempts, by
+                  design — it is a code to paste into an announcement, not a password.
+                </small>
+              </div>
+
+              <div class="mb-4">
+                <label class="form-label" for="reapplyCooldownDays">Reapply cooldown after a denial (days)</label>
+                <input type="number" min="1" class="form-control" id="reapplyCooldownDays"
+                       name="reapplyCooldownDays"
+                       value="<%= form && form.reapplyCooldownDays ? form.reapplyCooldownDays : '' %>">
+                <small class="form-text text-muted">
+                  Counted from when the decision was made, not from when they applied. Denials only —
+                  approved and pending submissions are still governed by the "allow more than one
+                  submission" option above. Blank means they may reapply straight away.
+                </small>
+              </div>
+
+              <hr>
+
+              <h6>Eligibility</h6>
+              <p class="text-muted small">
+                Checked before the questions render, and again on submit. Anyone who fails is told
+                the exact numbers — both the threshold and their own figure — which is the trade for
+                staff not having to field "why can't I apply?". Leave a box empty to not apply that
+                check.
+              </p>
+
+              <div class="row">
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="req_minPlaytimeHours">Minimum playtime (hours)</label>
+                  <input type="number" min="1" class="form-control"
+                         id="req_minPlaytimeHours" name="req_minPlaytimeHours"
+                         value="<%= requirements.minPlaytimeHours || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="req_noPunishmentsDays">Clean record for (days)</label>
+                  <input type="number" min="1" class="form-control"
+                         id="req_noPunishmentsDays" name="req_noPunishmentsDays"
+                         value="<%= requirements.noPunishmentsDays || '' %>">
+                  <small class="form-text text-muted">
+                    Minecraft bans and mutes, plus Discord punishments when their Discord is linked.
+                  </small>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="req_minMinecraftActiveDays">Played on at least (days)</label>
+                  <input type="number" min="1" class="form-control"
+                         id="req_minMinecraftActiveDays" name="req_minMinecraftActiveDays"
+                         value="<%= requirements.minMinecraftActiveDays || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="req_minMinecraftActiveWindowDays">...within the last (days)</label>
+                  <input type="number" min="1" class="form-control"
+                         id="req_minMinecraftActiveWindowDays" name="req_minMinecraftActiveWindowDays"
+                         placeholder="30"
+                         value="<%= requirements.minMinecraftActiveWindowDays || '' %>">
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="req_minDiscordActiveDays">Posted in Discord on (days)</label>
+                  <input type="number" min="1" class="form-control"
+                         id="req_minDiscordActiveDays" name="req_minDiscordActiveDays"
+                         value="<%= requirements.minDiscordActiveDays || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="req_minDiscordMessages">Discord messages at least</label>
+                  <input type="number" min="1" class="form-control"
+                         id="req_minDiscordMessages" name="req_minDiscordMessages"
+                         value="<%= requirements.minDiscordMessages || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="req_minDiscordActiveWindowDays">...within the last (days)</label>
+                  <input type="number" min="1" class="form-control"
+                         id="req_minDiscordActiveWindowDays" name="req_minDiscordActiveWindowDays"
+                         placeholder="30"
+                         value="<%= requirements.minDiscordActiveWindowDays || '' %>">
+                </div>
+              </div>
+
+              <div class="alert alert-warning mb-0" role="alert">
+                <strong>Discord activity only exists from the day counting started.</strong>
+                Message counts began accumulating when this feature was deployed, so a 30-day
+                Discord window means nothing until 30 days after that. Until the window is fully
+                covered these two checks report as skipped rather than failing everyone.
               </div>
             </div>
           </div>
@@ -148,6 +283,7 @@
   // selectable here without touching this template.
   var FIELD_TYPES = <%- JSON.stringify(fieldTypes) %>;
   var EXISTING    = <%- JSON.stringify(fields) %>;
+  var SHOW_IF_SOURCE_TYPES = <%- JSON.stringify(showIfSourceTypes) %>;
 
   var rowsEl  = document.getElementById("fieldRows");
   var hintEl  = document.getElementById("noFieldsHint");
@@ -178,6 +314,7 @@
   function buildRow(field) {
     var f = field || {};
     var type = f.fieldType || "text";
+    var cfg = f.config || {};
 
     var row = document.createElement("div");
     row.className = "field-row border rounded p-3 mb-3";
@@ -219,6 +356,48 @@
             escapeHtml(f.optionsText) + '</textarea>' +
         '</div>' +
       '</div>' +
+      '<div class="row f-images-wrap">' +
+        '<div class="mb-2 col-md-4">' +
+          '<label class="form-label">Maximum images</label>' +
+          '<input type="number" min="1" max="10" class="form-control f-maximages" value="' +
+            (cfg.maxImages || 10) + '">' +
+          '<small class="form-text text-muted">Ten is the hard limit, whatever is typed here.</small>' +
+        '</div>' +
+      '</div>' +
+      '<div class="row f-scale-wrap">' +
+        '<div class="mb-2 col-md-3">' +
+          '<label class="form-label">Starts at</label>' +
+          '<input type="number" min="0" max="1" class="form-control f-scalemin" value="' +
+            (cfg.scaleMin == null ? 1 : cfg.scaleMin) + '">' +
+        '</div>' +
+        '<div class="mb-2 col-md-3">' +
+          '<label class="form-label">Ends at</label>' +
+          '<input type="number" min="2" max="10" class="form-control f-scalemax" value="' +
+            (cfg.scaleMax == null ? 10 : cfg.scaleMax) + '">' +
+        '</div>' +
+        '<div class="mb-2 col-md-3">' +
+          '<label class="form-label">Label for the low end</label>' +
+          '<input type="text" maxlength="40" class="form-control f-scaleminlabel" placeholder="Poor" value="' +
+            escapeHtml(cfg.scaleMinLabel) + '">' +
+        '</div>' +
+        '<div class="mb-2 col-md-3">' +
+          '<label class="form-label">Label for the high end</label>' +
+          '<input type="text" maxlength="40" class="form-control f-scalemaxlabel" placeholder="Excellent" value="' +
+            escapeHtml(cfg.scaleMaxLabel) + '">' +
+        '</div>' +
+      '</div>' +
+      '<div class="row f-showif-wrap">' +
+        '<div class="mb-2 col-md-6">' +
+          '<label class="form-label">Only show this field when</label>' +
+          '<select class="form-select f-showif-field"><option value="">Always show it</option></select>' +
+          '<small class="form-text text-muted f-showif-note"></small>' +
+        '</div>' +
+        '<div class="mb-2 col-md-6">' +
+          '<label class="form-label">...the answer is one of</label>' +
+          '<select class="form-select f-showif-values" multiple size="4"></select>' +
+          '<small class="form-text text-muted">Ctrl- or Cmd-click to pick more than one.</small>' +
+        '</div>' +
+      '</div>' +
       '<div class="row align-items-center">' +
         '<div class="mb-2 col-md-4">' +
           '<label class="form-label">Max length</label>' +
@@ -234,8 +413,122 @@
       '</div>';
 
     rowsEl.appendChild(row);
+
+    // Seed the saved condition before syncRow repopulates the pickers, so the
+    // stored selection survives the rebuild.
+    if (cfg.showIf) {
+      row.querySelector(".f-showif-field").dataset.selected = cfg.showIf.fieldKey || "";
+      row.querySelector(".f-showif-values").dataset.selected =
+        JSON.stringify(cfg.showIf.equals || []);
+    }
+
     syncRow(row);
     return row;
+  }
+
+  /** Parse the "Label|value" choices textarea the way normaliseOptions does. */
+  function parseChoices(text) {
+    return String(text || "").split(/\r?\n/).map(function (line) {
+      var trimmed = line.trim();
+      if (!trimmed) return null;
+      var pipe = trimmed.indexOf("|");
+      if (pipe === -1) return { label: trimmed, value: trimmed };
+      var label = trimmed.slice(0, pipe).trim();
+      var value = trimmed.slice(pipe + 1).trim() || label;
+      return label && value ? { label: label, value: value } : null;
+    }).filter(Boolean);
+  }
+
+  /** The answers a given row can be conditioned on. */
+  function sourceChoices(sourceRow) {
+    var sourceType = sourceRow.querySelector(".f-type").value;
+    if (sourceType === "boolean") {
+      return [{ label: "Ticked", value: "true" }, { label: "Not ticked", value: "false" }];
+    }
+    return parseChoices(sourceRow.querySelector(".f-options").value);
+  }
+
+  /**
+   * Repopulate a row's condition picker from the rows *above* it.
+   *
+   * Only earlier rows are offered, which is what the server enforces too --
+   * a condition that points forwards (or at itself) would be a cycle, so the
+   * restriction removes the problem rather than detecting it. Only saved
+   * fields appear: a brand-new field has no fieldKey until the form is saved,
+   * and there is nothing stable to point at until then.
+   */
+  function refreshConditionSources(row) {
+    var select = row.querySelector(".f-showif-field");
+    var note = row.querySelector(".f-showif-note");
+    var current = select.dataset.selected || select.value || "";
+
+    var options = ['<option value="">Always show it</option>'];
+    var unsaved = 0;
+
+    var sibling = row.previousElementSibling;
+    var earlier = [];
+    while (sibling) {
+      earlier.unshift(sibling);
+      sibling = sibling.previousElementSibling;
+    }
+
+    earlier.forEach(function (candidate) {
+      var candidateType = typeInfo(candidate.querySelector(".f-type").value);
+      if (!candidateType || SHOW_IF_SOURCE_TYPES.indexOf(candidateType.value) === -1) return;
+      if (!candidate.dataset.fieldKey) {
+        unsaved += 1;
+        return;
+      }
+      var label = candidate.querySelector(".f-label").value.trim() || candidate.dataset.fieldKey;
+      var sel = candidate.dataset.fieldKey === current ? " selected" : "";
+      options.push('<option value="' + escapeHtml(candidate.dataset.fieldKey) + '"' + sel + ">" +
+                   escapeHtml(label) + "</option>");
+    });
+
+    select.innerHTML = options.join("");
+    select.dataset.selected = select.value;
+
+    if (options.length === 1) {
+      note.textContent = unsaved
+        ? "Save the form first — a new question has no stable key to point at yet."
+        : "Add a dropdown, multiple-choice, checkbox or confirmation question above this one.";
+    } else {
+      note.textContent = unsaved ? "Newly added questions appear here once the form is saved." : "";
+    }
+
+    refreshConditionValues(row);
+  }
+
+  /** Repopulate the "answer is one of" list for the chosen source field. */
+  function refreshConditionValues(row) {
+    var fieldSelect = row.querySelector(".f-showif-field");
+    var valueSelect = row.querySelector(".f-showif-values");
+    var wanted = valueSelect.dataset.selected
+      ? JSON.parse(valueSelect.dataset.selected)
+      : Array.prototype.map.call(valueSelect.selectedOptions, function (o) { return o.value; });
+
+    if (!fieldSelect.value) {
+      valueSelect.innerHTML = "";
+      valueSelect.disabled = true;
+      return;
+    }
+
+    var sourceRow = null;
+    Array.prototype.forEach.call(rowsEl.querySelectorAll(".field-row"), function (candidate) {
+      if (candidate.dataset.fieldKey === fieldSelect.value) sourceRow = candidate;
+    });
+    if (!sourceRow) {
+      valueSelect.innerHTML = "";
+      valueSelect.disabled = true;
+      return;
+    }
+
+    valueSelect.disabled = false;
+    valueSelect.innerHTML = sourceChoices(sourceRow).map(function (choice) {
+      var sel = wanted.indexOf(choice.value) !== -1 ? " selected" : "";
+      return '<option value="' + escapeHtml(choice.value) + '"' + sel + ">" +
+             escapeHtml(choice.label) + "</option>";
+    }).join("");
   }
 
   /**
@@ -251,16 +544,28 @@
     var maxLen = row.querySelector(".f-maxlength").closest(".col-md-4");
 
     optionsWrap.style.display = type && type.hasOptions ? "" : "none";
+    row.querySelector(".f-images-wrap").style.display = type && type.value === "images" ? "" : "none";
+    row.querySelector(".f-scale-wrap").style.display = type && type.value === "scale" ? "" : "none";
+
+    // Max length means nothing for the types whose answer is not free text.
+    var noLength = type && (type.value === "images" || type.value === "scale" || type.hasOptions);
 
     if (type && type.autoFill) {
       placeholder.style.display = "none";
       maxLen.style.display = "none";
       note.textContent = "Filled in automatically from the submitter's account.";
     } else {
-      placeholder.style.display = "";
-      maxLen.style.display = "";
+      placeholder.style.display = type && type.value === "images" ? "none" : "";
+      maxLen.style.display = noLength ? "none" : "";
       note.textContent = "";
     }
+
+    refreshConditionSources(row);
+  }
+
+  /** Every row's condition picker depends on the rows above it. */
+  function refreshAllConditions() {
+    Array.prototype.forEach.call(rowsEl.querySelectorAll(".field-row"), refreshConditionSources);
   }
 
   function refreshHint() {
@@ -268,7 +573,25 @@
   }
 
   rowsEl.addEventListener("change", function (e) {
-    if (e.target.classList.contains("f-type")) syncRow(e.target.closest(".field-row"));
+    var row = e.target.closest(".field-row");
+    if (!row) return;
+
+    if (e.target.classList.contains("f-type")) {
+      syncRow(row);
+      // A type change can make this row usable (or useless) as a source for
+      // every row below it.
+      refreshAllConditions();
+    } else if (e.target.classList.contains("f-showif-field")) {
+      e.target.dataset.selected = e.target.value;
+      row.querySelector(".f-showif-values").dataset.selected = "[]";
+      refreshConditionValues(row);
+    } else if (e.target.classList.contains("f-showif-values")) {
+      e.target.dataset.selected = JSON.stringify(
+        Array.prototype.map.call(e.target.selectedOptions, function (o) { return o.value; })
+      );
+    } else if (e.target.classList.contains("f-options") || e.target.classList.contains("f-label")) {
+      refreshAllConditions();
+    }
   });
 
   rowsEl.addEventListener("click", function (e) {
@@ -278,17 +601,52 @@
     if (e.target.classList.contains("f-remove")) {
       row.remove();
       refreshHint();
+      refreshAllConditions();
     } else if (e.target.classList.contains("f-up") && row.previousElementSibling) {
       rowsEl.insertBefore(row, row.previousElementSibling);
+      refreshAllConditions();
     } else if (e.target.classList.contains("f-down") && row.nextElementSibling) {
       rowsEl.insertBefore(row.nextElementSibling, row);
+      refreshAllConditions();
     }
   });
 
   addBtn.addEventListener("click", function () {
     buildRow(null);
     refreshHint();
+    refreshAllConditions();
   });
+
+  /**
+   * The row's `config` blob. Values are sent as typed; lib/formFields.js
+   * clamps them server-side, so nothing here is relied on as a limit.
+   */
+  function rowConfig(row) {
+    var type = row.querySelector(".f-type").value;
+    var config = {};
+
+    if (type === "images") {
+      config.maxImages = row.querySelector(".f-maximages").value;
+    }
+
+    if (type === "scale") {
+      config.scaleMin = row.querySelector(".f-scalemin").value;
+      config.scaleMax = row.querySelector(".f-scalemax").value;
+      config.scaleMinLabel = row.querySelector(".f-scaleminlabel").value.trim();
+      config.scaleMaxLabel = row.querySelector(".f-scalemaxlabel").value.trim();
+    }
+
+    var sourceKey = row.querySelector(".f-showif-field").value;
+    var values = Array.prototype.map.call(
+      row.querySelector(".f-showif-values").selectedOptions,
+      function (o) { return o.value; }
+    );
+    if (sourceKey && values.length) {
+      config.showIf = { fieldKey: sourceKey, equals: values };
+    }
+
+    return config;
+  }
 
   formEl.addEventListener("submit", function () {
     // DOM order is the field order; the server stores the array index as
@@ -305,20 +663,27 @@
         helpText: row.querySelector(".f-help").value.trim(),
         options: row.querySelector(".f-options").value,
         isRequired: row.querySelector(".f-required").checked,
-        maxLength: row.querySelector(".f-maxlength").value
+        maxLength: row.querySelector(".f-maxlength").value,
+        config: rowConfig(row)
       });
     });
     payload.value = JSON.stringify(out);
   });
 
   EXISTING.forEach(buildRow);
+  // Conditions can only be resolved once every row exists, since a picker
+  // reads the rows above it.
+  refreshAllConditions();
   refreshHint();
 
   // The ticket category only means anything when ticket creation is on.
   var ticketToggle = document.getElementById("createTicket");
   var ticketCategory = document.getElementById("ticketCategoryField");
+  var ticketMessages = document.getElementById("ticketMessagesFields");
   function syncTicketFields() {
-    if (ticketCategory) ticketCategory.style.display = ticketToggle.checked ? "" : "none";
+    var on = ticketToggle.checked;
+    if (ticketCategory) ticketCategory.style.display = on ? "" : "none";
+    if (ticketMessages) ticketMessages.style.display = on ? "" : "none";
   }
   if (ticketToggle) {
     ticketToggle.addEventListener("change", syncTicketFields);

@@ -12,10 +12,13 @@
 import { prisma } from "./databaseController.js";
 import {
   isValidFieldType,
+  normaliseFieldConfig,
   normaliseOptions,
+  sanitiseShowIfGraph,
   slugifyKey,
   uniqueKey,
 } from "../lib/formFields.js";
+import { normaliseRequirements } from "../lib/formRequirements.mjs";
 
 /**
  * Build a URL-safe, unique form slug.
@@ -95,7 +98,18 @@ function formWriteData(data) {
     successMessage: data.successMessage ? String(data.successMessage) : null,
     discordChannelId: data.discordChannelId ? String(data.discordChannelId).slice(0, 255) : null,
     allowMultiple: Boolean(data.allowMultiple),
+    // Blank clears the gate rather than storing "", so requiresAccessCode has
+    // one thing to test for.
+    accessCode: String(data.accessCode ?? "").trim().slice(0, 190) || null,
+    requirements: normaliseRequirements(data.requirements),
+    reapplyCooldownDays:
+      Number.isFinite(Number(data.reapplyCooldownDays)) && Number(data.reapplyCooldownDays) > 0
+        ? Math.min(3650, Math.round(Number(data.reapplyCooldownDays)))
+        : null,
     createTicket: Boolean(data.createTicket),
+    ticketPendingMessage: String(data.ticketPendingMessage ?? "").trim() || null,
+    ticketApprovedMessage: String(data.ticketApprovedMessage ?? "").trim() || null,
+    ticketDeniedMessage: String(data.ticketDeniedMessage ?? "").trim() || null,
     ticketCategoryId: Number.isInteger(Number(data.ticketCategoryId)) && Number(data.ticketCategoryId) > 0
       ? Number(data.ticketCategoryId)
       : null,
@@ -157,16 +171,22 @@ export async function replaceFields(formId, rawFields = []) {
       options: options.length ? options : null,
       isRequired: Boolean(raw.isRequired),
       maxLength: Number.isInteger(maxLength) && maxLength > 0 ? maxLength : null,
+      config: normaliseFieldConfig(String(raw.fieldType), raw.config),
       position: index,
     });
   });
 
+  // Display conditions are pruned only once the whole list exists: whether a
+  // showIf is usable depends on the fields before it, and their final
+  // fieldKeys are not settled until every row has been through the loop above.
+  const sanitised = sanitiseShowIfGraph(rows);
+
   await prisma.$transaction([
     prisma.formFields.deleteMany({ where: { formId: id } }),
-    ...(rows.length ? [prisma.formFields.createMany({ data: rows })] : []),
+    ...(sanitised.length ? [prisma.formFields.createMany({ data: sanitised })] : []),
   ]);
 
-  return rows.length;
+  return sanitised.length;
 }
 
 /** How many times this user has already submitted (for allowMultiple). */
@@ -174,6 +194,62 @@ export async function countUserSubmissions(formId, userId) {
   return prisma.formSubmissions.count({
     where: { formId: Number(formId), userId: Number(userId) },
   });
+}
+
+/**
+ * The user's most recent denial on this form, for the reapply cooldown.
+ *
+ * Only denials: an approval or a still-pending submission is `allowMultiple`'s
+ * business, not the cooldown's.
+ */
+export async function getLastDenial(formId, userId) {
+  return prisma.formSubmissions.findFirst({
+    where: { formId: Number(formId), userId: Number(userId), status: "denied" },
+    orderBy: [{ reviewedAt: "desc" }, { submissionId: "desc" }],
+    select: { submissionId: true, reviewedAt: true },
+  });
+}
+
+/* ────────────────────────────── drafts ─────────────────────────────────── */
+
+/** This user's saved draft for this form, or null. */
+export async function getDraft(formId, userId) {
+  return prisma.formDrafts.findUnique({
+    where: { formId_userId: { formId: Number(formId), userId: Number(userId) } },
+  });
+}
+
+/**
+ * Overwrite this user's draft for this form.
+ *
+ * One row per person per form, upserted: the only draft anyone wants back is
+ * the latest one, so there is nothing to version.
+ */
+export async function saveDraft(formId, userId, answers) {
+  const where = { formId_userId: { formId: Number(formId), userId: Number(userId) } };
+  return prisma.formDrafts.upsert({
+    where,
+    create: { formId: Number(formId), userId: Number(userId), answers },
+    update: { answers },
+  });
+}
+
+/**
+ * Throw the draft away.
+ *
+ * Called on a successful submission and when the applicant asks to discard.
+ * Missing is success: this runs after the submission is already committed, and
+ * a draft that was never saved is not a failure to report.
+ */
+export async function deleteDraft(formId, userId) {
+  try {
+    await prisma.formDrafts.delete({
+      where: { formId_userId: { formId: Number(formId), userId: Number(userId) } },
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function createSubmission({ formId, userId, answers }) {
@@ -209,12 +285,22 @@ export async function getSubmission(submissionId) {
   });
 }
 
+/**
+ * Record a decision.
+ *
+ * `commentIsPublic` is set true here and only here. The comment field used to
+ * be labelled as internal staff notes and was never forwarded to the
+ * applicant; it now is, so rows decided before this shipped keep the column at
+ * its false default and their notes stay internal. Nothing backfills it -- see
+ * migration 0053_form_ticket_messages.
+ */
 export async function reviewSubmission({ submissionId, status, reviewNotes, reviewedBy }) {
   return prisma.formSubmissions.update({
     where: { submissionId: Number(submissionId) },
     data: {
       status: String(status),
       reviewNotes: reviewNotes ? String(reviewNotes) : null,
+      commentIsPublic: true,
       reviewedBy: reviewedBy ? Number(reviewedBy) : null,
       reviewedAt: new Date(),
     },

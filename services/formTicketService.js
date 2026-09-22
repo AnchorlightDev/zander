@@ -25,8 +25,15 @@ import {
   syncParticipantsForMessage,
 } from "../controllers/supportTicketController.js";
 import { formatAnswer } from "../lib/formFields.js";
+import { buildTicketMessage } from "../lib/formTicketMessages.mjs";
 
-/** Render the submitted answers as the ticket's opening message. */
+/**
+ * Render the submitted answers as the ticket's opening message.
+ *
+ * The opening message is also the "pending" post in the status thread -- the
+ * ticket only exists because the submission landed, so a separate message
+ * saying so would just be noise directly under this one.
+ */
 function buildOpeningMessage({ form, fields, answers, submissionId }) {
   const lines = [`${form.name} - submission #${submissionId}`, ""];
 
@@ -37,7 +44,7 @@ function buildOpeningMessage({ form, fields, answers, submissionId }) {
     lines.push("");
   }
 
-  lines.push("A staff member will review this and reply here.");
+  lines.push(buildTicketMessage("pending", { form, submissionId }));
   return lines.join("\n");
 }
 
@@ -99,17 +106,16 @@ export async function openTicketForSubmission({ form, fields, answers, submissio
   }
 }
 
-const DECISION_TEXT = {
-  approved: "Your submission has been **approved**.",
-  denied: "Your submission has been **denied**.",
-  pending: "Your submission has been put back to **pending** and is being looked at again.",
-};
-
 /**
  * Post a review decision into the submission's ticket.
  *
- * `reviewNotes` are the reviewer's internal notes, so they are deliberately
- * NOT included -- only the decision itself reaches the submitter.
+ * The wording comes from the form, so each form can phrase its own approval
+ * and rejection; lib/formTicketMessages.mjs supplies the defaults.
+ *
+ * The reviewer's comment is included, but only when the submission is flagged
+ * commentIsPublic. Notes stored before that flag existed were written under an
+ * internal-only labelling and stay internal -- see migration
+ * 0053_form_ticket_messages.
  */
 export async function postReviewToTicket({ submission, status, reviewer }) {
   if (!submission?.ticketId) return false;
@@ -120,10 +126,18 @@ export async function postReviewToTicket({ submission, status, reviewer }) {
   }
 
   try {
-    const body = [
-      DECISION_TEXT[status] ?? `Your submission status is now **${status}**.`,
-      reviewer ? `\nReviewed by ${reviewer}.` : "",
-    ].join("");
+    // "pending" here means a decision was undone, which is not what the
+    // pending wording says -- that one opens the ticket when it first lands.
+    const messageKey = status === "pending" ? "reopened" : status;
+
+    const body =
+      buildTicketMessage(messageKey, {
+        form: submission.form,
+        submissionId: submission.submissionId,
+        reviewer,
+        comment: submission.reviewNotes,
+        commentIsPublic: submission.commentIsPublic,
+      }) ?? `Your submission status is now **${status}**.`;
 
     await createSupportTicketMessage(
       client,
