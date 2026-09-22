@@ -17,6 +17,7 @@
 import { getGlobalImage, isFeatureWebRouteEnabled } from "../api/common.js";
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import { getConnectionDetails } from "../lib/connectionDetails.mjs";
+import { getRegion } from "../lib/region.mjs";
 import { createTranslator } from "../lib/langText.mjs";
 import {
   ROBOTS_NOINDEX,
@@ -34,9 +35,11 @@ export default function bedrockSiteRoutes(app, config, features, lang) {
     const siteName = config.siteConfiguration?.siteName ?? "the server";
     const platforms = config.siteConfiguration?.platforms ?? {};
     const { bedrock } = getConnectionDetails(config);
+    const region = getRegion(config);
 
     const t = createTranslator(lang, {
       SITENAME: siteName,
+      REGION: region.name ?? "",
       BEDROCK_HOST: bedrock.host ?? "",
       BEDROCK_PORT: bedrock.port ?? "",
       BEDROCK_ADDRESS: bedrock.address ?? "",
@@ -105,6 +108,7 @@ export default function bedrockSiteRoutes(app, config, features, lang) {
         features,
         t,
         bedrock,
+        region,
         discordUrl: platforms.discord ?? null,
         knowledgebaseUrl: platforms.knowledgebase ?? null,
         globalImage: await getGlobalImage(),

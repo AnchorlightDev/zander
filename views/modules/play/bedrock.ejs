@@ -28,7 +28,13 @@
       <div class="col-lg-8">
 
         <% if (t.has("bedrock.intro")) { %>
-          <p class="lead text-muted mb-5"><%= t("bedrock.intro") %></p>
+          <p class="lead text-muted mb-3"><%= t("bedrock.intro") %></p>
+        <% } %>
+
+        <%# Latency is the thing Bedrock players on phones notice most, so this
+            is the page where saying where the servers are earns its place. %>
+        <% if (region.configured && t.has("region.hostedBlurb")) { %>
+          <p class="text-muted mb-5"><%= t("region.hostedBlurb") %></p>
         <% } %>
 
         <%# ── Connection details ───────────────────────────────────────── %>

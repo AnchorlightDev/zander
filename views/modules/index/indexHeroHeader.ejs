@@ -33,6 +33,19 @@
 						<a href="/play" class="btn btn-main-2 btn-icon btn-round-full">Let's Play <i class="fa-solid fa-right-long"></i></a>
 						<a href="/discord" class="btn btn-hero-secondary btn-round-full"><i class="fab fa-discord me-1"></i> Join Discord</a>
 					</div>
+
+					<%#
+						Where the servers are, stated rather than left for a visitor to
+						guess from their ping. No `text-muted` here: `.banner .block`
+						only whitens h1/p/span, so a muted class would be dark grey on
+						the dark overlay. Renders nothing unless a region is configured.
+					%>
+					<% const region = (config.siteConfiguration && config.siteConfiguration.region) || {}; %>
+					<% if (region.configured && typeof t !== "undefined" && t.has("region.hostedLabel")) { %>
+						<p class="small mt-3 mb-0">
+							<i class="fas fa-location-dot me-1"></i><%= t("region.hostedLabel") %>
+						</p>
+					<% } %>
 				</div>
 			</div>
 

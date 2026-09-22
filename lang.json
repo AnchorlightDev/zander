@@ -58,6 +58,11 @@
     "phraseCaught": "This message was blocked due to the usage of blocked words/phrases.",
     "linkCaught": "This message was blocked due to the usage of blocked links/sites."
   },
+  "region": {
+    "_comment": "Where the community is hosted, surfaced as a fact rather than left unsaid. %REGION% is config.siteConfiguration.region.name and %SITENAME% is the site name - never write a country in here. Nothing renders unless a region is configured.",
+    "hostedLabel": "Hosted in %REGION%",
+    "hostedBlurb": "%SITENAME% runs on servers in %REGION%, so players nearby get a low-ping connection rather than playing across an ocean."
+  },
   "bedrock": {
     "_comment": "Copy for the /bedrock landing page. %SITENAME%, %BEDROCK_HOST%, %BEDROCK_PORT% and %BEDROCK_ADDRESS% are filled in from config.json at render time - never write an address or a port in here. 'access' ships empty on purpose: what Bedrock players can and cannot do differs per network, and the section is hidden until an operator fills it in.",
     "pageTitle": "Bedrock Edition",

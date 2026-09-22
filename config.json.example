@@ -12,6 +12,12 @@
     }
   },
   "siteConfiguration": {
+    "region": {
+      "_comment": "Where this community is hosted. `name` is what the site says in copy, `countryCode` is ISO 3166-1 alpha-2 and `language` is ISO 639-1; <html lang> and og:locale are derived from the last two so they cannot disagree. Leave it out entirely and no region is claimed anywhere.",
+      "name": "Australia",
+      "countryCode": "AU",
+      "language": "en"
+    },
     "siteUrl": "https://craftingforchrist.net",
     "siteName": "Crafting For Christ",
     "tagline": "Crafting A Christ Centred Gaming Community",

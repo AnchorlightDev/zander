@@ -29,6 +29,7 @@ import webstoreSiteRoutes from "./webstoreRoutes.js";
 import formSiteRoutes from "./formRoutes.js";
 import bedrockSiteRoutes from "./bedrockRoutes.js";
 import { getRankCatalogForPublicPage } from "../controllers/rankCatalogController.js";
+import { createTranslator } from "../lib/langText.mjs";
 import {
   buildGraph,
   webPageNode,
@@ -120,6 +121,10 @@ export default function applicationSiteRoutes(
       config: config,
       req: req,
       features: features,
+      t: createTranslator(lang, {
+        SITENAME: config.siteConfiguration.siteName,
+        REGION: config.siteConfiguration.region?.name ?? "",
+      }),
       globalImage: await getGlobalImage(),
       jumboVideo: getJumboVideo(),
       statApiData: statApiData,

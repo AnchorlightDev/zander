@@ -1,5 +1,6 @@
+<% const region = (typeof config !== "undefined" && config && config.siteConfiguration && config.siteConfiguration.region) || {}; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= region.htmlLang || "en" %>">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">

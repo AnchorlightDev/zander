@@ -36,6 +36,7 @@ import {
   buildSessionCookieOptions,
 } from "./lib/securityConfig.js";
 import { checkRateLimit } from "./lib/rateLimiter.mjs";
+import { getRegion } from "./lib/region.mjs";
 import {
   createCspOnSendHook,
   registerCspReportParser,
@@ -43,6 +44,17 @@ import {
 } from "./lib/csp.js";
 
 const config = require("./config.json");
+
+// Derived config, computed once at boot.
+//
+// `config` already reaches every template, and @fastify/view does not merge
+// reply.locals into the app.view() path this codebase renders through (see the
+// CSP note further down). Normalising here is what lets the shared header read
+// one consistent region without threading a new local through 126 render calls.
+// getRegion is idempotent, so re-running it over its own output is harmless.
+config.siteConfiguration = config.siteConfiguration || {};
+config.siteConfiguration.region = getRegion(config);
+
 const features = require("./features.json");
 const lang = require("./lang.json");
 import db, { isDbHealthy, prisma } from "./controllers/databaseController.js";

@@ -1,5 +1,12 @@
+<%#
+  Region comes from config.siteConfiguration.region, normalised at boot in
+  app.js. `htmlLang` and `og:locale` below are the same fact in two spellings
+  and are both derived from it -- they used to be hard-coded and disagreed with
+  each other ("en" against "en_AU"). Do not write a country into this file.
+%>
+<% const region = (config && config.siteConfiguration && config.siteConfiguration.region) || {}; %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= region.htmlLang || "en" %>">
 <head>
 
   <!-- Basic Page Needs
@@ -36,7 +43,13 @@
   <meta property="og:image:height" content="372">
   <meta property="og:image:alt" content="<%= config.siteConfiguration.siteName %> logo">
 
-  <meta property="og:locale" content="en_AU">
+  <meta property="og:locale" content="<%= region.locale || "en" %>">
+  <% if (region.countryCode) { %>
+    <meta name="geo.region" content="<%= region.countryCode %>">
+  <% } %>
+  <% if (region.name) { %>
+    <meta name="geo.placename" content="<%= region.name %>">
+  <% } %>
 
   <!-- Twitter -->
   <meta property="twitter:card" content="summary">
