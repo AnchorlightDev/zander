@@ -2294,6 +2294,32 @@ a:focus {
   background-color: #92b4f2;
   text-align: center;
   padding: 15px;
+  /* The dismiss button sits at the end without pushing the text off centre:
+     the body flexes to fill and stays centred within itself. */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.announcementWebBanner-body {
+  flex: 1 1 auto;
+}
+
+.announcementWebBanner-dismiss {
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+.announcementWebBanner-dismiss:hover,
+.announcementWebBanner-dismiss:focus {
+  opacity: 1;
 }
 
 @media only screen and (max-width: 767px) {

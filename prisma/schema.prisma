@@ -321,6 +321,8 @@ model gameSessions {
 
 model announcements {
   announcementId     Int                  @id @default(autoincrement())
+  /// NULL for rows that predate 0057_announcement_created_at; see that migration.
+  createdAt          DateTime?
   enabled            Boolean              @default(true)
   announcementType   announcements_type?
   body               String?              @db.Text

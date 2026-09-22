@@ -127,7 +127,7 @@ export default function announcementApiRoute(app, config, db, features, lang) {
     try {
       await new Promise((resolve, reject) => {
         db.query(
-          `INSERT INTO announcements (enabled, body, announcementType, link, colourMessageFormat, popupButtonText, popupImageUrl, startDate, endDate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO announcements (enabled, body, announcementType, link, colourMessageFormat, popupButtonText, popupImageUrl, startDate, endDate, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
           [
             enabled,
             body,
