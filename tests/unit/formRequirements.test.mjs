@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  countRequirements,
   evaluateRequirements,
   formatDuration,
   hasRequirements,
@@ -69,6 +70,36 @@ describe("normaliseRequirements", () => {
   it("knows whether a form is gated at all", () => {
     expect(hasRequirements(null)).toBe(false);
     expect(hasRequirements({ minPlaytimeHours: 1 })).toBe(true);
+  });
+});
+
+describe("countRequirements", () => {
+  it("is zero for an ungated form", () => {
+    expect(countRequirements(null)).toBe(0);
+    expect(countRequirements({})).toBe(0);
+    expect(countRequirements("junk")).toBe(0);
+  });
+
+  it("counts each rule once", () => {
+    expect(countRequirements({ minPlaytimeHours: 20 })).toBe(1);
+    expect(countRequirements({ minPlaytimeHours: 20, noPunishmentsDays: 90 })).toBe(2);
+  });
+
+  it("does not count a window as a rule of its own", () => {
+    // minMinecraftActiveDays pulls in its window key, but an applicant only
+    // has one thing to satisfy.
+    expect(countRequirements({ minMinecraftActiveDays: 12 })).toBe(1);
+    expect(
+      countRequirements({ minMinecraftActiveDays: 12, minMinecraftActiveWindowDays: 30 })
+    ).toBe(1);
+  });
+
+  it("counts the two Discord rules separately, sharing one window", () => {
+    expect(countRequirements({ minDiscordActiveDays: 8, minDiscordMessages: 50 })).toBe(2);
+  });
+
+  it("does not count a threshold that was dropped for being out of range", () => {
+    expect(countRequirements({ minPlaytimeHours: 0, noPunishmentsDays: 90 })).toBe(1);
   });
 });
 

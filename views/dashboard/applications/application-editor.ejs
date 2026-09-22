@@ -179,10 +179,22 @@
                           <% } else { %>
                               <small class="form-text text-muted">
                                   Manage forms under <a href="/dashboard/forms">Dashboard &gt; Forms</a>.
-                                  A form marked &ldquo;opens a ticket&rdquo; gives each applicant a
-                                  support ticket so they can be kept informed.
                               </small>
                           <% } %>
+
+                          <%# What the chosen form is actually set up to do. Without this
+                              an admin has to open the form editor in another tab to find
+                              out whether submissions go anywhere, or whether the tile is
+                              pointing at a form nobody can get into. %>
+                          <div class="mt-3 d-none" id="linkedFormSummary">
+                              <div class="border rounded p-3">
+                                  <div class="d-flex justify-content-between align-items-center mb-2">
+                                      <strong class="small text-uppercase text-muted">How this form is set up</strong>
+                                      <a href="#" id="linkedFormEditLink" class="btn btn-sm btn-light">Edit the form</a>
+                                  </div>
+                                  <ul class="list-unstyled mb-0 small" id="linkedFormFacts"></ul>
+                              </div>
+                          </div>
                       </div>
                   </div>
 
@@ -284,6 +296,80 @@
 
 <script>
 (function() {
+    // Keyed by formId so the summary can be redrawn without another request.
+    var LINKED_FORMS = <%- JSON.stringify(availableForms) %>;
+
+    (function () {
+        var picker = document.getElementById('linkedFormId');
+        var summary = document.getElementById('linkedFormSummary');
+        var facts = document.getElementById('linkedFormFacts');
+        var editLink = document.getElementById('linkedFormEditLink');
+        if (!picker || !summary || !facts) return;
+
+        function fact(ok, text) {
+            var icon = ok
+                ? '<span class="text-success me-2">&#10003;</span>'
+                : '<span class="text-warning me-2">&#33;</span>';
+            return '<li class="mb-1">' + icon + text + '</li>';
+        }
+
+        function render() {
+            var chosen = null;
+            for (var i = 0; i < LINKED_FORMS.length; i++) {
+                if (String(LINKED_FORMS[i].formId) === String(picker.value)) chosen = LINKED_FORMS[i];
+            }
+
+            if (!chosen) {
+                summary.classList.add('d-none');
+                return;
+            }
+
+            var rows = [];
+
+            rows.push(fact(chosen.status, chosen.status
+                ? 'Open for submissions.'
+                : 'Closed &mdash; the tile will show, but nobody can submit.'));
+
+            rows.push(fact(chosen.fieldCount > 0, chosen.fieldCount > 0
+                ? chosen.fieldCount + ' question' + (chosen.fieldCount === 1 ? '' : 's') + '.'
+                : 'No questions yet.'));
+
+            // The two ways a submission reaches staff. Neither one configured
+            // means it lands in the dashboard and waits to be noticed.
+            rows.push(fact(chosen.hasDiscordChannel, chosen.hasDiscordChannel
+                ? 'Posts new submissions to a Discord channel.'
+                : 'No Discord channel &mdash; submissions are only visible in the dashboard.'));
+
+            rows.push(fact(chosen.createTicket, chosen.createTicket
+                ? 'Opens a support ticket for each applicant.'
+                : 'No ticket &mdash; applicants are not told the outcome automatically.'));
+
+            if (chosen.requirementCount > 0) {
+                rows.push(fact(true, chosen.requirementCount + ' eligibility requirement'
+                    + (chosen.requirementCount === 1 ? '' : 's') + ' enforced before the questions show.'));
+            } else {
+                rows.push(fact(true, 'No eligibility requirements &mdash; anyone signed in can apply.'));
+            }
+
+            if (chosen.hasAccessCode) {
+                rows.push(fact(true, 'Needs an access code, so it is invite-only.'));
+            }
+
+            if (chosen.reapplyCooldownDays) {
+                rows.push(fact(true, 'Denied applicants must wait '
+                    + chosen.reapplyCooldownDays + ' day'
+                    + (chosen.reapplyCooldownDays === 1 ? '' : 's') + ' to reapply.'));
+            }
+
+            facts.innerHTML = rows.join('');
+            if (editLink) editLink.href = '/dashboard/forms/' + chosen.formId + '/edit';
+            summary.classList.remove('d-none');
+        }
+
+        picker.addEventListener('change', render);
+        render();
+    })();
+
     var typeSelect = document.getElementById('applicationTypeSel');
     var redirectField = document.getElementById('redirectUrlField');
     var linkedFormField = document.getElementById('linkedFormField');

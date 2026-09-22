@@ -18,7 +18,7 @@ import {
   slugifyKey,
   uniqueKey,
 } from "../lib/formFields.js";
-import { normaliseRequirements } from "../lib/formRequirements.mjs";
+import { countRequirements, normaliseRequirements } from "../lib/formRequirements.mjs";
 
 /**
  * Build a URL-safe, unique form slug.
@@ -65,12 +65,48 @@ export async function listForms() {
   }));
 }
 
-/** Forms that an application can link to (the editor's picker). */
+/**
+ * Forms that an application can link to (the editor's picker).
+ *
+ * Carries enough of each form's configuration for the applications editor to
+ * say whether the form behind a tile is actually set up -- otherwise an admin
+ * has to open Dashboard > Forms in another tab to find out whether submissions
+ * go anywhere.
+ *
+ * The signals are booleans and counts, never the underlying values. This list
+ * is rendered into the applications editor, which is a different permission
+ * from the form editor, and `accessCode` in particular is a shared secret with
+ * no business being in that page's source.
+ */
 export async function listFormsForPicker() {
-  return prisma.forms.findMany({
+  const forms = await prisma.forms.findMany({
     orderBy: [{ name: "asc" }],
-    select: { formId: true, name: true, slug: true, status: true, createTicket: true },
+    select: {
+      formId: true,
+      name: true,
+      slug: true,
+      status: true,
+      createTicket: true,
+      discordChannelId: true,
+      accessCode: true,
+      requirements: true,
+      reapplyCooldownDays: true,
+      _count: { select: { fields: true } },
+    },
   });
+
+  return forms.map((form) => ({
+    formId: form.formId,
+    name: form.name,
+    slug: form.slug,
+    status: form.status,
+    createTicket: form.createTicket,
+    fieldCount: form._count.fields,
+    hasDiscordChannel: Boolean(form.discordChannelId),
+    hasAccessCode: Boolean(String(form.accessCode ?? "").trim()),
+    requirementCount: countRequirements(form.requirements),
+    reapplyCooldownDays: form.reapplyCooldownDays ?? null,
+  }));
 }
 
 export async function getFormById(formId) {
