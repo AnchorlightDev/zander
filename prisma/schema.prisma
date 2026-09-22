@@ -375,6 +375,7 @@ model forms {
   discordForumChannelId String? @db.VarChar(255)
   notifyDiscordUserIds  Json?
   allowMultiple    Boolean  @default(false)
+  requiresReview   Boolean  @default(true)
   accessCode          String?  @db.VarChar(190)
   requirements        Json?
   reapplyCooldownDays Int?
