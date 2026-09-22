@@ -26,6 +26,7 @@ import sitemapRoutes from "./sitemapRoute.js";
 import eventsSiteRoutes from "./eventsRoutes.js";
 import financeRoutes from "./financeRoutes.js";
 import webstoreSiteRoutes from "./webstoreRoutes.js";
+import formSiteRoutes from "./formRoutes.js";
 import { getRankCatalogForPublicPage } from "../controllers/rankCatalogController.js";
 import {
   buildGraph,
@@ -60,6 +61,7 @@ export default function applicationSiteRoutes(
   eventsSiteRoutes(app, config, features);
   financeRoutes(app, config, features);
   webstoreSiteRoutes(app, config, features);
+  formSiteRoutes(app, config, features);
 
   // Summernote editor fetches /emojis to populate its emoji picker.
   // Return an empty map so it silently falls back to the GitHub emoji list

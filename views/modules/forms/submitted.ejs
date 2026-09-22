@@ -1,0 +1,36 @@
+<%- include("../header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription
+}) %>
+
+<%- include("../navigationBar.ejs") %>
+
+<%- include("../../partials/miniHeader.ejs", {
+  headerTitle: form.name,
+  backgroundImage: globalImage
+}) %>
+
+<section class="section">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-8 text-center">
+
+        <div class="feature-icon mb-4">
+          <i class="fas fa-check-circle" style="color: green;"></i>
+        </div>
+
+        <h3 class="mb-3">Submission received</h3>
+
+        <p class="mb-4" style="white-space: pre-wrap;">
+          <%= form.successMessage || "Thanks — your submission has been received and will be reviewed." %>
+        </p>
+
+        <p class="text-muted mb-4">Your reference is #<%= submissionId %>.</p>
+
+        <a href="/" class="btn btn-primary">Back to home</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include("../footer.ejs") %>

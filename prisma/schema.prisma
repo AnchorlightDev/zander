@@ -356,6 +356,67 @@ model applications {
   redirectUrl          String? @db.Text
   position             Int?
   applicationStatus    Boolean @default(false)
+  applicationType      String  @default("external") @db.VarChar(20)
+  linkedFormId         Int?
+
+  linkedForm           forms?  @relation(fields: [linkedFormId], references: [formId], onDelete: SetNull)
+
+  @@index([linkedFormId], map: "applications_linkedFormId_fkey")
+}
+
+model forms {
+  formId           Int      @id @default(autoincrement())
+  name             String   @db.VarChar(100)
+  slug             String   @unique(map: "forms_slug_key") @db.VarChar(100)
+  description      String?  @db.Text
+  status           Boolean  @default(false)
+  successMessage   String?  @db.Text
+  discordChannelId String?  @db.VarChar(255)
+  allowMultiple    Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  fields           formFields[]
+  submissions      formSubmissions[]
+  applications     applications[]
+}
+
+model formFields {
+  fieldId     Int     @id @default(autoincrement())
+  formId      Int
+  label       String  @db.VarChar(255)
+  fieldKey    String  @db.VarChar(64)
+  fieldType   String  @default("text") @db.VarChar(32)
+  placeholder String? @db.VarChar(255)
+  helpText    String? @db.Text
+  options     Json?
+  isRequired  Boolean @default(false)
+  maxLength   Int?
+  position    Int     @default(0)
+
+  form        forms   @relation(fields: [formId], references: [formId], onDelete: Cascade)
+
+  @@unique([formId, fieldKey], map: "formFields_formId_fieldKey_key")
+  @@index([formId, position], map: "formFields_formId_position_idx")
+}
+
+model formSubmissions {
+  submissionId     Int       @id @default(autoincrement())
+  formId           Int
+  userId           Int
+  status           String    @default("pending") @db.VarChar(16)
+  answers          Json
+  reviewedBy       Int?
+  reviewNotes      String?   @db.Text
+  reviewedAt       DateTime?
+  discordMessageId String?   @db.VarChar(255)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
+
+  form             forms     @relation(fields: [formId], references: [formId], onDelete: Cascade)
+
+  @@index([formId, status], map: "formSubmissions_formId_status_idx")
+  @@index([userId], map: "formSubmissions_userId_idx")
 }
 
 model reports {

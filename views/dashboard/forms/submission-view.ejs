@@ -1,0 +1,110 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Submission #<%= submission.submissionId %></h1>
+        <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+          <a href="/dashboard/forms/submissions?formId=<%= submission.formId %>" class="btn btn-sm btn-light">
+            Back to submissions
+          </a>
+        </div>
+      </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+      <div class="row">
+        <div class="col-lg-8">
+          <div class="card mb-4">
+            <div class="card-header">
+              <h5 class="mb-0"><%= submission.form.name %></h5>
+            </div>
+            <div class="card-body">
+              <% if (!answerRows.length) { %>
+                <p class="text-muted mb-0">This form has no fields.</p>
+              <% } else { %>
+                <dl class="mb-0">
+                  <% answerRows.forEach(function (row) { %>
+                    <dt><%= row.label %></dt>
+                    <dd class="mb-3">
+                      <% if (!row.value) { %>
+                        <span class="text-muted fst-italic">Not answered</span>
+                      <% } else if (row.fieldType === "file") { %>
+                        <a href="<%= row.value %>" target="_blank" rel="noopener"><%= row.value %></a>
+                      <% } else { %>
+                        <span style="white-space: pre-wrap;"><%= row.value %></span>
+                      <% } %>
+                    </dd>
+                  <% }) %>
+                </dl>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-4">
+          <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">Details</h5></div>
+            <div class="card-body">
+              <p class="mb-2"><strong>Submitted by:</strong> <%= submission.submitterName %></p>
+              <p class="mb-2"><strong>Received:</strong> <%= new Date(submission.createdAt).toLocaleString() %></p>
+              <p class="mb-2">
+                <strong>Status:</strong>
+                <% if (submission.status === "approved") { %>
+                  <span class="badge bg-success">Approved</span>
+                <% } else if (submission.status === "denied") { %>
+                  <span class="badge bg-danger">Denied</span>
+                <% } else { %>
+                  <span class="badge bg-warning text-dark">Pending</span>
+                <% } %>
+              </p>
+              <% if (submission.reviewerName) { %>
+                <p class="mb-2"><strong>Reviewed by:</strong> <%= submission.reviewerName %></p>
+              <% } %>
+              <% if (submission.reviewedAt) { %>
+                <p class="mb-0"><strong>Reviewed:</strong> <%= new Date(submission.reviewedAt).toLocaleString() %></p>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">Review</h5></div>
+            <div class="card-body">
+              <form method="post" action="/dashboard/forms/submissions/review">
+                <input type="hidden" name="submissionId" value="<%= submission.submissionId %>">
+
+                <div class="mb-3">
+                  <label class="form-label" for="reviewStatus">Decision</label>
+                  <select class="form-select" id="reviewStatus" name="status">
+                    <% ["pending", "approved", "denied"].forEach(function (s) { %>
+                      <option value="<%= s %>" <%= submission.status === s ? "selected" : "" %>><%= s %></option>
+                    <% }) %>
+                  </select>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label" for="reviewNotes">Notes</label>
+                  <textarea class="form-control" id="reviewNotes" name="reviewNotes" rows="4"
+                            placeholder="Internal notes about this decision."><%= submission.reviewNotes || "" %></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100">Save review</button>
+              </form>
+
+              <hr>
+
+              <form method="post" action="/dashboard/forms/submissions/delete"
+                    onsubmit="return confirm('Permanently delete this submission?');">
+                <input type="hidden" name="submissionId" value="<%= submission.submissionId %>">
+                <button type="submit" class="btn btn-outline-danger w-100">Delete submission</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->

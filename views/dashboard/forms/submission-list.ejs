@@ -1,0 +1,121 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Form Submissions</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+          <a href="/dashboard/forms" class="btn btn-sm btn-light">Back to forms</a>
+        </div>
+      </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+      <form method="get" action="/dashboard/forms/submissions" class="row g-2 align-items-end mb-4">
+        <div class="col-md-4">
+          <label class="form-label" for="formId">Form</label>
+          <select class="form-select" id="formId" name="formId">
+            <option value="">All forms</option>
+            <% forms.forEach(function (f) { %>
+              <option value="<%= f.formId %>" <%= activeFormId === String(f.formId) ? "selected" : "" %>>
+                <%= f.name %>
+              </option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" for="status">Status</label>
+          <select class="form-select" id="status" name="status">
+            <option value="">Any status</option>
+            <% ["pending", "approved", "denied"].forEach(function (s) { %>
+              <option value="<%= s %>" <%= activeStatus === s ? "selected" : "" %>><%= s %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-secondary w-100">Filter</button>
+        </div>
+      </form>
+
+      <% if (!submissions.length) { %>
+        <%- include("../../partials/alert.ejs", {
+          alertType: "info",
+          content: "No submissions match this filter."
+        }) %>
+      <% } else { %>
+        <div class="table-responsive">
+          <table class="table align-middle submissions-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Form</th>
+                <th>Submitted by</th>
+                <th>Received</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% submissions.forEach(function (s) { %>
+                <tr>
+                  <td data-label="#"><%= s.submissionId %></td>
+                  <td data-label="Form"><%= s.form.name %></td>
+                  <td data-label="Submitted by"><%= s.submitterName %></td>
+                  <td data-label="Received"><%= new Date(s.createdAt).toLocaleString() %></td>
+                  <td data-label="Status">
+                    <% if (s.status === "approved") { %>
+                      <span class="badge bg-success">Approved</span>
+                    <% } else if (s.status === "denied") { %>
+                      <span class="badge bg-danger">Denied</span>
+                    <% } else { %>
+                      <span class="badge bg-warning text-dark">Pending</span>
+                    <% } %>
+                  </td>
+                  <td data-label="Action">
+                    <a href="/dashboard/forms/submissions/view?submissionId=<%= s.submissionId %>"
+                       class="btn btn-sm btn-info">Review</a>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+  @media (max-width: 768px) {
+    .submissions-table thead { display: none; }
+
+    .submissions-table tr {
+      display: block;
+      border: 1px solid #e6e6e6;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .submissions-table td {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      border: none;
+      padding: 6px 0;
+      font-size: 0.9rem;
+      word-break: break-word;
+    }
+
+    .submissions-table td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      color: #5f6b7a;
+      min-width: 110px;
+    }
+  }
+</style>

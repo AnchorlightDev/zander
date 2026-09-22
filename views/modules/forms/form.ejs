@@ -1,0 +1,212 @@
+<%- include("../header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription
+}) %>
+
+<%- include("../navigationBar.ejs") %>
+
+<%- include("../../partials/miniHeader.ejs", {
+  headerTitle: form.name,
+  backgroundImage: globalImage
+}) %>
+
+<section class="section">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+
+        <% if (form.description) { %>
+          <p class="mb-4" style="white-space: pre-wrap;"><%= form.description %></p>
+        <% } %>
+
+        <% if (errors && errors.length) { %>
+          <div class="alert alert-danger" role="alert">
+            <strong>Please fix the following:</strong>
+            <ul class="mb-0 mt-2">
+              <% errors.forEach(function (error) { %>
+                <li><%= error %></li>
+              <% }) %>
+            </ul>
+          </div>
+        <% } %>
+
+        <% if (!form.status) { %>
+          <%- include("../../partials/alert.ejs", {
+            alertType: "warning",
+            content: "This form is not currently accepting submissions."
+          }) %>
+        <% } else if (alreadySubmitted) { %>
+          <%- include("../../partials/alert.ejs", {
+            alertType: "info",
+            content: "You have already submitted this form. Only one submission per person is accepted."
+          }) %>
+        <% } else if (!fields.length) { %>
+          <%- include("../../partials/alert.ejs", {
+            alertType: "warning",
+            content: "This form has no questions yet. Please check back later."
+          }) %>
+        <% } else { %>
+
+          <form method="post" action="/forms/<%= form.slug %>" id="publicForm">
+            <% fields.forEach(function (field) { %>
+              <%
+                // `values` is the rejected body on a validation re-render, so a
+                // long answer survives a mistake in another field.
+                const submitted = values[field.fieldKey];
+                const isChecked = (option) => Array.isArray(submitted)
+                  ? submitted.indexOf(option) !== -1
+                  : submitted === option;
+              %>
+              <div class="mb-4">
+                <label class="form-label fw-bold" for="<%= field.fieldKey %>">
+                  <%= field.label %>
+                  <% if (field.isRequired) { %><span class="text-danger">*</span><% } %>
+                </label>
+
+                <% if (field.fieldType === "textarea") { %>
+                  <textarea class="form-control" id="<%= field.fieldKey %>" name="<%= field.fieldKey %>"
+                            rows="5"
+                            <%= field.isRequired ? "required" : "" %>
+                            <%= field.maxLength ? `maxlength=${field.maxLength}` : "" %>
+                            placeholder="<%= field.placeholder || '' %>"><%= submitted || "" %></textarea>
+
+                <% } else if (field.fieldType === "select") { %>
+                  <select class="form-select" id="<%= field.fieldKey %>" name="<%= field.fieldKey %>"
+                          <%= field.isRequired ? "required" : "" %>>
+                    <option value="">-- choose one --</option>
+                    <% field.choices.forEach(function (choice) { %>
+                      <option value="<%= choice.value %>" <%= submitted === choice.value ? "selected" : "" %>>
+                        <%= choice.label %>
+                      </option>
+                    <% }) %>
+                  </select>
+
+                <% } else if (field.fieldType === "radio") { %>
+                  <% field.choices.forEach(function (choice, index) { %>
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio"
+                             name="<%= field.fieldKey %>"
+                             id="<%= field.fieldKey %>_<%= index %>"
+                             value="<%= choice.value %>"
+                             <%= isChecked(choice.value) ? "checked" : "" %>
+                             <%= field.isRequired ? "required" : "" %>>
+                      <label class="form-check-label" for="<%= field.fieldKey %>_<%= index %>">
+                        <%= choice.label %>
+                      </label>
+                    </div>
+                  <% }) %>
+
+                <% } else if (field.fieldType === "checkbox") { %>
+                  <% field.choices.forEach(function (choice, index) { %>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox"
+                             name="<%= field.fieldKey %>"
+                             id="<%= field.fieldKey %>_<%= index %>"
+                             value="<%= choice.value %>"
+                             <%= isChecked(choice.value) ? "checked" : "" %>>
+                      <label class="form-check-label" for="<%= field.fieldKey %>_<%= index %>">
+                        <%= choice.label %>
+                      </label>
+                    </div>
+                  <% }) %>
+
+                <% } else if (field.fieldType === "boolean") { %>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           id="<%= field.fieldKey %>" name="<%= field.fieldKey %>" value="1"
+                           <%= submitted ? "checked" : "" %>
+                           <%= field.isRequired ? "required" : "" %>>
+                    <label class="form-check-label" for="<%= field.fieldKey %>">
+                      <%= field.placeholder || "I confirm" %>
+                    </label>
+                  </div>
+
+                <% } else if (field.fieldType === "file") { %>
+                  <%# The browser uploads first and posts back the resulting URL,
+                      so the form body stays a plain urlencoded POST. %>
+                  <input type="file" class="form-control form-upload"
+                         id="<%= field.fieldKey %>_file"
+                         data-target="<%= field.fieldKey %>"
+                         accept="image/png,image/jpeg,image/gif,image/webp">
+                  <input type="hidden" id="<%= field.fieldKey %>" name="<%= field.fieldKey %>"
+                         value="<%= submitted || '' %>">
+                  <div class="form-text upload-status" data-for="<%= field.fieldKey %>"></div>
+
+                <% } else { %>
+                  <input type="<%= field.fieldType === 'number' ? 'number' : field.fieldType === 'date' ? 'date' : 'text' %>"
+                         class="form-control"
+                         id="<%= field.fieldKey %>" name="<%= field.fieldKey %>"
+                         value="<%= submitted || '' %>"
+                         <%= field.isRequired ? "required" : "" %>
+                         <%= field.maxLength ? `maxlength=${field.maxLength}` : "" %>
+                         placeholder="<%= field.placeholder || '' %>">
+                <% } %>
+
+                <% if (field.helpText) { %>
+                  <div class="form-text"><%= field.helpText %></div>
+                <% } %>
+              </div>
+            <% }) %>
+
+            <button type="submit" class="btn btn-primary" id="publicFormSubmit">Submit</button>
+          </form>
+
+        <% } %>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  // Uploads go to the existing session-authenticated endpoint; the submit
+  // button stays disabled while one is in flight so a form cannot be posted
+  // with a half-finished upload.
+  var pending = 0;
+  var submitBtn = document.getElementById("publicFormSubmit");
+
+  function setPending(delta) {
+    pending += delta;
+    if (submitBtn) submitBtn.disabled = pending > 0;
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".form-upload"), function (input) {
+    input.addEventListener("change", function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+
+      var targetId = input.dataset.target;
+      var hidden = document.getElementById(targetId);
+      var status = document.querySelector('.upload-status[data-for="' + targetId + '"]');
+
+      // `folder` must precede the file: req.file() on the server only sees
+      // fields parsed before the file part.
+      var body = new FormData();
+      body.append("folder", "zander/forms");
+      body.append("file", file);
+
+      if (status) status.textContent = "Uploading...";
+      setPending(1);
+
+      fetch("/api/upload/image", { method: "POST", body: body, credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.success && data.data && data.data.url) {
+            hidden.value = data.data.url;
+            if (status) status.textContent = "Uploaded.";
+          } else {
+            hidden.value = "";
+            if (status) status.textContent = (data && data.message) || "Upload failed.";
+          }
+        })
+        .catch(function () {
+          hidden.value = "";
+          if (status) status.textContent = "Upload failed.";
+        })
+        .finally(function () { setPending(-1); });
+    });
+  });
+})();
+</script>
+
+<%- include("../footer.ejs") %>

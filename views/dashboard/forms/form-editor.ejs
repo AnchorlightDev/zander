@@ -1,0 +1,282 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><%= form ? "Edit Form" : "Create Form" %></h1>
+        <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+          <% if (form) { %>
+            <a href="/forms/<%= form.slug %>" target="_blank" rel="noopener" class="btn btn-sm btn-secondary">View public page</a>
+            <a href="/dashboard/forms/submissions?formId=<%= form.formId %>" class="btn btn-sm btn-secondary">Submissions</a>
+          <% } %>
+          <a href="/dashboard/forms" class="btn btn-sm btn-light">Back to forms</a>
+        </div>
+      </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+      <div class="basic-form">
+        <form method="post" action="<%= formAction %>" id="formEditor">
+
+          <!-- ── Form settings ──────────────────────────────────────────── -->
+          <div class="card mb-4">
+            <div class="card-header"><h5 class="mb-0">Form settings</h5></div>
+            <div class="card-body">
+              <div class="row">
+                <div class="mb-3 col-md-6">
+                  <label class="form-label" for="name">Form name</label>
+                  <input type="text" class="form-control" id="name" name="name" maxlength="100" required
+                         value="<%= form ? form.name : '' %>">
+                </div>
+                <div class="mb-3 col-md-6">
+                  <label class="form-label" for="slug">URL slug</label>
+                  <input type="text" class="form-control" id="slug" name="slug" maxlength="100"
+                         placeholder="left blank = generated from the name"
+                         value="<%= form ? form.slug : '' %>">
+                  <small class="form-text text-muted">
+                    The form will live at <code>/forms/&lt;slug&gt;</code>. Duplicates get a number appended.
+                  </small>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label" for="description">Description</label>
+                <textarea class="form-control" id="description" name="description" rows="3"
+                          placeholder="Shown at the top of the form."><%= form && form.description ? form.description : '' %></textarea>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label" for="successMessage">Confirmation message</label>
+                <textarea class="form-control" id="successMessage" name="successMessage" rows="2"
+                          placeholder="Thanks — we'll be in touch."><%= form && form.successMessage ? form.successMessage : '' %></textarea>
+                <small class="form-text text-muted">Shown after a successful submission.</small>
+              </div>
+
+              <div class="row">
+                <div class="mb-3 col-md-6">
+                  <label class="form-label" for="discordChannelId">Discord channel ID</label>
+                  <input type="text" class="form-control" id="discordChannelId" name="discordChannelId" maxlength="255"
+                         value="<%= form && form.discordChannelId ? form.discordChannelId : '' %>">
+                  <small class="form-text text-muted">
+                    New submissions get posted here. Leave blank to disable Discord notifications.
+                  </small>
+                </div>
+                <div class="mb-3 col-md-6">
+                  <label class="form-label d-block">Options</label>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="status" name="status" value="1"
+                           <%= form && form.status ? 'checked' : '' %>>
+                    <label class="form-check-label" for="status">Open for submissions</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="allowMultiple" name="allowMultiple" value="1"
+                           <%= form && form.allowMultiple ? 'checked' : '' %>>
+                    <label class="form-check-label" for="allowMultiple">Allow more than one submission per user</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Fields ─────────────────────────────────────────────────── -->
+          <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h5 class="mb-0">Fields</h5>
+              <button type="button" class="btn btn-sm btn-info" id="addFieldBtn">Add field</button>
+            </div>
+            <div class="card-body">
+              <div id="fieldRows"></div>
+              <p class="text-muted mb-0" id="noFieldsHint">
+                No fields yet. Add one to start building the form.
+              </p>
+            </div>
+          </div>
+
+          <!-- Serialised field list; rebuilt from the DOM on submit. -->
+          <input type="hidden" name="fields" id="fieldsPayload" value="[]">
+
+          <button type="submit" class="btn btn-primary">
+            <%= form ? "Save form" : "Create form" %>
+          </button>
+        </form>
+      </div>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<script>
+(function () {
+  // Field types come from lib/formFields.js, so adding a type there makes it
+  // selectable here without touching this template.
+  var FIELD_TYPES = <%- JSON.stringify(fieldTypes) %>;
+  var EXISTING    = <%- JSON.stringify(fields) %>;
+
+  var rowsEl  = document.getElementById("fieldRows");
+  var hintEl  = document.getElementById("noFieldsHint");
+  var addBtn  = document.getElementById("addFieldBtn");
+  var payload = document.getElementById("fieldsPayload");
+  var formEl  = document.getElementById("formEditor");
+
+  function typeInfo(value) {
+    for (var i = 0; i < FIELD_TYPES.length; i++) {
+      if (FIELD_TYPES[i].value === value) return FIELD_TYPES[i];
+    }
+    return null;
+  }
+
+  function typeOptionsHtml(selected) {
+    return FIELD_TYPES.map(function (t) {
+      var sel = t.value === selected ? " selected" : "";
+      return '<option value="' + t.value + '"' + sel + ">" + t.label + "</option>";
+    }).join("");
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function buildRow(field) {
+    var f = field || {};
+    var type = f.fieldType || "text";
+
+    var row = document.createElement("div");
+    row.className = "field-row border rounded p-3 mb-3";
+    // fieldKey is carried through untouched so existing submissions stay
+    // addressable after a relabel; blank means "generate one".
+    row.dataset.fieldKey = f.fieldKey || "";
+
+    row.innerHTML =
+      '<div class="row align-items-end">' +
+        '<div class="mb-2 col-md-5">' +
+          '<label class="form-label">Label</label>' +
+          '<input type="text" class="form-control f-label" maxlength="255" value="' + escapeHtml(f.label) + '">' +
+        '</div>' +
+        '<div class="mb-2 col-md-4">' +
+          '<label class="form-label">Type</label>' +
+          '<select class="form-select f-type">' + typeOptionsHtml(type) + '</select>' +
+        '</div>' +
+        '<div class="mb-2 col-md-3 d-flex gap-1 justify-content-end">' +
+          '<button type="button" class="btn btn-sm btn-light f-up" title="Move up">&uarr;</button>' +
+          '<button type="button" class="btn btn-sm btn-light f-down" title="Move down">&darr;</button>' +
+          '<button type="button" class="btn btn-sm btn-danger f-remove" title="Remove">&times;</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="row">' +
+        '<div class="mb-2 col-md-6">' +
+          '<label class="form-label">Placeholder</label>' +
+          '<input type="text" class="form-control f-placeholder" maxlength="255" value="' + escapeHtml(f.placeholder) + '">' +
+        '</div>' +
+        '<div class="mb-2 col-md-6">' +
+          '<label class="form-label">Help text</label>' +
+          '<input type="text" class="form-control f-help" value="' + escapeHtml(f.helpText) + '">' +
+        '</div>' +
+      '</div>' +
+      '<div class="row f-options-wrap">' +
+        '<div class="mb-2 col-12">' +
+          '<label class="form-label">Choices</label>' +
+          '<textarea class="form-control f-options" rows="3" ' +
+            'placeholder="One per line. Use Label|value to store something different from the label.">' +
+            escapeHtml(f.optionsText) + '</textarea>' +
+        '</div>' +
+      '</div>' +
+      '<div class="row align-items-center">' +
+        '<div class="mb-2 col-md-4">' +
+          '<label class="form-label">Max length</label>' +
+          '<input type="number" min="1" class="form-control f-maxlength" value="' + (f.maxLength || "") + '">' +
+        '</div>' +
+        '<div class="mb-2 col-md-4">' +
+          '<div class="form-check mt-4">' +
+            '<input class="form-check-input f-required" type="checkbox"' + (f.isRequired ? " checked" : "") + '>' +
+            '<label class="form-check-label">Required</label>' +
+          '</div>' +
+        '</div>' +
+        '<div class="mb-2 col-md-4 f-auto-note text-muted small"></div>' +
+      '</div>';
+
+    rowsEl.appendChild(row);
+    syncRow(row);
+    return row;
+  }
+
+  /**
+   * Show only the inputs that make sense for the selected type: choices for
+   * option types, and nothing editable for auto-filled ones (the server takes
+   * those from the session).
+   */
+  function syncRow(row) {
+    var type = typeInfo(row.querySelector(".f-type").value);
+    var optionsWrap = row.querySelector(".f-options-wrap");
+    var note = row.querySelector(".f-auto-note");
+    var placeholder = row.querySelector(".f-placeholder").closest(".col-md-6");
+    var maxLen = row.querySelector(".f-maxlength").closest(".col-md-4");
+
+    optionsWrap.style.display = type && type.hasOptions ? "" : "none";
+
+    if (type && type.autoFill) {
+      placeholder.style.display = "none";
+      maxLen.style.display = "none";
+      note.textContent = "Filled in automatically from the submitter's account.";
+    } else {
+      placeholder.style.display = "";
+      maxLen.style.display = "";
+      note.textContent = "";
+    }
+  }
+
+  function refreshHint() {
+    hintEl.style.display = rowsEl.children.length ? "none" : "";
+  }
+
+  rowsEl.addEventListener("change", function (e) {
+    if (e.target.classList.contains("f-type")) syncRow(e.target.closest(".field-row"));
+  });
+
+  rowsEl.addEventListener("click", function (e) {
+    var row = e.target.closest(".field-row");
+    if (!row) return;
+
+    if (e.target.classList.contains("f-remove")) {
+      row.remove();
+      refreshHint();
+    } else if (e.target.classList.contains("f-up") && row.previousElementSibling) {
+      rowsEl.insertBefore(row, row.previousElementSibling);
+    } else if (e.target.classList.contains("f-down") && row.nextElementSibling) {
+      rowsEl.insertBefore(row.nextElementSibling, row);
+    }
+  });
+
+  addBtn.addEventListener("click", function () {
+    buildRow(null);
+    refreshHint();
+  });
+
+  formEl.addEventListener("submit", function () {
+    // DOM order is the field order; the server stores the array index as
+    // `position`, so no explicit position input is needed.
+    var out = [];
+    Array.prototype.forEach.call(rowsEl.querySelectorAll(".field-row"), function (row) {
+      var label = row.querySelector(".f-label").value.trim();
+      if (!label) return;
+      out.push({
+        label: label,
+        fieldKey: row.dataset.fieldKey || "",
+        fieldType: row.querySelector(".f-type").value,
+        placeholder: row.querySelector(".f-placeholder").value.trim(),
+        helpText: row.querySelector(".f-help").value.trim(),
+        options: row.querySelector(".f-options").value,
+        isRequired: row.querySelector(".f-required").checked,
+        maxLength: row.querySelector(".f-maxlength").value
+      });
+    });
+    payload.value = JSON.stringify(out);
+  });
+
+  EXISTING.forEach(buildRow);
+  refreshHint();
+})();
+</script>

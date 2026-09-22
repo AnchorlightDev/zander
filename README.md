@@ -20,6 +20,7 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | `zander.web.logs` | View system logs and audit trails |
 | `zander.web.announcements` | Create, edit, and view announcements |
 | `zander.web.application` | Manage player applications |
+| `zander.web.forms` | Build forms and review their submissions |
 | `zander.web.server` | Manage game servers |
 | `zander.web.rank` | Manage individual player ranks via the API |
 | `zander.web.ranks` | Access the ranks dashboard page |

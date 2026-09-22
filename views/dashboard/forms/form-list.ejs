@@ -1,0 +1,113 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Forms</h1>
+        <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+          <a href="/dashboard/forms/submissions" class="btn btn-sm btn-secondary">All Submissions</a>
+          <a href="/dashboard/forms/create" class="btn btn-sm btn-info">Create Form</a>
+        </div>
+      </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (!forms.length) { %>
+        <%- include("../../partials/alert.ejs", {
+          alertType: "info",
+          content: "No forms yet. Create one to start collecting submissions."
+        }) %>
+      <% } else { %>
+        <div class="table-responsive">
+          <table class="table align-middle forms-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Public link</th>
+                <th>Fields</th>
+                <th>Submissions</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% forms.forEach(function (form) { %>
+                <tr>
+                  <td data-label="Name">
+                    <strong><%= form.name %></strong>
+                    <% if (form.description) { %>
+                      <div class="text-muted small"><%= form.description.slice(0, 90) %></div>
+                    <% } %>
+                  </td>
+                  <td data-label="Public link">
+                    <a href="/forms/<%= form.slug %>" target="_blank" rel="noopener">/forms/<%= form.slug %></a>
+                  </td>
+                  <td data-label="Fields"><%= form.fieldCount %></td>
+                  <td data-label="Submissions">
+                    <a href="/dashboard/forms/submissions?formId=<%= form.formId %>">
+                      <%= form.submissionCount %>
+                    </a>
+                    <% if (form.pendingCount > 0) { %>
+                      <span class="badge bg-warning text-dark ms-1"><%= form.pendingCount %> pending</span>
+                    <% } %>
+                  </td>
+                  <td data-label="Status">
+                    <% if (form.status) { %>
+                      <span class="badge bg-success">Open</span>
+                    <% } else { %>
+                      <span class="badge bg-secondary">Closed</span>
+                    <% } %>
+                  </td>
+                  <td data-label="Action">
+                    <div class="d-flex flex-wrap gap-2">
+                      <a href="/dashboard/forms/<%= form.formId %>/edit" class="btn btn-sm btn-warning">Edit</a>
+                      <form action="/dashboard/forms/<%= form.formId %>/delete" method="post"
+                            onsubmit="return confirm('Delete this form and all <%= form.submissionCount %> of its submissions? This cannot be undone.');">
+                        <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+  @media (max-width: 768px) {
+    .forms-table thead { display: none; }
+
+    .forms-table tr {
+      display: block;
+      border: 1px solid #e6e6e6;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .forms-table td {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      border: none;
+      padding: 6px 0;
+      font-size: 0.9rem;
+      word-break: break-word;
+    }
+
+    .forms-table td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      color: #5f6b7a;
+      min-width: 110px;
+    }
+  }
+</style>

@@ -84,6 +84,18 @@ export const adminPages = [
     sortOrder: 21,
   },
 
+  {
+    slug: "forms",
+    title: "Forms",
+    menuTitle: "Forms",
+    icon: "fas fa-clipboard-list",
+    capability: "zander.web.forms",
+    path: "/dashboard/forms",
+    featureFlag: "forms",
+    group: "Community",
+    sortOrder: 22,
+  },
+
   // ── Events group ───────────────────────────────────────────────────────────
   {
     slug: "events-calendar",
@@ -341,6 +353,20 @@ export const adminPages = [
 // Sub-pages (registered for breadcrumb / title lookup; not shown in sidebar)
 // ---------------------------------------------------------------------------
 export const adminSubPages = [
+  {
+    slug: "forms-create",
+    title: "Create Form",
+    parent: "forms",
+    path: "/dashboard/forms/create",
+    capability: "zander.web.forms",
+  },
+  {
+    slug: "forms-submissions",
+    title: "Form Submissions",
+    parent: "forms",
+    path: "/dashboard/forms/submissions",
+    capability: "zander.web.forms",
+  },
   {
     slug: "announcements-create",
     title: "Create Announcement",

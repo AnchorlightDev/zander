@@ -154,25 +154,33 @@
                           <% } %>
                       </div>
 
-                      <!-- Linked Form ID (for linked_form type) -->
+                      <!-- Linked Form (for linked_form type) -->
+                      <%# A picker rather than a free-text id: the previous
+                          "type the Form ID" box had no way to know whether the
+                          id existed, or whether that form was even open. %>
                       <div class="mb-3 col" id="linkedFormField">
-                          <label for="linkedFormId">Linked Form ID</label>
+                          <label for="linkedFormId">Linked Form</label>
 
-                          <% if (type === 'create') { %>
-                              <%- include("../../partials/form/inputText.ejs", {
-                                  elementName: "linkedFormId",
-                                  elementValue: null,
-                                  required: false
-                              }) %>
+                          <% const selectedFormId = type === 'edit' ? applicationApiData.linkedFormId : null; %>
+                          <select class="form-select" name="linkedFormId" id="linkedFormId">
+                              <option value="">-- choose a form --</option>
+                              <% availableForms.forEach(function (availableForm) { %>
+                                  <option value="<%= availableForm.formId %>"
+                                          <%= String(selectedFormId) === String(availableForm.formId) ? 'selected' : '' %>>
+                                      <%= availableForm.name %><%= availableForm.status ? '' : ' (closed)' %>
+                                  </option>
+                              <% }) %>
+                          </select>
+
+                          <% if (!availableForms.length) { %>
+                              <small class="form-text text-muted">
+                                  No forms exist yet. <a href="/dashboard/forms/create">Create one</a> first.
+                              </small>
+                          <% } else { %>
+                              <small class="form-text text-muted">
+                                  Manage forms under <a href="/dashboard/forms">Dashboard &gt; Forms</a>.
+                              </small>
                           <% } %>
-                          <% if (type === 'edit') { %>
-                              <%- include("../../partials/form/inputText.ejs", {
-                                  elementName: "linkedFormId",
-                                  elementValue: applicationApiData.linkedFormId,
-                                  required: false
-                              }) %>
-                          <% } %>
-                          <small class="form-text text-muted">Enter the Form ID from Dashboard > Forms.</small>
                       </div>
                   </div>
 

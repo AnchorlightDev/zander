@@ -19,6 +19,7 @@ import dashboardFinanceRoute from "./finance.js";
 import dashboardWebstoreRoute from "./webstore.js";
 import dashboardRankCatalogRoute from "./rankCatalog.js";
 import dashboardApiClientsRoute from "./apiClients.js";
+import dashboardFormsRoute from "./forms.js";
 
 export default function dashboardSiteRoutes(
   app,
@@ -99,4 +100,5 @@ export default function dashboardSiteRoutes(
   dashboardWebstoreRoute(app, fetch, config, db, features, lang);
   dashboardRankCatalogRoute(app, config, db, features, lang);
   dashboardApiClientsRoute(app, config, db, features, lang);
+  dashboardFormsRoute(app, config, db, features, lang);
 }
