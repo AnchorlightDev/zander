@@ -5,6 +5,13 @@ import {
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { luckpermsDb } from "../../controllers/databaseController.js";
 import { getProfilePicture } from "../../controllers/userController.js";
+import { setBannerCookie } from "../../api/common.js";
+import {
+  applyRankPermissions,
+  diffPermissions,
+  getRankPermissions,
+} from "../../controllers/rankPermissionController.js";
+import { grantableGroups } from "../../lib/permissions/zanderNodes.mjs";
 
 function getUsersForRanks(rankSlugs) {
   if (!rankSlugs || !rankSlugs.length) return Promise.resolve([]);
@@ -207,6 +214,83 @@ export default function dashboardRanksRoute(
       console.error("[dashboard/ranks] user-search error:", error);
       if (!res.sent) return res.status(500).send({ results: [] });
     }
+  });
+
+  /**
+   * The permission checklist for one rank.
+   *
+   * Behind its own node rather than the page's: editing a rank's colour and
+   * handing that rank access to the finance dashboard are not the same
+   * privilege, and whoever can do the second can escalate themselves.
+   */
+  app.get("/dashboard/ranks/:rankSlug/permissions", async function (req, res) {
+    if (!(await isFeatureWebRouteEnabled(app, features.ranks, req, res, features))) return;
+    if (!(await hasPermission("zander.web.ranks.permissions", req, res, features))) return;
+
+    const rankSlug = String(req.params.rankSlug || "").trim();
+
+    try {
+      const { known, unmanaged, denied } = await getRankPermissions(rankSlug);
+
+      return res.header("content-type", "text/html; charset=utf-8").send(
+        await app.view("dashboard/ranks/permissions", {
+          pageTitle: `Dashboard - ${rankSlug} permissions`,
+          config,
+          features,
+          req,
+          announcementWeb: await getWebAnnouncement(),
+          rankSlug,
+          groups: grantableGroups(),
+          held: new Set(known),
+          unmanaged,
+          denied,
+        })
+      );
+    } catch (error) {
+      console.error("[RANKS] Failed to load permissions:", error);
+      setBannerCookie("danger", "Those permissions could not be loaded.", res);
+      return res.redirect("/dashboard/ranks");
+    }
+  });
+
+  app.post("/dashboard/ranks/:rankSlug/permissions", async function (req, res) {
+    if (!(await isFeatureWebRouteEnabled(app, features.ranks, req, res, features))) return;
+    if (!(await hasPermission("zander.web.ranks.permissions", req, res, features))) return;
+
+    const rankSlug = String(req.params.rankSlug || "").trim();
+
+    // An unticked checkbox posts nothing, so the body is the whole of what was
+    // ticked. One box posts a string rather than an array.
+    const raw = req.body?.nodes;
+    const wanted = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
+
+    try {
+      const { known } = await getRankPermissions(rankSlug);
+      const changes = diffPermissions(known, wanted);
+
+      if (!changes.grant.length && !changes.revoke.length) {
+        setBannerCookie("info", "Nothing changed.", res);
+        return res.redirect(`/dashboard/ranks/${encodeURIComponent(rankSlug)}/permissions`);
+      }
+
+      const queued = await applyRankPermissions(
+        rankSlug,
+        changes,
+        req.session?.user?.username ?? null
+      );
+
+      setBannerCookie(
+        "success",
+        `Queued ${queued} change${queued === 1 ? "" : "s"} for ${rankSlug}. ` +
+          "LuckPerms applies them when the server next picks up the queue.",
+        res
+      );
+    } catch (error) {
+      console.error("[RANKS] Failed to save permissions:", error);
+      setBannerCookie("danger", "Those changes could not be saved.", res);
+    }
+
+    return res.redirect(`/dashboard/ranks/${encodeURIComponent(rankSlug)}/permissions`);
   });
 
   app.get("/dashboard/ranks", async function (req, res) {

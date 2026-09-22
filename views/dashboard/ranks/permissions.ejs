@@ -1,0 +1,115 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Permissions &mdash; <%= rankSlug %></h1>
+        <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+          <a href="/dashboard/ranks" class="btn btn-sm btn-light">Back to ranks</a>
+        </div>
+      </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+      <p class="text-muted">
+        Everything Zander can grant, grouped as the documentation groups it. Ticking a box queues a
+        LuckPerms command; the change applies when a server next picks up the queue, not instantly.
+      </p>
+
+      <form method="post" action="/dashboard/ranks/<%= encodeURIComponent(rankSlug) %>/permissions">
+        <div class="row">
+          <% groups.forEach(function (group) { %>
+            <div class="col-lg-6">
+              <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                  <h5 class="mb-0"><%= group.group %></h5>
+                  <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-light js-group-all">All</button>
+                    <button type="button" class="btn btn-light js-group-none">None</button>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <% group.nodes.forEach(function (entry) { %>
+                    <div class="form-check mb-2">
+                      <input class="form-check-input" type="checkbox"
+                             name="nodes" value="<%= entry.node %>"
+                             id="node-<%= entry.node.replace(/[^a-zA-Z0-9]/g, "-") %>"
+                             <%= held.has(entry.node) ? "checked" : "" %>>
+                      <label class="form-check-label"
+                             for="node-<%= entry.node.replace(/[^a-zA-Z0-9]/g, "-") %>">
+                        <code class="small"><%= entry.node %></code>
+                        <span class="d-block text-muted small"><%= entry.description %></span>
+                      </label>
+                    </div>
+                  <% }) %>
+                </div>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+
+        <%#
+          Anything this screen does not manage. A LuckPerms group holds game
+          permissions, other plugins' nodes and wildcards; none of it is
+          touched by saving, but hiding it entirely would make the checklist
+          look like the whole picture when a wildcard may already be granting
+          far more than is ticked.
+        %>
+        <% if (unmanaged.length || denied.length) { %>
+          <div class="card mb-4 border-warning">
+            <div class="card-header"><h5 class="mb-0">Also held, and left alone</h5></div>
+            <div class="card-body">
+              <% if (unmanaged.length) { %>
+                <p class="mb-2 small text-muted">
+                  Granted on this rank but not managed here &mdash; wildcards, dynamic ticket
+                  categories, or nodes from elsewhere. Saving this form will not remove them.
+                  <strong>A wildcard may already grant more than is ticked above.</strong>
+                </p>
+                <p class="mb-3">
+                  <% unmanaged.forEach(function (node) { %>
+                    <code class="me-2 small"><%= node %></code>
+                  <% }) %>
+                </p>
+              <% } %>
+
+              <% if (denied.length) { %>
+                <p class="mb-2 small text-muted">
+                  Explicitly <strong>denied</strong> on this rank (set to false in LuckPerms). A
+                  denial overrides a grant, so ticking one of these above will not take effect
+                  until the denial is removed in game.
+                </p>
+                <p class="mb-0">
+                  <% denied.forEach(function (node) { %>
+                    <code class="me-2 small"><%= node %></code>
+                  <% }) %>
+                </p>
+              <% } %>
+            </div>
+          </div>
+        <% } %>
+
+        <button type="submit" class="btn btn-primary">Save permissions</button>
+        <a href="/dashboard/ranks" class="btn btn-light">Cancel</a>
+      </form>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<script>
+(function () {
+  // Per-group All / None. Only ever touches the boxes in its own card.
+  document.querySelectorAll(".js-group-all, .js-group-none").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var card = button.closest(".card");
+      if (!card) return;
+      var on = button.classList.contains("js-group-all");
+      card.querySelectorAll('input[type="checkbox"][name="nodes"]').forEach(function (box) {
+        box.checked = on;
+      });
+    });
+  });
+})();
+</script>

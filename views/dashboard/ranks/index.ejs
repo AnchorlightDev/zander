@@ -91,6 +91,13 @@
                                   >
                                     Manage
                                   </button>
+                                  <%# Its own page rather than the modal: the
+                                      checklist is long, and it is behind a
+                                      different permission node. %>
+                                  <a class="btn btn-sm btn-outline-secondary"
+                                     href="/dashboard/ranks/<%= encodeURIComponent(rank.rankSlug) %>/permissions">
+                                    Permissions
+                                  </a>
                                 </td>
                               </tr>
                             <% }); %>
