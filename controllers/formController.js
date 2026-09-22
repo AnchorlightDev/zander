@@ -147,6 +147,7 @@ function formWriteData(data) {
     // one thing to test for.
     accessCode: String(data.accessCode ?? "").trim().slice(0, 190) || null,
     requirements: normaliseRequirements(data.requirements),
+    useGlobalRequirements: Boolean(data.useGlobalRequirements),
     reapplyCooldownDays:
       Number.isFinite(Number(data.reapplyCooldownDays)) && Number(data.reapplyCooldownDays) > 0
         ? Math.min(3650, Math.round(Number(data.reapplyCooldownDays)))

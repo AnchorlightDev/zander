@@ -22,10 +22,12 @@ import {
 import { getUserPlaytimeSeconds } from "../controllers/userController.js";
 import {
   DEFAULT_WINDOW_DAYS,
+  effectiveRequirements,
   evaluateRequirements,
   normaliseRequirements,
   windowStart,
 } from "../lib/formRequirements.mjs";
+import { getDefaultFormRequirements } from "../controllers/siteSettingsController.js";
 
 /**
  * Which LiteBans tables count as "a punishment" for a clean-record rule.
@@ -208,11 +210,18 @@ export async function measureUser(userId, requirements, now = new Date()) {
  * apply". The failure is logged and the gate opens.
  */
 export async function checkRequirements(form, userId, now = new Date()) {
-  if (!normaliseRequirements(form?.requirements)) return { ok: true, checks: [] };
+  if (!form) return { ok: true, checks: [] };
+
+  // Only forms that opted in pay for the settings lookup, so a feedback survey
+  // costs nothing extra.
+  const globals = form.useGlobalRequirements ? await getDefaultFormRequirements() : null;
+  const rules = effectiveRequirements(form, globals);
+
+  if (!rules) return { ok: true, checks: [] };
 
   try {
-    const measured = await measureUser(userId, form.requirements, now);
-    return evaluateRequirements(form.requirements, measured, { now });
+    const measured = await measureUser(userId, rules, now);
+    return evaluateRequirements(rules, measured, { now });
   } catch (error) {
     console.error(
       `[forms] Requirement check failed for form ${form?.formId} / user ${userId}:`,

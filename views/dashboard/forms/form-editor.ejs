@@ -212,6 +212,31 @@
                 check.
               </p>
 
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="useGlobalRequirements"
+                       name="useGlobalRequirements" value="1"
+                       <%= form && form.useGlobalRequirements ? 'checked' : '' %>>
+                <label class="form-check-label" for="useGlobalRequirements">
+                  Use the site-wide defaults for applications
+                </label>
+              </div>
+
+              <div class="alert alert-secondary py-2 px-3 small" id="inheritedRequirements">
+                <% if (globalRequirementsSummary.length) { %>
+                  <strong>Would inherit:</strong>
+                  <ul class="mb-1 mt-1 ps-3">
+                    <% globalRequirementsSummary.forEach(function (check) { %>
+                      <li><%= check.label %> &mdash; <%= check.required %></li>
+                    <% }) %>
+                  </ul>
+                  Anything you set below overrides the matching default. Enter <strong>0</strong>
+                  to switch an inherited check off for this form only.
+                <% } else { %>
+                  No site-wide defaults are set yet. You can set them on the
+                  <a href="/dashboard/forms">forms list</a>.
+                <% } %>
+              </div>
+
               <div class="row">
                 <div class="mb-3 col-md-4">
                   <label class="form-label" for="req_minPlaytimeHours">Minimum playtime (hours)</label>
@@ -750,6 +775,17 @@
   // The ticket category only means anything when ticket creation is on.
   var ticketToggle = document.getElementById("createTicket");
   var ticketCategory = document.getElementById("ticketCategoryField");
+  // The "would inherit" note only means anything while the box is ticked.
+  var globalsToggle = document.getElementById("useGlobalRequirements");
+  var inheritedNote = document.getElementById("inheritedRequirements");
+  function syncGlobals() {
+    if (inheritedNote) inheritedNote.style.display = globalsToggle.checked ? "" : "none";
+  }
+  if (globalsToggle) {
+    globalsToggle.addEventListener("change", syncGlobals);
+    syncGlobals();
+  }
+
   var ticketMessages = document.getElementById("ticketMessagesFields");
   function syncTicketFields() {
     var on = ticketToggle.checked;

@@ -14,6 +14,87 @@
       </div>
       <%- include("../../admin/_notices.ejs") %>
 
+      <%# Site-wide eligibility defaults. Here rather than in a settings area of
+          its own: it is about forms, it is the only site-wide setting so far,
+          and it reuses this page's permission. %>
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Default eligibility for applications</h5>
+          <button class="btn btn-sm btn-light" type="button" data-bs-toggle="collapse"
+                  data-bs-target="#defaultRequirements" aria-expanded="false">
+            Edit defaults
+          </button>
+        </div>
+        <div class="collapse<%= Object.keys(defaultRequirements).length ? ' show' : '' %>"
+             id="defaultRequirements">
+          <div class="card-body">
+            <p class="text-muted small">
+              Set the thresholds once here, then tick <strong>&ldquo;Use the site-wide
+              defaults&rdquo;</strong> on each application form rather than retyping them.
+              A form can still set its own value for any single check to override the default,
+              or enter <strong>0</strong> to switch that inherited check off for that form only.
+              Forms that do not tick the box are unaffected &mdash; a feedback survey never
+              inherits anything.
+            </p>
+
+            <form method="post" action="/dashboard/forms/defaults">
+              <div class="row">
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minPlaytimeHours">Minimum playtime (hours)</label>
+                  <input type="number" min="1" class="form-control" id="g_minPlaytimeHours"
+                         name="req_minPlaytimeHours"
+                         value="<%= defaultRequirements.minPlaytimeHours || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_noPunishmentsDays">Clean record for (days)</label>
+                  <input type="number" min="1" class="form-control" id="g_noPunishmentsDays"
+                         name="req_noPunishmentsDays"
+                         value="<%= defaultRequirements.noPunishmentsDays || '' %>">
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minMinecraftActiveDays">Played on at least (days)</label>
+                  <input type="number" min="1" class="form-control" id="g_minMinecraftActiveDays"
+                         name="req_minMinecraftActiveDays"
+                         value="<%= defaultRequirements.minMinecraftActiveDays || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minMinecraftActiveWindowDays">...within the last (days)</label>
+                  <input type="number" min="1" class="form-control" id="g_minMinecraftActiveWindowDays"
+                         name="req_minMinecraftActiveWindowDays" placeholder="30"
+                         value="<%= defaultRequirements.minMinecraftActiveWindowDays || '' %>">
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minDiscordActiveDays">Posted in Discord on (days)</label>
+                  <input type="number" min="1" class="form-control" id="g_minDiscordActiveDays"
+                         name="req_minDiscordActiveDays"
+                         value="<%= defaultRequirements.minDiscordActiveDays || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minDiscordMessages">Discord messages at least</label>
+                  <input type="number" min="1" class="form-control" id="g_minDiscordMessages"
+                         name="req_minDiscordMessages"
+                         value="<%= defaultRequirements.minDiscordMessages || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minDiscordActiveWindowDays">...within the last (days)</label>
+                  <input type="number" min="1" class="form-control" id="g_minDiscordActiveWindowDays"
+                         name="req_minDiscordActiveWindowDays" placeholder="30"
+                         value="<%= defaultRequirements.minDiscordActiveWindowDays || '' %>">
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary">Save defaults</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <% if (!forms.length) { %>
         <%- include("../../partials/alert.ejs", {
           alertType: "info",

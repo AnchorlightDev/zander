@@ -378,6 +378,7 @@ model forms {
   requiresReview   Boolean  @default(true)
   accessCode          String?  @db.VarChar(190)
   requirements        Json?
+  useGlobalRequirements Boolean @default(false)
   reapplyCooldownDays Int?
   createTicket     Boolean  @default(false)
   ticketCategoryId Int?
@@ -467,6 +468,14 @@ model discordActivityDaily {
 
   @@unique([discordUserId, activityDate], map: "discordActivityDaily_user_date_key")
   @@index([discordUserId, activityDate], map: "discordActivityDaily_user_date_idx")
+}
+
+/// Generic site-wide settings, one JSON value per named key. See
+/// 0056_site_settings_and_global_requirements.
+model siteSettings {
+  settingKey   String   @id @db.VarChar(100)
+  settingValue Json?
+  updatedAt    DateTime @default(now()) @updatedAt
 }
 
 model reports {

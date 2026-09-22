@@ -31,11 +31,16 @@ import {
   postReviewToThread,
 } from "../../services/formDiscordService.js";
 import { formatDiscordIds } from "../../lib/discordIds.mjs";
+import {
+  getDefaultFormRequirements,
+  setDefaultFormRequirements,
+} from "../../controllers/siteSettingsController.js";
 import { postReviewToTicket } from "../../services/formTicketService.js";
 import {
   REQUIREMENT_DEFS,
   WINDOW_DEFS,
   normaliseRequirements,
+  summariseRequirements,
 } from "../../lib/formRequirements.mjs";
 import {
   FIELD_TYPES,
@@ -115,10 +120,11 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
   app.get("/dashboard/forms", async (req, res) => {
     if (!(await guard(req, res))) return;
 
-    const [forms, pendingCounts, announcementWeb] = await Promise.all([
+    const [forms, pendingCounts, announcementWeb, defaults] = await Promise.all([
       listForms(),
       countPendingByForm(),
       getWebAnnouncement(),
+      getDefaultFormRequirements(),
     ]);
 
     return res.header("content-type", "text/html; charset=utf-8").send(
@@ -126,8 +132,34 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         pageTitle: "Dashboard - Forms",
         config, features, req, announcementWeb,
         forms: forms.map((f) => ({ ...f, pendingCount: pendingCounts.get(f.formId) || 0 })),
+        // Normalised on the way out so the editor shows what is actually
+        // enforced rather than whatever was typed.
+        defaultRequirements: normaliseRequirements(defaults) ?? {},
       })
     );
+  });
+
+  /**
+   * Save the site-wide eligibility defaults.
+   *
+   * Lives on the forms list rather than a settings area of its own: it is
+   * about forms, it is the only site-wide setting there is so far, and it
+   * reuses this page's permission instead of inventing another node.
+   */
+  app.post("/dashboard/forms/defaults", async (req, res) => {
+    if (!(await guard(req, res))) return;
+
+    try {
+      const requirements = parseRequirementsPayload(req.body || {});
+      await setDefaultFormRequirements(
+        Object.keys(requirements).length ? requirements : null
+      );
+      setBannerCookie("success", "Default eligibility requirements saved.", res);
+    } catch (error) {
+      console.error("[forms] default requirements error:", error);
+      setBannerCookie("danger", "The defaults could not be saved.", res);
+    }
+    return res.redirect("/dashboard/forms");
   });
 
   // ── Create ────────────────────────────────────────────────────────────────
@@ -148,6 +180,7 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         fieldTypes: FIELD_TYPES,
         showIfSourceTypes: SHOW_IF_SOURCE_TYPES,
         requirements: {},
+        globalRequirementsSummary: summariseRequirements(await getDefaultFormRequirements()),
         notifyDiscordUserIdsText: "",
         supportCategories,
         formAction: "/dashboard/forms/create",
@@ -177,6 +210,8 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         allowMultiple: body.allowMultiple === "1" || body.allowMultiple === "on",
         accessCode: body.accessCode,
         requirements: parseRequirementsPayload(body),
+        useGlobalRequirements:
+          body.useGlobalRequirements === "1" || body.useGlobalRequirements === "on",
         reapplyCooldownDays: body.reapplyCooldownDays,
         createTicket: body.createTicket === "1" || body.createTicket === "on",
         ticketCategoryId: body.ticketCategoryId,
@@ -223,6 +258,7 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         // Normalised on the way out too, so the editor shows the values that
         // are actually enforced rather than whatever was typed.
         requirements: normaliseRequirements(form.requirements) ?? {},
+        globalRequirementsSummary: summariseRequirements(await getDefaultFormRequirements()),
         // The editor works in one-id-per-line text, not JSON.
         notifyDiscordUserIdsText: formatDiscordIds(form.notifyDiscordUserIds),
         formAction: `/dashboard/forms/${form.formId}/edit`,
@@ -253,6 +289,8 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         allowMultiple: body.allowMultiple === "1" || body.allowMultiple === "on",
         accessCode: body.accessCode,
         requirements: parseRequirementsPayload(body),
+        useGlobalRequirements:
+          body.useGlobalRequirements === "1" || body.useGlobalRequirements === "on",
         reapplyCooldownDays: body.reapplyCooldownDays,
         createTicket: body.createTicket === "1" || body.createTicket === "on",
         ticketCategoryId: body.ticketCategoryId,
