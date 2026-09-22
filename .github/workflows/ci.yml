@@ -44,6 +44,15 @@ jobs:
       - name: Create config.json from the example
         run: cp config.json.example config.json
 
+      # .env is gitignored for the same reason. controllers/databaseController.js
+      # parses DATABASE_URL, LUCKPERMS_URL, QUICKSHOP_URL and PUNISHMENTS_URL with
+      # new URL() at module scope, so every test that transitively imports a
+      # controller dies with `TypeError: Invalid URL` when the file is absent.
+      # The example's placeholder connection strings parse correctly and no
+      # connection is ever opened during the suite, so they are sufficient.
+      - name: Create .env from the example
+        run: cp .env.example .env
+
       # The tests import modules that transitively load @prisma/client, which
       # throws unless a client has been generated from the schema. No database
       # connection is made — generate only reads prisma/schema.prisma.
