@@ -22,8 +22,10 @@ import {
   createSubmission,
   getFormBySlug,
   setSubmissionDiscordMessage,
+  setSubmissionTicket,
 } from "../controllers/formController.js";
 import { notifyNewSubmission } from "../services/formDiscordService.js";
+import { openTicketForSubmission } from "../services/formTicketService.js";
 import { isAutoFillType, normaliseOptions, validateSubmission } from "../lib/formFields.js";
 
 export default function formSiteRoutes(app, config, features) {
@@ -156,6 +158,25 @@ export default function formSiteRoutes(app, config, features) {
       console.error("[forms] Discord notification failed:", error.message);
     }
 
+    // Also best-effort: a form with the option on gets a support ticket so the
+    // submitter has somewhere to be kept informed. A failure here leaves
+    // ticketId null and the submission otherwise intact.
+    let ticketId = null;
+    try {
+      ticketId = await openTicketForSubmission({
+        form,
+        fields: form.fields,
+        answers,
+        submissionId: submission.submissionId,
+        user,
+      });
+      if (ticketId) {
+        await setSubmissionTicket(submission.submissionId, ticketId);
+      }
+    } catch (error) {
+      console.error("[forms] Ticket creation failed:", error.message);
+    }
+
     return res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("modules/forms/submitted", {
         pageTitle: `${form.name} - Submitted`,
@@ -165,6 +186,7 @@ export default function formSiteRoutes(app, config, features) {
         announcementWeb: await getWebAnnouncement(),
         form,
         submissionId: submission.submissionId,
+        ticketId,
       })
     );
   });

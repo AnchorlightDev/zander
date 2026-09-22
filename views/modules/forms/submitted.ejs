@@ -27,7 +27,15 @@
 
         <p class="text-muted mb-4">Your reference is #<%= submissionId %>.</p>
 
-        <a href="/" class="btn btn-primary">Back to home</a>
+        <% if (typeof ticketId !== "undefined" && ticketId) { %>
+          <p class="mb-4">
+            We have opened a support ticket so you can follow this and reply to us there.
+          </p>
+          <a href="/support/ticket/<%= ticketId %>" class="btn btn-primary">View your ticket</a>
+          <a href="/" class="btn btn-light">Back to home</a>
+        <% } else { %>
+          <a href="/" class="btn btn-primary">Back to home</a>
+        <% } %>
       </div>
     </div>
   </div>

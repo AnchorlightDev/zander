@@ -28,6 +28,7 @@
                 <th>Public link</th>
                 <th>Fields</th>
                 <th>Submissions</th>
+                <th>Used by</th>
                 <th>Status</th>
                 <th>Action</th>
               </tr>
@@ -53,18 +54,33 @@
                       <span class="badge bg-warning text-dark ms-1"><%= form.pendingCount %> pending</span>
                     <% } %>
                   </td>
+                  <td data-label="Used by">
+                    <% if (!form.applications.length) { %>
+                      <span class="text-muted">&mdash;</span>
+                    <% } else { %>
+                      <% form.applications.forEach(function (linkedApplication) { %>
+                        <a class="badge bg-info text-decoration-none"
+                           href="/dashboard/applications/edit?applicationId=<%= linkedApplication.applicationId %>">
+                          <%= linkedApplication.displayName %>
+                        </a>
+                      <% }) %>
+                    <% } %>
+                  </td>
                   <td data-label="Status">
                     <% if (form.status) { %>
                       <span class="badge bg-success">Open</span>
                     <% } else { %>
                       <span class="badge bg-secondary">Closed</span>
                     <% } %>
+                    <% if (form.createTicket) { %>
+                      <span class="badge bg-light text-dark" title="Opens a support ticket per submission">Ticket</span>
+                    <% } %>
                   </td>
                   <td data-label="Action">
                     <div class="d-flex flex-wrap gap-2">
                       <a href="/dashboard/forms/<%= form.formId %>/edit" class="btn btn-sm btn-warning">Edit</a>
                       <form action="/dashboard/forms/<%= form.formId %>/delete" method="post"
-                            onsubmit="return confirm('Delete this form and all <%= form.submissionCount %> of its submissions? This cannot be undone.');">
+                            onsubmit="return confirm('Delete this form and all <%= form.submissionCount %> of its submissions?<%= form.applicationCount ? ` This will also leave ${form.applicationCount} linked application(s) without a destination.` : "" %> This cannot be undone.');">
                         <button class="btn btn-sm btn-danger" type="submit">Delete</button>
                       </form>
                     </div>

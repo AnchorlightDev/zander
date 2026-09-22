@@ -167,7 +167,7 @@
                               <% availableForms.forEach(function (availableForm) { %>
                                   <option value="<%= availableForm.formId %>"
                                           <%= String(selectedFormId) === String(availableForm.formId) ? 'selected' : '' %>>
-                                      <%= availableForm.name %><%= availableForm.status ? '' : ' (closed)' %>
+                                      <%= availableForm.name %><%= availableForm.status ? '' : ' (closed)' %><%= availableForm.createTicket ? ' - opens a ticket' : '' %>
                                   </option>
                               <% }) %>
                           </select>
@@ -179,6 +179,8 @@
                           <% } else { %>
                               <small class="form-text text-muted">
                                   Manage forms under <a href="/dashboard/forms">Dashboard &gt; Forms</a>.
+                                  A form marked &ldquo;opens a ticket&rdquo; gives each applicant a
+                                  support ticket so they can be kept informed.
                               </small>
                           <% } %>
                       </div>

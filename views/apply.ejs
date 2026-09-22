@@ -53,14 +53,31 @@
                                 <zero-md src="<%= application.requirementsMarkdown %>"></zero-md>
                               <br><br>
 
+                              <%
+                                // A linked form can go missing (deleted, so the FK
+                                // nulled) or be closed on its own. Either way the
+                                // old markup fell through to the external branch
+                                // and rendered an Apply button pointing at
+                                // "undefined", so check both explicitly.
+                                const usesLinkedForm = application.applicationType === 'linked_form';
+                                const linkedFormUsable = usesLinkedForm
+                                  && application.linkedFormSlug
+                                  && Number(application.linkedFormStatus) === 1;
+                              %>
                               <% if (!applicationOpen) { %>
                                 <a href="#" target="_blank"><button type="button" class="btn btn-danger" disabled>Applications Closed</button></a>
-                              <% } else if (application.applicationType === 'linked_form' && application.linkedFormSlug) { %>
+                              <% } else if (linkedFormUsable) { %>
                                 <a href="/forms/<%= application.linkedFormSlug %>"><button type="button" class="btn btn-info">Apply</button></a>
                                 <small>Upon clicking Apply, you will be taken to the application form.</small>
-                              <% } else { %>
+                              <% } else if (usesLinkedForm) { %>
+                                <button type="button" class="btn btn-danger" disabled>Currently Unavailable</button>
+                                <small>This application form is not accepting responses right now. Please check back later.</small>
+                              <% } else if (application.redirectUrl) { %>
                                 <a href="<%= application.redirectUrl %>" target="_blank"><button type="button" class="btn btn-info">Apply</button></a>
                                 <small>Upon clicking Apply, you will be redirected to an external site.</small>
+                              <% } else { %>
+                                <button type="button" class="btn btn-danger" disabled>Currently Unavailable</button>
+                                <small>This application has no destination configured yet.</small>
                               <% } %>
                           </div>
                         </div>

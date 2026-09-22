@@ -373,12 +373,17 @@ model forms {
   successMessage   String?  @db.Text
   discordChannelId String?  @db.VarChar(255)
   allowMultiple    Boolean  @default(false)
+  createTicket     Boolean  @default(false)
+  ticketCategoryId Int?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now()) @updatedAt
 
   fields           formFields[]
   submissions      formSubmissions[]
   applications     applications[]
+  ticketCategory   supportTicketCategories? @relation(fields: [ticketCategoryId], references: [categoryId], onDelete: SetNull)
+
+  @@index([ticketCategoryId], map: "forms_ticketCategoryId_fkey")
 }
 
 model formFields {
@@ -410,10 +415,14 @@ model formSubmissions {
   reviewNotes      String?   @db.Text
   reviewedAt       DateTime?
   discordMessageId String?   @db.VarChar(255)
+  ticketId         Int?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @default(now()) @updatedAt
 
-  form             forms     @relation(fields: [formId], references: [formId], onDelete: Cascade)
+  form             forms           @relation(fields: [formId], references: [formId], onDelete: Cascade)
+  ticket           supportTickets? @relation(fields: [ticketId], references: [ticketId], onDelete: SetNull)
+
+  @@index([ticketId], map: "formSubmissions_ticketId_idx")
 
   @@index([formId, status], map: "formSubmissions_formId_status_idx")
   @@index([userId], map: "formSubmissions_userId_idx")
@@ -624,6 +633,7 @@ model supportTicketCategories {
 
   tickets     supportTickets[]
   permissions supportTicketCategoryPermissions[]
+  forms       forms[]
 }
 
 model supportTickets {
@@ -638,6 +648,7 @@ model supportTickets {
 
   category         supportTicketCategories @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
   messages         supportTicketMessages[]
+  formSubmissions  formSubmissions[]
 }
 
 model supportTicketMessages {

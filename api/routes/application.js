@@ -8,6 +8,32 @@ import {
 export default function applicationApiRoute(app, config, db, features, lang) {
   const baseEndpoint = "/api/application";
 
+  /**
+   * An application must actually lead somewhere. Without this, picking
+   * "Linked Form" and leaving the picker blank -- or "External URL" with no
+   * URL -- saved happily and produced a dead Apply button on /apply.
+   *
+   * Returns an error string, or null when the destination is coherent.
+   */
+  const destinationError = async (applicationType, redirectUrl, linkedFormId) => {
+    if (applicationType === "linked_form") {
+      if (!linkedFormId) return "Choose a form to link this application to.";
+
+      const rows = await new Promise((resolve, reject) => {
+        db.query(
+          `SELECT formId FROM forms WHERE formId=?;`,
+          [linkedFormId],
+          (error, results) => (error ? reject(error) : resolve(results))
+        );
+      });
+      if (!rows || !rows.length) return "That form no longer exists.";
+      return null;
+    }
+
+    if (!redirectUrl) return "An external application needs a redirect URL.";
+    return null;
+  };
+
   app.get(baseEndpoint + "/get", async function (req, res) {
     if (!isFeatureEnabled(features.applications, res, lang)) return;
     const applicationId = optional(req.query, "id");
@@ -97,6 +123,22 @@ export default function applicationApiRoute(app, config, db, features, lang) {
         ? null
         : Number(rawLinkedFormId);
 
+    const createDestinationError = await destinationError(
+      applicationType,
+      redirectUrl,
+      linkedFormId
+    );
+    if (createDestinationError) {
+      // alertType/alertContent are what postAPIRequest turns into a banner --
+      // a bare `message` would redirect with no explanation shown.
+      return res.send({
+        success: false,
+        message: createDestinationError,
+        alertType: "danger",
+        alertContent: createDestinationError,
+      });
+    }
+
     let applicationCreatedLang = lang.applications.applicationCreated;
 
     try {
@@ -182,6 +224,22 @@ export default function applicationApiRoute(app, config, db, features, lang) {
       Number.isNaN(Number(rawLinkedFormId))
         ? null
         : Number(rawLinkedFormId);
+
+    const editDestinationError = await destinationError(
+      applicationType,
+      redirectUrl,
+      linkedFormId
+    );
+    if (editDestinationError) {
+      // alertType/alertContent are what postAPIRequest turns into a banner --
+      // a bare `message` would redirect with no explanation shown.
+      return res.send({
+        success: false,
+        message: editDestinationError,
+        alertType: "danger",
+        alertContent: editDestinationError,
+      });
+    }
 
     let applicationEditedLang = lang.applications.applicationEdited;
 

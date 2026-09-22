@@ -64,7 +64,18 @@
                 <p class="mb-2"><strong>Reviewed by:</strong> <%= submission.reviewerName %></p>
               <% } %>
               <% if (submission.reviewedAt) { %>
-                <p class="mb-0"><strong>Reviewed:</strong> <%= new Date(submission.reviewedAt).toLocaleString() %></p>
+                <p class="mb-2"><strong>Reviewed:</strong> <%= new Date(submission.reviewedAt).toLocaleString() %></p>
+              <% } %>
+              <% if (submission.ticketId) { %>
+                <p class="mb-0">
+                  <strong>Ticket:</strong>
+                  <a href="/support/ticket/<%= submission.ticketId %>">#<%= submission.ticketId %></a>
+                  <br><small class="text-muted">Saving a decision below posts it here for the submitter.</small>
+                </p>
+              <% } else if (submission.form.createTicket) { %>
+                <p class="mb-0 text-muted">
+                  <small>No ticket was opened for this submission.</small>
+                </p>
               <% } %>
             </div>
           </div>

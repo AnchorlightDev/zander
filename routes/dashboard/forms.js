@@ -11,6 +11,7 @@
 
 import { hasPermission, isFeatureWebRouteEnabled, setBannerCookie } from "../../api/common.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
+import { getSupportCategories } from "../../controllers/supportTicketController.js";
 import { prisma } from "../../controllers/databaseController.js";
 import {
   countPendingByForm,
@@ -26,6 +27,7 @@ import {
   updateForm,
 } from "../../controllers/formController.js";
 import { notifySubmissionReviewed } from "../../services/formDiscordService.js";
+import { postReviewToTicket } from "../../services/formTicketService.js";
 import {
   FIELD_TYPES,
   formatAnswer,
@@ -97,14 +99,19 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
   app.get("/dashboard/forms/create", async (req, res) => {
     if (!(await guard(req, res))) return;
 
+    const [announcementWeb, supportCategories] = await Promise.all([
+      getWebAnnouncement(),
+      getSupportCategories().catch(() => []),
+    ]);
+
     return res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/forms/form-editor", {
         pageTitle: "Dashboard - Create Form",
-        config, features, req,
-        announcementWeb: await getWebAnnouncement(),
+        config, features, req, announcementWeb,
         form: null,
         fields: [],
         fieldTypes: FIELD_TYPES,
+        supportCategories,
         formAction: "/dashboard/forms/create",
       })
     );
@@ -128,6 +135,8 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         successMessage: body.successMessage,
         discordChannelId: body.discordChannelId,
         allowMultiple: body.allowMultiple === "1" || body.allowMultiple === "on",
+        createTicket: body.createTicket === "1" || body.createTicket === "on",
+        ticketCategoryId: body.ticketCategoryId,
       });
       await replaceFields(form.formId, parseFieldsPayload(body.fields));
 
@@ -150,11 +159,16 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
       return res.redirect("/dashboard/forms");
     }
 
+    const [announcementWeb, supportCategories] = await Promise.all([
+      getWebAnnouncement(),
+      getSupportCategories().catch(() => []),
+    ]);
+
     return res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/forms/form-editor", {
         pageTitle: `Dashboard - Edit ${form.name}`,
-        config, features, req,
-        announcementWeb: await getWebAnnouncement(),
+        config, features, req, announcementWeb,
+        supportCategories,
         form,
         // The editor works in the newline-per-option text form, not JSON.
         fields: form.fields.map((f) => ({ ...f, optionsText: optionsToText(f.options) })),
@@ -183,6 +197,8 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         successMessage: body.successMessage,
         discordChannelId: body.discordChannelId,
         allowMultiple: body.allowMultiple === "1" || body.allowMultiple === "on",
+        createTicket: body.createTicket === "1" || body.createTicket === "on",
+        ticketCategoryId: body.ticketCategoryId,
       });
       await replaceFields(formId, parseFieldsPayload(body.fields));
 
@@ -289,6 +305,16 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         await notifySubmissionReviewed({
           form: submission.form,
           submissionId: submission.submissionId,
+          status,
+          reviewer: req.session?.user?.username ?? null,
+        });
+      }
+
+      // Tell the submitter directly, in the ticket opened for them. Internal
+      // review notes are deliberately not forwarded -- only the decision.
+      if (submission?.ticketId) {
+        await postReviewToTicket({
+          submission,
           status,
           reviewer: req.session?.user?.username ?? null,
         });

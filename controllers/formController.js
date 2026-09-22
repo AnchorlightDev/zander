@@ -47,7 +47,10 @@ export async function listForms() {
   const forms = await prisma.forms.findMany({
     orderBy: [{ name: "asc" }],
     include: {
-      _count: { select: { submissions: true, fields: true } },
+      _count: { select: { submissions: true, fields: true, applications: true } },
+      // Named, not just counted: the delete confirmation needs to say which
+      // applications would be left without a destination.
+      applications: { select: { applicationId: true, displayName: true } },
     },
   });
 
@@ -55,6 +58,7 @@ export async function listForms() {
     ...form,
     fieldCount: form._count.fields,
     submissionCount: form._count.submissions,
+    applicationCount: form._count.applications,
   }));
 }
 
@@ -62,7 +66,7 @@ export async function listForms() {
 export async function listFormsForPicker() {
   return prisma.forms.findMany({
     orderBy: [{ name: "asc" }],
-    select: { formId: true, name: true, slug: true, status: true },
+    select: { formId: true, name: true, slug: true, status: true, createTicket: true },
   });
 }
 
@@ -91,6 +95,10 @@ function formWriteData(data) {
     successMessage: data.successMessage ? String(data.successMessage) : null,
     discordChannelId: data.discordChannelId ? String(data.discordChannelId).slice(0, 255) : null,
     allowMultiple: Boolean(data.allowMultiple),
+    createTicket: Boolean(data.createTicket),
+    ticketCategoryId: Number.isInteger(Number(data.ticketCategoryId)) && Number(data.ticketCategoryId) > 0
+      ? Number(data.ticketCategoryId)
+      : null,
   };
 }
 
@@ -210,6 +218,13 @@ export async function reviewSubmission({ submissionId, status, reviewNotes, revi
       reviewedBy: reviewedBy ? Number(reviewedBy) : null,
       reviewedAt: new Date(),
     },
+  });
+}
+
+export async function setSubmissionTicket(submissionId, ticketId) {
+  return prisma.formSubmissions.update({
+    where: { submissionId: Number(submissionId) },
+    data: { ticketId: Number(ticketId) },
   });
 }
 
