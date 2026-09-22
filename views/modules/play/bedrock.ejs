@@ -1,0 +1,177 @@
+<%#
+	Bedrock Edition landing page.
+
+	Every visible string comes from lang.json via `t`, and every address comes
+	from config.connection via `bedrock`. Nothing on this page may hard-code a
+	community name, an address or a port -- an operator who is not the one this
+	was written for should be able to switch features.bedrock on and have it
+	read correctly for them.
+
+	Sections render only when there is copy for them, so the parts an operator
+	has not filled in stay off the page rather than showing an empty heading.
+%>
+<%- include("../../modules/header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription
+}) %>
+
+<%- include("../../modules/navigationBar.ejs") %>
+
+<%- include("../../partials/miniHeader.ejs", {
+  headerTitle: t("bedrock.heading"),
+  backgroundImage: globalImage
+}) %>
+
+<section class="section">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+
+        <% if (t.has("bedrock.intro")) { %>
+          <p class="lead text-muted mb-5"><%= t("bedrock.intro") %></p>
+        <% } %>
+
+        <%# ── Connection details ───────────────────────────────────────── %>
+        <% if (!bedrock.configured) { %>
+          <%- include("../../partials/alert.ejs", {
+            alertType: "warning",
+            content: t("bedrock.notConfigured")
+          }) %>
+        <% } else { %>
+          <div class="card border-0 shadow-sm mb-5">
+            <div class="card-body p-4">
+              <h2 class="h5 fw-bold mb-3"><%= t("bedrock.addressHeading") %></h2>
+
+              <%#
+                GEO/SEO: the address and port are real text in the page, not only
+                values inside inputs, so search and AI engines can extract them.
+                Keep them that way if this is reworked.
+              %>
+              <div class="row g-3">
+                <div class="col-md-8">
+                  <label class="form-label small text-muted" for="bedrockHost">
+                    <%= t("bedrock.addressLabel") %>
+                  </label>
+                  <div class="input-group">
+                    <input type="text" class="form-control font-monospace" id="bedrockHost"
+                           value="<%= bedrock.host %>" readonly
+                           aria-label="<%= t("bedrock.addressLabel") %>">
+                    <button class="btn btn-main js-copy" type="button"
+                            data-copy="<%= bedrock.host %>"
+                            aria-label="<%= t("bedrock.addressLabel") %>">
+                      <i class="fas fa-copy"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <% if (bedrock.port) { %>
+                  <div class="col-md-4">
+                    <label class="form-label small text-muted" for="bedrockPort">
+                      <%= t("bedrock.portLabel") %>
+                    </label>
+                    <div class="input-group">
+                      <input type="text" class="form-control font-monospace" id="bedrockPort"
+                             value="<%= bedrock.port %>" readonly
+                             aria-label="<%= t("bedrock.portLabel") %>">
+                      <button class="btn btn-main js-copy" type="button"
+                              data-copy="<%= bedrock.port %>"
+                              aria-label="<%= t("bedrock.portLabel") %>">
+                        <i class="fas fa-copy"></i>
+                      </button>
+                    </div>
+                  </div>
+                <% } %>
+              </div>
+
+              <small class="text-muted d-block mt-3"><%= t("bedrock.copyHint") %></small>
+            </div>
+          </div>
+        <% } %>
+
+        <%# ── How to connect ───────────────────────────────────────────── %>
+        <h2 class="h4 fw-bold mb-4"><%= t("bedrock.stepsHeading") %></h2>
+
+        <% [
+             { heading: "bedrock.windowsHeading", steps: "bedrock.windowsSteps" },
+             { heading: "bedrock.mobileHeading",  steps: "bedrock.mobileSteps"  }
+           ].forEach(function (platform) { %>
+          <% if (t.has(platform.steps)) { %>
+            <div class="mb-4">
+              <h3 class="h6 fw-bold text-uppercase text-muted mb-3"><%= t(platform.heading) %></h3>
+              <ol class="ps-3">
+                <% t.list(platform.steps).forEach(function (step) { %>
+                  <li class="mb-2"><%= step %></li>
+                <% }) %>
+              </ol>
+            </div>
+          <% } %>
+        <% }) %>
+
+        <% if (t.has("bedrock.consoleNote")) { %>
+          <div class="mb-5">
+            <h3 class="h6 fw-bold text-uppercase text-muted mb-3"><%= t("bedrock.consoleHeading") %></h3>
+            <p class="text-muted mb-0" style="white-space: pre-wrap;"><%= t("bedrock.consoleNote") %></p>
+          </div>
+        <% } %>
+
+        <%#
+          What Bedrock players can and cannot reach differs per network, so this
+          ships empty and stays off the page until an operator fills
+          lang.bedrock.access in. Better a missing section than an invented one.
+        %>
+        <% if (t.has("bedrock.access")) { %>
+          <div class="mb-5">
+            <h2 class="h4 fw-bold mb-3"><%= t("bedrock.accessHeading") %></h2>
+            <ul class="ps-3 mb-0">
+              <% t.list("bedrock.access").forEach(function (item) { %>
+                <li class="mb-2"><%= item %></li>
+              <% }) %>
+            </ul>
+          </div>
+        <% } %>
+
+        <%# ── Help ─────────────────────────────────────────────────────── %>
+        <% if (t.has("bedrock.helpBody")) { %>
+          <div class="card bg-light border-0">
+            <div class="card-body p-4">
+              <h2 class="h5 fw-bold mb-2"><%= t("bedrock.helpHeading") %></h2>
+              <p class="text-muted mb-3"><%= t("bedrock.helpBody") %></p>
+              <div class="d-flex flex-wrap gap-2">
+                <% if (knowledgebaseUrl) { %>
+                  <a href="<%= knowledgebaseUrl %>" class="btn btn-main btn-round-full"
+                     target="_blank" rel="noopener"><%= t("bedrock.helpLinkLabel") %></a>
+                <% } %>
+                <% if (discordUrl) { %>
+                  <a href="<%= discordUrl %>" class="btn btn-light btn-round-full"
+                     target="_blank" rel="noopener"><%= t("bedrock.discordLinkLabel") %></a>
+                <% } %>
+              </div>
+            </div>
+          </div>
+        <% } %>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  // Copy buttons. Progressive: the fields are readable and selectable without
+  // any of this, so a clipboard API that is missing or blocked costs nothing.
+  Array.prototype.forEach.call(document.querySelectorAll(".js-copy"), function (button) {
+    button.addEventListener("click", function () {
+      var value = button.getAttribute("data-copy");
+      if (!value || !navigator.clipboard) return;
+      navigator.clipboard.writeText(value).then(function () {
+        var icon = button.querySelector("i");
+        if (!icon) return;
+        icon.className = "fas fa-check";
+        setTimeout(function () { icon.className = "fas fa-copy"; }, 1500);
+      }).catch(function () { /* clipboard blocked; the field is still selectable */ });
+    });
+  });
+})();
+</script>
+
+<%- include("../../modules/footer.ejs") %>

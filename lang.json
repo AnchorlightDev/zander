@@ -57,5 +57,41 @@
   "filter": {
     "phraseCaught": "This message was blocked due to the usage of blocked words/phrases.",
     "linkCaught": "This message was blocked due to the usage of blocked links/sites."
+  },
+  "bedrock": {
+    "_comment": "Copy for the /bedrock landing page. %SITENAME%, %BEDROCK_HOST%, %BEDROCK_PORT% and %BEDROCK_ADDRESS% are filled in from config.json at render time - never write an address or a port in here. 'access' ships empty on purpose: what Bedrock players can and cannot do differs per network, and the section is hidden until an operator fills it in.",
+    "pageTitle": "Bedrock Edition",
+    "metaDescription": "How to join %SITENAME% on Minecraft Bedrock Edition. Server address, port and step-by-step instructions for Windows, mobile and console.",
+    "heading": "Play on Bedrock Edition",
+    "intro": "%SITENAME% supports Minecraft Bedrock Edition, so you can play on Windows, phone or tablet. Add the address below to your server list and you are in.",
+    "addressHeading": "Bedrock server details",
+    "addressLabel": "Server address",
+    "portLabel": "Port",
+    "copyHint": "Tap a field to select it, or use the copy button.",
+    "notConfigured": "Bedrock connection details have not been published yet. Please check back shortly, or ask in our Discord.",
+    "stepsHeading": "How to connect",
+    "windowsHeading": "Windows",
+    "windowsSteps": [
+      "Open Minecraft and choose Play.",
+      "Open the Servers tab and scroll to the bottom of the list.",
+      "Choose Add Server.",
+      "Give it any name you like, then enter the server address %BEDROCK_HOST% and the port %BEDROCK_PORT%.",
+      "Save, then pick %SITENAME% from your list and choose Join Server."
+    ],
+    "mobileHeading": "Phone and tablet",
+    "mobileSteps": [
+      "Open Minecraft and tap Play.",
+      "Tap the Servers tab, then scroll down and tap Add Server.",
+      "Give it any name you like, then enter the server address %BEDROCK_HOST% and the port %BEDROCK_PORT%.",
+      "Tap Save, then tap the server to join."
+    ],
+    "consoleHeading": "Console",
+    "consoleNote": "Xbox, PlayStation and Switch do not let you type in a server address - Minecraft only shows its own featured servers on those platforms. That is a restriction in the game itself rather than anything to do with %SITENAME%. Players usually get around it with a third-party DNS service or companion app; we cannot vouch for or support those, so if you are on console, come and ask in our Discord and someone will talk you through what has worked for others.",
+    "accessHeading": "What Bedrock players can do here",
+    "access": [],
+    "helpHeading": "Stuck connecting?",
+    "helpBody": "Double-check the address and the port, and make sure you are on the latest version of Minecraft. If it still will not connect, ask in our Discord and someone will help.",
+    "helpLinkLabel": "Read the connection guide",
+    "discordLinkLabel": "Ask in Discord"
   }
 }

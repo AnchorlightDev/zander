@@ -107,6 +107,7 @@ export default function sitemapRoutes(app, config, features) {
     L.push("## Main pages");
     L.push(`- [Home](${baseUrl}/): what ${sc.siteName || "the network"} is and current player activity`);
     if (features.server) L.push(`- [Play / how to join](${baseUrl}/play): Java and Bedrock server addresses and connection steps`);
+    if (features.bedrock) L.push(`- [Bedrock Edition](${baseUrl}/bedrock): how to join on Bedrock - address, port and per-device steps`);
     if (features.ranks) L.push(`- [Ranks](${baseUrl}/ranks): available ranks, their perks and pricing`);
     L.push(`- [Rules](${baseUrl}/rules): the community rules every player agrees to`);
     if (features.applications) L.push(`- [Apply](${baseUrl}/apply): open staff positions and how to apply`);
@@ -142,6 +143,7 @@ export default function sitemapRoutes(app, config, features) {
     const staticPages = [
       { url: "/", priority: "1.0", changefreq: "daily" },
       features.server && { url: "/play", priority: "0.9", changefreq: "weekly" },
+      features.bedrock && { url: "/bedrock", priority: "0.8", changefreq: "monthly" },
       features.ranks && { url: "/ranks", priority: "0.8", changefreq: "weekly" },
       { url: "/finance", priority: "0.7", changefreq: "weekly" },
       { url: "/staff", priority: "0.6", changefreq: "weekly" },

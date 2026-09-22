@@ -3,6 +3,7 @@
   "applications": true,
   "forms": true,
   "forums": true,
+  "bedrock": true,
   "discord": {
     "events": {
       "generalKenobi": true,
