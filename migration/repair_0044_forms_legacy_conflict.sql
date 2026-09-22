@@ -41,6 +41,12 @@
 --   Any application currently set to 'linked_form' reverts to 'external'
 --   and needs re-pointing once its form has been rebuilt. See step 0.
 --
+-- YOU DO NOT HAVE TO DECIDE ABOUT THE LEGACY DATA FIRST
+--   Nothing here destroys anything, so there is no reason to hold the deploy
+--   while you work out whether the 6 old forms are still wanted. Run the
+--   repair, get the site deploying again, and decide afterwards -- the rows
+--   are sitting in the _legacy_v19 tables either way.
+--
 -- TAKE A BACKUP FIRST. This is production.
 
 -- ===========================================================================
@@ -98,28 +104,60 @@ RENAME TABLE
 
 
 -- ===========================================================================
--- STEP 3 -- Hand back to Prisma. Run these in a shell, not here.
+-- STEP 3 -- Tell Prisma that 0044 never happened.
 -- ===========================================================================
---   npx prisma migrate resolve --rolled-back 0044_forms
---   npx prisma migrate deploy
+-- Until this is done, `prisma migrate deploy` keeps refusing everything with
+-- P3009 and the deploy keeps failing in exactly the same way. Redeploying
+-- without it changes nothing: migrate deploy is the command doing the
+-- refusing.
 --
+-- If you have a shell on the deploy host, the CLI is the tidier route:
+--
+--   npx prisma migrate resolve --rolled-back 0044_forms
+--
+-- All that command does is stamp `rolled_back_at` on the failed row, so the
+-- statement below is equivalent and can be run right here alongside the rest.
+-- Prisma then treats 0044 as un-applied and runs it again on the next deploy.
+
+UPDATE `_prisma_migrations`
+SET `rolled_back_at` = NOW(3)
+WHERE `migration_name` = '0044_forms'
+  AND `finished_at` IS NULL
+  AND `rolled_back_at` IS NULL;
+
+-- Expect: 1 row affected. Confirm before deploying --
+--   SELECT migration_name, started_at, finished_at, rolled_back_at,
+--          applied_steps_count
+--   FROM _prisma_migrations WHERE migration_name = '0044_forms';
+--
+-- rolled_back_at must now be set. Then redeploy.
+
+
+-- ===========================================================================
+-- STEP 4 -- Redeploy, and check it took.
+-- ===========================================================================
 -- 0044 now applies all five statements against a clean slate, followed by
 -- 0045_form_tickets and 0047_form_field_config through
 -- 0053_form_ticket_messages.
 --
--- Verify:
 --   SELECT migration_name, finished_at, applied_steps_count
 --   FROM _prisma_migrations
 --   WHERE migration_name >= '0044' ORDER BY migration_name;
+--   -- expect 10 rows: the 9 migrations 0044-0053 with finished_at set,
+--   -- plus the original failed 0044 row carrying rolled_back_at
 --
 --   SHOW COLUMNS FROM forms;   -- expect description, successMessage,
 --                              -- discordChannelId, allowMultiple, accessCode,
 --                              -- requirements, reapplyCooldownDays,
 --                              -- ticketPendingMessage, ...
+--
+-- Note there will be TWO 0044_forms rows afterwards: the failed one carrying
+-- rolled_back_at, and the successful re-run. That is normal and is how the
+-- CLI leaves it too.
 
 
 -- ===========================================================================
--- STEP 4 -- Afterwards, in the dashboard.
+-- STEP 5 -- Afterwards, in the dashboard.
 -- ===========================================================================
 -- Rebuild whichever of the 6 legacy forms are still wanted at
 -- /dashboard/forms, then re-point their applications at the new forms in
