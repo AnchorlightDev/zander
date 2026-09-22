@@ -37,6 +37,16 @@
         <div class="col-md-2">
           <button type="submit" class="btn btn-secondary w-100">Filter</button>
         </div>
+        <%# Export needs one form: the columns are that form's questions, and
+            two forms' questions cannot share a table. %>
+        <% if (activeFormId) { %>
+          <div class="col-md-3">
+            <a class="btn btn-light w-100"
+               href="/dashboard/forms/<%= activeFormId %>/export.csv<%= activeStatus ? "?status=" + activeStatus : "" %>">
+              Export CSV<%= activeStatus ? " (" + activeStatus + ")" : "" %>
+            </a>
+          </div>
+        <% } %>
       </form>
 
       <% if (!submissions.length) { %>

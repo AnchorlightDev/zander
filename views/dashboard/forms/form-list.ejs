@@ -131,6 +131,11 @@
                     <a href="/dashboard/forms/submissions?formId=<%= form.formId %>">
                       <%= form.submissionCount %>
                     </a>
+                    <% if (form.submissionCount > 0) { %>
+                      <a class="btn btn-sm btn-light ms-1"
+                         href="/dashboard/forms/<%= form.formId %>/export.csv"
+                         title="Download every response as a spreadsheet">CSV</a>
+                    <% } %>
                     <% if (form.requiresReview === false) { %>
                       <span class="badge bg-light text-muted border ms-1">no review</span>
                     <% } else if (form.pendingCount > 0) { %>

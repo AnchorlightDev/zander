@@ -31,6 +31,8 @@ import {
   postReviewToThread,
 } from "../../services/formDiscordService.js";
 import { formatDiscordIds } from "../../lib/discordIds.mjs";
+import { csvFilename, toCsv } from "../../lib/csv.mjs";
+import { buildSubmissionExport } from "../../lib/formExport.mjs";
 import {
   getDefaultFormRequirements,
   setDefaultFormRequirements,
@@ -91,16 +93,22 @@ function parseRequirementsPayload(body = {}) {
   return out;
 }
 
-/** Attach usernames to submissions without an N+1 lookup per row. */
-async function withSubmitterNames(submissions) {
+/** userId -> username for everyone named on these submissions, in one query. */
+async function usernameMap(submissions) {
   const userIds = [...new Set(submissions.flatMap((s) => [s.userId, s.reviewedBy]).filter(Boolean))];
-  if (!userIds.length) return submissions.map((s) => ({ ...s, submitterName: null, reviewerName: null }));
+  if (!userIds.length) return new Map();
 
   const users = await prisma.users.findMany({
     where: { userId: { in: userIds } },
     select: { userId: true, username: true },
   });
-  const names = new Map(users.map((u) => [u.userId, u.username]));
+  return new Map(users.map((u) => [u.userId, u.username]));
+}
+
+/** Attach usernames to submissions without an N+1 lookup per row. */
+async function withSubmitterNames(submissions) {
+  const names = await usernameMap(submissions);
+  if (!names.size) return submissions.map((s) => ({ ...s, submitterName: null, reviewerName: null }));
 
   return submissions.map((s) => ({
     ...s,
@@ -310,6 +318,48 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
       setBannerCookie("danger", "The form could not be updated.", res);
     }
     return res.redirect(`/dashboard/forms/${formId}/edit`);
+  });
+
+  /**
+   * Download one form's submissions as CSV.
+   *
+   * One column per question, in the order the form asks them. Honours the
+   * status filter from the submissions list so "export the denied ones" works.
+   *
+   * Per form rather than across all of them: the columns are that form's
+   * questions, and there is no sensible way to put two different forms'
+   * questions in one table.
+   */
+  app.get("/dashboard/forms/:formId/export.csv", async (req, res) => {
+    if (!(await guard(req, res))) return;
+
+    const form = await getFormById(req.params.formId);
+    if (!form) {
+      setBannerCookie("danger", "Form not found.", res);
+      return res.redirect("/dashboard/forms");
+    }
+
+    const status = isValidSubmissionStatus(req.query?.status) ? String(req.query.status) : null;
+
+    try {
+      // A high ceiling rather than the list view's 200: an export that silently
+      // stopped short would be worse than a slow one.
+      const submissions = await listSubmissions({ formId: form.formId, status, limit: 100000 });
+      const usernames = await usernameMap(submissions);
+      const csv = toCsv(buildSubmissionExport(form, submissions, { usernames }));
+
+      return res
+        .header("content-type", "text/csv; charset=utf-8")
+        .header(
+          "content-disposition",
+          `attachment; filename="${csvFilename(form.slug, status, "submissions")}"`
+        )
+        .send(csv);
+    } catch (error) {
+      console.error("[forms] export error:", error);
+      setBannerCookie("danger", "The export could not be generated.", res);
+      return res.redirect(`/dashboard/forms/submissions?formId=${form.formId}`);
+    }
   });
 
   app.post("/dashboard/forms/:formId/delete", async (req, res) => {
