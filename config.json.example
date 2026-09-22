@@ -11,6 +11,14 @@
       "port": 19132
     }
   },
+  "birthday": {
+    "_comment": "Birthday rank. Disabled and blank by default so nothing happens until an operator opts in. `rankGroup` is the LuckPerms group granted temporarily via `lp user <name> parent addtemp`, so it expires on its own and needs no revoke job. `serverSlug` targets the executorTasks queue ('any' = whichever server claims it first). `webhookUrl` is optional; leave blank for no announcement.",
+    "enabled": false,
+    "rankGroup": "",
+    "durationHours": 24,
+    "serverSlug": "any",
+    "webhookUrl": ""
+  },
   "siteConfiguration": {
     "region": {
       "_comment": "Where this community is hosted. `name` is what the site says in copy, `countryCode` is ISO 3166-1 alpha-2 and `language` is ISO 639-1; <html lang> and og:locale are derived from the last two so they cannot disagree. Leave it out entirely and no region is claimed anywhere.",

@@ -1,4 +1,6 @@
 import crypto from "crypto";
+import { MONTHS } from "../lib/birthday.mjs";
+import { groupedTimeZones } from "../lib/timezones.mjs";
 import qs from "querystring";
 import { getGlobalImage, isLoggedIn, setBannerCookie } from "../api/common.js";
 import { checkRateLimit } from "../lib/rateLimiter.mjs";
@@ -370,6 +372,9 @@ export default function profileSiteRoutes(
           profileSession: await getUserLastSession(profileData.userId),
           moment: moment,
           platformConnections: platformConnections,
+          // Straight from the runtime's ICU data, so the list never goes stale.
+          timeZoneGroups: groupedTimeZones(),
+          months: MONTHS,
         }));
         return;
       }

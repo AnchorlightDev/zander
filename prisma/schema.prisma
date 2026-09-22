@@ -143,11 +143,20 @@ model users {
   audit_lastDiscordPunishment  DateTime?
   audit_lastWebsiteLogin       DateTime?
 
+  /// IANA zone name. Decides which day "today" is for this user.
+  timezone                     String?                    @db.VarChar(64)
+  /// Day and month only -- deliberately no year. See 0058.
+  birthdayDay                  Int?                       @db.UnsignedTinyInt
+  birthdayMonth                Int?                       @db.UnsignedTinyInt
+  /// Local year the birthday rank last fired, so the hourly job grants once.
+  birthdayLastGrantedYear      Int?                       @db.UnsignedSmallInt
+
   emailVerifications           userEmailVerifications[]
   passwordResets               userPasswordResets[]
 
   @@index([username])
   @@index([discordId])
+  @@index([birthdayMonth, birthdayDay], map: "users_birthday_idx")
 }
 
 model userEmailVerifications {

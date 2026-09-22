@@ -4,6 +4,7 @@
   "forms": true,
   "forums": true,
   "bedrock": true,
+  "birthday": true,
   "discord": {
     "events": {
       "generalKenobi": true,

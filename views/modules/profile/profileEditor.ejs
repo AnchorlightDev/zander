@@ -97,6 +97,73 @@
                 </div>
 
                 <div class="tab-pane fade" id="socialconnections" role="tabpanel" aria-labelledby="socialconnections-tab">
+                    <%#
+                      Timezone and birthday. Both optional, and the birthday is
+                      a day and a month with no year on purpose -- see
+                      migration 0058. The timezone is what decides which day
+                      "today" is for this person, which is why the birthday
+                      greeting needs it.
+                    %>
+                    <% if (features.birthday) { %>
+                    <form action="<%= process.env.siteAddress %>/redirect/web/user/profile/personal" method="post" class="mb-4">
+                      <div class="card border-0 shadow-sm">
+                        <div class="card-body p-4">
+                          <h5 class="mb-1">About you</h5>
+                          <p class="text-muted small mb-4">
+                            Both optional. We ask for a day and month only &mdash; never a year, so
+                            your age is not stored anywhere.
+                          </p>
+
+                          <div class="row g-3">
+                            <div class="col-md-6">
+                              <label class="form-label" for="timezone">Time zone</label>
+                              <select class="form-select" id="timezone" name="timezone">
+                                <option value="">Not set</option>
+                                <% timeZoneGroups.forEach(function (group) { %>
+                                  <optgroup label="<%= group.region %>">
+                                    <% group.zones.forEach(function (zone) { %>
+                                      <option value="<%= zone.value %>"
+                                              <%= profileApiData.timezone === zone.value ? "selected" : "" %>>
+                                        <%= zone.label %>
+                                      </option>
+                                    <% }) %>
+                                  </optgroup>
+                                <% }) %>
+                              </select>
+                              <small class="form-text text-muted">
+                                Used so anything dated shows in your own local time.
+                              </small>
+                            </div>
+
+                            <div class="col-md-3">
+                              <label class="form-label" for="birthdayDay">Birthday &mdash; day</label>
+                              <select class="form-select" id="birthdayDay" name="birthdayDay">
+                                <option value="">&mdash;</option>
+                                <% for (let d = 1; d <= 31; d++) { %>
+                                  <option value="<%= d %>"
+                                          <%= Number(profileApiData.birthdayDay) === d ? "selected" : "" %>><%= d %></option>
+                                <% } %>
+                              </select>
+                            </div>
+
+                            <div class="col-md-3">
+                              <label class="form-label" for="birthdayMonth">Month</label>
+                              <select class="form-select" id="birthdayMonth" name="birthdayMonth">
+                                <option value="">&mdash;</option>
+                                <% months.forEach(function (name, index) { %>
+                                  <option value="<%= index + 1 %>"
+                                          <%= Number(profileApiData.birthdayMonth) === index + 1 ? "selected" : "" %>><%= name %></option>
+                                <% }) %>
+                              </select>
+                            </div>
+                          </div>
+
+                          <button type="submit" class="btn btn-main btn-round-full mt-4">Save</button>
+                        </div>
+                      </div>
+                    </form>
+                    <% } %>
+
                     <form action="<%= process.env.siteAddress %>/redirect/web/user/profile/social" method="post">
                         <div class="row g-4">
                             <div class="col-lg-6">

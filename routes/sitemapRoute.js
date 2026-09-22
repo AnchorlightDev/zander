@@ -2,6 +2,8 @@ import {
   getCategoriesForUser,
   getRecentDiscussions,
 } from "../controllers/forumController.js";
+import { getAllPublishedEvents } from "../services/eventService.js";
+import { resolveEventAccess } from "../lib/eventAccess.js";
 
 function escapeXml(str) {
   return String(str)
@@ -61,6 +63,44 @@ export const DISALLOW = [
   "/logout",
 ];
 
+/**
+ * The fixed public pages, filtered to those whose feature is on.
+ *
+ * Exported and pure so the invariant that matters -- a disabled page never
+ * appears in the sitemap -- can be tested directly.
+ *
+ * The entries with no flag are pages that are served unconditionally by their
+ * routes. `/finance` is one of them: features.finance exists but
+ * routes/financeRoutes.js does not gate on it, and the sitemap follows what is
+ * actually served rather than what a flag suggests.
+ */
+export function staticSitemapPages(features = {}) {
+  return [
+    { url: "/", priority: "1.0", changefreq: "daily" },
+    features.server && { url: "/play", priority: "0.9", changefreq: "weekly" },
+    features.bedrock && { url: "/bedrock", priority: "0.8", changefreq: "monthly" },
+    features.ranks && { url: "/ranks", priority: "0.8", changefreq: "weekly" },
+    // The map archive: years of worlds with seeds, dates and downloads. Rare
+    // content, and it was missing from here entirely.
+    features.vault && { url: "/vault", priority: "0.7", changefreq: "monthly" },
+    features.forums && { url: "/forums", priority: "0.7", changefreq: "daily" },
+    features.webstore && { url: "/webstore", priority: "0.6", changefreq: "weekly" },
+    { url: "/finance", priority: "0.7", changefreq: "weekly" },
+    { url: "/staff", priority: "0.6", changefreq: "weekly" },
+    features.applications && { url: "/apply", priority: "0.7", changefreq: "weekly" },
+    features.watch && { url: "/watch", priority: "0.7", changefreq: "daily" },
+    features.events && { url: "/events", priority: "0.7", changefreq: "daily" },
+    features.shopdirectory && { url: "/shopdirectory", priority: "0.6", changefreq: "daily" },
+    features.discord?.punishments && { url: "/punishments", priority: "0.4", changefreq: "daily" },
+    { url: "/appeal", priority: "0.5", changefreq: "monthly" },
+    features.report && { url: "/report", priority: "0.5", changefreq: "monthly" },
+    { url: "/rules", priority: "0.6", changefreq: "monthly" },
+    { url: "/terms", priority: "0.3", changefreq: "monthly" },
+    { url: "/privacy", priority: "0.3", changefreq: "monthly" },
+    { url: "/refund", priority: "0.3", changefreq: "monthly" },
+  ].filter(Boolean);
+}
+
 export default function sitemapRoutes(app, config, features) {
   const rawUrl = config?.siteConfiguration?.siteUrl;
   if (!rawUrl) {
@@ -118,6 +158,8 @@ export default function sitemapRoutes(app, config, features) {
 
     L.push("## Community");
     if (features.forums) L.push(`- [Forums](${baseUrl}/forums): community discussion boards`);
+    if (features.vault) L.push(`- [Map archive](${baseUrl}/vault): every past world with its dates, seed and download`);
+    if (features.webstore) L.push(`- [Store](${baseUrl}/webstore): ranks and perks available to buy`);
     if (features.events) L.push(`- [Events](${baseUrl}/events): upcoming and past community events`);
     if (features.watch) L.push(`- [Watch](${baseUrl}/watch): community creator content and streams`);
     if (features.shopdirectory) L.push(`- [Player shop directory](${baseUrl}/shopdirectory): in-game player-run stores, items and prices`);
@@ -140,25 +182,7 @@ export default function sitemapRoutes(app, config, features) {
   app.get("/sitemap.xml", async function (req, res) {
     const day = today();
 
-    const staticPages = [
-      { url: "/", priority: "1.0", changefreq: "daily" },
-      features.server && { url: "/play", priority: "0.9", changefreq: "weekly" },
-      features.bedrock && { url: "/bedrock", priority: "0.8", changefreq: "monthly" },
-      features.ranks && { url: "/ranks", priority: "0.8", changefreq: "weekly" },
-      { url: "/finance", priority: "0.7", changefreq: "weekly" },
-      { url: "/staff", priority: "0.6", changefreq: "weekly" },
-      features.applications && { url: "/apply", priority: "0.7", changefreq: "weekly" },
-      features.watch && { url: "/watch", priority: "0.7", changefreq: "daily" },
-      features.events && { url: "/events", priority: "0.7", changefreq: "daily" },
-      features.shopdirectory && { url: "/shopdirectory", priority: "0.6", changefreq: "daily" },
-      features.discord?.punishments && { url: "/punishments", priority: "0.4", changefreq: "daily" },
-      { url: "/appeal", priority: "0.5", changefreq: "monthly" },
-      features.report && { url: "/report", priority: "0.5", changefreq: "monthly" },
-      { url: "/rules", priority: "0.6", changefreq: "monthly" },
-      { url: "/terms", priority: "0.3", changefreq: "monthly" },
-      { url: "/privacy", priority: "0.3", changefreq: "monthly" },
-      { url: "/refund", priority: "0.3", changefreq: "monthly" },
-    ].filter(Boolean).map((p) => ({ lastmod: day, ...p }));
+    const staticPages = staticSitemapPages(features).map((p) => ({ lastmod: day, ...p }));
 
     let forumUrls = [];
     try {
@@ -198,7 +222,37 @@ export default function sitemapRoutes(app, config, features) {
       console.error("[SITEMAP] Failed to fetch forum data:", err.message);
     }
 
-    const urlEntries = [...staticPages, ...forumUrls]
+    let eventUrls = [];
+    if (features.events) {
+      try {
+        // Anonymous viewer: no ranks, not staff -- the same trick the forum
+        // block above uses.
+        const { events = [] } = await getAllPublishedEvents(1, 200, [], false);
+
+        for (const event of events) {
+          if (!event.slug) continue;
+
+          // `visible` alone is not enough. A rank-locked event is still
+          // "visible" to everyone as a redacted teaser, and a page whose
+          // substance is withheld is thin content that should not be
+          // submitted for indexing.
+          const access = resolveEventAccess(event, [], { isStaff: false });
+          if (!access.visible || access.locked) continue;
+
+          const stamp = event.updatedAt || event.startAt;
+          eventUrls.push({
+            url: `/events/${event.slug}`,
+            priority: "0.5",
+            changefreq: "weekly",
+            lastmod: stamp ? new Date(stamp).toISOString().slice(0, 10) : day,
+          });
+        }
+      } catch (err) {
+        console.error("[SITEMAP] Failed to fetch events:", err.message);
+      }
+    }
+
+    const urlEntries = [...staticPages, ...forumUrls, ...eventUrls]
       .map(
         ({ url, priority, changefreq, lastmod }) =>
           `  <url>\n    <loc>${escapeXml(baseUrl + url)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`

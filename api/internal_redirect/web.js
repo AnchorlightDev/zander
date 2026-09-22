@@ -40,6 +40,22 @@ export default function webRedirectRoute(app, config, lang, features) {
     return res;
   });
 
+  app.post(baseEndpoint + "/user/profile/personal", async function (req, res) {
+    req.body.userId = req.session.user.userId;
+
+    await postAPIRequest(
+      `${process.env.siteAddress}/api/user/profile/personal`,
+      req.body,
+      `${process.env.siteAddress}/`,
+      res
+    );
+
+    if (!res.sent) {
+      return res.redirect(`${process.env.siteAddress}/profile/${req.session.user.username}`);
+    }
+    return res;
+  });
+
   app.post(baseEndpoint + "/user/profile/interests", async function (req, res) {
     // Add userId to req.body
     req.body.userId = req.session.user.userId;

@@ -488,6 +488,30 @@ export async function setProfileDisplayPreferences(
   );
 }
 
+/**
+ * Timezone and birthday.
+ *
+ * Both optional and both nullable -- clearing them is a supported action, not
+ * an error, so nulls are written rather than skipped. Validation happens in
+ * lib/birthday.mjs and lib/timezones.mjs before this is called; anything that
+ * did not survive it arrives here as null.
+ */
+export async function setProfileUserPersonal(userId, { timezone, birthdayDay, birthdayMonth }) {
+  return new Promise((resolve, reject) => {
+    db.query(
+      `UPDATE users SET timezone = ?, birthdayDay = ?, birthdayMonth = ? WHERE userId = ?`,
+      [timezone ?? null, birthdayDay ?? null, birthdayMonth ?? null, userId],
+      (error) => {
+        if (error) {
+          console.error("Failed to update profile personal details", error);
+          return reject(error);
+        }
+        resolve(true);
+      }
+    );
+  });
+}
+
 export async function setProfileUserInterests(
   userId,
   social_interests

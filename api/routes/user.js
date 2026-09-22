@@ -9,7 +9,10 @@ import {
   setProfileSocialConnections,
   setProfileUserAboutMe,
   setProfileUserInterests,
+  setProfileUserPersonal,
 } from "../../controllers/userController.js";
+import { normaliseBirthday } from "../../lib/birthday.mjs";
+import { normaliseTimeZone } from "../../lib/timezones.mjs";
 import { syncMemberRankRoles } from "../../lib/discord/rankRoleSync.mjs";
 import {
   required,
@@ -124,6 +127,9 @@ export default function userApiRoute(app, config, db, features, lang) {
       "account_disabled",
       "social_aboutMe",
       "social_interests",
+      "timezone",
+      "birthdayDay",
+      "birthdayMonth",
       "social_discord",
       "social_steam",
       "social_twitch",
@@ -629,6 +635,54 @@ export default function userApiRoute(app, config, db, features, lang) {
           message: `${error}`,
         });
       }
+    }
+  });
+
+  /**
+   * Timezone and birthday.
+   *
+   * No content filter: these are a dropdown selection and two numbers, not
+   * free text, and both are validated against real IANA zones and real
+   * calendar days before anything is written. Blank clears the field.
+   */
+  app.post(baseEndpoint + "/profile/personal", async function (req, res) {
+    const userId = required(req.body, "userId", res);
+    if (res.sent) return;
+
+    if (await hasActiveWebBan(req.session?.user?.userId)) {
+      return res.send({ success: false, message: "You are currently banned from editing your profile." });
+    }
+
+    const timezone = normaliseTimeZone(req.body.timezone);
+    const birthday = normaliseBirthday(req.body.birthdayDay, req.body.birthdayMonth);
+
+    // A month with no day is half a birthday, and normaliseBirthday rejects it.
+    // Say so rather than silently dropping what they picked.
+    const attemptedBirthday =
+      String(req.body.birthdayDay || "").trim() !== "" ||
+      String(req.body.birthdayMonth || "").trim() !== "";
+
+    if (attemptedBirthday && !birthday) {
+      return res.send({
+        success: false,
+        message: "Please choose both a day and a month, and make sure the date exists.",
+      });
+    }
+
+    if (String(req.body.timezone || "").trim() !== "" && !timezone) {
+      return res.send({ success: false, message: "That is not a time zone we recognise." });
+    }
+
+    try {
+      await setProfileUserPersonal(userId, {
+        timezone,
+        birthdayDay: birthday?.day ?? null,
+        birthdayMonth: birthday?.month ?? null,
+      });
+      return res.send({ success: true, message: "Your details have been saved." });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).send({ success: false, message: `${error}` });
     }
   });
 

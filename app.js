@@ -71,6 +71,7 @@ import("./controllers/discordController.js");
 import("./cron/userCodeExpiryCron.js");
 import("./cron/bridgeCleanupCron.js");
 import("./cron/cakeDayUserCheck.js");
+import("./cron/birthdayRankCron.js");
 import("./cron/staffAuditReportCron.js");
 import("./cron/schedulerCron.js");
 import("./cron/nicknameCheckCron.js");
