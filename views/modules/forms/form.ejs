@@ -176,23 +176,31 @@
                   <div class="d-flex flex-wrap gap-2 mt-2 upload-previews" data-for="<%= field.fieldKey %>"></div>
 
                 <% } else if (field.fieldType === "scale") { %>
-                  <div class="d-flex align-items-end flex-wrap gap-3">
+                  <%# The pips spread across the full width with the end labels
+                      pinned to either side, rather than bunching up on the
+                      left. The inner row grows into whatever space the labels
+                      leave; its min-width makes the whole thing wrap onto two
+                      lines on a phone instead of crushing the pips together. %>
+                  <div class="d-flex align-items-end flex-wrap gap-2">
                     <% if (field.scale.minLabel) { %>
                       <span class="text-muted small pb-2"><%= field.scale.minLabel %></span>
                     <% } %>
-                    <% for (let point = field.scale.min; point <= field.scale.max; point++) { %>
-                      <div class="text-center">
-                        <input class="form-check-input d-block mx-auto" type="radio"
-                               name="<%= field.fieldKey %>"
-                               id="<%= field.fieldKey %>_<%= point %>"
-                               value="<%= point %>"
-                               <%= String(submitted) === String(point) ? "checked" : "" %>
-                               <%= field.isRequired ? "required" : "" %>>
-                        <label class="form-check-label small" for="<%= field.fieldKey %>_<%= point %>">
-                          <%= point %>
-                        </label>
-                      </div>
-                    <% } %>
+                    <div class="d-flex align-items-end justify-content-between flex-grow-1 gap-1"
+                         style="min-width: 240px;">
+                      <% for (let point = field.scale.min; point <= field.scale.max; point++) { %>
+                        <div class="text-center">
+                          <input class="form-check-input d-block mx-auto" type="radio"
+                                 name="<%= field.fieldKey %>"
+                                 id="<%= field.fieldKey %>_<%= point %>"
+                                 value="<%= point %>"
+                                 <%= String(submitted) === String(point) ? "checked" : "" %>
+                                 <%= field.isRequired ? "required" : "" %>>
+                          <label class="form-check-label small" for="<%= field.fieldKey %>_<%= point %>">
+                            <%= point %>
+                          </label>
+                        </div>
+                      <% } %>
+                    </div>
                     <% if (field.scale.maxLabel) { %>
                       <span class="text-muted small pb-2"><%= field.scale.maxLabel %></span>
                     <% } %>
@@ -228,9 +236,16 @@
               </div>
             <% } %>
 
-            <div class="d-flex align-items-center gap-3" id="submitRow">
-              <button type="submit" class="btn btn-primary" id="publicFormSubmit">Submit</button>
-              <small class="text-muted" id="draftStatus" aria-live="polite"></small>
+            <%# The id sits on a plain wrapper, NOT on the d-flex row inside it.
+                Bootstrap's display utilities carry !important, so hiding a
+                .d-flex element with an inline style silently does nothing --
+                which is exactly why Submit used to show on every page. Do not
+                merge these two divs back together. %>
+            <div id="submitRow">
+              <div class="d-flex align-items-center gap-3">
+                <button type="submit" class="btn btn-primary" id="publicFormSubmit">Submit</button>
+                <small class="text-muted" id="draftStatus" aria-live="polite"></small>
+              </div>
             </div>
           </form>
 
@@ -430,7 +445,18 @@
     if (progressEl) progressEl.textContent = "Step " + (position + 1) + " of " + open.length;
     if (backBtn) backBtn.disabled = position <= 0;
     if (nextBtn) nextBtn.style.display = isLast ? "none" : "";
-    if (submitRow) submitRow.style.display = isLast ? "" : "none";
+
+    // setProperty with "important" as well as the plain assignment: the plain
+    // one is enough for a wrapper with no utility classes, and the important
+    // one means this keeps working if somebody later puts a d-* class back on
+    // it. Submit only exists on the final page.
+    if (submitRow) {
+      if (isLast) {
+        submitRow.style.removeProperty("display");
+      } else {
+        submitRow.style.setProperty("display", "none", "important");
+      }
+    }
   }
 
   function step(delta) {

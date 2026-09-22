@@ -254,13 +254,22 @@
           <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
               <h5 class="mb-0">Fields</h5>
-              <button type="button" class="btn btn-sm btn-info" id="addFieldBtn">Add field</button>
+              <button type="button" class="btn btn-sm btn-info" id="addFieldBtn">Add field at the top</button>
             </div>
             <div class="card-body">
               <div id="fieldRows"></div>
               <p class="text-muted mb-0" id="noFieldsHint">
                 No fields yet. Add one to start building the form.
               </p>
+              <%# Long forms are long: the pair means you never scroll the
+                  length of the list just to reach a button. Each one adds at
+                  its own end, and focus follows the new row so it is never a
+                  mystery where it landed. %>
+              <div class="mt-3">
+                <button type="button" class="btn btn-sm btn-info" id="addFieldBtnBottom">
+                  Add field at the bottom
+                </button>
+              </div>
             </div>
           </div>
 
@@ -288,6 +297,7 @@
   var rowsEl  = document.getElementById("fieldRows");
   var hintEl  = document.getElementById("noFieldsHint");
   var addBtn  = document.getElementById("addFieldBtn");
+  var addBtnBottom = document.getElementById("addFieldBtnBottom");
   var payload = document.getElementById("fieldsPayload");
   var formEl  = document.getElementById("formEditor");
 
@@ -311,7 +321,11 @@
       .replace(/"/g, "&quot;");
   }
 
-  function buildRow(field) {
+  /**
+   * @param field  existing row to rebuild, or null for a blank one
+   * @param atTop  insert above everything rather than appending
+   */
+  function buildRow(field, atTop) {
     var f = field || {};
     var type = f.fieldType || "text";
     var cfg = f.config || {};
@@ -412,7 +426,8 @@
         '<div class="mb-2 col-md-4 f-auto-note text-muted small"></div>' +
       '</div>';
 
-    rowsEl.appendChild(row);
+    if (atTop && rowsEl.firstChild) rowsEl.insertBefore(row, rowsEl.firstChild);
+    else rowsEl.appendChild(row);
 
     // Seed the saved condition before syncRow repopulates the pickers, so the
     // stored selection survives the rebuild.
@@ -624,11 +639,25 @@
     }
   });
 
-  addBtn.addEventListener("click", function () {
-    buildRow(null);
+  /** Put the cursor in the new row, so it is obvious where it was added. */
+  function addField(atTop) {
+    var row = buildRow(null, atTop);
     refreshHint();
     refreshAllConditions();
-  });
+
+    var label = row.querySelector(".f-label");
+    if (label) {
+      label.focus();
+      if (label.scrollIntoView) label.scrollIntoView({ block: "center" });
+    }
+  }
+
+  if (addBtn) {
+    addBtn.addEventListener("click", function () { addField(true); });
+  }
+  if (addBtnBottom) {
+    addBtnBottom.addEventListener("click", function () { addField(false); });
+  }
 
   /**
    * The row's `config` blob. Values are sent as typed; lib/formFields.js
@@ -683,7 +712,9 @@
     payload.value = JSON.stringify(out);
   });
 
-  EXISTING.forEach(buildRow);
+  // Called through a wrapper: forEach passes the index as its second argument,
+  // which buildRow would now read as `atTop` and reverse the whole list.
+  EXISTING.forEach(function (existingField) { buildRow(existingField); });
   // Conditions can only be resolved once every row exists, since a picker
   // reads the rows above it.
   refreshAllConditions();
