@@ -26,7 +26,11 @@ import {
   reviewSubmission,
   updateForm,
 } from "../../controllers/formController.js";
-import { notifySubmissionReviewed } from "../../services/formDiscordService.js";
+import {
+  notifySubmissionReviewed,
+  postReviewToThread,
+} from "../../services/formDiscordService.js";
+import { formatDiscordIds } from "../../lib/discordIds.mjs";
 import { postReviewToTicket } from "../../services/formTicketService.js";
 import {
   REQUIREMENT_DEFS,
@@ -144,6 +148,7 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         fieldTypes: FIELD_TYPES,
         showIfSourceTypes: SHOW_IF_SOURCE_TYPES,
         requirements: {},
+        notifyDiscordUserIdsText: "",
         supportCategories,
         formAction: "/dashboard/forms/create",
       })
@@ -167,6 +172,8 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         status: body.status === "1" || body.status === "on",
         successMessage: body.successMessage,
         discordChannelId: body.discordChannelId,
+        discordForumChannelId: body.discordForumChannelId,
+        notifyDiscordUserIds: body.notifyDiscordUserIds,
         allowMultiple: body.allowMultiple === "1" || body.allowMultiple === "on",
         accessCode: body.accessCode,
         requirements: parseRequirementsPayload(body),
@@ -216,6 +223,8 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         // Normalised on the way out too, so the editor shows the values that
         // are actually enforced rather than whatever was typed.
         requirements: normaliseRequirements(form.requirements) ?? {},
+        // The editor works in one-id-per-line text, not JSON.
+        notifyDiscordUserIdsText: formatDiscordIds(form.notifyDiscordUserIds),
         formAction: `/dashboard/forms/${form.formId}/edit`,
       })
     );
@@ -239,6 +248,8 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         status: body.status === "1" || body.status === "on",
         successMessage: body.successMessage,
         discordChannelId: body.discordChannelId,
+        discordForumChannelId: body.discordForumChannelId,
+        notifyDiscordUserIds: body.notifyDiscordUserIds,
         allowMultiple: body.allowMultiple === "1" || body.allowMultiple === "on",
         accessCode: body.accessCode,
         requirements: parseRequirementsPayload(body),
@@ -359,6 +370,16 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
         await notifySubmissionReviewed({
           form: submission.form,
           submissionId: submission.submissionId,
+          status,
+          reviewer: req.session?.user?.username ?? null,
+        });
+      }
+
+      // And into the submission's own forum thread, so it does not stop at
+      // "here is the application" and never say what happened to it.
+      if (submission?.discordThreadId) {
+        await postReviewToThread({
+          submission,
           status,
           reviewer: req.session?.user?.username ?? null,
         });

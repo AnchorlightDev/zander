@@ -372,6 +372,8 @@ model forms {
   status           Boolean  @default(false)
   successMessage   String?  @db.Text
   discordChannelId String?  @db.VarChar(255)
+  discordForumChannelId String? @db.VarChar(255)
+  notifyDiscordUserIds  Json?
   allowMultiple    Boolean  @default(false)
   accessCode          String?  @db.VarChar(190)
   requirements        Json?
@@ -440,6 +442,7 @@ model formSubmissions {
   commentIsPublic  Boolean   @default(false)
   reviewedAt       DateTime?
   discordMessageId String?   @db.VarChar(255)
+  discordThreadId  String?   @db.VarChar(255)
   ticketId         Int?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @default(now()) @updatedAt

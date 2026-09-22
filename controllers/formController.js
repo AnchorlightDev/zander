@@ -19,6 +19,7 @@ import {
   uniqueKey,
 } from "../lib/formFields.js";
 import { countRequirements, normaliseRequirements } from "../lib/formRequirements.mjs";
+import { parseDiscordIds } from "../lib/discordIds.mjs";
 
 /**
  * Build a URL-safe, unique form slug.
@@ -133,6 +134,14 @@ function formWriteData(data) {
     status: Boolean(data.status),
     successMessage: data.successMessage ? String(data.successMessage) : null,
     discordChannelId: data.discordChannelId ? String(data.discordChannelId).slice(0, 255) : null,
+    discordForumChannelId: data.discordForumChannelId
+      ? String(data.discordForumChannelId).trim().slice(0, 255)
+      : null,
+    // Stored as an array so the service does not have to re-parse a textarea;
+    // empty means nobody gets DMed, which is the column's NULL.
+    notifyDiscordUserIds: parseDiscordIds(data.notifyDiscordUserIds).length
+      ? parseDiscordIds(data.notifyDiscordUserIds)
+      : null,
     allowMultiple: Boolean(data.allowMultiple),
     // Blank clears the gate rather than storing "", so requiresAccessCode has
     // one thing to test for.
@@ -347,6 +356,14 @@ export async function setSubmissionTicket(submissionId, ticketId) {
   return prisma.formSubmissions.update({
     where: { submissionId: Number(submissionId) },
     data: { ticketId: Number(ticketId) },
+  });
+}
+
+/** The forum thread opened for this submission, if the form uses one. */
+export async function setSubmissionThread(submissionId, discordThreadId) {
+  return prisma.formSubmissions.update({
+    where: { submissionId: Number(submissionId) },
+    data: { discordThreadId: String(discordThreadId) },
   });
 }
 

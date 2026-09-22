@@ -60,7 +60,8 @@
                   <input type="text" class="form-control" id="discordChannelId" name="discordChannelId" maxlength="255"
                          value="<%= form && form.discordChannelId ? form.discordChannelId : '' %>">
                   <small class="form-text text-muted">
-                    New submissions get posted here. Leave blank to disable Discord notifications.
+                    A review embed per submission gets posted here. Leave blank for none. This is
+                    one of three independent routes &mdash; see below for the other two.
                   </small>
                 </div>
                 <div class="mb-3 col-md-6">
@@ -75,6 +76,32 @@
                            <%= form && form.allowMultiple ? 'checked' : '' %>>
                     <label class="form-check-label" for="allowMultiple">Allow more than one submission per user</label>
                   </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="mb-3 col-md-6">
+                  <label class="form-label" for="discordForumChannelId">Discord forum channel ID</label>
+                  <input type="text" class="form-control" id="discordForumChannelId"
+                         name="discordForumChannelId" maxlength="255"
+                         value="<%= form && form.discordForumChannelId ? form.discordForumChannelId : '' %>">
+                  <small class="form-text text-muted">
+                    Each submission opens its own thread here, so the back-and-forth about one
+                    applicant stays with that applicant instead of scrolling away. Must be a
+                    <strong>forum</strong> channel, not a text one. The decision is posted into the
+                    thread as well.
+                  </small>
+                </div>
+                <div class="mb-3 col-md-6">
+                  <label class="form-label" for="notifyDiscordUserIds">DM these people on a new submission</label>
+                  <textarea class="form-control" id="notifyDiscordUserIds" name="notifyDiscordUserIds"
+                            rows="3"
+                            placeholder="One Discord user ID per line"><%= notifyDiscordUserIdsText %></textarea>
+                  <small class="form-text text-muted">
+                    One ID per line, or comma separated. In Discord, right-click a user &rarr;
+                    Copy User ID. For forms nobody is sitting watching a channel for. Anyone with
+                    DMs closed is skipped quietly. Up to 25.
+                  </small>
                 </div>
               </div>
 

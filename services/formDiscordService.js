@@ -9,9 +9,10 @@
  * person who filled the form in. Failures are logged and swallowed.
  */
 
-import { EmbedBuilder } from "discord.js";
+import { ChannelType, EmbedBuilder } from "discord.js";
 import { client } from "../controllers/discordController.js";
 import { formatAnswer, getAnswerImages, isDisplayType } from "../lib/formFields.js";
+import { parseDiscordIds } from "../lib/discordIds.mjs";
 
 const STATUS_COLOURS = {
   pending: 0x5865f2,
@@ -63,6 +64,12 @@ function buildSubmissionEmbed({ form, fields, answers, submissionId, submitter }
   return embed;
 }
 
+/** Point the embed title at the dashboard, when we know our own address. */
+function linkToDashboard(embed, submissionId, siteAddress) {
+  if (!siteAddress) return embed;
+  return embed.setURL(`${siteAddress}/dashboard/forms/submissions/view?submissionId=${submissionId}`);
+}
+
 /**
  * Announce a new submission.
  *
@@ -86,15 +93,128 @@ export async function notifyNewSubmission({ form, fields, answers, submissionId,
     }
 
     const embed = buildSubmissionEmbed({ form, fields, answers, submissionId, submitter });
-    if (siteAddress) {
-      embed.setURL(`${siteAddress}/dashboard/forms/submissions/view?submissionId=${submissionId}`);
-    }
+    linkToDashboard(embed, submissionId, siteAddress);
 
     const message = await channel.send({ embeds: [embed] });
     return message.id;
   } catch (error) {
     console.error("[forms] Failed to post submission to Discord:", error.message);
     return null;
+  }
+}
+
+/**
+ * Open a thread for this submission in a Discord forum channel.
+ *
+ * A forum gives every submission a thread of its own, so the back-and-forth
+ * about one applicant stays attached to that applicant instead of scrolling
+ * away in a shared channel. Independent of `discordChannelId` -- a form can
+ * use either, both or neither.
+ *
+ * Returns the new thread id, or null when nothing was created.
+ */
+export async function postSubmissionToForum({
+  form, fields, answers, submissionId, submitter, siteAddress,
+}) {
+  const channelId = form?.discordForumChannelId;
+  if (!channelId) return null;
+
+  if (!client?.isReady?.()) {
+    console.warn("[forms] Discord client not ready; skipping forum post.");
+    return null;
+  }
+
+  try {
+    const channel = await client.channels.fetch(channelId);
+    if (channel?.type !== ChannelType.GuildForum) {
+      console.warn(`[forms] Channel ${channelId} is not a forum channel; skipping forum post.`);
+      return null;
+    }
+
+    const embed = buildSubmissionEmbed({ form, fields, answers, submissionId, submitter });
+    linkToDashboard(embed, submissionId, siteAddress);
+
+    const thread = await channel.threads.create({
+      // Discord caps thread names at 100 characters.
+      name: `${submitter || "Submission"} - #${submissionId}`.slice(0, 100),
+      message: { embeds: [embed] },
+      reason: `Form submission #${submissionId}`,
+    });
+
+    return thread.id;
+  } catch (error) {
+    console.error("[forms] Failed to open forum thread:", error.message);
+    return null;
+  }
+}
+
+/**
+ * DM the people listed on the form that a submission has landed.
+ *
+ * For forms nobody is sitting watching a channel for. Returns how many DMs
+ * actually went out.
+ *
+ * A closed DM is an ordinary outcome, not an error worth shouting about: plenty
+ * of people have DMs off, and the submission is already saved either way.
+ */
+export async function dmNewSubmission({
+  form, fields, answers, submissionId, submitter, siteAddress,
+}) {
+  const recipients = parseDiscordIds(form?.notifyDiscordUserIds);
+  if (!recipients.length) return 0;
+
+  if (!client?.isReady?.()) {
+    console.warn("[forms] Discord client not ready; skipping submission DMs.");
+    return 0;
+  }
+
+  const embed = buildSubmissionEmbed({ form, fields, answers, submissionId, submitter });
+  linkToDashboard(embed, submissionId, siteAddress);
+
+  let sent = 0;
+  for (const id of recipients) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const user = await client.users.fetch(id);
+      // eslint-disable-next-line no-await-in-loop
+      await user.send({ embeds: [embed] });
+      sent += 1;
+    } catch (error) {
+      if (error.code === 50007) continue; // recipient has DMs closed
+      console.error(`[forms] Failed to DM ${id} about submission ${submissionId}:`, error.message);
+    }
+  }
+
+  return sent;
+}
+
+/**
+ * Post the decision into the submission's own forum thread.
+ *
+ * Without this the thread stops at "here is the application" and never says
+ * what happened to it, which is exactly the thing a thread per submission was
+ * meant to fix.
+ */
+export async function postReviewToThread({ submission, status, reviewer }) {
+  const threadId = submission?.discordThreadId;
+  if (!threadId || !client?.isReady?.()) return false;
+
+  try {
+    const thread = await client.channels.fetch(threadId);
+    if (!thread?.isThread?.()) return false;
+
+    const embed = new EmbedBuilder()
+      .setTitle(`Submission #${submission.submissionId} ${status}`)
+      .setColor(STATUS_COLOURS[status] ?? STATUS_COLOURS.pending)
+      .setTimestamp(new Date());
+
+    if (reviewer) embed.setDescription(`Reviewed by ${reviewer}.`);
+
+    await thread.send({ embeds: [embed] });
+    return true;
+  } catch (error) {
+    console.error("[forms] Failed to post review to thread:", error.message);
+    return false;
   }
 }
 

@@ -26,9 +26,14 @@ import {
   getLastDenial,
   saveDraft,
   setSubmissionDiscordMessage,
+  setSubmissionThread,
   setSubmissionTicket,
 } from "../controllers/formController.js";
-import { notifyNewSubmission } from "../services/formDiscordService.js";
+import {
+  dmNewSubmission,
+  notifyNewSubmission,
+  postSubmissionToForum,
+} from "../services/formDiscordService.js";
 import { checkRequirements } from "../services/formRequirementsService.js";
 import { openTicketForSubmission } from "../services/formTicketService.js";
 import {
@@ -390,6 +395,39 @@ export default function formSiteRoutes(app, config, features) {
       }
     } catch (error) {
       console.error("[forms] Discord notification failed:", error.message);
+    }
+
+    // A thread of its own, for forms that point at a Discord forum. Also
+    // best-effort, and independent of the channel notification above -- a form
+    // may use either, both or neither.
+    try {
+      const threadId = await postSubmissionToForum({
+        form,
+        fields: form.fields,
+        answers,
+        submissionId: submission.submissionId,
+        submitter: user.username,
+        siteAddress: process.env.siteAddress,
+      });
+      if (threadId) {
+        await setSubmissionThread(submission.submissionId, threadId);
+      }
+    } catch (error) {
+      console.error("[forms] Discord forum post failed:", error.message);
+    }
+
+    // And a DM to anyone the form lists, for forms nobody watches a channel for.
+    try {
+      await dmNewSubmission({
+        form,
+        fields: form.fields,
+        answers,
+        submissionId: submission.submissionId,
+        submitter: user.username,
+        siteAddress: process.env.siteAddress,
+      });
+    } catch (error) {
+      console.error("[forms] Submission DMs failed:", error.message);
     }
 
     // Also best-effort: a form with the option on gets a support ticket so the
