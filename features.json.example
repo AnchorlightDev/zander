@@ -14,8 +14,9 @@
   "bridge": true,
   "staffAuditReport": true,
   "watch": true,
-  "vote": true,
   "events": true,
+  "webstore": true,
+  "finance": true,
 
   "discord": {
     "punishments": true,
@@ -39,8 +40,6 @@
     "login": true,
     "register": true
   },
-
-  "mixed": true,
 
   "smDiscord": true,
   "smFacebook": true,

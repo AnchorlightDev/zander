@@ -30,6 +30,9 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | `zander.web.bridge` | Manage bridge/integrations |
 | `zander.web.badges` | Access the badge management dashboard (create, edit, assign, delete badges) |
 | `zander.web.apikeys` | Issue, scope and revoke API client credentials |
+| `zander.web.users` | Access the user administration dashboard (view only; email addresses are masked) |
+| `zander.web.users.email` | Reveal unmasked email addresses on the user administration pages |
+| `zander.web.users.manage` | Edit user records from the user administration dashboard |
 
 ### Events
 
@@ -44,6 +47,8 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | Permission Node | Description |
 |---|---|
 | `zander.web.webstore` | Access the webstore admin dashboard (purchases, command configuration) |
+| `zander.web.webstore.manage` | Edit webstore products and command configuration |
+| `zander.web.webstore.*` | Equivalent to both `zander.web.webstore` and `zander.web.webstore.manage` |
 
 ### Finance
 
@@ -86,6 +91,7 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | Permission Node | Description |
 |---|---|
 | `zander.web.forums` | Access the forums management dashboard |
+| `zander.web.forums.{node}` | Free-form node set as a category's **view permission**; only holders see that category. The suffix is chosen by you when creating the category (e.g. `zander.web.forums.staff`, `zander.web.forums.supporter`) — it is not a fixed list |
 | `zander.forums.moderate` | General forum moderation rights |
 | `zander.forums.view` | View forum content |
 | `zander.forums.post.delete` | Delete forum posts |
@@ -104,6 +110,12 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | `zander.discord.punish.ban` | Ban/unban users from the Discord server |
 | `zander.discord.punish.mute` | Mute/unmute users in Discord |
 | `zander.discord.punish.history` | View punishment history for users |
+
+### Discord Commands
+
+| Permission Node | Description |
+|---|---|
+| `zander.web.nicknamecheck` | Run the `/nicknamecheck` slash command (bulk-scans linked users for nickname mismatches) |
 
 ### Watch / Creator Content
 
