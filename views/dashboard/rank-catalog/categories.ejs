@@ -1,0 +1,174 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-tags fa-fw me-2"></i>Webstore Categories</h1>
+        <div class="btn-toolbar gap-2">
+          <a href="/ranks" target="_blank" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>View Page
+          </a>
+          <a href="/dashboard/rank-catalog" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-layer-group me-1"></i>Rank Catalog
+          </a>
+        </div>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <p class="text-muted small">
+        Categories are the headings products are grouped under on the ranks page.
+        Hiding a category takes the whole section off the public page, whatever the
+        products inside it are set to individually.
+      </p>
+
+      <%# Existing categories. Each row edits in place. %>
+      <div class="card shadow-sm mb-4">
+        <div class="card-header fw-semibold">Categories</div>
+
+        <% if (!categories || !categories.length) { %>
+          <div class="card-body text-muted small">No categories yet, add one below.</div>
+        <% } else { %>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th style="width:90px">Order</th>
+                  <th>Name</th>
+                  <th style="width:150px">Products</th>
+                  <th style="width:96px">Visible</th>
+                  <th style="width:150px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <% categories.forEach(function(cat) { %>
+                  <tr class="<%= cat.visible === false ? 'opacity-50' : '' %>">
+                    <td>
+                      <input form="editCategory<%= cat.id %>" type="number" class="form-control form-control-sm"
+                             name="sortOrder" value="<%= cat.sortOrder %>" min="0" style="width:74px">
+                    </td>
+                    <td>
+                      <input form="editCategory<%= cat.id %>" type="text" class="form-control form-control-sm"
+                             name="name" value="<%= cat.name %>" maxlength="64" required>
+                    </td>
+                    <td class="text-muted small">
+                      <%= cat.productCount %> total
+                      <% if (cat.productCount) { %>
+                        <span class="d-block"><%= cat.visibleProductCount %> shown</span>
+                      <% } %>
+                    </td>
+                    <td>
+                      <div class="form-check form-switch mb-0">
+                        <input form="editCategory<%= cat.id %>" class="form-check-input" type="checkbox" role="switch"
+                               name="visible" value="on" <%= cat.visible === false ? '' : 'checked' %>
+                               title="Show this category on the ranks page">
+                      </div>
+                    </td>
+                    <td class="text-end">
+                      <%# The form element sits here, empty, and the inputs above point at it by
+                          id. That keeps the delete button from being nested inside the edit form,
+                          which HTML does not allow. %>
+                      <form id="editCategory<%= cat.id %>" method="post"
+                            action="/dashboard/webstore/categories/<%= cat.id %>/edit" class="d-none"></form>
+                      <button form="editCategory<%= cat.id %>" type="submit"
+                              class="btn btn-sm btn-outline-primary me-1" title="Save">
+                        <i class="fa-solid fa-floppy-disk fa-fw"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-danger"
+                              data-bs-toggle="modal" data-bs-target="#deleteCategory<%= cat.id %>" title="Delete">
+                        <i class="fa-solid fa-trash fa-fw"></i>
+                      </button>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+
+      <%# Add a category %>
+      <div class="card shadow-sm mb-4">
+        <div class="card-header fw-semibold">Add a category</div>
+        <div class="card-body">
+          <form method="post" action="/dashboard/webstore/categories/create" class="row g-2 align-items-end">
+            <div class="col-md-5">
+              <label for="newName" class="form-label fw-semibold small">Name</label>
+              <input type="text" class="form-control form-control-sm" id="newName" name="name"
+                     maxlength="64" placeholder="e.g. Ranks, Donate, Cosmetics" required>
+            </div>
+            <div class="col-md-3">
+              <label for="newSortOrder" class="form-label fw-semibold small">Order</label>
+              <input type="number" class="form-control form-control-sm" id="newSortOrder" name="sortOrder"
+                     value="0" min="0">
+              <div class="form-text">Lower numbers appear first.</div>
+            </div>
+            <div class="col-md-2">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       id="newVisible" name="visible" value="on" checked>
+                <label class="form-check-label small" for="newVisible">Visible</label>
+              </div>
+            </div>
+            <div class="col-md-2 d-grid">
+              <button type="submit" class="btn btn-sm btn-primary">
+                <i class="fa-solid fa-plus me-1"></i>Add
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <%# Delete confirmations. A category holding products must say where they go. %>
+      <% (categories || []).forEach(function(cat) { %>
+        <div class="modal fade" id="deleteCategory<%= cat.id %>" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog">
+            <form method="post" action="/dashboard/webstore/categories/<%= cat.id %>/delete" class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Delete <%= cat.name %></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <% if (cat.productCount) { %>
+                  <p class="mb-2">
+                    This category still holds <strong><%= cat.productCount %></strong>
+                    product<%= cat.productCount === 1 ? "" : "s" %>. Choose where they go,
+                    a category cannot be deleted while products point at it.
+                  </p>
+                  <label for="moveTo<%= cat.id %>" class="form-label fw-semibold small">Move products to</label>
+                  <select class="form-select form-select-sm" id="moveTo<%= cat.id %>" name="moveTo" required>
+                    <option value="">Choose a category</option>
+                    <% categories.filter(function(c) { return c.id !== cat.id; }).forEach(function(c) { %>
+                      <option value="<%= c.id %>"><%= c.name %></option>
+                    <% }) %>
+                  </select>
+                  <% if (categories.length < 2) { %>
+                    <div class="alert alert-warning small mt-2 mb-0">
+                      There is nowhere to move them, create another category first.
+                    </div>
+                  <% } %>
+                <% } else { %>
+                  <p class="mb-0">This category is empty. Delete it?</p>
+                <% } %>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-sm btn-danger"
+                        <%= cat.productCount && categories.length < 2 ? "disabled" : "" %>>
+                  Delete
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      <% }) %>
+
+    </div>
+  </div>
+</div>
+
+<%- include("../../admin/_footer.ejs") %>

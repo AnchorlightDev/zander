@@ -109,21 +109,52 @@
           <%# Right column — meta %>
           <div class="col-lg-4">
 
+<%
+              // Categories are rows now, so this is a picker rather than a free
+              // text box that silently created a new category on every typo.
+              const _categories = (typeof categories !== 'undefined' && Array.isArray(categories)) ? categories : [];
+              const _selectedCategoryId = entry ? entry.categoryId : (_categories[0] ? _categories[0].id : null);
+              const _visible = entry ? entry.visible !== false : true;
+            %>
+
+            <div class="card shadow-sm mb-3">
+              <div class="card-header fw-semibold">Visibility</div>
+              <div class="card-body">
+                <div class="form-check form-switch mb-0">
+                  <input class="form-check-input" type="checkbox" role="switch"
+                         id="visible" name="visible" value="on" <%= _visible ? 'checked' : '' %>>
+                  <label class="form-check-label fw-semibold small" for="visible">Show on the ranks page</label>
+                </div>
+                <div class="form-text">
+                  Unticked, this product is kept out of the public page entirely so it can be
+                  staged before launch. Hiding its category hides it too, whatever this is set to.
+                </div>
+              </div>
+            </div>
+
             <div class="card shadow-sm mb-3">
               <div class="card-header fw-semibold">Category</div>
               <div class="card-body">
-                <div class="mb-3">
-                  <label for="category" class="form-label fw-semibold small">Category name</label>
-                  <input type="text" class="form-control form-control-sm" id="category" name="category"
-                         value="<%= entry ? entry.category : 'Ranks' %>" maxlength="64" required>
-                  <div class="form-text">Group heading on the ranks page (e.g. "Ranks", "Donate").</div>
-                </div>
-                <div class="mb-0">
-                  <label for="categorySortOrder" class="form-label fw-semibold small">Category order</label>
-                  <input type="number" class="form-control form-control-sm" id="categorySortOrder" name="categorySortOrder"
-                         value="<%= entry ? entry.categorySortOrder : 0 %>" min="0">
-                  <div class="form-text">Lower numbers appear first. Shared across all entries in this category.</div>
-                </div>
+                <% if (!_categories.length) { %>
+                  <div class="alert alert-warning small mb-0">
+                    No categories yet.
+                    <a href="/dashboard/webstore/categories" class="alert-link">Create one first</a> —
+                    every product belongs to a category.
+                  </div>
+                <% } else { %>
+                  <label for="categoryId" class="form-label fw-semibold small">Category</label>
+                  <select class="form-select form-select-sm" id="categoryId" name="categoryId" required>
+                    <% _categories.forEach(function(c) { %>
+                      <option value="<%= c.id %>" <%= String(c.id) === String(_selectedCategoryId) ? 'selected' : '' %>>
+                        <%= c.name %><%= c.visible === false ? ' (hidden)' : '' %>
+                      </option>
+                    <% }) %>
+                  </select>
+                  <div class="form-text">
+                    Group heading on the ranks page.
+                    <a href="/dashboard/webstore/categories">Manage categories</a> to add, rename or reorder them.
+                  </div>
+                <% } %>
               </div>
             </div>
 

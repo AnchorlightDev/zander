@@ -279,6 +279,17 @@ export const adminPages = [
     group: "Webstore",
     sortOrder: 80,
   },
+  {
+    slug: "webstore-categories",
+    title: "Categories",
+    menuTitle: "Categories",
+    icon: "fa-solid fa-tags",
+    capability: "zander.web.webstore",
+    path: "/dashboard/webstore/categories",
+    featureFlag: "webstore",
+    group: "Webstore",
+    sortOrder: 81,
+  },
 
   // ── Finance group ──────────────────────────────────────────────────────────
   {

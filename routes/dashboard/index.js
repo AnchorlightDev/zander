@@ -18,6 +18,7 @@ import dashboardUsersRoute from "./users.js";
 import dashboardFinanceRoute from "./finance.js";
 import dashboardWebstoreRoute from "./webstore.js";
 import dashboardRankCatalogRoute from "./rankCatalog.js";
+import dashboardWebstoreCategoriesRoute from "./webstoreCategories.js";
 import dashboardApiClientsRoute from "./apiClients.js";
 import dashboardFormsRoute from "./forms.js";
 
@@ -99,6 +100,7 @@ export default function dashboardSiteRoutes(
   dashboardFinanceRoute(app, fetch, config, db, features, lang);
   dashboardWebstoreRoute(app, fetch, config, db, features, lang);
   dashboardRankCatalogRoute(app, config, db, features, lang);
+  dashboardWebstoreCategoriesRoute(app, config, db, features, lang);
   dashboardApiClientsRoute(app, config, db, features, lang);
   dashboardFormsRoute(app, config, db, features, lang);
 }
