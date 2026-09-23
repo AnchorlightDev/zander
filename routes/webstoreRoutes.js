@@ -29,6 +29,13 @@ import {
   getWebstoreItems,
   preferredCurrencyFromLocale,
 } from "../controllers/webstoreController.js";
+import { getAllCategories } from "../controllers/webstoreCategoryController.js";
+import { getAllItemSettings } from "../controllers/webstoreItemSettingsController.js";
+import {
+  applyItemSettings,
+  groupByCategory,
+  isPubliclyVisible,
+} from "../lib/webstore/catalogVisibility.mjs";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -81,15 +88,36 @@ export default function webstoreRoutes(app, config, features) {
     }
 
     let items = [];
+    let categoryGroups = [];
+    let useCategories = false;
     let itemsError = false;
     try {
-      items = (await getWebstoreItems(preferredCurrency)).map((item) => ({
+      // getWebstoreItems() deliberately returns everything -- it also serves
+      // checkout and renewal. Hiding happens here, on the way to the page.
+      const [rawItems, settings, categories] = await Promise.all([
+        getWebstoreItems(preferredCurrency),
+        getAllItemSettings().catch(() => []),
+        getAllCategories().catch(() => []),
+      ]);
+
+      const decorated = applyItemSettings(rawItems, settings, categories).map((item) => ({
         ...item,
         priceDisplay: formatPrice(item.priceCents, item.currency, locale),
         purchaseLabel: item.purchaseType === "subscription" ? "Subscribe" : "Buy Now",
         badgeLabel: item.purchaseType === "subscription" ? "Monthly" : "One-time",
       }));
-      console.log(`[webstore] loaded ${items.length} item(s) for storefront`);
+
+      categoryGroups = groupByCategory(decorated, { publicOnly: true });
+      // Until somebody actually assigns a category, the page stays the flat
+      // list it has always been rather than growing an "Uncategorised" heading.
+      useCategories = categoryGroups.some((g) => g.id !== null);
+      items = categoryGroups.flatMap((g) => g.packages);
+
+      const hidden = decorated.length - items.length;
+      console.log(
+        `[webstore] loaded ${items.length} item(s) for storefront` +
+        (hidden > 0 ? ` (${hidden} hidden)` : "")
+      );
     } catch (err) {
       console.error("[webstore] Failed to load items:", err.message);
       itemsError = true;
@@ -104,6 +132,8 @@ export default function webstoreRoutes(app, config, features) {
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
       items,
+      categoryGroups,
+      useCategories,
       itemsError,
       username: loggedIn ? req.session.user.username : null,
       loggedIn,
@@ -152,6 +182,27 @@ export default function webstoreRoutes(app, config, features) {
     if (!item.stripePriceId) {
       setBannerCookie("danger", "Item configuration error — please contact staff.", res);
       return res.redirect("/webstore");
+    }
+
+    // findWebstoreItem() does not filter -- renewal depends on it resolving
+    // hidden items -- so the storefront has to refuse them itself. Without this
+    // a hidden product is still purchasable by posting its slug.
+    try {
+      const [settings, categories] = await Promise.all([
+        getAllItemSettings(),
+        getAllCategories(),
+      ]);
+      const [decorated] = applyItemSettings([item], settings, categories);
+      if (!isPubliclyVisible(decorated)) {
+        console.log(`[webstore] checkout refused for hidden item | user=${req.session.user.userId} itemSlug=${itemSlug}`);
+        setBannerCookie("warning", "That item is no longer available.", res);
+        return res.redirect("/webstore");
+      }
+    } catch (err) {
+      // A settings lookup failure must not block a legitimate purchase; the
+      // item was already resolved and is assumed visible, as it was before
+      // this table existed.
+      console.error("[webstore] visibility check failed, allowing checkout:", err.message);
     }
 
     // --- Determine recipient ---

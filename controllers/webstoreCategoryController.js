@@ -54,20 +54,33 @@ export async function getAllCategories() {
 
 /** Every category plus how many products each holds, for the dashboard list. */
 export async function getAllCategoriesWithCounts() {
+  // Two independent things live in a category: rank catalog entries (/ranks)
+  // and storefront products (/webstore). Counted separately rather than in one
+  // join, which would multiply the rows together.
   const rows = await query(
     `SELECT c.id, c.name, c.sortOrder, c.visible, c.createdAt, c.updatedAt,
-            COUNT(rc.id) AS productCount,
-            SUM(CASE WHEN rc.visible = 1 THEN 1 ELSE 0 END) AS visibleProductCount
+            (SELECT COUNT(*) FROM rankCatalog rc WHERE rc.categoryId = c.id)
+              AS rankCount,
+            (SELECT COUNT(*) FROM rankCatalog rc WHERE rc.categoryId = c.id AND rc.visible = 1)
+              AS visibleRankCount,
+            (SELECT COUNT(*) FROM webstoreItemSettings s WHERE s.categoryId = c.id)
+              AS itemCount,
+            (SELECT COUNT(*) FROM webstoreItemSettings s WHERE s.categoryId = c.id AND s.visible = 1)
+              AS visibleItemCount
        FROM webstoreCategories c
-       LEFT JOIN rankCatalog rc ON rc.categoryId = c.id
-      GROUP BY c.id, c.name, c.sortOrder, c.visible, c.createdAt, c.updatedAt
       ORDER BY c.sortOrder ASC, c.name ASC`
   );
-  return rows.map((r) => ({
-    ...rowToCategory(r),
-    productCount: Number(r.productCount) || 0,
-    visibleProductCount: Number(r.visibleProductCount) || 0,
-  }));
+  return rows.map((r) => {
+    const rankCount = Number(r.rankCount) || 0;
+    const itemCount = Number(r.itemCount) || 0;
+    return {
+      ...rowToCategory(r),
+      rankCount,
+      itemCount,
+      productCount: rankCount + itemCount,
+      visibleProductCount: (Number(r.visibleRankCount) || 0) + (Number(r.visibleItemCount) || 0),
+    };
+  });
 }
 
 export async function getCategory(id) {
@@ -122,21 +135,30 @@ export async function setCategoryVisibility(id, visible) {
  * products, so the dashboard can show something useful.
  */
 export async function deleteCategory(id) {
-  const [{ productCount }] = await query(
-    `SELECT COUNT(*) AS productCount FROM rankCatalog WHERE categoryId = ?`,
-    [id]
+  const [{ total }] = await query(
+    `SELECT
+        (SELECT COUNT(*) FROM rankCatalog WHERE categoryId = ?)
+      + (SELECT COUNT(*) FROM webstoreItemSettings WHERE categoryId = ?) AS total`,
+    [id, id]
   );
-  const count = Number(productCount) || 0;
+  const count = Number(total) || 0;
   if (count > 0) throw new CategoryInUseError(count);
 
   await query(`DELETE FROM webstoreCategories WHERE id = ?`, [id]);
 }
 
-/** Move every product in one category to another, so the first can be deleted. */
+/**
+ * Move everything in one category to another, so the first can be deleted.
+ * Covers both rank catalog entries and storefront products.
+ */
 export async function reassignProducts(fromCategoryId, toCategoryId) {
-  const result = await query(
+  const ranks = await query(
     `UPDATE rankCatalog SET categoryId = ?, updatedAt = NOW() WHERE categoryId = ?`,
     [toCategoryId, fromCategoryId]
   );
-  return result.affectedRows || 0;
+  const items = await query(
+    `UPDATE webstoreItemSettings SET categoryId = ?, updatedAt = NOW() WHERE categoryId = ?`,
+    [toCategoryId, fromCategoryId]
+  );
+  return (ranks.affectedRows || 0) + (items.affectedRows || 0);
 }

@@ -280,6 +280,17 @@ export const adminPages = [
     sortOrder: 80,
   },
   {
+    slug: "webstore-products",
+    title: "Storefront Products",
+    menuTitle: "Products",
+    icon: "fa-solid fa-box-open",
+    capability: "zander.web.webstore",
+    path: "/dashboard/webstore/products",
+    featureFlag: "webstore",
+    group: "Webstore",
+    sortOrder: 79.5,
+  },
+  {
     slug: "webstore-categories",
     title: "Categories",
     menuTitle: "Categories",
