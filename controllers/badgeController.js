@@ -5,9 +5,7 @@
  * Uses the Prisma client for all database operations.
  */
 
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "./databaseController.js";
 
 // ---------------------------------------------------------------------------
 // Badge CRUD

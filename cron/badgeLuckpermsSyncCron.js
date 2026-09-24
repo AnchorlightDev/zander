@@ -13,14 +13,11 @@
  */
 
 import cron from "node-cron";
-import { PrismaClient } from "@prisma/client";
 import db, { luckpermsDb } from "../controllers/databaseController.js";
 import {
   getAllBadges,
   syncLuckpermsBadge,
 } from "../controllers/badgeController.js";
-
-const prisma = new PrismaClient();
 
 async function syncBadgesFromLuckperms() {
   try {

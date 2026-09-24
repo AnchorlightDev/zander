@@ -324,6 +324,9 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     try {
       const { actorId, actorName } = actorFromReq(req);
       const event = await submitForReview(eventId, actorId, actorName);
+      if (event.alreadySubmitted) {
+        return res.send({ success: true, data: event, message: "Event is already awaiting review" });
+      }
 
       // Fire review notification asynchronously — don't block the response
       setImmediate(async () => {

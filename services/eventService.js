@@ -472,18 +472,24 @@ export async function updateEvent(eventId, data, actorId, actorName) {
 export async function submitForReview(eventId, actorId, actorName) {
   const event = await getEventById(eventId);
   if (!event) throw new Error("Event not found");
-  if (event.status !== "draft" && event.status !== "rejected") {
-    throw new Error(`Cannot submit event in status '${event.status}' for review`);
-  }
 
-  const updated = await prisma.events.update({
-    where: { eventId: parseInt(eventId) },
+  // Conditional update so two concurrent submits (double-click, stale tab)
+  // can't both pass the status check and both notify reviewers.
+  const { count } = await prisma.events.updateMany({
+    where: { eventId: parseInt(eventId), status: { in: ["draft", "rejected"] } },
     data: { status: "pending_review" },
   });
 
+  if (count === 0) {
+    const current = await getEventById(eventId);
+    // Already submitted -- the caller's intent is satisfied, so not an error.
+    if (current?.status === "pending_review") return { ...current, alreadySubmitted: true };
+    throw new Error(`Cannot submit event in status '${current?.status ?? event.status}' for review`);
+  }
+
   await logEventAudit(parseInt(eventId), actorId, actorName, "submitted_for_review", "Event submitted for review");
 
-  return updated;
+  return getEventById(eventId);
 }
 
 /**

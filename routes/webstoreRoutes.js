@@ -41,11 +41,26 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Extract a best-effort locale from the Accept-Language header. */
+/**
+ * Extract a best-effort locale from the Accept-Language header.
+ * Entries carry optional weights ("en-us;q=0.7") and may be "*" or malformed,
+ * any of which would make Intl.NumberFormat throw, so each candidate is
+ * stripped and validated before use.
+ */
 function parseLocale(req) {
   const header = req.headers["accept-language"];
   if (typeof header !== "string") return "en-US";
-  return header.split(",")[0].trim() || "en-US";
+  for (const entry of header.split(",")) {
+    const tag = entry.split(";")[0].trim();
+    if (!tag || tag === "*") continue;
+    try {
+      const [canonical] = Intl.getCanonicalLocales(tag);
+      if (canonical) return canonical;
+    } catch {
+      // invalid tag -- try the next one
+    }
+  }
+  return "en-US";
 }
 
 /** Validate a Minecraft username: 1-16 alphanumeric / underscore characters. */
@@ -312,6 +327,9 @@ export default function webstoreRoutes(app, config, features) {
       features,
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
+      // discord_role perks are deferred until the recipient links Discord;
+      // linking re-drives them (retryDeferredDiscordRoles), so prompt here.
+      discordLinked: Boolean(req.session.user.discordID),
     });
   });
 

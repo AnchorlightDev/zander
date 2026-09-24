@@ -412,9 +412,15 @@ async function eventAction(endpoint, body, redirect) {
     else alert('Error: ' + data.message);
 }
 
-document.querySelectorAll('.btn-submit-review').forEach(el => el.addEventListener('click', e => {
+document.querySelectorAll('.btn-submit-review').forEach(el => el.addEventListener('click', async e => {
+    const btn = e.currentTarget;
     if (!confirm('Submit for review?')) return;
-    eventAction('/api/events/submit-review', { eventId: e.currentTarget.dataset.eventId }, window.location.href);
+    btn.disabled = true;
+    try {
+        await eventAction('/api/events/submit-review', { eventId: btn.dataset.eventId }, window.location.href);
+    } finally {
+        btn.disabled = false;
+    }
 }));
 
 document.querySelectorAll('.btn-approve').forEach(el => el.addEventListener('click', e => {

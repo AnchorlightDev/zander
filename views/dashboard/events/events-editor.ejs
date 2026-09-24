@@ -1252,15 +1252,21 @@ const submitBtn = document.getElementById('submitReviewBtn');
 if (submitBtn) {
     submitBtn.addEventListener('click', async () => {
         if (!confirm('Submit this event for admin review?')) return;
-        const res = await fetch('/api/events/submit-review', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ eventId: submitBtn.dataset.eventId }),
-        });
-        const data = await res.json();
-        if (data.success) window.location.href = `/dashboard/events/view?eventId=${submitBtn.dataset.eventId}`;
-        else alert('Error: ' + data.message);
+        submitBtn.disabled = true;
+        try {
+            const res = await fetch('/api/events/submit-review', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ eventId: submitBtn.dataset.eventId }),
+            });
+            const data = await res.json();
+            if (data.success) return void (window.location.href = `/dashboard/events/view?eventId=${submitBtn.dataset.eventId}`);
+            alert('Error: ' + data.message);
+        } catch (err) {
+            alert('Network error: ' + err.message);
+        }
+        submitBtn.disabled = false;
     });
 }
 
