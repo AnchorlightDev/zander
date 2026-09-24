@@ -9,6 +9,7 @@ import {
   syncMemberRankRoles,
 } from "../../lib/discord/rankRoleSync.mjs";
 import { syncAllRanks, syncUserRanks } from "../../controllers/rankSyncController.js";
+import { isAboveHighestRank, isSameUser } from "../../lib/rankPromotion.mjs";
 
 const LUCKPERMS_PLAYERS_TABLE = "luckperms_players";
 const LUCKPERMS_GROUP_PERMISSIONS_TABLE = "luckperms_group_permissions";
@@ -643,7 +644,7 @@ export default function rankApiRoute(app, config, db, features, lang) {
   app.post(`${baseEndpoint}/user/assign`, async function (req, res) {
     if (!isFeatureEnabled(features.ranks, res, lang)) return;
 
-    const { username, rankSlug, title, expiresAt } = req.body || {};
+    const { username, rankSlug, title, expiresAt, actorUserId, actorUuid } = req.body || {};
 
     if (!username || !rankSlug) {
       return res.send({
@@ -669,6 +670,23 @@ export default function rankApiRoute(app, config, db, features, lang) {
 
       if (!player || !player.uuid) {
         return res.send({ success: false, message: "Player not found." });
+      }
+
+      // Nobody may hand themselves a rank that outweighs the highest one they
+      // already hold. Only dashboard calls carry an actor; server-to-server
+      // callers have no "self" to promote.
+      if (isSameUser({ userId: actorUserId, uuid: actorUuid }, player)) {
+        const [heldRanks, metaMap] = await Promise.all([
+          getRanksForUuid(player.uuid),
+          getRankMetaMap(),
+        ]);
+        const rankWeight = rankRowFromMeta(rankSlug, metaMap).priority;
+        if (isAboveHighestRank(rankWeight, heldRanks.map((r) => r.priority))) {
+          return res.send({
+            success: false,
+            message: "You cannot promote yourself to a rank higher than your own.",
+          });
+        }
       }
 
       await normalizeUserPermissionContexts(player.uuid, rankSlug);

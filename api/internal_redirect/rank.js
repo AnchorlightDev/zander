@@ -107,6 +107,10 @@ export default function rankRedirectRoute(app) {
     }
 
     payload.actor = req.session?.user?.username || null;
+    // From the session, overwriting anything the browser sent: the API uses
+    // these to stop people promoting themselves above their own rank.
+    payload.actorUserId = req.session?.user?.userId ?? null;
+    payload.actorUuid = req.session?.user?.uuid ?? null;
 
     try {
       const { data } = await forwardJson(`/api/rank/user/assign`, {
