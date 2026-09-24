@@ -91,21 +91,26 @@
                   <!-- Application Type -->
                   <div class="mb-3">
                       <label for="applicationType">Application Type</label>
+                      <%# selected is set server-side as well as by the partial's
+                          window-load script: the field toggle below runs before
+                          that script, and would otherwise read "External URL" and
+                          hide the form picker for an application that is linked. %>
+                      <% const currentApplicationType = type === 'edit' ? (applicationApiData.applicationType || 'external') : 'external'; %>
                       <%- include("../../partials/form/inputSelect.ejs", {
                           elementName: "applicationType",
-                          elementValue: type === 'edit' ? (applicationApiData.applicationType || 'external') : 'external',
+                          elementValue: currentApplicationType,
                           required: true,
                           optionElements: [
                               {
                                   optionName: "External URL",
                                   optionValue: "external",
-                                  selected: false,
+                                  selected: currentApplicationType === "external",
                                   disabled: false
                               },
                               {
                                   optionName: "Linked Form",
                                   optionValue: "linked_form",
-                                  selected: false,
+                                  selected: currentApplicationType === "linked_form",
                                   disabled: false
                               }
                           ]
@@ -388,6 +393,9 @@
     if (typeSelect) {
         typeSelect.addEventListener('change', toggleFields);
         toggleFields();
+        // The select partial assigns the saved value on load without firing
+        // change, so re-apply once it has.
+        window.addEventListener('load', toggleFields);
     }
 })();
 </script>
