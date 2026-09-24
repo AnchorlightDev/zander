@@ -18,6 +18,7 @@ import {
   createForm,
   deleteForm,
   deleteSubmission,
+  duplicateForm,
   getFormById,
   getSubmission,
   listForms,
@@ -359,6 +360,24 @@ export default function dashboardFormsRoute(app, config, db, features, lang) {
       console.error("[forms] export error:", error);
       setBannerCookie("danger", "The export could not be generated.", res);
       return res.redirect(`/dashboard/forms/submissions?formId=${form.formId}`);
+    }
+  });
+
+  app.post("/dashboard/forms/:formId/duplicate", async (req, res) => {
+    if (!(await guard(req, res))) return;
+
+    try {
+      const copy = await duplicateForm(req.params.formId);
+      if (!copy) {
+        setBannerCookie("danger", "Form not found.", res);
+        return res.redirect("/dashboard/forms");
+      }
+      setBannerCookie("success", `Created "${copy.name}" with all its fields. It is closed until you open it.`, res);
+      return res.redirect(`/dashboard/forms/${copy.formId}/edit`);
+    } catch (error) {
+      console.error("[forms] duplicate error:", error);
+      setBannerCookie("danger", "The form could not be duplicated.", res);
+      return res.redirect("/dashboard/forms");
     }
   });
 

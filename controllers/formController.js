@@ -181,6 +181,52 @@ export async function updateForm(formId, data) {
   });
 }
 
+/**
+ * Copy a form's settings and every one of its fields into a new form.
+ *
+ * Submissions, drafts and linked applications stay with the original. The copy
+ * starts closed so it cannot take submissions before someone has looked at it.
+ *
+ * Fields keep their fieldKeys: a showIf condition refers to another field by
+ * key, so renaming them would break every condition in the copy. The keys only
+ * need to be unique per form, so reusing them cannot clash.
+ *
+ * Null JSON columns are left out rather than passed as null, because Prisma
+ * rejects a bare null for a Json column; omitting it stores NULL anyway.
+ */
+export async function duplicateForm(formId) {
+  const source = await getFormById(formId);
+  if (!source) return null;
+
+  const withoutNullJson = (row, keys) => {
+    const out = { ...row };
+    for (const key of keys) if (out[key] === null) delete out[key];
+    return out;
+  };
+
+  const {
+    formId: _formId, slug: _slug, createdAt: _createdAt, updatedAt: _updatedAt,
+    fields, ...settings
+  } = source;
+
+  const name = `${source.name} (copy)`.slice(0, 100);
+  const slug = await buildUniqueSlug(`${source.slug}-copy`);
+
+  return prisma.forms.create({
+    data: {
+      ...withoutNullJson(settings, ["notifyDiscordUserIds", "requirements"]),
+      name,
+      slug,
+      status: false,
+      fields: {
+        create: fields.map(({ fieldId: _fieldId, formId: _fieldFormId, ...field }) =>
+          withoutNullJson(field, ["options", "config"])
+        ),
+      },
+    },
+  });
+}
+
 export async function deleteForm(formId) {
   return prisma.forms.delete({ where: { formId: Number(formId) } });
 }
