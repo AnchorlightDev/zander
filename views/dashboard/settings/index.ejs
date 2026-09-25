@@ -1,0 +1,112 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-sliders me-2"></i>Site Settings</h1>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (error) { %>
+        <div class="alert alert-warning"><%= error %></div>
+      <% } %>
+
+      <p class="text-muted">
+        Changes apply straight away across the site. Anything you have not changed here keeps
+        following <code>config.json</code>. Settings marked <span class="badge bg-warning text-dark">Restart</span>
+        are read once at startup and take effect on the next deploy or restart.
+      </p>
+
+      <ul class="nav nav-tabs mb-4">
+        <% sections.forEach(function (s) { %>
+          <li class="nav-item">
+            <a class="nav-link <%= s.key === section.key ? 'active' : '' %>" href="/dashboard/settings?section=<%= s.key %>">
+              <i class="<%= s.icon %> me-1"></i><%= s.title %>
+            </a>
+          </li>
+        <% }) %>
+      </ul>
+
+      <form method="post" action="/dashboard/settings/<%= section.key %>">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <% section.fields.forEach(function (field) {
+                 const state = values[field.path] || { value: undefined, fileValue: undefined, overridden: false };
+                 const id = "f_" + field.path.replace(/[^\w]/g, "_");
+                 const current = state.value;
+                 const secret = isSecretField(field);
+                 const textValue = Array.isArray(current) ? current.join("\n") : (current == null ? "" : String(current));
+            %>
+              <div class="row mb-3 align-items-start">
+                <div class="col-md-4">
+                  <label class="form-label fw-semibold mb-0" for="<%= id %>"><%= field.label %></label>
+                  <% if (field.restart) { %><span class="badge bg-warning text-dark ms-1">Restart</span><% } %>
+                  <% if (state.overridden) { %><span class="badge bg-info text-dark ms-1">Edited</span><% } %>
+                  <% if (field.help) { %><div class="form-text"><%= field.help %></div><% } %>
+                </div>
+                <div class="col-md-6">
+                  <% if (field.type === "boolean") { %>
+                    <div class="form-check form-switch mt-1">
+                      <input class="form-check-input" type="checkbox" id="<%= id %>" name="<%= field.path %>" value="1" <%= current === true ? "checked" : "" %>>
+                    </div>
+                  <% } else if (field.type === "select") { %>
+                    <select class="form-select" id="<%= id %>" name="<%= field.path %>">
+                      <% field.options.forEach(function (opt) { %>
+                        <option value="<%= opt %>" <%= textValue === opt ? "selected" : "" %>><%= opt %></option>
+                      <% }) %>
+                    </select>
+                  <% } else if (field.type === "timezone") { %>
+                    <select class="form-select" id="<%= id %>" name="<%= field.path %>">
+                      <option value="UTC" <%= textValue === "UTC" || !textValue ? "selected" : "" %>>UTC</option>
+                      <% timeZoneGroups.forEach(function (group) { %>
+                        <optgroup label="<%= group.region %>">
+                          <% group.zones.forEach(function (zone) { %>
+                            <option value="<%= zone.value %>" <%= textValue === zone.value ? "selected" : "" %>><%= zone.label %></option>
+                          <% }) %>
+                        </optgroup>
+                      <% }) %>
+                    </select>
+                  <% } else if (field.type === "textarea" || field.type === "list") { %>
+                    <textarea class="form-control" id="<%= id %>" name="<%= field.path %>" rows="<%= field.type === 'list' ? 3 : 4 %>"><%= textValue %></textarea>
+                  <% } else if (secret) { %>
+                    <input type="password" class="form-control font-monospace" id="<%= id %>" name="<%= field.path %>"
+                           autocomplete="off" placeholder="<%= textValue ? maskSecret(textValue) : 'Not set' %>">
+                    <div class="form-text">Leave blank to keep the current webhook.</div>
+                  <% } else {
+                       const inputType = field.type === "number" || field.type === "port" ? "number"
+                         : field.type === "email" ? "email"
+                         : field.type === "url" ? "url"
+                         : field.type === "time" ? "time" : "text";
+                  %>
+                    <input type="<%= inputType %>" class="form-control<%= field.type === 'snowflake' ? ' font-monospace' : '' %>"
+                           id="<%= id %>" name="<%= field.path %>" value="<%= textValue %>"
+                           <%= field.required ? "required" : "" %>>
+                  <% } %>
+                </div>
+                <div class="col-md-2 pt-1">
+                  <% if (state.overridden) { %>
+                    <div class="form-check" title="Go back to the config.json value">
+                      <input class="form-check-input" type="checkbox" name="reset" value="<%= field.path %>" id="<%= id %>_reset">
+                      <label class="form-check-label small" for="<%= id %>_reset">Reset</label>
+                    </div>
+                  <% } %>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+          <div class="card-footer d-flex justify-content-end">
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Save <%= section.title %></button>
+          </div>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<%- include("../../admin/_footer.ejs") %>

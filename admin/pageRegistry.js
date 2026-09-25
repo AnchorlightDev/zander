@@ -370,6 +370,16 @@ export const adminPages = [
     group: "System",
     sortOrder: 75,
   },
+  {
+    slug: "settings",
+    title: "Site Settings",
+    menuTitle: "Settings",
+    icon: "fa-solid fa-sliders",
+    capability: "zander.web.settings",
+    path: "/dashboard/settings",
+    group: "System",
+    sortOrder: 80,
+  },
 ];
 // ---------------------------------------------------------------------------
 // Sub-pages (registered for breadcrumb / title lookup; not shown in sidebar)

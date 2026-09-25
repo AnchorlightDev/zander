@@ -21,6 +21,7 @@ import dashboardRankCatalogRoute from "./rankCatalog.js";
 import dashboardWebstoreCategoriesRoute from "./webstoreCategories.js";
 import dashboardWebstoreProductsRoute from "./webstoreProducts.js";
 import dashboardApiClientsRoute from "./apiClients.js";
+import dashboardSettingsRoute from "./settings.js";
 import dashboardFormsRoute from "./forms.js";
 
 export default function dashboardSiteRoutes(
@@ -104,5 +105,6 @@ export default function dashboardSiteRoutes(
   dashboardWebstoreCategoriesRoute(app, config, db, features, lang);
   dashboardWebstoreProductsRoute(app, config, db, features, lang);
   dashboardApiClientsRoute(app, config, db, features, lang);
+  dashboardSettingsRoute(app, config, db, features, lang);
   dashboardFormsRoute(app, config, db, features, lang);
 }

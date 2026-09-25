@@ -60,12 +60,19 @@ const lang = require("./lang.json");
 import db, { isDbHealthy, prisma } from "./controllers/databaseController.js";
 import { getWebAnnouncement } from "./controllers/announcementController.js";
 import { getNotificationSummary } from "./controllers/notificationController.js";
+import { applyConfigOverrides, startConfigSync } from "./controllers/configSettingsController.js";
 
 // Paths
 import path from "path";
 import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Dashboard-edited settings (/dashboard/settings) are overlaid onto the shared
+// config object before the Discord client and cron jobs load, because a few of
+// them copy config values once at import time.
+await applyConfigOverrides();
+startConfigSync();
 
 import("./controllers/discordController.js");
 import("./cron/userCodeExpiryCron.js");
