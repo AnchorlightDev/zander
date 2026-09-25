@@ -14,6 +14,7 @@
 import { hasPermission, setBannerCookie } from "../../api/common.js";
 import { adminViewData } from "../../admin/adminHelpers.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
+import { parseYearMonth } from "../../lib/finance/budgetPeriod.mjs";
 
 import {
   // Categories
@@ -32,7 +33,7 @@ import {
   getAllBudgetEntries,
   createBudgetEntry,
   updateBudgetEntry,
-  deleteBudgetEntry,
+  removeBudgetEntryFrom,
   getBudgetVsActual,
   upsertMonthlyBudgetOverride,
   resetMonthlyBudgetOverride,
@@ -411,14 +412,30 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
       return res.redirect("/dashboard/finance");
     }
 
+    // Removal applies from the month being viewed onwards, never to earlier months.
+    const period = parseYearMonth(req.body?.year, req.body?.month);
+    if (!period) {
+      setBannerCookie("danger", "Pick the month to remove this item from.", res);
+      return res.redirect("/dashboard/finance");
+    }
+    const backToMonth = `/dashboard/finance?year=${period.year}&month=${period.month}`;
+
     try {
-      await deleteBudgetEntry(budgetId);
-      setBannerCookie("success", "Budget entry deleted.", res);
+      const outcome = await removeBudgetEntryFrom(budgetId, period.year, period.month);
+      const monthLabel = new Date(period.year, period.month - 1, 1)
+        .toLocaleString("en-US", { month: "long", year: "numeric" });
+      setBannerCookie(
+        "success",
+        outcome === "deleted"
+          ? "Budget entry deleted."
+          : `Budget entry removed from ${monthLabel} onwards. Earlier months are unchanged.`,
+        res
+      );
     } catch (error) {
       console.error("[finance] POST /dashboard/finance/budget/:budgetId/delete:", error);
       setBannerCookie("danger", error.message, res);
     }
-    return res.redirect("/dashboard/finance");
+    return res.redirect(backToMonth);
   });
 
   // ===========================================================================

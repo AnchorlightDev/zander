@@ -364,8 +364,11 @@
                                     name cannot break the handler.
                                   %>
                                   <form method="post" action="/dashboard/finance/budget/<%= b.budgetId %>/delete" class="d-inline js-delete-budget-item"
-                                        data-label="<%= b.label || 'this item' %>">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete standing budget item">
+                                        data-label="<%= b.label || 'this item' %>"
+                                        data-month-label="<%= monthNames[selectedMonth - 1] %> <%= selectedYear %>">
+                                    <input type="hidden" name="year" value="<%= selectedYear %>">
+                                    <input type="hidden" name="month" value="<%= selectedMonth %>">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove from this month onwards">
                                       <i class="fa-solid fa-trash"></i>
                                     </button>
                                   </form>
@@ -971,10 +974,11 @@
       form.addEventListener('submit', function (e) {
         var label = form.dataset.label || 'this item';
         var gap = String.fromCharCode(10, 10);
+        var monthLabel = form.dataset.monthLabel || 'this month';
         var ok = confirm(
-          'Delete "' + label + '" from the operations budget?' + gap +
-          'This removes the line from every month, including past months, and ' +
-          'discards any per-month overrides for it. It cannot be undone.'
+          'Remove "' + label + '" from ' + monthLabel + ' onwards?' + gap +
+          'Earlier months keep this line. Any per-month overrides from ' +
+          monthLabel + ' on are discarded. It cannot be undone.'
         );
         if (!ok) e.preventDefault();
       });

@@ -8,6 +8,7 @@
 import { prisma } from "./databaseController.js";
 import db from "./databaseController.js";
 import { getMonthlyPurchaseTotals } from "./webstoreController.js";
+import { budgetItemAppliesToMonth, hasHistoryBefore } from "../lib/finance/budgetPeriod.mjs";
 
 // ---------------------------------------------------------------------------
 // Internal helper: wrap mysql2 pool query in a Promise
@@ -507,8 +508,38 @@ export async function updateBudgetEntry(id, data) {
   return prisma.financeOperationsBudget.update({ where: { budgetId: id }, data: update });
 }
 
-export async function deleteBudgetEntry(id) {
-  return prisma.financeOperationsBudget.delete({ where: { budgetId: id } });
+/**
+ * Remove a standing budget item from (year, month) onwards. Earlier months --
+ * and the public reports built from them -- keep the line. Per-month overrides
+ * from that month on are discarded along with it.
+ *
+ * An item with no months before (year, month) has no history to keep, so it is
+ * deleted outright rather than left behind as an ended row.
+ *
+ * @returns {Promise<"deleted"|"ended">}
+ */
+export async function removeBudgetEntryFrom(id, year, month) {
+  const entry = await prisma.financeOperationsBudget.findUnique({ where: { budgetId: id } });
+  if (!entry) throw new Error("Budget entry not found.");
+
+  if (!hasHistoryBefore(entry.createdAt, year, month)) {
+    await prisma.financeOperationsBudget.delete({ where: { budgetId: id } });
+    return "deleted";
+  }
+
+  await prisma.$transaction([
+    prisma.financeOperationsBudget.update({
+      where: { budgetId: id },
+      data: { removedFromYear: year, removedFromMonth: month },
+    }),
+    prisma.financeOperationsBudgetMonthly.deleteMany({
+      where: {
+        budgetItemId: id,
+        OR: [{ year: { gt: year } }, { year, month: { gte: month } }],
+      },
+    }),
+  ]);
+  return "ended";
 }
 
 // =============================================================================
@@ -627,26 +658,28 @@ export async function getBudgetVsActual(year, month) {
   const endDate = new Date(year, month, 0);
   const actualCentsFor = await buildActualCentsLookup(startDate, endDate);
 
-  const templateResults = templateEntries.map((entry) => {
-    const override = overrideByBudgetItemId.get(entry.budgetId) || null;
-    const appliesThisMonth = entry.cadence !== "annual" || entry.annualMonth === Number(month);
-    const monthlyBudgetCents = override
-      ? override.monthlyBudgetCents
-      : (appliesThisMonth ? entry.monthlyBudgetCents : 0);
-    const actualCents = actualCentsFor(entry.categoryId);
+  const templateResults = templateEntries
+    .filter((entry) => budgetItemAppliesToMonth(entry, year, month))
+    .map((entry) => {
+      const override = overrideByBudgetItemId.get(entry.budgetId) || null;
+      const appliesThisMonth = entry.cadence !== "annual" || entry.annualMonth === Number(month);
+      const monthlyBudgetCents = override
+        ? override.monthlyBudgetCents
+        : (appliesThisMonth ? entry.monthlyBudgetCents : 0);
+      const actualCents = actualCentsFor(entry.categoryId);
 
-    return {
-      ...entry,
-      label: normaliseBudgetLabel(entry.label),
-      monthlyBudgetCents,
-      templateMonthlyBudgetCents: entry.monthlyBudgetCents,
-      isOverridden: Boolean(override),
-      monthlyBudgetItemId: override?.monthlyBudgetItemId || null,
-      isOneOff: false,
-      actualCents,
-      varianceCents: monthlyBudgetCents - actualCents,
-    };
-  });
+      return {
+        ...entry,
+        label: normaliseBudgetLabel(entry.label),
+        monthlyBudgetCents,
+        templateMonthlyBudgetCents: entry.monthlyBudgetCents,
+        isOverridden: Boolean(override),
+        monthlyBudgetItemId: override?.monthlyBudgetItemId || null,
+        isOneOff: false,
+        actualCents,
+        varianceCents: monthlyBudgetCents - actualCents,
+      };
+    });
 
   const oneOffResults = oneOffRows.map((row) => {
     const actualCents = actualCentsFor(row.categoryId);

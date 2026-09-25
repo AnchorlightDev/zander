@@ -1416,6 +1416,8 @@ model financeOperationsBudget {
   iconImageUrl        String?  @db.VarChar(500)
   notes               String?  @db.Text
   isActive            Int      @default(1) @db.TinyInt
+  removedFromYear     Int?     @db.SmallInt
+  removedFromMonth    Int?     @db.TinyInt
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
