@@ -495,12 +495,28 @@ export async function submitForReview(eventId, actorId, actorName) {
 /**
  * Approve an event (admin action).
  */
+/**
+ * Refuse to approve or publish an event that has already started: its
+ * announcements would all be in the past and Discord will not schedule it.
+ */
+function assertStartsInFuture(event, action) {
+  const start = new Date(event.startAt);
+  if (!Number.isNaN(start.getTime()) && start.getTime() <= Date.now()) {
+    throw new Error(
+      `Cannot ${action} an event whose start time has already passed. Change the date and time first.`
+    );
+  }
+}
+
 export async function approveEvent(eventId, reviewerId, reviewerName) {
   const event = await getEventById(eventId);
   if (!event) throw new Error("Event not found");
   if (event.status !== "pending_review") {
     throw new Error(`Cannot approve event in status '${event.status}'`);
   }
+  // Checked before the status changes: approval publishes immediately, and a
+  // publish refused after this point would strand the event as 'approved'.
+  assertStartsInFuture(event, "approve");
 
   await prisma.events.update({
     where: { eventId: parseInt(eventId) },
@@ -615,6 +631,7 @@ export async function publishEvent(eventId, actorId, actorName) {
   if (event.status !== "approved") {
     throw new Error(`Cannot publish event in status '${event.status}'`);
   }
+  assertStartsInFuture(event, "publish");
 
   const updated = await prisma.events.update({
     where: { eventId: parseInt(eventId) },

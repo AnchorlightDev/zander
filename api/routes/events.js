@@ -620,8 +620,8 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
             await editGuildScheduledEvent(event, resolvedGuildId, event.discordGuildEventId);
             results.guildEvent = "updated";
           } else if (resolvedGuildId) {
-            await createGuildScheduledEvent(event, resolvedGuildId);
-            results.guildEvent = "created";
+            const createdId = await createGuildScheduledEvent(event, resolvedGuildId);
+            results.guildEvent = createdId ? "created" : "skipped: event already started or not public";
           } else {
             results.guildEvent = "skipped: no guild configured";
           }

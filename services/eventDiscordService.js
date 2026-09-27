@@ -337,6 +337,26 @@ export async function editEventDiscordMessage(event, channelId, messageId, siteB
 }
 
 /**
+ * Discord rejects a scheduled event whose start is not in the future, and will
+ * not move the start of one that has begun. A small margin covers the request
+ * round trip so an event starting "right now" is treated as started.
+ */
+const DISCORD_SCHEDULE_MARGIN_MS = 60_000;
+
+function hasStarted(event, now = Date.now()) {
+  return new Date(event.startAt).getTime() <= now + DISCORD_SCHEDULE_MARGIN_MS;
+}
+
+function hasEnded(event, now = Date.now()) {
+  return event.endAt ? new Date(event.endAt).getTime() <= now : false;
+}
+
+/** Only an error about the cover image is worth retrying without it. */
+function isCoverImageError(err) {
+  return Boolean(err?.rawError?.errors?.image) || /\bimage\b/i.test(String(err?.message || ""));
+}
+
+/**
  * Create a Discord Guild Scheduled Event.
  * Returns the guild event ID.
  */
@@ -349,6 +369,14 @@ export async function createGuildScheduledEvent(event, guildId) {
     await logEventAudit(
       event.eventId, null, "System", "discord_guild_event_skipped",
       "Event is not publicly visible — no Discord scheduled event created"
+    );
+    return null;
+  }
+
+  if (hasStarted(event)) {
+    await logEventAudit(
+      event.eventId, null, "System", "discord_guild_event_skipped",
+      "Event has already started — Discord cannot schedule an event in the past, so no scheduled event was created"
     );
     return null;
   }
@@ -398,7 +426,7 @@ export async function createGuildScheduledEvent(event, guildId) {
     guildEvent = await guild.scheduledEvents.create(eventData);
   } catch (err) {
     // A bad/unreachable cover image must not stop the event being created.
-    if (eventData.image) {
+    if (eventData.image && isCoverImageError(err)) {
       console.error(
         `[EventDiscord] Guild event create failed with cover image, retrying without it:`,
         err.message
@@ -431,6 +459,14 @@ export async function createGuildScheduledEvent(event, guildId) {
 export async function editGuildScheduledEvent(event, guildId, guildEventId) {
   if (!client?.isReady?.()) throw new Error("Discord client not ready");
   if (!guildId || !guildEventId) throw new Error("guildId and guildEventId required");
+
+  if (hasEnded(event)) {
+    await logEventAudit(
+      event.eventId, null, "System", "discord_guild_event_skipped",
+      "Event has already ended — Discord scheduled event left as it was"
+    );
+    return guildEventId;
+  }
 
   const guild = await client.guilds.fetch(guildId);
   if (!guild) throw new Error(`Guild ${guildId} not found`);
@@ -479,10 +515,14 @@ export async function editGuildScheduledEvent(event, guildId, guildEventId) {
     editData.image = null;
   }
 
+  // Once the event has begun Discord refuses any start time in the past, even
+  // an unchanged one, so leave the start alone.
+  if (hasStarted(event)) delete editData.scheduledStartTime;
+
   try {
     await guildEvent.edit(editData);
   } catch (err) {
-    if (editData.image) {
+    if (editData.image && isCoverImageError(err)) {
       console.error(
         `[EventDiscord] Guild event edit failed with cover image, retrying without it:`,
         err.message
