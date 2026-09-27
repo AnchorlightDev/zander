@@ -15,8 +15,8 @@ import { client } from "../controllers/discordController.js";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
-const features = require("../features.json");
+const config = require("../lib/config/config.cjs");
+const features = require("../lib/config/features.cjs");
 
 const REMINDER_MESSAGE = `Hello! 👋
 Our system shows that your account still needs to be verified.

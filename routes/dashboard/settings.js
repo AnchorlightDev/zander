@@ -1,7 +1,7 @@
 /**
  * routes/dashboard/settings.js
  *
- * Dashboard editor for the staff-tunable parts of config.json.
+ * Dashboard editor for the site settings (stored in the database).
  *
  *   GET  /dashboard/settings?section=general  — one section of the settings form
  *   POST /dashboard/settings/:section         — save that section
@@ -36,7 +36,7 @@ export default function dashboardSettingsRoute(app, config, db, features, lang) 
       values = await describeSettings();
     } catch (err) {
       console.error("[dashboard/settings] failed to load settings:", err);
-      error = "Could not load saved settings from the database. Values shown are from config.json.";
+      error = "Could not load saved settings from the database. Values shown are the defaults.";
     }
 
     res.header("content-type", "text/html; charset=utf-8").send(

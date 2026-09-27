@@ -2,7 +2,7 @@ import { Listener } from "@sapphire/framework";
 import { AuditLogEvent, PermissionFlagsBits, RESTJSONErrorCodes } from "discord.js";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
+const config = require("../lib/config/config.cjs");
 import {
   createPunishment,
 } from "../controllers/discordPunishmentController.js";

@@ -1,8 +1,8 @@
 import { Listener } from "@sapphire/framework";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
-const features = require("../features.json");
+const config = require("../lib/config/config.cjs");
+const features = require("../lib/config/features.cjs");
 import { checkAndReportNickname } from "../lib/discord/nicknameCheck.mjs";
 import { syncMemberRankRoles } from "../lib/discord/rankRoleSync.mjs";
 import { UserGetter } from "../controllers/userController.js";

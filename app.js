@@ -43,7 +43,7 @@ import {
   normaliseCspReports,
 } from "./lib/csp.js";
 
-const config = require("./config.json");
+const config = require("./lib/config/config.cjs");
 
 // Derived config, computed once at boot.
 //
@@ -55,7 +55,7 @@ const config = require("./config.json");
 config.siteConfiguration = config.siteConfiguration || {};
 config.siteConfiguration.region = getRegion(config);
 
-const features = require("./features.json");
+const features = require("./lib/config/features.cjs");
 const lang = require("./lang.json");
 import db, { isDbHealthy, prisma } from "./controllers/databaseController.js";
 import { getWebAnnouncement } from "./controllers/announcementController.js";
@@ -68,9 +68,11 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Dashboard-edited settings (/dashboard/settings) are overlaid onto the shared
-// config object before the Discord client and cron jobs load, because a few of
-// them copy config values once at import time.
+// Site settings and module switches live in the database (/dashboard/settings,
+// /dashboard/modules). Load them into the shared config/features objects before
+// the Discord client and cron jobs load, because a few of them copy values once
+// at import time. The first boot also imports any legacy config.json /
+// features.json on disk, once.
 await applyConfigOverrides();
 startConfigSync();
 

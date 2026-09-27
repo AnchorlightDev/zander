@@ -55,7 +55,7 @@ import { searchLinkedUsers } from "../../controllers/supportTicketController.js"
 import { createRequire } from "module";
 import path from "path";
 const _require = createRequire(import.meta.url);
-const config = _require(path.join(process.cwd(), "config.json"));
+const config = _require("../../lib/config/config.cjs");
 
 function actorFromReq(req) {
   const user = req.session?.user;

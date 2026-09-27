@@ -24,9 +24,10 @@ once, here, then paste.
 | Java Edition | `[CONFIRM]` | default (25565) unless stated |
 | Bedrock Edition | `[CONFIRM]` | `[CONFIRM]` |
 
-Put the real values into `config.json` under `connection` before publishing
-anywhere. Every page on the site reads from there, so the site and the listings
-cannot then disagree.
+Put the real addresses into **Dashboard → Servers** (the connection address and
+Bedrock address of the main public server) before publishing anywhere. Every
+page on the site reads from there, so the site and the listings cannot then
+disagree.
 
 > **Known inconsistency to settle first.** The live site has been rendering
 > *different Bedrock ports on different pages* — `/ranks` and `/vault` disagree.
@@ -177,5 +178,5 @@ For each one, check in this order:
 Update this file first, then the listings. The order matters: a directory you
 updated from memory is a directory nobody can check.
 
-Connection details are the exception — those live in `config.json` under
-`connection`, and this document should quote them rather than restate them.
+Connection details are the exception — those live in **Dashboard → Servers**,
+and this document should quote them rather than restate them.

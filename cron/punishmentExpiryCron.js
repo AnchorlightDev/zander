@@ -8,7 +8,7 @@ import {
 } from "../controllers/discordPunishmentController.js";
 
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
+const config = require("../lib/config/config.cjs");
 
 const GUILD_ID = config.discord?.guildId;
 const MUTED_ROLE_ID = config.discord?.roles?.muted;

@@ -47,9 +47,9 @@ describe("describeFlags", () => {
     expect(LOCKED_FLAGS.has("web.login")).toBe(true);
   });
 
-  it("covers every flag in the real features.json", async () => {
+  it("covers every built-in default flag", async () => {
     const { createRequire } = await import("module");
-    const features = createRequire(import.meta.url)("../../features.json");
+    const features = createRequire(import.meta.url)("../../lib/config/defaults.cjs").DEFAULT_FEATURES;
     const described = describeFlags(features).flatMap((g) => g.flags).map((f) => f.path).sort();
     expect(described).toEqual(listFlagPaths(features).sort());
   });

@@ -1,12 +1,13 @@
 /**
  * routes/dashboard/modules.js
  *
- * Switch features.json flags on and off from the dashboard.
+ * Switch modules (feature flags, stored in the database) on and off.
  *
  *   GET  /dashboard/modules  — every flag, grouped, with its current state
  *   POST /dashboard/modules  — save all toggles
  *
- * The flag list comes from features.json itself (lib/config/featureRegistry.mjs);
+ * The flag list comes from the defaults (lib/config/defaults.cjs) plus any
+ * imported legacy features.json (lib/config/featureRegistry.mjs);
  * storage and the live overlay are in controllers/configSettingsController.js.
  */
 
@@ -50,7 +51,7 @@ export default function dashboardModulesRoute(app, config, db, features, lang) {
       const { changed } = await saveFeatureFlags(req.body ?? {});
       const actor = req.session?.user?.username || req.session?.user?.userId || "unknown";
       console.log(
-        `[dashboard/modules] ${actor} saved modules; differing from features.json: ${changed.join(", ") || "none"}`
+        `[dashboard/modules] ${actor} saved modules; differing from default: ${changed.join(", ") || "none"}`
       );
       setBannerCookie("success", "Modules saved.", res);
     } catch (err) {

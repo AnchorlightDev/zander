@@ -19,7 +19,7 @@
  *  group         – sidebar section heading  (null / omitted → top-level)
  *  sortOrder     – render order within the group
  *  hiddenFromMenu– true → page exists but is NOT shown in the sidebar
- *  featureFlag   – key in features.json that must be truthy to show the item
+ *  featureFlag   – module switch (lib/config/features.cjs) that must be on to show the item
  */
 
 // ---------------------------------------------------------------------------
@@ -505,7 +505,7 @@ function checkPermission(permissionsArray, node) {
  * Return all menu pages visible to the current user, sorted by sortOrder.
  *
  * @param {string[]} userPermissions  – req.session.user.permissions
- * @param {object}   features         – parsed features.json
+ * @param {object}   features         – live module switches (lib/config/features.cjs)
  */
 export function getMenuItems(userPermissions, features) {
   return adminPages

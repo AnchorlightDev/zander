@@ -3,7 +3,7 @@ dotenv.config();
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 import path from "path";
-const config = require(path.join(process.cwd(), "config.json"));
+const config = require("../lib/config/config.cjs");
 import fetch from "node-fetch";
 import { readdirSync } from "fs";
 import crypto from "crypto";

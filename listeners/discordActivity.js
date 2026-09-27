@@ -21,8 +21,8 @@ import { activityDateKey, addMessageCounts } from "../controllers/discordActivit
 import { createActivityBuffer } from "../lib/discordActivityBuffer.mjs";
 
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
-const features = require("../features.json");
+const config = require("../lib/config/config.cjs");
+const features = require("../lib/config/features.cjs");
 
 /** Absent means on: activity must accumulate before anyone asks for it. */
 const ENABLED = features?.discord?.activityTracking !== false;

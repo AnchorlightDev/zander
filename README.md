@@ -30,8 +30,8 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | `zander.web.bridge` | Manage bridge/integrations |
 | `zander.web.badges` | Access the badge management dashboard (create, edit, assign, delete badges) |
 | `zander.web.apikeys` | Issue, scope and revoke API client credentials |
-| `zander.web.settings` | Edit site settings (links, Discord IDs and webhooks, automation) that override `config.json` |
-| `zander.web.modules` | Switch modules (`features.json` flags) on and off |
+| `zander.web.settings` | Edit site settings (site info, links, Discord IDs and webhooks, automation) |
+| `zander.web.modules` | Switch modules (feature flags) on and off |
 | `zander.web.users` | Access the user administration dashboard (view only; email addresses are masked) |
 | `zander.web.users.email` | Reveal unmasked email addresses on the user administration pages |
 | `zander.web.users.manage` | Edit user records from the user administration dashboard |
@@ -233,7 +233,7 @@ youtubeApiKey=YOUR_API_KEY
 
 ### Configuring CFC content filters
 
-The filters that determine whether content is CFC-related are configured in `config.json` under the `watch.filters` key:
+The filters that determine whether content is CFC-related are set in **Dashboard → Settings → Watch & Events** (stored as `watch.filters`):
 
 ```json
 "watch": {
@@ -263,7 +263,7 @@ The filters that determine whether content is CFC-related are configured in `con
 
 ### Feature flag
 
-The `/watch` route is controlled by the `watch` key in `features.json`. Set it to `false` to disable the page entirely:
+The `/watch` route is controlled by the **Watch** switch in **Dashboard → Modules** (`features.watch`). Turn it off to disable the page entirely:
 
 ```json
 {
@@ -290,7 +290,7 @@ The `/webstore` module is a Stripe-powered store for selling in-game ranks and p
 
 ### Feature flag
 
-The webstore is controlled by the `webstore` key in `features.json`. Set it to `false` to disable the storefront and all checkout routes:
+The webstore is controlled by the **Webstore** switch in **Dashboard → Modules** (`features.webstore`). Turn it off to disable the storefront and all checkout routes:
 
 ```json
 {
@@ -375,7 +375,7 @@ VALUES
 
 ### Discord notifications
 
-The webstore posts to a Discord webhook on key events. Configure the webhook URL in `config.json` under `siteConfiguration.staffWebhook` (shared with other staff notifications).
+The webstore posts to a Discord webhook on key events. Set the webhook in **Dashboard → Settings → Discord** (*Webstore webhook*).
 
 ### Database migration
 

@@ -5,8 +5,8 @@ import db, { luckpermsDb } from "../controllers/databaseController.js";
 import { client } from "../controllers/discordController.js";
 
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
-const features = require("../features.json");
+const config = require("../lib/config/config.cjs");
+const features = require("../lib/config/features.cjs");
 
 const DAY_MAP = {
   sunday: 0,

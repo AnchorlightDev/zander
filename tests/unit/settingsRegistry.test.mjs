@@ -99,7 +99,7 @@ describe("planSectionWrites", () => {
     expect(writes.find((w) => w.path === "discord.webhooks.welcome")).toBeUndefined();
   });
 
-  it("stores a value equal to config.json as no override", () => {
+  it("stores a value equal to the default as no override", () => {
     const { writes } = planSectionWrites(discord, { "discord.guildId": "111111111111111111" }, [], baseline);
     expect(writes.find((w) => w.path === "discord.guildId")).toEqual({ path: "discord.guildId", value: null });
   });
@@ -114,7 +114,7 @@ describe("planSectionWrites", () => {
     expect(writes.find((w) => w.path === "discord.punishments.requireDmSuccess").value).toBe(false);
   });
 
-  it("clears reset fields back to config.json", () => {
+  it("clears reset fields back to the default", () => {
     const { writes } = planSectionWrites(discord, { "discord.guildId": "222222222222222222" }, ["discord.guildId"], baseline);
     expect(writes.find((w) => w.path === "discord.guildId")).toEqual({ path: "discord.guildId", value: null });
   });
@@ -127,7 +127,7 @@ describe("planSectionWrites", () => {
 });
 
 describe("applyOverrides", () => {
-  it("overlays overrides in place and falls back to config.json for unset ones", () => {
+  it("overlays overrides in place and falls back to the default for unset ones", () => {
     const baseline = { siteConfiguration: { siteName: "File Name", tagline: "File tagline" }, birthday: { durationHours: 24 } };
     const config = structuredClone(baseline);
     const birthdayRef = config.birthday; // a module holding a reference at import time

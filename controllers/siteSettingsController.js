@@ -5,7 +5,7 @@
  *
  * Exists because eligibility thresholds are policy rather than deployment
  * config: staff change their mind about whether it is 20 hours or 15, and that
- * should not mean editing config.json and redeploying. Anything else that turns
+ * should not mean a code change and a redeploy. Anything else that turns
  * out to be staff-tunable can use the same table without a migration.
  *
  * Reads are cached in process. These are read on the public form gate, which

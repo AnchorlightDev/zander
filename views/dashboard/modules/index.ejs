@@ -18,7 +18,7 @@
 
       <p class="text-muted">
         Switch parts of the site and bot on or off. Changes apply straight away. A module you have not
-        changed here keeps following <code>features.json</code>.
+        changed here keeps its default.
         <span class="badge bg-warning text-dark">Restart</span> means the change applies after the next deploy or restart.
       </p>
 
@@ -37,11 +37,11 @@
                         <label class="fw-semibold mb-0" for="<%= id %>"><%= flag.label %></label>
                         <% if (flag.restart) { %><span class="badge bg-warning text-dark ms-1">Restart</span><% } %>
                         <% if (flag.overridden) { %>
-                          <span class="badge bg-info text-dark ms-1" title="features.json has this <%= flag.fileValue ? 'on' : 'off' %>">Edited</span>
+                          <span class="badge bg-info text-dark ms-1" title="Default is <%= flag.fileValue ? 'on' : 'off' %>">Edited</span>
                         <% } %>
                         <% if (flag.description) { %><div class="small text-muted"><%= flag.description %></div><% } %>
                         <% if (flag.locked) { %>
-                          <div class="small text-muted">Set in <code>features.json</code> only &mdash; switching it off here could lock everyone out.</div>
+                          <div class="small text-muted">Always follows its default &mdash; switching it off here could lock everyone out.</div>
                         <% } %>
                       </div>
                       <div class="form-check form-switch mb-0">

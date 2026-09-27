@@ -64,7 +64,7 @@
     "hostedBlurb": "%SITENAME% runs on servers in %REGION%, so players nearby get a low-ping connection rather than playing across an ocean."
   },
   "bedrock": {
-    "_comment": "Copy for the /bedrock landing page. %SITENAME%, %BEDROCK_HOST%, %BEDROCK_PORT% and %BEDROCK_ADDRESS% are filled in from config.json at render time - never write an address or a port in here. 'access' ships empty on purpose: what Bedrock players can and cannot do differs per network, and the section is hidden until an operator fills it in.",
+    "_comment": "Copy for the /bedrock landing page. %SITENAME%, %BEDROCK_HOST%, %BEDROCK_PORT% and %BEDROCK_ADDRESS% are filled in from the servers dashboard at render time - never write an address or a port in here. 'access' ships empty on purpose: what Bedrock players can and cannot do differs per network, and the section is hidden until an operator fills it in.",
     "pageTitle": "Bedrock Edition",
     "metaDescription": "How to join %SITENAME% on Minecraft Bedrock Edition. Server address, port and step-by-step instructions for Windows, mobile and console.",
     "heading": "Play on Bedrock Edition",

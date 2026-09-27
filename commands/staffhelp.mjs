@@ -2,7 +2,7 @@ import { Command, RegisterBehavior } from "@sapphire/framework";
 import { Colors, EmbedBuilder, MessageFlags } from "discord.js";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
+const config = require("../lib/config/config.cjs");
 import { MessageBuilder, Webhook } from "discord-webhook-node";
 import { sendWebhookMessage } from "../lib/discord/webhooks.mjs";
 

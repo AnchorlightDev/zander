@@ -1,26 +1,44 @@
 /**
  * controllers/configSettingsController.js
  *
- * Dashboard-editable overrides for config.json (see
- * lib/config/settingsRegistry.mjs for which fields and why).
+ * Site settings and module switches, stored in the database. There is no
+ * config.json or features.json: /dashboard/settings and /dashboard/modules
+ * are the only place these are changed.
  *
- * How the overlay reaches every module
- * ------------------------------------
- * Every module loads config with `createRequire(...)("../config.json")`, and
- * Node caches that by resolved path -- they all hold the SAME object. So
- * applying an override here is just writing into that object, and every
- * module that reads `config.x.y` at use time sees it immediately. The few
- * that copy a value at startup are marked `restart: true` in the registry.
+ * Layers, lowest first
+ * --------------------
+ *   1. Built-in defaults (lib/config/defaults.cjs).
+ *   2. The install's base: a legacy config.json / features.json imported once
+ *      into siteSettings as `legacy.config` / `legacy.features` (see below).
+ *      Merged over the defaults, so keys a newer release added still get
+ *      their default when an old file lacked them.
+ *   3. Per-field edits from the dashboard: `config:<path>` / `feature:<path>`.
+ * "Reset" on a field returns it to layer 2 (or 1 if there was no file).
+ *
+ * One-time import
+ * ---------------
+ * On the first boot that finds no `legacy.*` row, a config.json or
+ * features.json on disk (e.g. a Render secret file) is copied into the
+ * database. From then on the files are never read and can be deleted.
+ *
+ * How the values reach every module
+ * ---------------------------------
+ * Every module loads `lib/config/config.cjs` / `features.cjs`, which Node
+ * caches -- they all hold the SAME two objects. Loading settings writes into
+ * those objects in place, so every module reading `config.x.y` at use time
+ * sees the change. The few that copy a value at import are marked
+ * `restart: true` in the settings registry.
  *
  * Multiple instances
  * ------------------
- * Production runs several replicas. A save applies instantly on the instance
- * that handled it; the others notice within SYNC_INTERVAL_MS by polling the
- * newest `config:%` row timestamp, then reload. Resets are stored as NULL
- * rather than deleted so they bump that timestamp too.
+ * A save applies instantly on the instance that handled it; the others notice
+ * within SYNC_INTERVAL_MS by polling the newest `config:%`/`feature:%` row
+ * timestamp. Resets are stored as NULL rather than deleted so they bump it.
  */
 
 import { createRequire } from "module";
+import { existsSync, readFileSync } from "fs";
+import path from "path";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./databaseController.js";
 import { getRegion } from "../lib/region.mjs";
@@ -37,24 +55,66 @@ import {
 import { LOCKED_FLAGS, describeFlags, listFlagPaths, planFlagWrites } from "../lib/config/featureRegistry.mjs";
 
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
-const features = require("../features.json");
+const config = require("../lib/config/config.cjs");
+const features = require("../lib/config/features.cjs");
+const { DEFAULT_CONFIG, DEFAULT_FEATURES, mergeDeep, assignInPlace } = require("../lib/config/defaults.cjs");
 
 /** Feature flag overrides (/dashboard/modules) live alongside config ones. */
 const FEATURE_KEY_PREFIX = "feature:";
+const LEGACY_CONFIG_KEY = "legacy.config";
+const LEGACY_FEATURES_KEY = "legacy.features";
 
 const SYNC_INTERVAL_MS = 60_000;
 
-/** config.json as it was before any override -- what "reset" returns to. */
-let baseline = null;
-/** features.json as loaded at boot. */
-let featureBaseline = null;
+/** Defaults + imported legacy file: what "reset" returns a field to. */
+let baseline = structuredClone(DEFAULT_CONFIG);
+let featureBaseline = structuredClone(DEFAULT_FEATURES);
+/** False until the base layer has been read from the database. */
+let baseLoaded = false;
 let lastSeenUpdate = null;
 let syncTimer = null;
 
-function captureBaseline() {
-  if (!baseline) baseline = structuredClone(config);
-  if (!featureBaseline) featureBaseline = structuredClone(features);
+/** A legacy settings file from the working directory, or null. */
+function readLegacyFile(name) {
+  const file = path.join(process.cwd(), name);
+  if (!existsSync(file)) return null;
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch (error) {
+    console.error(`[settings] Ignoring unreadable ${name}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * The imported base for one store: the database row if there is one,
+ * otherwise the legacy file -- which is then saved so it is never needed
+ * again.
+ */
+async function loadBase(key, fileName) {
+  const row = await prisma.siteSettings.findUnique({ where: { settingKey: key } });
+  if (row && row.settingValue && typeof row.settingValue === "object") return row.settingValue;
+
+  const legacy = readLegacyFile(fileName);
+  if (!legacy) return {};
+
+  await prisma.siteSettings.upsert({
+    where: { settingKey: key },
+    create: { settingKey: key, settingValue: legacy },
+    update: { settingValue: legacy },
+  });
+  console.log(`[settings] Imported ${fileName} into the database. It is no longer read and can be deleted.`);
+  return legacy;
+}
+
+async function loadBaseLayers() {
+  const [legacyConfig, legacyFeatures] = await Promise.all([
+    loadBase(LEGACY_CONFIG_KEY, "config.json"),
+    loadBase(LEGACY_FEATURES_KEY, "features.json"),
+  ]);
+  baseline = mergeDeep(DEFAULT_CONFIG, legacyConfig);
+  featureBaseline = mergeDeep(DEFAULT_FEATURES, legacyFeatures);
+  baseLoaded = true;
 }
 
 async function loadOverrides(prefix = SETTING_KEY_PREFIX) {
@@ -76,23 +136,18 @@ function newer(a, b) {
   return a > b ? a : b;
 }
 
-/** Overlay flag overrides onto the shared features object, in place. */
+/** Base layer, then flag overrides, into the shared features object. */
 function overlayFeatures(overrides) {
-  for (const path of listFlagPaths(featureBaseline)) {
-    const override = LOCKED_FLAGS.has(path) ? null : overrides.get(path);
-    setPath(features, path, typeof override === "boolean" ? override : getPath(featureBaseline, path));
+  assignInPlace(features, featureBaseline);
+  for (const flagPath of listFlagPaths(featureBaseline)) {
+    const override = LOCKED_FLAGS.has(flagPath) ? null : overrides.get(flagPath);
+    setPath(features, flagPath, typeof override === "boolean" ? override : getPath(featureBaseline, flagPath));
   }
 }
 
-/** Load and apply both config and feature overrides; returns the newest row time. */
-async function reloadAll() {
-  const [cfg, feat] = await Promise.all([loadOverrides(SETTING_KEY_PREFIX), loadOverrides(FEATURE_KEY_PREFIX)]);
-  overlay(cfg.overrides);
-  overlayFeatures(feat.overrides);
-  return { newest: newer(cfg.newest, feat.newest), count: cfg.overrides.size + feat.overrides.size };
-}
-
+/** Base layer, then field overrides, into the shared config object. */
 function overlay(overrides) {
+  assignInPlace(config, baseline);
   applyOverrides(config, baseline, overrides);
   // Region carries derived fields (htmlLang, locale); recompute them in place
   // so references held by templates stay valid.
@@ -105,27 +160,53 @@ function overlay(overrides) {
   }
 }
 
+/** Load everything and apply it; returns the newest override row time. */
+async function reloadAll() {
+  if (!baseLoaded) await loadBaseLayers();
+  const [cfg, feat] = await Promise.all([loadOverrides(SETTING_KEY_PREFIX), loadOverrides(FEATURE_KEY_PREFIX)]);
+  overlay(cfg.overrides);
+  overlayFeatures(feat.overrides);
+  return { newest: newer(cfg.newest, feat.newest), count: cfg.overrides.size + feat.overrides.size };
+}
+
 /**
- * Apply stored overrides to the shared config. Called once at boot, before
- * the Discord client and cron jobs load. A database failure leaves config.json
- * values in place rather than blocking startup.
+ * Load saved settings into the shared objects. Called once at boot, before the
+ * Discord client and cron jobs load.
+ *
+ * If the database is unreachable the site still has to start: it uses any
+ * legacy file still on disk, otherwise the defaults, and the sync loop keeps
+ * retrying until the database answers.
  */
 export async function applyConfigOverrides() {
-  captureBaseline();
   try {
     const { newest, count } = await reloadAll();
     lastSeenUpdate = newest;
-    if (count) console.log(`[settings] Applied ${count} dashboard config/module override row(s).`);
+    console.log(`[settings] Loaded site settings from the database (${count} edited field(s)).`);
   } catch (error) {
-    console.error("[settings] Could not load dashboard config overrides; using config.json only:", error.message);
+    console.error("[settings] Could not load site settings from the database:", error.message);
+    const legacyConfig = readLegacyFile("config.json");
+    const legacyFeatures = readLegacyFile("features.json");
+    baseline = mergeDeep(DEFAULT_CONFIG, legacyConfig || {});
+    featureBaseline = mergeDeep(DEFAULT_FEATURES, legacyFeatures || {});
+    overlay(new Map());
+    overlayFeatures(new Map());
+    console.warn(
+      `[settings] Running on ${legacyConfig || legacyFeatures ? "legacy files on disk" : "built-in defaults"} until the database is reachable.`
+    );
   }
 }
 
-/** Poll for saves made on other instances. */
+/** Poll for saves made on other instances (and retry a failed boot load). */
 export function startConfigSync() {
   if (syncTimer) return;
   syncTimer = setInterval(async () => {
     try {
+      if (!baseLoaded) {
+        const { newest } = await reloadAll();
+        lastSeenUpdate = newest;
+        console.log("[settings] Database reachable again; site settings loaded.");
+        return;
+      }
       const latest = await prisma.siteSettings.aggregate({
         where: {
           OR: [
@@ -139,10 +220,10 @@ export function startConfigSync() {
       if (newest && (!lastSeenUpdate || newest > lastSeenUpdate)) {
         const { newest: reloadedNewest } = await reloadAll();
         lastSeenUpdate = reloadedNewest;
-        console.log("[settings] Reloaded dashboard config overrides from another instance.");
+        console.log("[settings] Reloaded site settings saved on another instance.");
       }
     } catch (error) {
-      console.error("[settings] Config sync failed:", error.message);
+      console.error("[settings] Settings sync failed:", error.message);
     }
   }, SYNC_INTERVAL_MS);
   if (syncTimer.unref) syncTimer.unref();
@@ -150,10 +231,9 @@ export function startConfigSync() {
 
 /**
  * Everything the settings page needs for one field: the live value, the
- * config.json value, and whether the dashboard is overriding it.
+ * default value, and whether the dashboard is overriding it.
  */
 export async function describeSettings() {
-  captureBaseline();
   const { overrides } = await loadOverrides(SETTING_KEY_PREFIX);
   const byPath = {};
   for (const field of ALL_FIELDS) {
@@ -172,11 +252,10 @@ export async function describeSettings() {
  *
  * @param {string} sectionKey
  * @param {object} body     Submitted form fields, keyed by field path.
- * @param {string[]} resets Paths ticked "reset to config.json".
+ * @param {string[]} resets Paths ticked "reset to default".
  * @returns {Promise<{ saved: number, errors: string[] }>}
  */
 export async function saveSection(sectionKey, body, resets = []) {
-  captureBaseline();
   const section = findSection(sectionKey);
   if (!section) return { saved: 0, errors: ["Unknown settings section."] };
 
@@ -201,10 +280,9 @@ export async function saveSection(sectionKey, body, resets = []) {
 
 /**
  * The modules page: flags grouped for display, each with its live state,
- * the features.json value, and whether the dashboard is overriding it.
+ * the default value, and whether the dashboard is overriding it.
  */
 export async function describeFeatureFlags() {
-  captureBaseline();
   const { overrides } = await loadOverrides(FEATURE_KEY_PREFIX);
   return describeFlags(featureBaseline).map((group) => ({
     ...group,
@@ -219,7 +297,6 @@ export async function describeFeatureFlags() {
 
 /** Save every toggle on the modules page. */
 export async function saveFeatureFlags(body) {
-  captureBaseline();
   const writes = planFlagWrites(body, featureBaseline, getPath);
 
   await prisma.$transaction(

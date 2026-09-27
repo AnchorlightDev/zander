@@ -14,7 +14,7 @@ import {
 } from "../controllers/userController.js";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const features = require("../features.json");
+const features = require("../lib/config/features.cjs");
 
 import { internalApiHeaders } from "../api/common.js";
 export class BridgeCommand extends Command {

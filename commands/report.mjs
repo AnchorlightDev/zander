@@ -4,7 +4,7 @@ import fetch from "node-fetch";
 import { UserGetter } from "../controllers/userController.js";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const features = require("../features.json");
+const features = require("../lib/config/features.cjs");
 
 import { internalApiHeaders } from "../api/common.js";
 export class ReportCommand extends Command {

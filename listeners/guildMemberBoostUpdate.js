@@ -1,9 +1,9 @@
 import { Listener } from "@sapphire/framework";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
+const config = require("../lib/config/config.cjs");
 import { Colors, EmbedBuilder } from "discord.js";
-const features = require("../features.json");
+const features = require("../lib/config/features.cjs");
 import { MessageBuilder, Webhook } from "discord-webhook-node";
 import { sendWebhookMessage } from "../lib/discord/webhooks.mjs";
 

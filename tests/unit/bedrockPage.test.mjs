@@ -16,6 +16,7 @@
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
+import { createRequire } from "module";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -23,8 +24,7 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const view = readFileSync(join(repoRoot, "views/modules/play/bedrock.ejs"), "utf8");
 const lang = JSON.parse(readFileSync(join(repoRoot, "lang.json"), "utf8"));
-const features = JSON.parse(readFileSync(join(repoRoot, "features.json"), "utf8"));
-const featuresExample = JSON.parse(readFileSync(join(repoRoot, "features.json.example"), "utf8"));
+const { DEFAULT_FEATURES } = createRequire(import.meta.url)("../../lib/config/defaults.cjs");
 
 /**
  * The template minus its own commentary -- the assertions below are about the
@@ -99,8 +99,7 @@ describe("the Bedrock copy holds no connection details", () => {
 });
 
 describe("the page is behind a feature flag", () => {
-  it("is declared in both features files", () => {
-    expect(features.bedrock).toBeTypeOf("boolean");
-    expect(featuresExample.bedrock).toBeTypeOf("boolean");
+  it("has a default in the built-in module switches", () => {
+    expect(DEFAULT_FEATURES.bedrock).toBeTypeOf("boolean");
   });
 });

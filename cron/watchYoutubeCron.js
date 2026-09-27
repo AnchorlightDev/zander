@@ -12,7 +12,7 @@
 import cron from "node-cron";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
+const config = require("../lib/config/config.cjs");
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import { client } from "../controllers/discordController.js";
@@ -34,7 +34,7 @@ import {
 async function sendDiscordNotification(notifType, item) {
   const channelId = config?.watch?.contentChannelId;
   if (!channelId) {
-    console.warn("[WatchYouTube] contentChannelId is not set in config.json — skipping Discord notification.");
+    console.warn("[WatchYouTube] the creator content channel is not set (Settings → Watch & Events) — skipping Discord notification.");
     return null;
   }
 
