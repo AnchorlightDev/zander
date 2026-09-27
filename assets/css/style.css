@@ -974,6 +974,32 @@ a:focus {
   display: none;
 }
 
+/* Main nav: a small chevron shows which items open a menu. Drawn with borders
+   rather than an icon font, and flips upward while the menu is open. */
+#navbarmain .dropdown > .dropdown-toggle::after {
+  display: inline-block;
+  content: "";
+  width: 0.4em;
+  height: 0.4em;
+  margin-left: 0.45em;
+  border: 0;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  vertical-align: middle;
+  transform: translateY(-0.2em) rotate(45deg);
+  transition: transform 0.25s ease;
+}
+
+#navbarmain .dropdown:hover > .dropdown-toggle::after,
+#navbarmain .dropdown > .dropdown-toggle[aria-expanded="true"]::after {
+  transform: translateY(0.05em) rotate(-135deg);
+}
+
+/* The notification bell is an icon with a badge, not a menu label. */
+#navbarmain #notificationDropdown::after {
+  display: none;
+}
+
 .navbar-brand {
   margin-top: 10px;
 }

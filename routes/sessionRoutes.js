@@ -32,6 +32,7 @@ import {
 } from "../controllers/sessionController.js";
 import { sendMail } from "../controllers/emailController.js";
 import { checkRateLimit } from "../lib/rateLimiter.mjs";
+import { hasStaffFlag } from "../lib/permissions/staffFlag.mjs";
 
 /**
  * A post-login redirect target must be a path on this site. "//evil.com" and
@@ -134,9 +135,7 @@ export default function sessionSiteRoute(
     const userRanks = rankSlugs.map((slug) => ({ rankSlug: slug }));
 
     // Derive isStaff from whether the user's resolved permissions include meta.staff.1 (set on staff groups in LuckPerms)
-    const isStaff = userPermissionData.some(
-      (p) => p && String(p).trim().toLowerCase().startsWith("meta.staff.")
-    );
+    const isStaff = hasStaffFlag(userPermissionData);
 
     req.session.authenticated = true;
     req.session.user = {
@@ -158,11 +157,7 @@ export default function sessionSiteRoute(
     if (!checkRateLimit(req, res, { windowMs: 60_000, max: 30 })) return;
 
     if (req.query.returnTo && typeof req.query.returnTo === "string") {
-      const sanitizedReturnTo =
-        req.query.returnTo.startsWith("/") &&
-        !req.query.returnTo.startsWith("//")
-          ? req.query.returnTo
-          : null;
+      const sanitizedReturnTo = isSafeLocalPath(req.query.returnTo) ? req.query.returnTo : null;
       if (sanitizedReturnTo) {
         req.session.returnTo = sanitizedReturnTo;
       }
@@ -187,12 +182,7 @@ export default function sessionSiteRoute(
     }
 
     if (req.session.user) {
-      const returnTo =
-        typeof req.session.returnTo === "string" &&
-        req.session.returnTo.startsWith("/") &&
-        !req.session.returnTo.startsWith("//")
-          ? req.session.returnTo
-          : null;
+      const returnTo = isSafeLocalPath(req.session.returnTo) ? req.session.returnTo : null;
       if (returnTo) {
         delete req.session.returnTo;
         return res.redirect(returnTo);
@@ -320,10 +310,7 @@ export default function sessionSiteRoute(
       return;
 
     if (req.query.returnTo && typeof req.query.returnTo === "string") {
-      const sanitizedReturnTo =
-        req.query.returnTo.startsWith("/") && !req.query.returnTo.startsWith("//")
-          ? req.query.returnTo
-          : null;
+      const sanitizedReturnTo = isSafeLocalPath(req.query.returnTo) ? req.query.returnTo : null;
       if (sanitizedReturnTo) {
         req.session.returnTo = sanitizedReturnTo;
       }

@@ -24,6 +24,7 @@ import dashboardApiClientsRoute from "./apiClients.js";
 import dashboardSettingsRoute from "./settings.js";
 import dashboardModulesRoute from "./modules.js";
 import dashboardFormsRoute from "./forms.js";
+import { hasStaffFlag } from "../../lib/permissions/staffFlag.mjs";
 
 export default function dashboardSiteRoutes(
   app,
@@ -59,9 +60,7 @@ export default function dashboardSiteRoutes(
 
     req.session.user.permissions = refreshedPermissions;
     req.session.user.ranks = rankSlugs.map((rankSlug) => ({ rankSlug }));
-    req.session.user.isStaff = refreshedPermissions.some(
-      (permission) => permission && String(permission).trim().toLowerCase().startsWith("meta.staff.")
-    );
+    req.session.user.isStaff = hasStaffFlag(refreshedPermissions);
     req.session.user.permissionsRefreshedAt = Date.now();
   }
 
