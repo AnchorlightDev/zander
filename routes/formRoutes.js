@@ -55,6 +55,7 @@ import {
   validateSubmission,
 } from "../lib/formFields.js";
 import { evaluateCooldown } from "../lib/formCooldown.mjs";
+import { checkRateLimit } from "../lib/rateLimiter.mjs";
 
 export default function formSiteRoutes(app, config, features) {
   /**
@@ -217,6 +218,8 @@ export default function formSiteRoutes(app, config, features) {
    */
   app.post("/forms/:slug/access", async (req, res) => {
     if (!(await isFeatureWebRouteEnabled(app, features.forms, req, res, features))) return;
+    // Access codes are staff-chosen and often short; stop them being guessed.
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 10 })) return;
 
     const form = await getFormBySlug(req.params.slug);
     if (!form) {
@@ -301,6 +304,8 @@ export default function formSiteRoutes(app, config, features) {
 
   app.post("/forms/:slug", async (req, res) => {
     if (!(await isFeatureWebRouteEnabled(app, features.forms, req, res, features))) return;
+    // Each submission fans out to Discord posts, DMs and tickets.
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 5 })) return;
 
     const form = await getFormBySlug(req.params.slug);
     if (!form) {

@@ -33,6 +33,14 @@ import {
 import { sendMail } from "../controllers/emailController.js";
 import { checkRateLimit } from "../lib/rateLimiter.mjs";
 
+/**
+ * A post-login redirect target must be a path on this site. "//evil.com" and
+ * "/\evil.com" both start with "/" but browsers treat them as another host.
+ */
+function isSafeLocalPath(value) {
+  return typeof value === "string" && /^\/(?![\/\\])/.test(value);
+}
+
 export default function sessionSiteRoute(
   app,
   client,
@@ -292,11 +300,7 @@ export default function sessionSiteRoute(
       }
 
       setBannerCookie("success", "Logged in successfully.", res);
-      const returnTo =
-        typeof req.session.returnTo === "string" &&
-        req.session.returnTo.startsWith("/")
-          ? req.session.returnTo
-          : null;
+      const returnTo = isSafeLocalPath(req.session.returnTo) ? req.session.returnTo : null;
       if (returnTo) {
         delete req.session.returnTo;
         return res.redirect(returnTo);
@@ -400,11 +404,7 @@ export default function sessionSiteRoute(
       await hydrateUserSession(req, userLoginData);
       delete req.session.passwordReset;
 
-      const returnTo =
-        typeof req.session.returnTo === "string" &&
-        req.session.returnTo.startsWith("/")
-          ? req.session.returnTo
-          : null;
+      const returnTo = isSafeLocalPath(req.session.returnTo) ? req.session.returnTo : null;
       if (returnTo) {
         delete req.session.returnTo;
         return res.redirect(returnTo);

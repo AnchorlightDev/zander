@@ -87,6 +87,9 @@ export function diffPermissions(current = [], wanted = []) {
 export async function applyRankPermissions(rankSlug, { grant = [], revoke = [] }, actor = null) {
   const slug = String(rankSlug).trim();
   if (!slug) throw new Error("A rank is required.");
+  // The slug is interpolated into a console command, so it must be a single
+  // token: no spaces or newlines that could change the command's shape.
+  if (!/^[A-Za-z0-9_.-]{1,36}$/.test(slug)) throw new Error("Invalid rank name.");
 
   const commands = [
     ...grant.filter(isGrantableNode).map((node) => `lp group ${slug} permission set ${node} true`),

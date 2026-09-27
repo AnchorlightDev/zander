@@ -377,7 +377,7 @@
 </div>
 
 <script>
-  window.rankDirectory = <%- JSON.stringify(ranks) %>;
+  window.rankDirectory = <%- JSON.stringify(ranks).replace(/</g, '\\u003c') %>;
 </script>
 
 <script>

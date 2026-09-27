@@ -1,0 +1,62 @@
+/**
+ * routes/dashboard/modules.js
+ *
+ * Switch features.json flags on and off from the dashboard.
+ *
+ *   GET  /dashboard/modules  — every flag, grouped, with its current state
+ *   POST /dashboard/modules  — save all toggles
+ *
+ * The flag list comes from features.json itself (lib/config/featureRegistry.mjs);
+ * storage and the live overlay are in controllers/configSettingsController.js.
+ */
+
+import { getGlobalImage, hasPermission, setBannerCookie } from "../../api/common.js";
+import { getWebAnnouncement } from "../../controllers/announcementController.js";
+import { describeFeatureFlags, saveFeatureFlags } from "../../controllers/configSettingsController.js";
+
+const PERMISSION_NODE = "zander.web.modules";
+
+export default function dashboardModulesRoute(app, config, db, features, lang) {
+  app.get("/dashboard/modules", async function (req, res) {
+    if (!(await hasPermission(PERMISSION_NODE, req, res, features))) return;
+
+    let groups = [];
+    let error = null;
+    try {
+      groups = await describeFeatureFlags();
+    } catch (err) {
+      console.error("[dashboard/modules] failed to load flags:", err);
+      error = "Could not load module settings from the database.";
+    }
+
+    res.header("content-type", "text/html; charset=utf-8").send(
+      await app.view("dashboard/modules/index", {
+        pageTitle: "Dashboard - Modules",
+        config,
+        req,
+        features,
+        groups,
+        error,
+        globalImage: await getGlobalImage(),
+        announcementWeb: await getWebAnnouncement(),
+      })
+    );
+  });
+
+  app.post("/dashboard/modules", async function (req, res) {
+    if (!(await hasPermission(PERMISSION_NODE, req, res, features))) return;
+
+    try {
+      const { changed } = await saveFeatureFlags(req.body ?? {});
+      const actor = req.session?.user?.username || req.session?.user?.userId || "unknown";
+      console.log(
+        `[dashboard/modules] ${actor} saved modules; differing from features.json: ${changed.join(", ") || "none"}`
+      );
+      setBannerCookie("success", "Modules saved.", res);
+    } catch (err) {
+      console.error("[dashboard/modules] save failed:", err);
+      setBannerCookie("danger", "Could not save modules. Please try again.", res);
+    }
+    return res.redirect("/dashboard/modules");
+  });
+}

@@ -48,8 +48,8 @@ export const SESSION_ALLOWED_ROUTES = new Map([
       into this map: a grep for "/api/..." in the views does not find them.
       Creating, editing and cancelling events all 401'd as a result.
 
-      /api/events/cancel performs no permission check of its own, so this entry
-      is its only gate — it must stay on EVENTS_WRITE.
+      These entries only require a session; each handler then checks editor
+      or reviewer rights itself (isEditor / isReviewer in api/routes/events.js).
   */
   ["POST /api/events/create", EVENTS_WRITE],
   ["POST /api/events/update", EVENTS_WRITE],

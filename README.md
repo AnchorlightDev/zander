@@ -31,6 +31,7 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | `zander.web.badges` | Access the badge management dashboard (create, edit, assign, delete badges) |
 | `zander.web.apikeys` | Issue, scope and revoke API client credentials |
 | `zander.web.settings` | Edit site settings (links, Discord IDs and webhooks, automation) that override `config.json` |
+| `zander.web.modules` | Switch modules (`features.json` flags) on and off |
 | `zander.web.users` | Access the user administration dashboard (view only; email addresses are masked) |
 | `zander.web.users.email` | Reveal unmasked email addresses on the user administration pages |
 | `zander.web.users.manage` | Edit user records from the user administration dashboard |

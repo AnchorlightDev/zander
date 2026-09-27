@@ -356,9 +356,9 @@
 (function () {
   // Field types come from lib/formFields.js, so adding a type there makes it
   // selectable here without touching this template.
-  var FIELD_TYPES = <%- JSON.stringify(fieldTypes) %>;
-  var EXISTING    = <%- JSON.stringify(fields) %>;
-  var SHOW_IF_SOURCE_TYPES = <%- JSON.stringify(showIfSourceTypes) %>;
+  var FIELD_TYPES = <%- JSON.stringify(fieldTypes).replace(/</g, '\\u003c') %>;
+  var EXISTING    = <%- JSON.stringify(fields).replace(/</g, '\\u003c') %>;
+  var SHOW_IF_SOURCE_TYPES = <%- JSON.stringify(showIfSourceTypes).replace(/</g, '\\u003c') %>;
 
   var rowsEl  = document.getElementById("fieldRows");
   var hintEl  = document.getElementById("noFieldsHint");

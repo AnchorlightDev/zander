@@ -309,6 +309,7 @@ model servers {
   serverId              Int                 @id @default(autoincrement())
   displayName           String?             @db.Text
   serverConnectionAddress String?           @db.Text
+  bedrockAddress        String?             @db.VarChar(255)
   serverType            servers_serverType?
   position              Int?
 }

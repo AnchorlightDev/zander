@@ -41,7 +41,7 @@ Several *other* databases are connected via raw connection URLs (`LUCKPERMS_URL`
 
 - `config.json` (gitignored, copy from `config.json.example`) — non-secret operational config, loaded via CommonJS `createRequire` at the top of any file that needs it (`const require = createRequire(import.meta.url); const config = require("../config.json");`), since the project is `"type": "module"` but `config.json` is loaded as CJS.
 - Dashboard overrides — most of `config.json` (site info, links, Discord IDs/webhooks, automation) is editable at `/dashboard/settings` (`zander.web.settings`). Saved values live in `siteSettings` as `config:<path>` rows and are written into the shared `config` object at boot and on save (`controllers/configSettingsController.js`), so code keeps reading `config.x.y` as normal. To make a new config key editable, add it to `lib/config/settingsRegistry.mjs`; mark it `restart: true` if a module copies it at import time.
-- `features.json` — boolean feature flags gating entire modules/routes (e.g. `features.webstore`, `features.events`). Check this before assuming a module is reachable.
+- `features.json` — boolean feature flags gating entire modules/routes (e.g. `features.webstore`, `features.events`). Check this before assuming a module is reachable. Flags are also switchable at `/dashboard/modules` (`zander.web.modules`), stored as `feature:<path>` rows and overlaid the same way as settings, so read `features.x` at use time rather than copying it at import. `web.login` is file-only so nobody can lock themselves out.
 - `.env` — secrets and connection strings, read via `process.env.X` (dotenv loaded once in `app.js`/`api/common.js`). Never put secrets in `config.json`.
 - `lang.json` — user-facing string overrides.
 

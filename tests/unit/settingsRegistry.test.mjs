@@ -46,9 +46,10 @@ describe("parseFieldValue", () => {
   });
 
   it("validates ports and allows blank", () => {
-    expect(parseFieldValue(field("connection.java.port"), "25565")).toEqual({ ok: true, value: 25565 });
-    expect(parseFieldValue(field("connection.java.port"), "")).toEqual({ ok: true, value: null });
-    expect(parseFieldValue(field("connection.java.port"), "70000").ok).toBe(false);
+    const port = { label: "Port", type: "port" };
+    expect(parseFieldValue(port, "25565")).toEqual({ ok: true, value: 25565 });
+    expect(parseFieldValue(port, "")).toEqual({ ok: true, value: null });
+    expect(parseFieldValue(port, "70000").ok).toBe(false);
   });
 
   it("strips trailing slashes from URLs and rejects non-http schemes", () => {
@@ -147,6 +148,10 @@ describe("applyOverrides", () => {
     expect(birthdayRef.durationHours).toBe(24);
   });
 
+  it("no longer offers connection fields (they come from the servers dashboard)", () => {
+    expect(ALL_FIELDS.some((f) => f.path.startsWith("connection."))).toBe(false);
+  });
+
   it("does not invent keys for fields absent from both", () => {
     const config = { siteConfiguration: { siteName: "x" } };
     applyOverrides(config, structuredClone(config), new Map());
@@ -155,8 +160,8 @@ describe("applyOverrides", () => {
 
   it("creates nested objects when an override targets a missing section", () => {
     const config = {};
-    applyOverrides(config, {}, new Map([["connection.java.host", "play.example.net"]]));
-    expect(config.connection.java.host).toBe("play.example.net");
+    applyOverrides(config, {}, new Map([["wrapped.minemonitor.baseUrl", "https://monitor.example.net"]]));
+    expect(config.wrapped.minemonitor.baseUrl).toBe("https://monitor.example.net");
   });
 });
 

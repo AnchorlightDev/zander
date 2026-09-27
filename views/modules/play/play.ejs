@@ -52,6 +52,21 @@
 								<i class="fas fa-copy"></i>
 							</button>
 						</div>
+						<% if (server.bedrockAddress) { %>
+						<div class="small text-muted mt-3 mb-1">Bedrock Edition</div>
+						<div class="input-group">
+							<input type="text"
+							       class="form-control text-center font-monospace js-address"
+							       value="<%= server.bedrockAddress %>"
+							       readonly
+							       aria-label="<%= server.displayName %> Bedrock address">
+							<button class="btn btn-main js-copy-address" type="button"
+							        data-address="<%= server.bedrockAddress %>"
+							        aria-label="Copy the <%= server.displayName %> Bedrock address">
+								<i class="fas fa-copy"></i>
+							</button>
+						</div>
+						<% } %>
 						<small class="text-muted d-block mt-2">Tap the field to select, or use the copy button.</small>
 					</div>
 				</div>

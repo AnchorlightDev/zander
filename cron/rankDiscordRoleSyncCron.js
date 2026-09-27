@@ -82,24 +82,18 @@ async function reconcileRankDiscordRoles() {
         if (lpRows.length === 0) continue;
         anyRankHadMembers = true;
 
-        // A placeholder ("ghost") users row created from Discord carries a
-        // random MySQL UUID() rather than the player's Mojang uuid (see
-        // createUnlinkedUser in controllers/supportTicketController.js), so it
-        // never matches on uuid — match those by username instead, or the
-        // sweep below strips every rank role such a player holds. The
-        // is_placeholder guard keeps the (non-unique) username match from
-        // hijacking a real account.
+        // Match on uuid only. A placeholder ("ghost") row's username is the
+        // person's self-chosen Discord handle, so matching placeholders by
+        // username let anyone claim a staff member's rank roles by copying
+        // their Minecraft name. Placeholders are skipped by the sweep below
+        // instead, so their roles are not stripped either.
         const uuids = lpRows.map((r) => r.uuid);
-        const usernames = lpRows.map((r) => r.username).filter(Boolean);
         const uuidPlaceholders = uuids.map(() => "?").join(", ");
-        const usernameClause = usernames.length
-          ? ` OR (is_placeholder = 1 AND LOWER(username) IN (${usernames.map(() => "?").join(", ")}))`
-          : "";
         const webUsers = await queryDb(
           `SELECT userId, discordId FROM users
             WHERE discordId IS NOT NULL
-              AND (LOWER(uuid) IN (${uuidPlaceholders})${usernameClause})`,
-          [...uuids, ...usernames]
+              AND LOWER(uuid) IN (${uuidPlaceholders})`,
+          uuids
         );
 
         for (const user of webUsers) {
@@ -146,8 +140,16 @@ async function reconcileRankDiscordRoles() {
       shouldHaveByDiscordId.set(discordId, [...roleIds]);
     }
 
+    // Unverified placeholder accounts are left as they are until merged into
+    // a real account -- see syncMemberRankRoles in lib/discord/rankRoleSync.mjs.
+    const placeholderRows = await queryDb(
+      `SELECT discordId FROM users WHERE is_placeholder = 1 AND discordId IS NOT NULL`
+    );
+    const placeholderDiscordIds = new Set(placeholderRows.map((r) => String(r.discordId)));
+
     let updated = 0;
     for (const [, member] of guild.members.cache) {
+      if (!shouldHaveByDiscordId.has(member.id) && placeholderDiscordIds.has(member.id)) continue;
       const shouldHaveRoleIds = shouldHaveByDiscordId.get(member.id) || [];
       const currentRoleIds = [...member.roles.cache.keys()];
       const { toAdd, toRemove } = diffTrackedRoles(currentRoleIds, shouldHaveRoleIds, trackedRoleIds);

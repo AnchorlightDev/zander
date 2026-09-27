@@ -302,7 +302,7 @@
 <script>
 (function() {
     // Keyed by formId so the summary can be redrawn without another request.
-    var LINKED_FORMS = <%- JSON.stringify(availableForms) %>;
+    var LINKED_FORMS = <%- JSON.stringify(availableForms).replace(/</g, '\\u003c') %>;
 
     (function () {
         var picker = document.getElementById('linkedFormId');

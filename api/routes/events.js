@@ -458,6 +458,11 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
 
     const body = req.body || {};
     if (!body?.eventId) return res.send({ success: false, message: "eventId is required" });
+    // A published event is live on the site and Discord: same rule as /update
+    // applies to approved events -- only reviewers may change it.
+    if (!isReviewer(req)) {
+      return res.status(403).send({ success: false, message: "Only approvers can edit a published event." });
+    }
 
     try {
       const { actorId, actorName } = actorFromReq(req);
@@ -661,8 +666,18 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
 
     const { eventId } = req.body || {};
     if (!eventId) return res.send({ success: false, message: "eventId is required" });
+    if (!isEditor(req)) {
+      return res.status(403).send({ success: false, message: "You do not have permission to delete events." });
+    }
 
     try {
+      const existing = await getEventById(eventId);
+      if (!existing) return res.send({ success: false, message: "Event not found" });
+      // Deleting an approved or published event removes it from public view,
+      // so it needs the same reviewer rights as editing one.
+      if ((existing.status === "approved" || existing.status === "published") && !isReviewer(req)) {
+        return res.status(403).send({ success: false, message: "Only approvers can delete an approved or published event." });
+      }
       const { actorId, actorName } = actorFromReq(req);
       const event = await deleteEvent(eventId, actorId, actorName);
       return res.send({ success: true, data: event, message: "Event deleted" });

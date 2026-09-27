@@ -9,14 +9,15 @@
  * an address at all. None of that fits on a page that also has to serve Java
  * players.
  *
- * Nothing here is specific to any one community: every address comes from
- * config.connection, every string from lang.json, and the whole route is behind
- * features.bedrock.
+ * Nothing here is specific to any one community: the address comes from the
+ * servers dashboard (config.connection as a fallback), every string from
+ * lang.json, and the whole route is behind features.bedrock.
  */
 
 import { getGlobalImage, isFeatureWebRouteEnabled } from "../api/common.js";
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import { getConnectionDetails } from "../lib/connectionDetails.mjs";
+import { prisma } from "../controllers/databaseController.js";
 import { getRegion } from "../lib/region.mjs";
 import { createTranslator } from "../lib/langText.mjs";
 import {
@@ -34,7 +35,15 @@ export default function bedrockSiteRoutes(app, config, features, lang) {
 
     const siteName = config.siteConfiguration?.siteName ?? "the server";
     const platforms = config.siteConfiguration?.platforms ?? {};
-    const { bedrock } = getConnectionDetails(config);
+    // A servers lookup failing falls back to config.connection rather than
+    // taking the page down.
+    const servers = await prisma.servers
+      .findMany({ where: { serverType: "EXTERNAL" }, orderBy: { position: "asc" } })
+      .catch((error) => {
+        console.error("[bedrock] Could not load servers; using config.connection:", error.message);
+        return [];
+      });
+    const { bedrock } = getConnectionDetails(config, servers);
     const region = getRegion(config);
 
     const t = createTranslator(lang, {

@@ -63,6 +63,15 @@
                             }) %>
                         <% } %>
                     </div>
+
+                    <!-- Bedrock Address -->
+                    <div class="mb-3 col">
+                        <label for="bedrockAddress">Bedrock Address <span class="text-muted small">(optional)</span></label>
+                        <input type="text" class="form-control" id="bedrockAddress" name="bedrockAddress"
+                               placeholder="play.example.net:19132"
+                               value="<%= type === 'edit' && serverApiData ? (serverApiData.bedrockAddress || '') : '' %>">
+                        <div class="form-text">Host and port Bedrock players join on (e.g. Geyser). Leave blank if this server is Java only. The /bedrock page uses the first public server that has one.</div>
+                    </div>
                 </div>
 
                 <div class="row">

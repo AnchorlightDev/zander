@@ -31,9 +31,12 @@ function checked(value) {
 
 export default function dashboardWebstoreProductsRoute(app, config, db, features, lang) {
 
-  async function guard(req, res) {
+  // Viewing needs zander.web.webstore; any change needs .manage, matching the
+  // rest of the webstore dashboard (routes/dashboard/webstore.js).
+  async function guard(req, res, { manage = false } = {}) {
     if (!await isFeatureWebRouteEnabled(app, features.webstore, req, res, features)) return false;
-    if (!await hasPermission("zander.web.webstore", req, res, features)) return false;
+    const node = manage ? "zander.web.webstore.manage" : "zander.web.webstore";
+    if (!await hasPermission(node, req, res, features)) return false;
     return true;
   }
 
@@ -79,7 +82,7 @@ export default function dashboardWebstoreProductsRoute(app, config, db, features
 
   // ── Save one product's settings ───────────────────────────────────────────
   app.post(`${LIST_PATH}/save`, async (req, res) => {
-    if (!await guard(req, res)) return;
+    if (!await guard(req, res, { manage: true })) return;
 
     const body = req.body || {};
     const stripePriceId = String(body.stripePriceId || "").trim();
@@ -104,7 +107,7 @@ export default function dashboardWebstoreProductsRoute(app, config, db, features
 
   // ── Show / hide ───────────────────────────────────────────────────────────
   app.post(`${LIST_PATH}/visibility`, async (req, res) => {
-    if (!await guard(req, res)) return;
+    if (!await guard(req, res, { manage: true })) return;
 
     const body = req.body || {};
     const stripePriceId = String(body.stripePriceId || "").trim();

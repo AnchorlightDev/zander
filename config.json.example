@@ -1,7 +1,7 @@
 {
   "debug": false,
   "connection": {
-    "_comment": "Server connection details. Every public surface (navbar, /play, /ranks, /vault, landing pages) reads from here so these values can never drift between pages. Set port to null to render the host without a port.",
+    "_comment": "Fallback only. Java and Bedrock addresses normally come from Dashboard > Servers (the first External server, and its Bedrock address). These values are used for an edition no server provides. Set port to null to render the host without a port.",
     "java": {
       "host": "play.example.net",
       "port": null

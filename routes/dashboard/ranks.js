@@ -12,6 +12,7 @@ import {
   getRankPermissions,
 } from "../../controllers/rankPermissionController.js";
 import { grantableGroups } from "../../lib/permissions/zanderNodes.mjs";
+import { hasPermission as holdsNode } from "../../lib/discord/permissions.mjs";
 
 function getUsersForRanks(rankSlugs) {
   if (!rankSlugs || !rankSlugs.length) return Promise.resolve([]);
@@ -266,9 +267,29 @@ export default function dashboardRanksRoute(
 
     try {
       const { known } = await getRankPermissions(rankSlug);
-      const changes = diffPermissions(known, wanted);
+      const diff = diffPermissions(known, wanted);
+
+      // Staff may only hand out (or take away) nodes they hold themselves.
+      // Otherwise this page is a route to any permission at all: grant your
+      // own group zander.web.apikeys, zander.web.settings, and so on.
+      const actorPermissions = req.session?.user?.permissions ?? [];
+      const mayChange = (node) => holdsNode(actorPermissions, node);
+      const changes = {
+        grant: diff.grant.filter(mayChange),
+        revoke: diff.revoke.filter(mayChange),
+      };
+      const refused = [...diff.grant, ...diff.revoke].filter((node) => !mayChange(node));
+      if (refused.length) {
+        console.warn(
+          `[RANKS] ${req.session?.user?.username ?? "unknown"} tried to change nodes they do not hold on ${rankSlug}: ${refused.join(", ")}`
+        );
+      }
 
       if (!changes.grant.length && !changes.revoke.length) {
+        if (refused.length) {
+          setBannerCookie("danger", `You can only grant or revoke permissions you hold yourself (${refused.join(", ")}).`, res);
+          return res.redirect(`/dashboard/ranks/${encodeURIComponent(rankSlug)}/permissions`);
+        }
         setBannerCookie("info", "Nothing changed.", res);
         return res.redirect(`/dashboard/ranks/${encodeURIComponent(rankSlug)}/permissions`);
       }
@@ -282,7 +303,8 @@ export default function dashboardRanksRoute(
       setBannerCookie(
         "success",
         `Queued ${queued} change${queued === 1 ? "" : "s"} for ${rankSlug}. ` +
-          "LuckPerms applies them when the server next picks up the queue.",
+          "LuckPerms applies them when the server next picks up the queue." +
+          (refused.length ? ` Skipped permissions you do not hold: ${refused.join(", ")}.` : ""),
         res
       );
     } catch (error) {

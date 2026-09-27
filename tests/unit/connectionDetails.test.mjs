@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { getConnectionDetails, hasBedrockConnection } from "../../lib/connectionDetails.mjs";
+import { connectionFromServers, getConnectionDetails, hasBedrockConnection, parseAddress } from "../../lib/connectionDetails.mjs";
 
 const config = (connection) => ({ connection });
 
@@ -126,5 +126,43 @@ describe("hasBedrockConnection", () => {
     expect(hasBedrockConnection(config({ bedrock: { host: "", port: 19132 } }))).toBe(false);
     expect(hasBedrockConnection(config({ java: { host: "play.zanderdemo.net" } }))).toBe(false);
     expect(hasBedrockConnection({})).toBe(false);
+  });
+});
+
+describe("connection details from the servers dashboard", () => {
+  const servers = [
+    { serverType: "INTERNAL", position: 0, serverConnectionAddress: "lobby.internal:25566", bedrockAddress: "internal:19132" },
+    { serverType: "EXTERNAL", position: 2, serverConnectionAddress: "second.zanderdemo.net", bedrockAddress: "bedrock.zanderdemo.net:19132" },
+    { serverType: "EXTERNAL", position: 1, serverConnectionAddress: "play.zanderdemo.net", bedrockAddress: null },
+  ];
+
+  it("parses host and optional port", () => {
+    expect(parseAddress("play.zanderdemo.net:25566")).toEqual({ host: "play.zanderdemo.net", port: 25566 });
+    expect(parseAddress("play.zanderdemo.net")).toEqual({ host: "play.zanderdemo.net", port: null });
+    expect(parseAddress("  ")).toBeNull();
+  });
+
+  it("takes Java from the first public server and Bedrock from the first public server that has one", () => {
+    const { java, bedrock } = connectionFromServers(servers);
+    expect(java).toEqual({ host: "play.zanderdemo.net", port: null });
+    expect(bedrock).toEqual({ host: "bedrock.zanderdemo.net", port: 19132 });
+  });
+
+  it("prefers servers over config.connection", () => {
+    const details = getConnectionDetails(config({ bedrock: { host: "old.zanderdemo.net", port: 1 } }), servers);
+    expect(details.bedrock.address).toBe("bedrock.zanderdemo.net:19132");
+    expect(details.java.address).toBe("play.zanderdemo.net");
+  });
+
+  it("falls back to config.connection per edition when no server supplies it", () => {
+    const javaOnly = [{ serverType: "EXTERNAL", position: 1, serverConnectionAddress: "play.zanderdemo.net" }];
+    const details = getConnectionDetails(config({ bedrock: { host: "bedrock.zanderdemo.net", port: 19132 } }), javaOnly);
+    expect(details.java.address).toBe("play.zanderdemo.net");
+    expect(details.bedrock.address).toBe("bedrock.zanderdemo.net:19132");
+  });
+
+  it("ignores placeholder hosts entered on a server", () => {
+    const details = getConnectionDetails({}, [{ serverType: "EXTERNAL", position: 1, serverConnectionAddress: "play.example.net" }]);
+    expect(details.java.configured).toBe(false);
   });
 });

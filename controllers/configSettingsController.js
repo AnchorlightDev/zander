@@ -31,34 +31,65 @@ import {
   findSection,
   getPath,
   planSectionWrites,
+  setPath,
   settingKeyFor,
 } from "../lib/config/settingsRegistry.mjs";
+import { LOCKED_FLAGS, describeFlags, listFlagPaths, planFlagWrites } from "../lib/config/featureRegistry.mjs";
 
 const require = createRequire(import.meta.url);
 const config = require("../config.json");
+const features = require("../features.json");
+
+/** Feature flag overrides (/dashboard/modules) live alongside config ones. */
+const FEATURE_KEY_PREFIX = "feature:";
 
 const SYNC_INTERVAL_MS = 60_000;
 
 /** config.json as it was before any override -- what "reset" returns to. */
 let baseline = null;
+/** features.json as loaded at boot. */
+let featureBaseline = null;
 let lastSeenUpdate = null;
 let syncTimer = null;
 
 function captureBaseline() {
   if (!baseline) baseline = structuredClone(config);
+  if (!featureBaseline) featureBaseline = structuredClone(features);
 }
 
-async function loadOverrides() {
+async function loadOverrides(prefix = SETTING_KEY_PREFIX) {
   const rows = await prisma.siteSettings.findMany({
-    where: { settingKey: { startsWith: SETTING_KEY_PREFIX } },
+    where: { settingKey: { startsWith: prefix } },
   });
   const overrides = new Map();
   let newest = null;
   for (const row of rows) {
-    overrides.set(row.settingKey.slice(SETTING_KEY_PREFIX.length), row.settingValue);
+    overrides.set(row.settingKey.slice(prefix.length), row.settingValue);
     if (!newest || row.updatedAt > newest) newest = row.updatedAt;
   }
   return { overrides, newest };
+}
+
+function newer(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return a > b ? a : b;
+}
+
+/** Overlay flag overrides onto the shared features object, in place. */
+function overlayFeatures(overrides) {
+  for (const path of listFlagPaths(featureBaseline)) {
+    const override = LOCKED_FLAGS.has(path) ? null : overrides.get(path);
+    setPath(features, path, typeof override === "boolean" ? override : getPath(featureBaseline, path));
+  }
+}
+
+/** Load and apply both config and feature overrides; returns the newest row time. */
+async function reloadAll() {
+  const [cfg, feat] = await Promise.all([loadOverrides(SETTING_KEY_PREFIX), loadOverrides(FEATURE_KEY_PREFIX)]);
+  overlay(cfg.overrides);
+  overlayFeatures(feat.overrides);
+  return { newest: newer(cfg.newest, feat.newest), count: cfg.overrides.size + feat.overrides.size };
 }
 
 function overlay(overrides) {
@@ -82,10 +113,9 @@ function overlay(overrides) {
 export async function applyConfigOverrides() {
   captureBaseline();
   try {
-    const { overrides, newest } = await loadOverrides();
-    overlay(overrides);
+    const { newest, count } = await reloadAll();
     lastSeenUpdate = newest;
-    if (overrides.size) console.log(`[settings] Applied ${overrides.size} dashboard config override(s).`);
+    if (count) console.log(`[settings] Applied ${count} dashboard config/module override row(s).`);
   } catch (error) {
     console.error("[settings] Could not load dashboard config overrides; using config.json only:", error.message);
   }
@@ -97,13 +127,17 @@ export function startConfigSync() {
   syncTimer = setInterval(async () => {
     try {
       const latest = await prisma.siteSettings.aggregate({
-        where: { settingKey: { startsWith: SETTING_KEY_PREFIX } },
+        where: {
+          OR: [
+            { settingKey: { startsWith: SETTING_KEY_PREFIX } },
+            { settingKey: { startsWith: FEATURE_KEY_PREFIX } },
+          ],
+        },
         _max: { updatedAt: true },
       });
       const newest = latest._max.updatedAt;
       if (newest && (!lastSeenUpdate || newest > lastSeenUpdate)) {
-        const { overrides, newest: reloadedNewest } = await loadOverrides();
-        overlay(overrides);
+        const { newest: reloadedNewest } = await reloadAll();
         lastSeenUpdate = reloadedNewest;
         console.log("[settings] Reloaded dashboard config overrides from another instance.");
       }
@@ -120,7 +154,7 @@ export function startConfigSync() {
  */
 export async function describeSettings() {
   captureBaseline();
-  const { overrides } = await loadOverrides();
+  const { overrides } = await loadOverrides(SETTING_KEY_PREFIX);
   const byPath = {};
   for (const field of ALL_FIELDS) {
     const override = overrides.get(field.path);
@@ -159,9 +193,48 @@ export async function saveSection(sectionKey, body, resets = []) {
     )
   );
 
-  const { overrides, newest } = await loadOverrides();
-  overlay(overrides);
+  const { newest } = await reloadAll();
   lastSeenUpdate = newest;
 
   return { saved: writes.length, errors: [] };
+}
+
+/**
+ * The modules page: flags grouped for display, each with its live state,
+ * the features.json value, and whether the dashboard is overriding it.
+ */
+export async function describeFeatureFlags() {
+  captureBaseline();
+  const { overrides } = await loadOverrides(FEATURE_KEY_PREFIX);
+  return describeFlags(featureBaseline).map((group) => ({
+    ...group,
+    flags: group.flags.map((flag) => ({
+      ...flag,
+      enabled: getPath(features, flag.path) === true,
+      fileValue: getPath(featureBaseline, flag.path) === true,
+      overridden: !flag.locked && typeof overrides.get(flag.path) === "boolean",
+    })),
+  }));
+}
+
+/** Save every toggle on the modules page. */
+export async function saveFeatureFlags(body) {
+  captureBaseline();
+  const writes = planFlagWrites(body, featureBaseline, getPath);
+
+  await prisma.$transaction(
+    writes.map(({ path, value }) =>
+      prisma.siteSettings.upsert({
+        where: { settingKey: `${FEATURE_KEY_PREFIX}${path}` },
+        create: { settingKey: `${FEATURE_KEY_PREFIX}${path}`, settingValue: value ?? Prisma.DbNull },
+        update: { settingValue: value ?? Prisma.DbNull },
+      })
+    )
+  );
+
+  const { newest } = await reloadAll();
+  lastSeenUpdate = newest;
+
+  const changed = writes.filter((w) => w.value !== null).map((w) => `${w.path}=${w.value}`);
+  return { changed };
 }

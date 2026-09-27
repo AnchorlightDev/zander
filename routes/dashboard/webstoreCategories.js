@@ -35,9 +35,12 @@ function checked(value) {
 
 export default function dashboardWebstoreCategoriesRoute(app, config, db, features, lang) {
 
-  async function guard(req, res) {
+  // Viewing needs zander.web.webstore; any change needs .manage, matching the
+  // rest of the webstore dashboard (routes/dashboard/webstore.js).
+  async function guard(req, res, { manage = false } = {}) {
     if (!await isFeatureWebRouteEnabled(app, features.webstore, req, res, features)) return false;
-    if (!await hasPermission("zander.web.webstore", req, res, features)) return false;
+    const node = manage ? "zander.web.webstore.manage" : "zander.web.webstore";
+    if (!await hasPermission(node, req, res, features)) return false;
     return true;
   }
 
@@ -61,7 +64,7 @@ export default function dashboardWebstoreCategoriesRoute(app, config, db, featur
 
   // ── Create ────────────────────────────────────────────────────────────────
   app.post(`${LIST_PATH}/create`, async (req, res) => {
-    if (!await guard(req, res)) return;
+    if (!await guard(req, res, { manage: true })) return;
 
     const body = req.body || {};
     const name = String(body.name || "").trim();
@@ -90,7 +93,7 @@ export default function dashboardWebstoreCategoriesRoute(app, config, db, featur
 
   // ── Edit ──────────────────────────────────────────────────────────────────
   app.post(`${LIST_PATH}/:id/edit`, async (req, res) => {
-    if (!await guard(req, res)) return;
+    if (!await guard(req, res, { manage: true })) return;
 
     const body = req.body || {};
     const name = String(body.name || "").trim();
@@ -119,7 +122,7 @@ export default function dashboardWebstoreCategoriesRoute(app, config, db, featur
 
   // ── Show / hide ───────────────────────────────────────────────────────────
   app.post(`${LIST_PATH}/:id/visibility`, async (req, res) => {
-    if (!await guard(req, res)) return;
+    if (!await guard(req, res, { manage: true })) return;
 
     try {
       const visible = checked((req.body || {}).visible);
@@ -141,7 +144,7 @@ export default function dashboardWebstoreCategoriesRoute(app, config, db, featur
   // Optionally moves the products somewhere else first; without that a category
   // still holding products is refused rather than orphaning them.
   app.post(`${LIST_PATH}/:id/delete`, async (req, res) => {
-    if (!await guard(req, res)) return;
+    if (!await guard(req, res, { manage: true })) return;
 
     const moveTo = (req.body || {}).moveTo;
 

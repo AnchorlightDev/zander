@@ -380,6 +380,16 @@ export const adminPages = [
     group: "System",
     sortOrder: 80,
   },
+  {
+    slug: "modules",
+    title: "Modules",
+    menuTitle: "Modules",
+    icon: "fa-solid fa-puzzle-piece",
+    capability: "zander.web.modules",
+    path: "/dashboard/modules",
+    group: "System",
+    sortOrder: 85,
+  },
 ];
 // ---------------------------------------------------------------------------
 // Sub-pages (registered for breadcrumb / title lookup; not shown in sidebar)

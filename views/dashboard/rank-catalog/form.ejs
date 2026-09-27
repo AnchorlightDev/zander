@@ -186,8 +186,8 @@
 <script>
 (function () {
   // ── Stripe price multi-select ────────────────────────────────────────────
-  var stripeOptions = <%- JSON.stringify(stripeOptions) %>;
-  var selectedPriceIds = <%- JSON.stringify(entry && entry.stripePriceIds ? entry.stripePriceIds : []) %>;
+  var stripeOptions = <%- JSON.stringify(stripeOptions).replace(/</g, '\\u003c') %>;
+  var selectedPriceIds = <%- JSON.stringify(entry && entry.stripePriceIds ? entry.stripePriceIds : []).replace(/</g, '\\u003c') %>;
 
   function syncPriceJson() {
     var selects = document.querySelectorAll('#prices-list .price-select');
@@ -254,7 +254,7 @@
   renderPrices();
 
   // ── Grouped perks builder ────────────────────────────────────────────────
-  var rawPerks = <%- JSON.stringify(entry && entry.perks ? entry.perks : []) %>;
+  var rawPerks = <%- JSON.stringify(entry && entry.perks ? entry.perks : []).replace(/</g, '\\u003c') %>;
   // Support both legacy flat string[] and new grouped [{group, perks}]
   var groups = (Array.isArray(rawPerks) && rawPerks.length && typeof rawPerks[0] === 'string')
     ? [{ group: '', perks: rawPerks }]
