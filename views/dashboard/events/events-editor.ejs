@@ -243,7 +243,7 @@
                                 <select class="form-select" name="templateId" id="templateSelector">
                                     <option value="">— No template —</option>
                                     <% templatesData.data.forEach(t => { %>
-                                        <option value="<%= t.templateId %>"><%= t.title %></option>
+                                        <option value="<%= t.templateId %>" <%= String(ev.templateId || '') === String(t.templateId) ? 'selected' : '' %>><%= t.title %></option>
                                     <% }) %>
                                 </select>
                             </div>

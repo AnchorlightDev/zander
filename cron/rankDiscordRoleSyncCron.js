@@ -128,8 +128,8 @@ async function reconcileRankDiscordRoles() {
       // privileged intent being disabled, or a slow chunk on a large guild.
       // Skip this run rather than surfacing it as a fatal reconciliation error.
       console.warn(
-        "[rankRoleSync-cron] Could not fetch guild members (%s). Skipping this run — check the GuildMembers privileged intent.",
-        err?.message || err
+        `[rankRoleSync-cron] Could not fetch guild members (${err?.message || err}). Skipping this run — ` +
+          "if this is not a rate limit, check the GuildMembers privileged intent."
       );
       return;
     }

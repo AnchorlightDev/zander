@@ -52,6 +52,14 @@ export default function sessionSiteRoute(
   features,
   lang
 ) {
+  // A POST with no form body (scanners, empty submissions) leaves req.body
+  // undefined, and every handler below reads req.body.x directly -- that was a
+  // 500 on /login. Treat it as an empty form so each handler's own "fields are
+  // required" message answers instead.
+  app.addHook("preValidation", async (req) => {
+    if (req.method === "POST" && (req.body === undefined || req.body === null)) req.body = {};
+  });
+
   //
   // Session
   //

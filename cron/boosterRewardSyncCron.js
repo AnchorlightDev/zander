@@ -36,7 +36,7 @@ async function sweep() {
     } catch (error) {
       // Without the full member list, "not boosting" cannot be told apart
       // from "not fetched" -- skip rather than revoke.
-      console.warn("[boosterRewards] Could not fetch guild members (%s); skipping this sweep.", error?.message || error);
+      console.warn(`[boosterRewards] Could not fetch guild members (${error?.message || error}); skipping this sweep.`);
       return;
     }
 
@@ -53,7 +53,10 @@ async function sweep() {
   }
 }
 
-cron.schedule("*/30 * * * *", sweep);
+// :07 and :37 -- offset from cron/rankDiscordRoleSyncCron.js (:00/:15/:30/:45),
+// which also fetches the full member list. Discord rate-limits a second
+// member-list request made at the same moment (gateway opcode 8).
+cron.schedule("7,37 * * * *", sweep);
 
 // Once shortly after start-up, when the Discord client has had time to log in.
 setTimeout(sweep, 90_000).unref?.();

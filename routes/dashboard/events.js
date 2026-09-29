@@ -13,6 +13,7 @@ import {
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { hasPermission as hasPermissionNode } from "../../lib/discord/permissions.mjs";
 import { getEventById } from "../../services/eventService.js";
+import { computeNextEventDate, eventPrefillFromTemplate, getTemplateById } from "../../services/eventTemplateService.js";
 import { getSelectableRanks } from "../../services/rankMetaService.js";
 import { enrichHostsWithAvatars } from "../../lib/avatarHelpers.js";
 import { sanitizeForumHtml } from "../../lib/htmlSanitize.js";
@@ -219,6 +220,30 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
       getWebAnnouncement(),
     ]);
 
+    // ?templateId=N — start the new event pre-filled from a template (the
+    // templates page sends master templates here). A recurring template also
+    // fills its next date; a master template leaves the date to the organiser.
+    let ev = {};
+    const templateId = parseInt(req.query.templateId, 10);
+    if (templateId) {
+      const template = await getTemplateById(templateId);
+      if (template) {
+        let nextDate = null;
+        try {
+          nextDate = computeNextEventDate(template);
+        } catch {
+          nextDate = null;
+        }
+        try {
+          ev = eventPrefillFromTemplate(template, nextDate);
+        } catch (prefillError) {
+          // A bad default time only costs the pre-filled date, not the form.
+          console.warn("[events] Template default times unusable:", prefillError.message);
+          ev = eventPrefillFromTemplate(template, null);
+        }
+      }
+    }
+
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-editor", {
         pageTitle: "Dashboard - Create Event",
@@ -227,7 +252,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
         features,
         req,
         mode: "create",
-        ev: {},
+        ev,
         isPublished: false,
         apiEndpoint: "/api/events/create",
         templatesData,

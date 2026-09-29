@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("../../controllers/databaseController.js", () => ({ prisma: {}, default: {} }));
 
-const { computeNextEventDate, recurrenceDaysOf } = await import("../../services/eventTemplateService.js");
+const { computeNextEventDate, eventPrefillFromTemplate, recurrenceDaysOf, templateTimesOn } = await import("../../services/eventTemplateService.js");
 
 // Wednesday 1 October 2025, UTC.
 const WEDNESDAY = new Date("2025-10-01T10:00:00Z");
@@ -43,5 +43,41 @@ describe("computeNextEventDate", () => {
 
   it("handles daily templates", () => {
     expect(iso(computeNextEventDate({ recurrenceType: "daily" }, WEDNESDAY))).toBe("2025-10-02");
+  });
+});
+
+describe("eventPrefillFromTemplate", () => {
+  const template = {
+    templateId: 7,
+    title: "Game Night",
+    description: "<p>Fun</p>",
+    visibility: "rank",
+    teaserPublic: false,
+    defaultStartTime: "09:30",
+    defaultEndTime: "08:00",
+    rankAccess: [{ rankSlug: "supporter" }],
+    defaultHosts: [{ userId: 3, discordUserId: "9", displayName: "Host", role: "host" }],
+    announcements: [{ label: "Reminder", triggerType: "before_event", offsetMinutes: 60, enabled: true }],
+  };
+
+  it("leaves the date to the organiser for a master template", () => {
+    const ev = eventPrefillFromTemplate(template, null);
+    expect(ev.templateId).toBe(7);
+    expect(ev.title).toBe("Game Night");
+    expect(ev.startAt).toBeUndefined();
+    expect(ev.rankAccess).toEqual([{ rankSlug: "supporter" }]);
+    expect(ev.hosts[0].displayName).toBe("Host");
+    expect(ev.announcements[0].label).toBe("Reminder");
+    expect(ev.teaserPublic).toBe(false);
+  });
+
+  it("fills the date and default times when one is given, running overnight if needed", () => {
+    const ev = eventPrefillFromTemplate(template, new Date("2025-10-03T00:00:00Z"));
+    expect(ev.startAt).toBe("2025-10-03T09:30:00.000Z");
+    expect(ev.endAt).toBe("2025-10-04T08:00:00.000Z");
+  });
+
+  it("names a broken default time instead of throwing 'Invalid time value'", () => {
+    expect(() => templateTimesOn({ defaultStartTime: "6pm" }, new Date("2025-10-03T00:00:00Z"))).toThrow(/default start time "6pm"/);
   });
 });

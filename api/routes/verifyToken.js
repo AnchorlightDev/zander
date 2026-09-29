@@ -123,7 +123,10 @@ export default async function verifyToken(req, res) {
       }
     }
 
-    logDenial("no token", { req });
+    // Say whether a session cookie arrived at all: "cookie sent, no user" means
+    // the session lookup came back empty (e.g. the store's read timeout under
+    // database latency), not that the browser failed to send it.
+    logDenial(req.cookies?.sessionId ? "no token (session cookie sent but no logged-in user)" : "no token (no session cookie)", { req });
     return deny(res, 401, lang.api.noToken);
   }
 

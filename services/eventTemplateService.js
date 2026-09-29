@@ -212,22 +212,27 @@ export async function deleteTemplate(templateId) {
  * Generate a draft event from a template.
  * The event inherits template defaults but remains fully editable.
  */
-export async function generateDraftFromTemplate(template, targetDate, actorId = null, actorName = "System") {
-  const { defaultStartTime, defaultEndTime, defaultDurationMins, timezone } = template;
-
-  // Build start/end datetimes for the target date in the template's timezone
-  // We store UTC; targetDate is a JS Date already set to the occurrence date (midnight UTC)
+/**
+ * Start and end for a template's default times on `targetDate` (a Date at
+ * midnight UTC). Times are stored in UTC ("HH:MM" or "HH:MM:SS"); an end at
+ * or before the start runs overnight. Shared by draft generation and the
+ * "create event from template" form so both agree.
+ */
+export function templateTimesOn(template, targetDate) {
+  const { defaultStartTime, defaultEndTime, defaultDurationMins } = template;
   const dateStr = targetDate.toISOString().slice(0, 10);
 
-  const startTime = defaultStartTime || "18:00:00";
-  const endTime = defaultEndTime || null;
+  const startAt = new Date(`${dateStr}T${defaultStartTime || "18:00:00"}Z`);
+  if (Number.isNaN(startAt.getTime())) {
+    throw new Error(`Template default start time "${defaultStartTime}" is not a valid time.`);
+  }
 
-  // Parse times as UTC (no conversion; operators should configure times in UTC or use timezone field)
-  const startAt = new Date(`${dateStr}T${startTime}Z`);
   let endAt;
-
-  if (endTime) {
-    endAt = new Date(`${dateStr}T${endTime}Z`);
+  if (defaultEndTime) {
+    endAt = new Date(`${dateStr}T${defaultEndTime}Z`);
+    if (Number.isNaN(endAt.getTime())) {
+      throw new Error(`Template default end time "${defaultEndTime}" is not a valid time.`);
+    }
     // Handle overnight events
     if (endAt <= startAt) endAt = new Date(endAt.getTime() + 86400000);
   } else if (defaultDurationMins) {
@@ -235,6 +240,61 @@ export async function generateDraftFromTemplate(template, targetDate, actorId = 
   } else {
     endAt = new Date(startAt.getTime() + 3600000); // default 1 hour
   }
+  return { startAt, endAt };
+}
+
+/**
+ * A new-event form pre-filled from a template, in the shape the event editor
+ * renders (views/dashboard/events/events-editor.ejs reads `ev`). Dates are
+ * filled only when `targetDate` is given -- a master template has none, so
+ * the organiser picks the date on the form.
+ */
+export function eventPrefillFromTemplate(template, targetDate = null) {
+  const times = targetDate ? templateTimesOn(template, targetDate) : null;
+  return {
+    templateId: template.templateId,
+    title: template.title,
+    description: template.description,
+    teaserDescription: template.teaserDescription,
+    locationType: template.locationType,
+    locationLabel: template.locationLabel,
+    locationDiscordChannelId: template.locationDiscordChannelId,
+    serverName: template.serverName,
+    serverIp: template.serverIp,
+    bannerUrl: template.bannerUrl,
+    logoUrl: template.logoUrl,
+    tags: template.tags,
+    visibility: template.visibility || "public",
+    teaserPublic: template.teaserPublic !== false,
+    rankAccess: (template.rankAccess || []).map((r) => ({ rankSlug: r.rankSlug })),
+    hosts: (template.defaultHosts || []).map((h) => ({
+      userId: h.userId,
+      discordUserId: h.discordUserId,
+      displayName: h.displayName,
+      role: h.role,
+    })),
+    announcements: (template.announcements || []).map((a) => ({
+      label: a.label,
+      announcementType: a.announcementType,
+      platform: a.platform,
+      channelId: a.channelId,
+      contentTemplate: a.contentTemplate,
+      body: a.body,
+      colourMessageFormat: a.colourMessageFormat,
+      link: a.link,
+      popupButtonText: a.popupButtonText,
+      popupImageUrl: a.popupImageUrl,
+      triggerType: a.triggerType,
+      offsetMinutes: a.offsetMinutes,
+      enabled: a.enabled,
+    })),
+    ...(times ? { startAt: times.startAt.toISOString(), endAt: times.endAt.toISOString() } : {}),
+  };
+}
+
+export async function generateDraftFromTemplate(template, targetDate, actorId = null, actorName = "System") {
+  const { timezone } = template;
+  const { startAt, endAt } = templateTimesOn(template, targetDate);
 
   const eventData = {
     title: template.title,
