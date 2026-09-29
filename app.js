@@ -312,6 +312,16 @@ const buildApp = async () => {
   await app.register(await import("@fastify/static"), {
     root: path.join(__dirname, "assets"),
     prefix: "/",
+    // Third-party libraries are served from here rather than their CDNs so a
+    // first visit depends on one host, not five: a stalled connection to any
+    // render-blocking CDN left the page white until refresh. The paths carry
+    // the version, so the files never change and can be cached for good.
+    // @fastify/static v10 passes the Fastify reply here, not the raw response.
+    setHeaders(reply, filePath) {
+      if (filePath.includes(`${path.sep}vendors${path.sep}cdn${path.sep}`)) {
+        reply.header("cache-control", "public, max-age=31536000, immutable");
+      }
+    },
   });
 
   await app.register(await import("@fastify/formbody"), { bodyLimit: 10485760 }); // 10 MB
