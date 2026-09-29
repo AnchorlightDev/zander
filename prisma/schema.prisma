@@ -1500,3 +1500,15 @@ model apiClients {
 
   @@index([isRevoked])
 }
+
+model boosterRewardGrants {
+  grantId   Int      @id @default(autoincrement())
+  userId    Int
+  discordId String   @db.VarChar(32)
+  uuid      String   @db.VarChar(36)
+  rankGroup String   @db.VarChar(64)
+  grantedAt DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([userId, rankGroup])
+  @@index([discordId])
+}

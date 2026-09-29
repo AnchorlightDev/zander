@@ -36,6 +36,7 @@ import {
 } from "../controllers/watchController.js";
 import { checkAndReportNickname } from "../lib/discord/nicknameCheck.mjs";
 import { syncMemberRankRoles, stripAllTrackedRankRoles } from "../lib/discord/rankRoleSync.mjs";
+import { syncBoosterRewardsForDiscordId } from "../controllers/boosterRewardController.js";
 
 export default function profileSiteRoutes(
   app,
@@ -549,6 +550,14 @@ export default function profileSiteRoutes(
         console.error("[PROFILE] Deferred webstore role retry after Discord link failed:", roleErr.message);
       }
 
+      // Already boosting the server? Grant the booster reward rank(s) now
+      // rather than waiting for the next sweep.
+      try {
+        await syncBoosterRewardsForDiscordId(discordUser.id);
+      } catch (boostErr) {
+        console.error("[PROFILE] Booster reward sync after Discord link failed:", boostErr.message);
+      }
+
       // Trigger nickname enforcement now that the account is linked
       if (features.discord?.events?.nicknameCheck && config.discord?.nicknameReportChannelId && config.discord?.guildId) {
         try {
@@ -622,6 +631,10 @@ export default function profileSiteRoutes(
       req.session.user.discordID = null;
       if (discordIdBeingUnlinked) {
         await stripAllTrackedRankRoles(discordIdBeingUnlinked);
+        // No longer linked, so no longer eligible for booster reward ranks.
+        await syncBoosterRewardsForDiscordId(discordIdBeingUnlinked).catch((boostErr) =>
+          console.error("[PROFILE] Booster reward sync after Discord unlink failed:", boostErr.message)
+        );
       }
       setBannerCookie("success", "Discord account disconnected.", res);
     } catch (error) {

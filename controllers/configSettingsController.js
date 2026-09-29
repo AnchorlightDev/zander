@@ -196,6 +196,15 @@ export async function applyConfigOverrides() {
   }
 }
 
+/**
+ * True once the saved settings have been read from the database. Jobs that
+ * take something away (e.g. booster reward revocation) must not act on the
+ * built-in defaults during an outage.
+ */
+export function isSettingsLoaded() {
+  return baseLoaded;
+}
+
 /** Poll for saves made on other instances (and retry a failed boot load). */
 export function startConfigSync() {
   if (syncTimer) return;
