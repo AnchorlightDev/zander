@@ -301,6 +301,18 @@ const buildApp = async () => {
     createCspOnSendHook({ reportUri: "/api/csp-report", enforce: false })
   );
 
+  // Logged-in pages must always come fresh from the server. Without a
+  // Cache-Control header browsers may reuse an earlier copy (back/forward,
+  // redirects to a page just viewed), so a dashboard list could still show a
+  // template that was just deleted -- or miss one just created -- until a
+  // manual refresh. no-store also keeps personal pages out of shared caches.
+  app.addHook("onSend", async (req, res, payload) => {
+    if (req.session?.user && String(res.getHeader("content-type") || "").includes("text/html")) {
+      res.header("cache-control", "private, no-store");
+    }
+    return payload;
+  });
+
   // EJS Rendering Engine
   await app.register(await import("@fastify/view"), {
     engine: {

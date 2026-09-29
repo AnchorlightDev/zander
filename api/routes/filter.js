@@ -1,21 +1,22 @@
 /**
  * api/routes/filter.js
  *
- * POST /api/filter — the one place chat and profile text is checked. Called by
- * the Discord bot (listeners/filter.js), the Velocity/Waterfall proxy plugins
- * for in-game chat, and profile edits (api/routes/user.js).
+ * POST /api/filter — checks text for zander's own callers: profile edits
+ * (api/routes/user.js) and the Velocity/Waterfall proxy plugins' chat.
  *
- * The checking itself is done by the Purify microservice (profanity, a manual
- * domain blocklist that catches bare `discord.gg/...` invites, and VirusTotal
- * link scanning). This route keeps the contract its callers already rely on --
- * `{ success: false }` means "block it" -- and sends the staff alert.
+ * MineMonitor owns content filtering (it filters Discord with its own bot and
+ * in-game chat through its agents, via Purify). This route asks MineMonitor's
+ * POST /api/filter for the verdict, keeps the contract zander's callers rely
+ * on -- `{ success: false }` means "block it" -- and sends the staff alert.
  *
- * Environment:
- *   PURIFY_URL      base URL of the Purify service, e.g. https://purify.example.net
- *   PURIFY_API_KEY  Purify's API_KEY, sent as a bearer token
+ * Configuration:
+ *   Settings → Automation → MineMonitor base URL (or MINEMONITOR_BASE_URL)
+ *   MINEMONITOR_CONNECTION_TOKEN  a MineMonitor connection token with the
+ *                                 `filter.check` scope (and `wrapped.read`
+ *                                 for Wrapped)
  *
- * If Purify is not configured or does not answer, content is let through
- * (fail open): a filter outage must not silence all chat.
+ * If MineMonitor is not configured or does not answer, content is let
+ * through (fail open): a filter outage must not silence all chat.
  */
 
 import { isFeatureEnabled, optional, required } from "../common.js";
@@ -24,46 +25,49 @@ import { MessageBuilder, Webhook } from "discord-webhook-node";
 import { Colors } from "discord.js";
 import { sendWebhookMessage } from "../../lib/discord/webhooks.mjs";
 
-const PURIFY_TIMEOUT_MS = 5000;
+const FILTER_TIMEOUT_MS = 5000;
 const CLEAN = { success: true, message: "Content is clean. No flags detected." };
 
 let warnedUnconfigured = false;
 
 /**
- * Ask Purify about one piece of content.
- * @returns {Promise<{flagged:boolean, details:string[]} | null>} null when unavailable
+ * Ask MineMonitor about one piece of content.
+ * @returns {Promise<{flagged:boolean, details:string[], dryRun:boolean} | null>} null when unavailable
  */
-async function checkWithPurify(content) {
-  const baseUrl = String(process.env.PURIFY_URL || "").replace(/\/+$/, "");
-  const apiKey = process.env.PURIFY_API_KEY;
-  if (!baseUrl || !apiKey) {
+async function checkWithMineMonitor(content, config) {
+  const baseUrl = String(config.wrapped?.minemonitor?.baseUrl || process.env.MINEMONITOR_BASE_URL || "").replace(/\/+$/, "");
+  const token = process.env.MINEMONITOR_CONNECTION_TOKEN;
+  if (!baseUrl || !token) {
     if (!warnedUnconfigured) {
-      console.warn("[filter] PURIFY_URL / PURIFY_API_KEY are not set — chat filtering is off.");
+      console.warn("[filter] MineMonitor base URL / MINEMONITOR_CONNECTION_TOKEN are not set — text filtering is off.");
       warnedUnconfigured = true;
     }
     return null;
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PURIFY_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), FILTER_TIMEOUT_MS);
   try {
-    const response = await fetch(`${baseUrl}/filter`, {
+    const response = await fetch(`${baseUrl}/api/filter`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ content }),
       signal: controller.signal,
     });
     if (!response.ok) {
-      console.error(`[filter] Purify responded ${response.status}; letting content through.`);
+      console.error(`[filter] MineMonitor responded ${response.status}; letting content through.`);
       return null;
     }
     const data = await response.json();
+    // ok:false is MineMonitor saying its own check failed -- fail open.
+    if (data?.ok === false) return null;
     return {
       flagged: data?.flagged === true,
       details: Array.isArray(data?.details) ? data.details.map(String) : [],
+      dryRun: data?.dryRun === true,
     };
   } catch (error) {
-    console.error("[filter] Purify unavailable; letting content through:", error.message);
+    console.error("[filter] MineMonitor unavailable; letting content through:", error.message);
     return null;
   } finally {
     clearTimeout(timer);
@@ -73,7 +77,7 @@ async function checkWithPurify(content) {
 /**
  * Keep only flags whose filter is switched on in Modules: link flags follow
  * "Link filter", everything else (profanity) follows "Phrase filter".
- * Prefixes are Purify's flag messages (src/services/filterService.js).
+ * Prefixes are Purify's flag messages, passed through by MineMonitor.
  */
 function relevantFlags(details, features) {
   const isLinkFlag = (d) => /^(Manually Blocked Domain|Malicious Link Detected|Blocked Category Detected)\b/.test(d);
@@ -93,7 +97,7 @@ export default function filterApiRoute(app, client, config, db, features, lang) 
     const discordUsername = optional(req.body, "discordUsername");
 
     try {
-      const result = await checkWithPurify(String(content));
+      const result = await checkWithMineMonitor(String(content), config);
       if (!result || !result.flagged) return res.send(CLEAN);
 
       const flaggedFor = relevantFlags(result.details, features);
@@ -110,7 +114,7 @@ export default function filterApiRoute(app, client, config, db, features, lang) 
       else if (username) detectedUser = `${username} (Unverified)`;
 
       const embed = new MessageBuilder()
-        .setTitle(`🔵 Filter Flagged`)
+        .setTitle(result.dryRun ? `🔵 Filter Flagged (notify only)` : `🔵 Filter Flagged`)
         .addField("Detected User", detectedUser, true)
         .addField("Flagged Issues", flaggedFor.join(", ").slice(0, 1000), true)
         .addField("Content", String(content).slice(0, 1000), false)
@@ -121,6 +125,9 @@ export default function filterApiRoute(app, client, config, db, features, lang) 
         context: "api/filter",
       });
 
+      // MineMonitor's notify-only mode: staff hear about it, nothing is blocked.
+      if (result.dryRun) return res.send(CLEAN);
+
       return res.send({
         success: false,
         message: webhookSent
@@ -129,7 +136,7 @@ export default function filterApiRoute(app, client, config, db, features, lang) 
       });
     } catch (error) {
       console.error("[filter] Error processing request:", error);
-      // Fail open, same as a Purify outage: callers treat success:false as "block".
+      // Fail open, same as a MineMonitor outage: callers treat success:false as "block".
       if (!res.sent) return res.send(CLEAN);
     }
   });

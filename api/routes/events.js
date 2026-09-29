@@ -858,8 +858,28 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
 
       const { generateDraftFromTemplate, computeNextEventDate } = await import("../../services/eventTemplateService.js");
 
-      const date = targetDate ? new Date(targetDate) : computeNextEventDate(tmpl);
-      if (!date) return res.send({ success: false, message: "Could not determine next event date" });
+      // A picked date (YYYY-MM-DD) wins; otherwise the template's recurrence
+      // decides. A once-off (master) template has no recurrence, so the
+      // caller has to pick -- needsDate tells the page to ask.
+      let date = null;
+      if (targetDate) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(targetDate))) {
+          return res.send({ success: false, message: "Pick a valid date for the event." });
+        }
+        date = new Date(`${targetDate}T00:00:00Z`);
+      } else {
+        date = computeNextEventDate(tmpl);
+      }
+      if (!date || Number.isNaN(date.getTime())) {
+        return res.send({
+          success: false,
+          needsDate: true,
+          message:
+            tmpl.recurrenceType === "once"
+              ? "This is a master template, so choose the date for the new event."
+              : "This template's schedule doesn't give a next date, so choose one for the new event.",
+        });
+      }
 
       const event = await generateDraftFromTemplate(tmpl, date, actorId, actorName);
       return res.send({ success: true, data: event, message: "Draft event generated from template" });

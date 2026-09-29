@@ -345,8 +345,8 @@ export function computeNextGenerationDate(template, fromDate = null) {
 
   const advanceDays = template.draftAdvanceDays || 7;
 
-  if (template.recurrenceType === "weekly" && Array.isArray(template.recurrenceDays)) {
-    const days = template.recurrenceDays.map(Number).sort();
+  if (template.recurrenceType === "weekly") {
+    const days = recurrenceDaysOf(template);
     if (days.length === 0) return null;
 
     // Find the next occurrence that is at least advanceDays in the future
@@ -393,6 +393,25 @@ export function computeNextGenerationDate(template, fromDate = null) {
 }
 
 /**
+ * The weekday numbers (0 = Sunday) a weekly template runs on. The column is
+ * JSON and older rows hold it as a JSON string ("[1,3]") rather than an
+ * array; both mean the same thing. Treating the string as "no days" is what
+ * made Generate Draft fail with "Could not determine next event date".
+ */
+export function recurrenceDaysOf(template) {
+  let days = template?.recurrenceDays;
+  if (typeof days === "string") {
+    try {
+      days = JSON.parse(days);
+    } catch {
+      days = days.split(",");
+    }
+  }
+  if (!Array.isArray(days)) return [];
+  return [...new Set(days.map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b);
+}
+
+/**
  * Find the next event occurrence date for a template.
  */
 export function computeNextEventDate(template, fromDate = null) {
@@ -401,8 +420,8 @@ export function computeNextEventDate(template, fromDate = null) {
 
   if (template.recurrenceType === "once") return null;
 
-  if (template.recurrenceType === "weekly" && Array.isArray(template.recurrenceDays)) {
-    const days = template.recurrenceDays.map(Number).sort();
+  if (template.recurrenceType === "weekly") {
+    const days = recurrenceDaysOf(template);
     if (days.length === 0) return null;
 
     const currentDay = base.getUTCDay();

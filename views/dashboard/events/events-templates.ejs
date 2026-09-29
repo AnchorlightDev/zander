@@ -78,7 +78,7 @@
                                 <a href="/dashboard/events/templates/edit?templateId=<%= tmpl.templateId %>" class="btn btn-sm btn-warning">
                                     <i class="fas fa-edit me-1"></i>Edit
                                 </a>
-                                <button class="btn btn-sm btn-outline-primary btn-generate-draft" data-template-id="<%= tmpl.templateId %>" data-title="<%= tmpl.title %>">
+                                <button class="btn btn-sm btn-outline-primary btn-generate-draft" data-template-id="<%= tmpl.templateId %>" data-title="<%= tmpl.title %>" data-recurrence="<%= tmpl.recurrenceType %>">
                                     <i class="fas fa-plus me-1"></i>Generate Draft
                                 </button>
                                 <button class="btn btn-sm btn-outline-danger btn-delete-template ms-auto" data-template-id="<%= tmpl.templateId %>" data-title="<%= tmpl.title %>">
@@ -90,6 +90,25 @@
                     <% }) %>
                 </div>
             <% } %>
+    <%# Date picker for templates with no schedule of their own (master / once-off). %>
+    <div class="modal fade" id="draftDateModal" tabindex="-1" aria-labelledby="draftDateModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" id="draftDateForm">
+          <div class="modal-header">
+            <h5 class="modal-title" id="draftDateModalLabel">Choose the event date</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p class="mb-2" id="draftDateMessage">Pick the date for the new event. The template's default times are used.</p>
+            <input type="date" class="form-control" id="draftDateInput" required>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-plus me-1"></i>Generate Draft</button>
+          </div>
+        </form>
+      </div>
+    </div>
     </div><!-- /.wrap -->
   </div><!-- /#wpbody-content -->
   <%- include("../../admin/_footer.ejs") %>
@@ -104,36 +123,88 @@ document.querySelectorAll('.js-datetime').forEach(el => {
     }) : '—';
 });
 
-document.querySelectorAll('.btn-generate-draft').forEach(btn => {
-    btn.addEventListener('click', async () => {
-        if (!confirm(`Generate a draft event from template "${btn.dataset.title}"?`)) return;
-        btn.disabled = true;
-        const res = await fetch('/api/events/templates/generate-draft', {
+// POST JSON and always come back with { success, message, ... } -- a network
+// failure or a non-JSON reply used to throw silently and leave the page as it
+// was, looking like nothing happened until a refresh.
+async function postJson(url, body) {
+    try {
+        const res = await fetch(url, {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ templateId: btn.dataset.templateId }),
+            body: JSON.stringify(body),
         });
-        const data = await res.json();
-        if (data.success) {
-            window.location.href = `/dashboard/events/view?eventId=${data.data.eventId}`;
-        } else {
-            alert('Error: ' + data.message);
-            btn.disabled = false;
-        }
+        const data = await res.json().catch(() => null);
+        if (!data) return { success: false, message: `The server returned an unexpected response (HTTP ${res.status}).` };
+        return data;
+    } catch (err) {
+        return { success: false, message: 'Network error: ' + err.message };
+    }
+}
+
+function tomorrowIso() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+}
+
+let pendingDraftButton = null;
+const draftDateModalEl = document.getElementById('draftDateModal');
+
+function askForDate(btn, message) {
+    pendingDraftButton = btn;
+    document.getElementById('draftDateMessage').textContent =
+        message || "Pick the date for the new event. The template's default times are used.";
+    const input = document.getElementById('draftDateInput');
+    input.value = input.value || tomorrowIso();
+    bootstrap.Modal.getOrCreateInstance(draftDateModalEl).show();
+}
+
+async function generateDraft(btn, targetDate) {
+    btn.disabled = true;
+    const data = await postJson('/api/events/templates/generate-draft', {
+        templateId: btn.dataset.templateId,
+        ...(targetDate ? { targetDate } : {}),
     });
+    if (data.success) {
+        window.location.href = `/dashboard/events/view?eventId=${data.data.eventId}`;
+        return;
+    }
+    btn.disabled = false;
+    if (data.needsDate && !targetDate) askForDate(btn, data.message);
+    else alert('Error: ' + data.message);
+}
+
+document.querySelectorAll('.btn-generate-draft').forEach(btn => {
+    btn.addEventListener('click', () => {
+        // A master template has no schedule, so the date has to be picked.
+        if (btn.dataset.recurrence === 'once') return askForDate(btn);
+        if (!confirm(`Generate a draft event from template "${btn.dataset.title}"?`)) return;
+        generateDraft(btn);
+    });
+});
+
+document.getElementById('draftDateForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const date = document.getElementById('draftDateInput').value;
+    if (!date || !pendingDraftButton) return;
+    bootstrap.Modal.getOrCreateInstance(draftDateModalEl).hide();
+    generateDraft(pendingDraftButton, date);
 });
 
 document.querySelectorAll('.btn-delete-template').forEach(btn => {
     btn.addEventListener('click', async () => {
         if (!confirm(`Delete template "${btn.dataset.title}"? This will not delete generated events.`)) return;
-        const res = await fetch('/api/events/templates/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ templateId: btn.dataset.templateId }),
-        });
-        const data = await res.json();
-        if (data.success) window.location.reload();
-        else alert('Error: ' + data.message);
+        btn.disabled = true;
+        const data = await postJson('/api/events/templates/delete', { templateId: btn.dataset.templateId });
+        if (data.success) {
+            // Take the card off straight away, then reload for fresh counts.
+            btn.closest('.col-md-6, .col-lg-4, .col-xl-4, .col-12, [class*="col-"]')?.remove();
+            window.location.reload();
+        } else {
+            btn.disabled = false;
+            alert('Error: ' + data.message);
+        }
     });
 });
 </script>
