@@ -1,12 +1,20 @@
-import { Listener } from "@sapphire/framework";
+import { Listener, container } from "@sapphire/framework";
 import { EmbedBuilder } from "discord.js";
 import fetch from "node-fetch";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const features = require("../lib/config/features.cjs");
+const config = require("../lib/config/config.cjs");
+import { cachedInviteResolver, stripOwnServerLinks } from "../lib/discord/inviteAllowlist.mjs";
 import { isDbHealthy } from "../controllers/databaseController.js";
 
 import { internalApiHeaders } from "../api/common.js";
+// Which guild an invite belongs to, cached (see lib/discord/inviteAllowlist.mjs).
+const resolveInviteGuildId = cachedInviteResolver(async (code) => {
+  const invite = await container.client.fetchInvite(code);
+  return invite?.guild?.id ?? null;
+});
+
 export class GuildMessageListener extends Listener {
   constructor(context, options) {
     super(context, {
@@ -26,9 +34,19 @@ export class GuildMessageListener extends Listener {
 
     if (features.filter.link || features.filter.phrase) {
       try {
+        // Links to this server (its invites, event and message links) are fine
+        // inside this server; only the rest of the message is checked. Other
+        // servers' invites are still caught.
+        const guildId = config.discord?.guildId;
+        const content =
+          message.guildId && message.guildId === guildId
+            ? await stripOwnServerLinks(message.content, { guildId, resolveInviteGuildId })
+            : message.content;
+        if (!content || !content.trim()) return;
+
         const filterURL = `${process.env.siteAddress}/api/filter`;
         const bodyJSON = {
-          content: message.content,
+          content,
           discordId: message.author.id,
           discordUsername: message.author.username,
         };
