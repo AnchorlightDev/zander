@@ -339,7 +339,8 @@ export async function createEvent(data, actorId, actorName) {
       tags: data.tags || undefined,
       featured: data.featured || false,
       creatorId: actorId,
-      templateId: data.templateId || null,
+      // Form posts send the template's ID as a string ("3"); the column is an Int.
+      templateId: Number.parseInt(data.templateId, 10) || null,
     },
   });
 

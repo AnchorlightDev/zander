@@ -104,6 +104,15 @@ describe("event description sanitization", () => {
       await createEvent({ ...baseEvent }, 1, "tester");
       expect(createdDescription()).toBeNull();
     });
+
+    // The "create event from template" form posts the template ID as a string;
+    // Prisma rejected "3" for the Int column.
+    it("stores a posted template ID as a number, and blank as null", async () => {
+      await createEvent({ ...baseEvent, templateId: "3" }, 1, "tester");
+      expect(mockCreate.mock.calls.at(-1)[0].data.templateId).toBe(3);
+      await createEvent({ ...baseEvent, templateId: "" }, 1, "tester");
+      expect(mockCreate.mock.calls.at(-1)[0].data.templateId).toBeNull();
+    });
   });
 
   describe("updateEvent", () => {
