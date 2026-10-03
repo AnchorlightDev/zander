@@ -33,6 +33,8 @@ import {
   updateTemplate,
   deleteTemplate,
   upsertTemplateAnnouncements,
+  getDefaultAnnouncements,
+  upsertDefaultAnnouncements,
 } from "../../services/eventTemplateService.js";
 
 import {
@@ -841,6 +843,40 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     } catch (err) {
       console.error("[Events API] templates/announcements/update:", err);
       return res.send({ success: false, message: err.message || "Failed to update template announcements" });
+    }
+  });
+
+  // ============================================================================
+  // Default announcements (seed every new event and template)
+  // ============================================================================
+
+  /** GET /api/events/default-announcements/get */
+  app.get("/api/events/default-announcements/get", async (req, res) => {
+    if (!features.events) return res.send({ success: false, message: "Events feature disabled" });
+
+    try {
+      return res.send({ success: true, data: await getDefaultAnnouncements() });
+    } catch (err) {
+      console.error("[Events API] default-announcements/get:", err);
+      return res.send({ success: false, message: "Failed to fetch default announcements" });
+    }
+  });
+
+  /** POST /api/events/default-announcements/update */
+  app.post("/api/events/default-announcements/update", async (req, res) => {
+    if (!features.events) return res.send({ success: false, message: "Events feature disabled" });
+
+    const { announcements } = req.body || {};
+    if (announcements !== undefined && !Array.isArray(announcements)) {
+      return res.send({ success: false, message: "announcements must be an array" });
+    }
+
+    try {
+      await upsertDefaultAnnouncements(announcements || []);
+      return res.send({ success: true, message: "Default announcements updated" });
+    } catch (err) {
+      console.error("[Events API] default-announcements/update:", err);
+      return res.send({ success: false, message: err.message || "Failed to update default announcements" });
     }
   });
 

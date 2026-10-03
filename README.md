@@ -42,7 +42,7 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 |---|---|
 | `zander.web.events` | Access the events dashboard (view only) |
 | `zander.web.events.edit` | Create and edit events |
-| `zander.web.events.review` | Review and publish events (implies edit access) |
+| `zander.web.events.review` | Review and publish events (implies edit access), and edit the default announcements new events start with |
 
 ### Webstore
 

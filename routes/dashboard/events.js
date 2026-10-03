@@ -13,7 +13,12 @@ import {
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { hasPermission as hasPermissionNode } from "../../lib/discord/permissions.mjs";
 import { getEventById } from "../../services/eventService.js";
-import { computeNextEventDate, eventPrefillFromTemplate, getTemplateById } from "../../services/eventTemplateService.js";
+import {
+  computeNextEventDate,
+  eventPrefillFromTemplate,
+  getDefaultAnnouncements,
+  getTemplateById,
+} from "../../services/eventTemplateService.js";
 import { getSelectableRanks } from "../../services/rankMetaService.js";
 import { enrichHostsWithAvatars } from "../../lib/avatarHelpers.js";
 import { sanitizeForumHtml } from "../../lib/htmlSanitize.js";
@@ -29,6 +34,19 @@ import { renderDiscordTimestamps } from "../../lib/discordTimestamps.js";
  * rank picker, so "one dependency is down" has to degrade into something
  * readable rather than nothing at all.
  */
+/**
+ * The site-wide default announcements, or none if they cannot be read -- a
+ * missing starting set should not stop anyone creating an event.
+ */
+async function defaultAnnouncementsOrEmpty(context) {
+  try {
+    return await getDefaultAnnouncements();
+  } catch (error) {
+    console.warn(`[dashboard/events] Default announcements unavailable (${context}):`, error.message);
+    return [];
+  }
+}
+
 async function renderRouteError(app, res, error, context, config, features, req) {
   console.error(`[dashboard/events] ${context}:`, error);
   res.status(500).header("content-type", "text/html; charset=utf-8").send(
@@ -223,7 +241,9 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     // ?templateId=N — start the new event pre-filled from a template (the
     // templates page sends master templates here). A recurring template also
     // fills its next date; a master template leaves the date to the organiser.
-    let ev = {};
+    // Without a template the event starts with the site-wide default
+    // announcements; a template's own announcements replace them.
+    let ev = null;
     const templateId = parseInt(req.query.templateId, 10);
     if (templateId) {
       const template = await getTemplateById(templateId);
@@ -243,6 +263,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
         }
       }
     }
+    if (!ev) ev = { announcements: await defaultAnnouncementsOrEmpty("create event") };
 
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-editor", {
@@ -410,8 +431,9 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     if (!await isFeatureWebRouteEnabled(app, features.events, req, res, features)) return;
     if (!await hasPermission("zander.web.events.edit", req, res, features)) return;
 
-    const [selectableRanks, globalImage, announcementWeb] = await Promise.all([
+    const [selectableRanks, defaultAnnouncements, globalImage, announcementWeb] = await Promise.all([
       selectableRanksOrEmpty("create template"),
+      defaultAnnouncementsOrEmpty("create template"),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
@@ -426,13 +448,43 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
         features,
         req,
         mode: "create",
-        tmpl: {},
+        tmpl: { announcements: defaultAnnouncements },
         dayNames: DAY_NAMES,
         recDays: [],
         globalImage,
         announcementWeb,
       })
     );
+  });
+
+  // ============================================================================
+  // Default Announcements (starting set for every new event and template)
+  // ============================================================================
+  app.get("/dashboard/events/announcement-defaults", async (req, res) => {
+    if (!await isFeatureWebRouteEnabled(app, features.events, req, res, features)) return;
+    if (!await hasPermission("zander.web.events.review", req, res, features)) return;
+
+    try {
+      const [announcements, globalImage, announcementWeb] = await Promise.all([
+        getDefaultAnnouncements(),
+        getGlobalImage(),
+        getWebAnnouncement(),
+      ]);
+
+      res.header("content-type", "text/html; charset=utf-8").send(
+        await app.view("dashboard/events/events-announcement-defaults", {
+          pageTitle: "Dashboard - Default Event Announcements",
+          config,
+          features,
+          req,
+          announcements,
+          globalImage,
+          announcementWeb,
+        })
+      );
+    } catch (error) {
+      await renderRouteError(app, res, error, "the default announcements", config, features, req);
+    }
   });
 
   // ============================================================================

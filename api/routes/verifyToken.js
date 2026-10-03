@@ -72,6 +72,10 @@ export const SESSION_ALLOWED_ROUTES = new Map([
   ["POST /api/events/templates/delete", EVENTS_WRITE],
   ["POST /api/events/templates/generate-draft", EVENTS_WRITE],
   ["POST /api/events/templates/announcements/update", EVENTS_WRITE],
+
+  // Default announcements apply to every new event, so only reviewers edit them
+  ["GET /api/events/default-announcements/get", EVENTS_WRITE],
+  ["POST /api/events/default-announcements/update", EVENTS_REVIEW],
 ]);
 
 /** Client address for audit lines, preferring the proxied original. */

@@ -394,6 +394,57 @@ export async function upsertTemplateAnnouncements(templateId, announcements) {
 }
 
 /**
+ * The site-wide default announcements, without row ids, ready to seed a new
+ * event or template. Editing them never touches events or templates that
+ * already exist.
+ */
+export async function getDefaultAnnouncements() {
+  const rows = await prisma.event_default_announcements.findMany({ orderBy: { id: "asc" } });
+  return rows.map((a) => ({
+    label: a.label,
+    announcementType: a.announcementType,
+    platform: a.platform,
+    channelId: a.channelId,
+    contentTemplate: a.contentTemplate,
+    body: a.body,
+    colourMessageFormat: a.colourMessageFormat,
+    link: a.link,
+    popupButtonText: a.popupButtonText,
+    popupImageUrl: a.popupImageUrl,
+    triggerType: a.triggerType,
+    offsetMinutes: a.offsetMinutes,
+    enabled: a.enabled,
+  }));
+}
+
+/**
+ * Replace the site-wide default announcements (delete + recreate).
+ */
+export async function upsertDefaultAnnouncements(announcements) {
+  await prisma.event_default_announcements.deleteMany({});
+
+  if (Array.isArray(announcements) && announcements.length > 0) {
+    await prisma.event_default_announcements.createMany({
+      data: announcements.map((a) => ({
+        label: a.label || null,
+        announcementType: a.announcementType || "reminder",
+        platform: a.platform || "discord",
+        channelId: a.channelId || null,
+        contentTemplate: a.contentTemplate || null,
+        body: a.body || null,
+        colourMessageFormat: a.colourMessageFormat || null,
+        link: a.link || null,
+        popupButtonText: a.popupButtonText || null,
+        popupImageUrl: a.popupImageUrl || null,
+        triggerType: a.triggerType || "before_event",
+        offsetMinutes: a.offsetMinutes ? parseInt(a.offsetMinutes) : null,
+        enabled: a.enabled !== undefined ? a.enabled : true,
+      })),
+    });
+  }
+}
+
+/**
  * Compute the next date that a template should generate a draft.
  * Returns a Date or null.
  */

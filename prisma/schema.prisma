@@ -896,6 +896,25 @@ model event_template_announcements {
   template            event_templates @relation(fields: [templateId], references: [templateId], onDelete: Cascade)
 }
 
+model event_default_announcements {
+  id                  Int      @id @default(autoincrement())
+  label               String?  @db.VarChar(100)
+  announcementType    String   @default("reminder") @db.VarChar(32)
+  platform            String   @default("discord") @db.VarChar(32)
+  channelId           String?  @db.VarChar(32)
+  contentTemplate     String?  @db.Text
+  body                String?  @db.Text
+  colourMessageFormat String?  @db.Text
+  link                String?  @db.Text
+  popupButtonText     String?  @db.VarChar(60)
+  popupImageUrl       String?  @db.Text
+  triggerType         String   @default("before_event") @db.VarChar(32)
+  offsetMinutes       Int?
+  enabled             Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
 model event_template_hosts {
   id            Int             @id @default(autoincrement())
   templateId    Int
