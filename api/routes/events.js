@@ -24,6 +24,7 @@ import {
   upsertEventAnnouncements,
   getPendingReviewEvents,
   duplicateEvent,
+  applyDefaultAnnouncementsToEvents,
 } from "../../services/eventService.js";
 
 import {
@@ -35,6 +36,7 @@ import {
   upsertTemplateAnnouncements,
   getDefaultAnnouncements,
   upsertDefaultAnnouncements,
+  applyDefaultAnnouncementsToTemplates,
 } from "../../services/eventTemplateService.js";
 
 import {
@@ -877,6 +879,34 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     } catch (err) {
       console.error("[Events API] default-announcements/update:", err);
       return res.send({ success: false, message: err.message || "Failed to update default announcements" });
+    }
+  });
+
+  /**
+   * POST /api/events/default-announcements/apply
+   * Body: { dryRun?: boolean, includeTemplates?: boolean }
+   * Adds the current defaults to upcoming events (and templates) missing them.
+   */
+  app.post("/api/events/default-announcements/apply", async (req, res) => {
+    if (!features.events) return res.send({ success: false, message: "Events feature disabled" });
+
+    const dryRun = req.body?.dryRun === true;
+    const includeTemplates = req.body?.includeTemplates !== false;
+
+    try {
+      const defaults = await getDefaultAnnouncements();
+      if (defaults.length === 0) return res.send({ success: false, message: "There are no default announcements to apply" });
+
+      const { actorId, actorName } = actorFromReq(req);
+      const events = await applyDefaultAnnouncementsToEvents(defaults, { dryRun, actorId, actorName });
+      const templates = includeTemplates
+        ? await applyDefaultAnnouncementsToTemplates(defaults, { dryRun })
+        : { templates: 0, announcements: 0 };
+
+      return res.send({ success: true, dryRun, data: { events, templates } });
+    } catch (err) {
+      console.error("[Events API] default-announcements/apply:", err);
+      return res.send({ success: false, message: err.message || "Failed to apply default announcements" });
     }
   });
 

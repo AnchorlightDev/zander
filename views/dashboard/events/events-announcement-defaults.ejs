@@ -24,7 +24,8 @@
             <p class="text-muted small">
                 These announcements are added to every <strong>new event</strong> and <strong>new template</strong> as a starting point,
                 where they can be edited or removed. Events created from a template use that template's announcements instead.
-                Changing the defaults does not affect events or templates that already exist.
+                Saving the defaults does not change events or templates that already exist; use
+                <strong>Apply to existing</strong> below for that.
             </p>
 
             <div class="card mb-3">
@@ -49,6 +50,25 @@
             <button type="button" class="btn btn-primary" id="saveBtn">
                 <i class="fas fa-save me-1"></i>Save Defaults
             </button>
+
+            <div class="card mt-4 mb-3">
+                <div class="card-header">Apply to existing</div>
+                <div class="card-body">
+                    <p class="text-muted small">
+                        Adds the <strong>saved</strong> defaults to every upcoming event that does not already have them
+                        (same platform, trigger, offset and channel), so running it twice adds nothing new.
+                        On <strong>published</strong> events the added announcements are queued straight away; there,
+                        <em>On Publish</em> defaults and any whose send time has already passed are skipped.
+                    </p>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="includeTemplatesCheck" checked>
+                        <label class="form-check-label small" for="includeTemplatesCheck">Also add them to templates, so drafts they generate get them</label>
+                    </div>
+                    <button type="button" class="btn btn-outline-warning" id="applyBtn" <%= (announcements || []).length ? '' : 'disabled' %>>
+                        <i class="fas fa-share-square me-1"></i>Apply to Existing Events
+                    </button>
+                </div>
+            </div>
 
 <!-- New row: the same partial, rendered blank. Scripts inside <template> do not run. -->
 <template id="announcementRowTemplate">
@@ -210,6 +230,55 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
         alert('Network error: ' + err.message);
     } finally {
         saveBtn.disabled = false;
+    }
+});
+
+// ============================================================
+// Apply saved defaults to existing events / templates
+// ============================================================
+async function applyDefaults(dryRun) {
+    const res = await fetch('/api/events/default-announcements/apply', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun, includeTemplates: document.getElementById('includeTemplatesCheck').checked }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
+    return data.data;
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+document.getElementById('applyBtn').addEventListener('click', async () => {
+    const applyBtn = document.getElementById('applyBtn');
+    applyBtn.disabled = true;
+    try {
+        const preview = await applyDefaults(true);
+        const { events, templates } = preview;
+        if (events.announcements === 0 && templates.announcements === 0) {
+            alert('Every upcoming event and template already has the defaults. Nothing to add.');
+            return;
+        }
+
+        const lines = [
+            `Add ${plural(events.announcements, 'announcement')} to ${plural(events.events, 'upcoming event')}.`,
+        ];
+        if (events.publishedEvents > 0) {
+            lines.push(`${plural(events.publishedEvents, 'of these event')} ${events.publishedEvents === 1 ? 'is' : 'are'} published: their new announcements will be queued to send.`);
+        }
+        if (templates.templates > 0) {
+            lines.push(`Add ${plural(templates.announcements, 'announcement')} to ${plural(templates.templates, 'template')}.`);
+        }
+        if (!confirm(lines.join('\n\n') + '\n\nContinue?')) return;
+
+        const done = await applyDefaults(false);
+        alert(`Added ${plural(done.events.announcements, 'announcement')} to ${plural(done.events.events, 'event')}` +
+            (done.templates.templates ? ` and ${plural(done.templates.announcements, 'announcement')} to ${plural(done.templates.templates, 'template')}` : '') + '.');
+    } catch (err) {
+        alert('Error: ' + err.message);
+    } finally {
+        applyBtn.disabled = false;
     }
 });
 </script>

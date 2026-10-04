@@ -6,6 +6,7 @@
 import { prisma } from "../controllers/databaseController.js";
 import { sanitizeForumHtml } from "../lib/htmlSanitize.js";
 import { EVENT_VISIBILITY, normaliseRankSlugs } from "../lib/eventAccess.js";
+import { missingDefaults } from "../lib/eventDefaultAnnouncements.js";
 
 // Valid status transitions
 const STATUS_TRANSITIONS = {
@@ -820,11 +821,12 @@ export async function upsertEventAnnouncements(eventId, announcements, actorId, 
 /**
  * Schedule announcements for a published event.
  * Creates scheduledDiscordMessages entries so the central schedulerCron handles delivery.
+ * `onlyIds` limits it to those announcement rows (ones added after publishing).
  */
-async function scheduleAnnouncementsForEvent(eventId, startAt, actorId) {
+async function scheduleAnnouncementsForEvent(eventId, startAt, actorId, onlyIds = null) {
   const event = await prisma.events.findUnique({ where: { eventId } });
   const announcements = await prisma.event_announcements.findMany({
-    where: { eventId, enabled: true, status: "pending" },
+    where: { eventId, enabled: true, status: "pending", ...(onlyIds ? { id: { in: onlyIds } } : {}) },
   });
 
   for (const ann of announcements) {
@@ -941,6 +943,89 @@ async function scheduleAnnouncementsForEvent(eventId, startAt, actorId) {
       });
     }
   }
+}
+
+/** Statuses whose events can still take new announcements. */
+const DEFAULTS_APPLY_STATUSES = ["draft", "pending_review", "approved", "rejected", "published"];
+
+/**
+ * Add the site-wide default announcements to every upcoming event that does
+ * not already have them. On published events the added ones are queued
+ * straight away (they would otherwise never send); see missingDefaults() for
+ * which defaults a published event skips.
+ *
+ * With `dryRun` nothing is written; the counts say what would happen.
+ * Returns { events, announcements, publishedEvents }.
+ */
+export async function applyDefaultAnnouncementsToEvents(defaults, { dryRun = false, actorId = null, actorName = "System" } = {}) {
+  const now = new Date();
+  const events = await prisma.events.findMany({
+    where: { deletedAt: null, status: { in: DEFAULTS_APPLY_STATUSES }, startAt: { gt: now } },
+    select: {
+      eventId: true,
+      status: true,
+      startAt: true,
+      endAt: true,
+      announcements: { where: { status: { not: "cancelled" } } },
+    },
+  });
+
+  const result = { events: 0, announcements: 0, publishedEvents: 0 };
+
+  for (const event of events) {
+    const published = event.status === "published";
+    const toAdd = missingDefaults(event.announcements, defaults, {
+      published,
+      startAt: event.startAt,
+      endAt: event.endAt,
+      now,
+    });
+    if (toAdd.length === 0) continue;
+
+    result.events++;
+    result.announcements += toAdd.length;
+    if (published) result.publishedEvents++;
+    if (dryRun) continue;
+
+    const created = [];
+    for (const a of toAdd) {
+      created.push(
+        await prisma.event_announcements.create({
+          data: {
+            eventId: event.eventId,
+            label: a.label || null,
+            announcementType: a.announcementType || "reminder",
+            platform: a.platform || "discord",
+            channelId: a.channelId || null,
+            contentTemplate: a.contentTemplate || null,
+            body: a.body || null,
+            colourMessageFormat: a.colourMessageFormat || null,
+            link: a.link || null,
+            popupButtonText: a.popupButtonText || null,
+            popupImageUrl: a.popupImageUrl || null,
+            triggerType: a.triggerType || "before_event",
+            offsetMinutes: a.offsetMinutes || null,
+            enabled: a.enabled !== undefined ? a.enabled : true,
+            status: "pending",
+          },
+        })
+      );
+    }
+
+    if (published) {
+      await scheduleAnnouncementsForEvent(event.eventId, event.startAt, actorId, created.map((c) => c.id));
+    }
+
+    await logEventAudit(
+      event.eventId,
+      actorId,
+      actorName,
+      "announcements_updated",
+      `Added ${toAdd.length} default announcement${toAdd.length === 1 ? "" : "s"}`
+    );
+  }
+
+  return result;
 }
 
 /**

@@ -76,6 +76,7 @@ export const SESSION_ALLOWED_ROUTES = new Map([
   // Default announcements apply to every new event, so only reviewers edit them
   ["GET /api/events/default-announcements/get", EVENTS_WRITE],
   ["POST /api/events/default-announcements/update", EVENTS_REVIEW],
+  ["POST /api/events/default-announcements/apply", EVENTS_REVIEW],
 ]);
 
 /** Client address for audit lines, preferring the proxied original. */

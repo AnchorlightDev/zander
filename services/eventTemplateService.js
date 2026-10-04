@@ -6,6 +6,7 @@
 import { prisma } from "../controllers/databaseController.js";
 import { createEvent, logEventAudit, upsertEventAnnouncements } from "./eventService.js";
 import { EVENT_VISIBILITY, normaliseRankSlugs } from "../lib/eventAccess.js";
+import { missingDefaults } from "../lib/eventDefaultAnnouncements.js";
 
 /** Reject anything outside the known set so a bad payload cannot invent a visibility. */
 function coerceVisibility(value, fallback = "public") {
@@ -442,6 +443,51 @@ export async function upsertDefaultAnnouncements(announcements) {
       })),
     });
   }
+}
+
+/**
+ * Add the default announcements to every template that does not already have
+ * them, so drafts it generates from now on carry them too.
+ *
+ * With `dryRun` nothing is written. Returns { templates, announcements }.
+ */
+export async function applyDefaultAnnouncementsToTemplates(defaults, { dryRun = false } = {}) {
+  const templates = await prisma.event_templates.findMany({
+    where: { deletedAt: null },
+    select: { templateId: true, announcements: true },
+  });
+
+  const result = { templates: 0, announcements: 0 };
+
+  for (const tmpl of templates) {
+    const toAdd = missingDefaults(tmpl.announcements, defaults);
+    if (toAdd.length === 0) continue;
+
+    result.templates++;
+    result.announcements += toAdd.length;
+    if (dryRun) continue;
+
+    await prisma.event_template_announcements.createMany({
+      data: toAdd.map((a) => ({
+        templateId: tmpl.templateId,
+        label: a.label || null,
+        announcementType: a.announcementType || "reminder",
+        platform: a.platform || "discord",
+        channelId: a.channelId || null,
+        contentTemplate: a.contentTemplate || null,
+        body: a.body || null,
+        colourMessageFormat: a.colourMessageFormat || null,
+        link: a.link || null,
+        popupButtonText: a.popupButtonText || null,
+        popupImageUrl: a.popupImageUrl || null,
+        triggerType: a.triggerType || "before_event",
+        offsetMinutes: a.offsetMinutes ? parseInt(a.offsetMinutes) : null,
+        enabled: a.enabled !== undefined ? a.enabled : true,
+      })),
+    });
+  }
+
+  return result;
 }
 
 /**
