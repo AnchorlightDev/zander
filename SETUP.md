@@ -13,7 +13,7 @@ This document explains how to set up a local environment for this project.
 1. Create a new MySQL database and set `DATABASE_URL` in `.env` to point at it.
 2. Run `npm run build` (or `npx prisma migrate deploy && npx prisma generate`). Prisma creates the schema and applies every migration in `prisma/migrations/` in order.
 
-Schema changes are made by adding a new migration under `prisma/migrations/` — see `CLAUDE.md`. `dbinit.sql` and the `migration/` directory are the pre-Prisma setup scripts, kept for reference only; do not run them on a new database.
+Schema changes are made by adding a new migration under `prisma/migrations/` — see `CLAUDE.md`.
 
 ## Environment Variables
 

@@ -277,7 +277,7 @@ The `/watch` route is controlled by the **Watch** switch in **Dashboard → Modu
 
 ### Database migration
 
-Run `migration/v1.11.0_v1.12.0.sql` against your database to create the four tables required by this feature:
+The Prisma migrations (`npm run build`) create the four tables this feature uses:
 
 | Table | Purpose |
 |---|---|

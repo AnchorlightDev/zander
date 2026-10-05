@@ -10,10 +10,9 @@
  *                  Keeps existing callback-style controller code working without
  *                  modification.  Import as: import db from "./databaseController.js"
  *
- * Cross-database views (luckPermsPlayers, ranks, userRanks, userPermissions,
- * rankRanks, rankPermissions, shoppingDirectory) cannot be modelled in Prisma
- * because they span external databases.  Use prisma.$queryRawUnsafe() for those.
- * Punishments are queried directly via punishmentsDb (LiteBans DB instance).
+ * LuckPerms, QuickShop and LiteBans live in external databases and are queried
+ * directly through luckpermsDb, quickshopDb and punishmentsDb -- there are no
+ * cross-database views.
  */
 
 import { PrismaClient } from "@prisma/client";
