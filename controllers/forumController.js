@@ -1,6 +1,6 @@
 import db, { luckpermsDb } from "./databaseController.js";
-import { hashEmail } from "../api/common.js";
-import { sanitizeForumHtml } from "../lib/htmlSanitize.js";
+import { hashEmail, isLoggedIn } from "../api/common.js";
+import { plainTextExcerpt, sanitizeForumHtml } from "../lib/htmlSanitize.js";
 
 function query(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -52,6 +52,21 @@ function slugify(value) {
     .toLowerCase();
 
   return base || "item";
+}
+
+/**
+ * The permissions a request's viewer has for forum access checks: their
+ * LuckPerms nodes, plus "@authenticated" when logged in so a category can
+ * require login by setting its viewPermission to "@authenticated".
+ */
+export function forumViewerPermissions(req) {
+  const permissions = Array.isArray(req.session?.user?.permissions)
+    ? [...req.session.user.permissions]
+    : [];
+  if (isLoggedIn(req)) {
+    permissions.push("@authenticated");
+  }
+  return permissions;
 }
 
 export function permissionMatch(permissions, node) {
@@ -1038,6 +1053,69 @@ export async function getRecentDiscussions({
   });
 
   return { discussions, total };
+}
+
+/**
+ * The newest discussions in `categoryIds`, for the homepage: newest first by
+ * when they were started, archived ones left out, and sticky ones not pinned
+ * to the top (a pinned rules thread would otherwise sit there for good). Each
+ * carries a plain-text excerpt of its opening post.
+ *
+ * `categoryIds` must already be limited to what the viewer can see -- see
+ * forumViewerPermissions() and getCategoriesForUser().
+ */
+export async function getLatestDiscussions({ categoryIds = [], limit = 4, excerptLength = 160 } = {}) {
+  if (!categoryIds.length || limit < 1) return [];
+
+  const placeholders = categoryIds.map(() => "?").join(",");
+  const rows = await query(
+    `SELECT d.discussionId, d.categoryId, d.title, d.slug, d.createdBy, d.createdAt,
+            d.updatedAt, d.lastPostAt, d.lastPostBy, d.isLocked, d.isSticky, d.isArchived,
+            c.name AS categoryName, c.slug AS categorySlug
+       FROM forumDiscussions d
+       JOIN forumCategories c ON c.categoryId = d.categoryId
+      WHERE d.categoryId IN (${placeholders})
+        AND d.isArchived = 0
+      ORDER BY d.createdAt DESC, d.discussionId DESC
+      LIMIT ?`,
+    [...categoryIds, limit]
+  );
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.discussionId);
+  const idPlaceholders = ids.map(() => "?").join(",");
+  const [countRows, openingRows] = await Promise.all([
+    query(
+      `SELECT discussionId, COUNT(*) AS postCount
+         FROM forumPosts
+        WHERE discussionId IN (${idPlaceholders})
+        GROUP BY discussionId`,
+      ids
+    ),
+    // The opening post: flagged isOriginal, else the earliest
+    query(
+      `SELECT discussionId, content
+         FROM forumPosts
+        WHERE discussionId IN (${idPlaceholders})
+        ORDER BY discussionId ASC, isOriginal DESC, createdAt ASC, postId ASC`,
+      ids
+    ),
+  ]);
+
+  const replies = new Map(countRows.map((r) => [r.discussionId, Math.max(0, Number(r.postCount || 0) - 1)]));
+  const opening = new Map();
+  for (const r of openingRows) if (!opening.has(r.discussionId)) opening.set(r.discussionId, r.content);
+
+  const authors = await fetchUserSummaries(rows.map((r) => r.createdBy));
+
+  return rows.map((row) => ({
+    ...mapDiscussionRow(row),
+    categoryName: row.categoryName,
+    categorySlug: row.categorySlug,
+    replyCount: replies.get(row.discussionId) ?? 0,
+    excerpt: plainTextExcerpt(opening.get(row.discussionId), excerptLength),
+    author: authors.get(row.createdBy) || null,
+  }));
 }
 
 export async function getCategoryDiscussions({

@@ -31,6 +31,12 @@ import bedrockSiteRoutes from "./bedrockRoutes.js";
 import { getRankCatalogForPublicPage } from "../controllers/rankCatalogController.js";
 import { createTranslator } from "../lib/langText.mjs";
 import {
+  forumViewerPermissions,
+  getCategoriesForUser,
+  getLatestDiscussions,
+} from "../controllers/forumController.js";
+import { homepageCategoryIds } from "../lib/homepageForum.js";
+import {
   buildGraph,
   webPageNode,
   breadcrumbNode,
@@ -39,6 +45,35 @@ import {
   itemListNode,
 } from "../lib/seo/jsonLd.js";
 import { rankCatalogSchema } from "../lib/seo/rankSchema.js";
+
+/**
+ * The homepage's "Latest from the forums" posts for this visitor, or null to
+ * leave the section out. Never throws: a forum problem must not take the
+ * homepage down with it.
+ */
+async function homepageForumPosts(req, config, features) {
+  const settings = config.forums?.homepage || {};
+  const count = Number(settings.count ?? 4);
+  if (!features.forums || !(count > 0)) return null;
+
+  try {
+    const categoryData = await getCategoriesForUser(forumViewerPermissions(req));
+    const slug = String(settings.categorySlug || "").trim();
+    const categoryIds = homepageCategoryIds(categoryData, slug);
+    const discussions = await getLatestDiscussions({ categoryIds, limit: Math.min(count, 12) });
+    if (discussions.length === 0) return null;
+
+    const category = slug ? categoryData.flat.find((c) => c.slug === slug) : null;
+    return {
+      discussions,
+      title: category ? category.name : "Latest from the forums",
+      viewAllUrl: category ? `/forums/category/${category.slug}` : "/forums",
+    };
+  } catch (error) {
+    console.error("[homepage] Latest forum posts unavailable:", error.message);
+    return null;
+  }
+}
 
 export default function applicationSiteRoutes(
   app,
@@ -128,6 +163,7 @@ export default function applicationSiteRoutes(
       globalImage: await getGlobalImage(),
       jumboVideo: getJumboVideo(),
       statApiData: statApiData,
+      forumPosts: await homepageForumPosts(req, config, features),
       announcementWeb: await getWebAnnouncement(),
     }));
     return;

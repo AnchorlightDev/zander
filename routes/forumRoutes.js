@@ -17,6 +17,7 @@ import {
   getPostRevisions,
   moveDiscussion,
   getAllCategoriesForAdmin,
+  forumViewerPermissions,
 } from "../controllers/forumController.js";
 import {
   validatePollInput,
@@ -53,19 +54,8 @@ const PERMISSIONS = {
   ARCHIVE: "zander.forums.discussion.archive",
 };
 
-function getUserPermissions(req) {
-  const permissions = Array.isArray(req.session?.user?.permissions)
-    ? [...req.session.user.permissions]
-    : [];
-
-  // Add @authenticated pseudo-permission for logged-in users
-  // This allows categories to require login by setting viewPermission to "@authenticated"
-  if (isLoggedIn(req)) {
-    permissions.push("@authenticated");
-  }
-
-  return permissions;
-}
+// Shared with the homepage's latest-posts section (forumViewerPermissions)
+const getUserPermissions = forumViewerPermissions;
 
 function getCurrentUserId(req) {
   return req.session?.user?.userId || null;

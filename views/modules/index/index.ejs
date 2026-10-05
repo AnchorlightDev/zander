@@ -9,6 +9,10 @@
 
 <%- include("../../modules/index/features.ejs") %>
 
+<% if (typeof forumPosts !== "undefined" && forumPosts) { %>
+<%- include("../../modules/index/latestForumPosts.ejs", { forumPosts }) %>
+<% } %>
+
 <div class="section-spacer"></div>
 <%- include("../../modules/index/stats.ejs", {
     globalImage: globalImage

@@ -32,6 +32,7 @@ Read these before deploying.
 - **Dismissible site-wide banner**; announcements now record when they were created.
 - **Verification reminders** for unverified Discord members.
 - **Content filtering through MineMonitor** (backed by Purify), including Discord invite-link handling.
+- **Latest forum posts on the homepage** — the newest discussions visitors can see, with an excerpt. Show one category (for example network announcements) or all of them, and set how many, at Dashboard → Settings → Watch, Events & Forums.
 - **Version and commit** shown in the site and dashboard footers.
 
 ### Improved
