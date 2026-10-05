@@ -6,7 +6,7 @@
 import { prisma } from "../controllers/databaseController.js";
 import { createEvent, logEventAudit, upsertEventAnnouncements } from "./eventService.js";
 import { EVENT_VISIBILITY, normaliseRankSlugs } from "../lib/eventAccess.js";
-import { missingDefaults } from "../lib/eventDefaultAnnouncements.js";
+import { missingDefaults, parseOffsetMinutes } from "../lib/eventAnnouncements.js";
 
 /** Reject anything outside the known set so a bad payload cannot invent a visibility. */
 function coerceVisibility(value, fallback = "public") {
@@ -387,7 +387,7 @@ export async function upsertTemplateAnnouncements(templateId, announcements) {
         popupButtonText: a.popupButtonText || null,
         popupImageUrl: a.popupImageUrl || null,
         triggerType: a.triggerType || "before_event",
-        offsetMinutes: a.offsetMinutes ? parseInt(a.offsetMinutes) : null,
+        offsetMinutes: parseOffsetMinutes(a.offsetMinutes),
         enabled: a.enabled !== undefined ? a.enabled : true,
       })),
     });
@@ -438,7 +438,7 @@ export async function upsertDefaultAnnouncements(announcements) {
         popupButtonText: a.popupButtonText || null,
         popupImageUrl: a.popupImageUrl || null,
         triggerType: a.triggerType || "before_event",
-        offsetMinutes: a.offsetMinutes ? parseInt(a.offsetMinutes) : null,
+        offsetMinutes: parseOffsetMinutes(a.offsetMinutes),
         enabled: a.enabled !== undefined ? a.enabled : true,
       })),
     });
@@ -481,7 +481,7 @@ export async function applyDefaultAnnouncementsToTemplates(defaults, { dryRun = 
         popupButtonText: a.popupButtonText || null,
         popupImageUrl: a.popupImageUrl || null,
         triggerType: a.triggerType || "before_event",
-        offsetMinutes: a.offsetMinutes ? parseInt(a.offsetMinutes) : null,
+        offsetMinutes: parseOffsetMinutes(a.offsetMinutes),
         enabled: a.enabled !== undefined ? a.enabled : true,
       })),
     });

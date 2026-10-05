@@ -200,7 +200,7 @@ function collectAnnouncements() {
         popupButtonText: row.querySelector('.ann-popupButtonText')?.value || null,
         popupImageUrl: row.querySelector('.ann-popupImageUrl')?.value || null,
         triggerType: row.querySelector('.ann-trigger')?.value || 'before_event',
-        offsetMinutes: parseInt(row.querySelector('.ann-offsetMinutes')?.value || '0') || null,
+        offsetMinutes: row.querySelector('.ann-offsetMinutes')?.value || null,
         enabled: row.querySelector('.ann-enabled')?.checked !== false,
     }));
 }

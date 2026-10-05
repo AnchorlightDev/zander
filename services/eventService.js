@@ -6,7 +6,13 @@
 import { prisma } from "../controllers/databaseController.js";
 import { sanitizeForumHtml } from "../lib/htmlSanitize.js";
 import { EVENT_VISIBILITY, normaliseRankSlugs } from "../lib/eventAccess.js";
-import { missingDefaults } from "../lib/eventDefaultAnnouncements.js";
+import {
+  SITE_ANNOUNCEMENT_PLATFORMS,
+  discordScheduledFor,
+  missingDefaults,
+  parseOffsetMinutes,
+  siteAnnouncementWindow,
+} from "../lib/eventAnnouncements.js";
 
 // Valid status transitions
 const STATUS_TRANSITIONS = {
@@ -47,33 +53,92 @@ async function generateSlug(title, startAt, existingSlug = null) {
 }
 
 /**
- * Recalculate scheduled announcement times for an event.
- * Called whenever event start time changes.
+ * Move a published event's announcements after its start or end time changes:
+ * unsent Discord announcements get a new send time, and site announcements
+ * already created get a new display window. Unpublished events have nothing
+ * scheduled yet -- times are worked out when they are published.
  */
-async function recalculateAnnouncementSchedules(eventId, startAt) {
+async function recalculateAnnouncementSchedules(eventId) {
   const event = await prisma.events.findUnique({ where: { eventId } });
+  if (!event || event.status !== "published") return;
+
   const announcements = await prisma.event_announcements.findMany({
-    where: { eventId, status: "pending", enabled: true },
+    where: { eventId, enabled: true },
   });
 
   for (const ann of announcements) {
-    let scheduledFor = null;
-
-    if (ann.triggerType === "before_event" && ann.offsetMinutes != null) {
-      scheduledFor = new Date(new Date(startAt).getTime() - ann.offsetMinutes * 60000);
-    } else if (ann.triggerType === "event_start") {
-      scheduledFor = new Date(startAt);
-    } else if (ann.triggerType === "after_event" && event?.endAt) {
-      const offset = (ann.offsetMinutes || 0) * 60000;
-      scheduledFor = new Date(new Date(event.endAt).getTime() + offset);
-    }
-
-    if (scheduledFor) {
-      await prisma.event_announcements.update({
-        where: { id: ann.id },
-        data: { scheduledFor },
+    if ((ann.platform || "discord") === "discord") {
+      if (ann.status !== "pending" || ann.triggerType === "on_publish") continue;
+      const scheduledFor = discordScheduledFor(ann, event.startAt, event.endAt);
+      if (scheduledFor) {
+        await prisma.event_announcements.update({ where: { id: ann.id }, data: { scheduledFor } });
+      }
+    } else if (ann.linkedAnnouncementId) {
+      await prisma.announcements.updateMany({
+        where: { announcementId: ann.linkedAnnouncementId },
+        data: { ...siteAnnouncementWindow(ann, event.startAt, event.endAt), updatedDate: new Date() },
       });
     }
+  }
+
+  for (const ann of await legacyQueuedDiscordAnnouncements(eventId)) {
+    if (ann.triggerType === "on_publish") continue;
+    const scheduledFor = discordScheduledFor(ann, event.startAt, event.endAt);
+    if (!scheduledFor) continue;
+    await prisma.scheduledDiscordMessages.updateMany({
+      where: { channelId: ann.channelId, scheduledFor: ann.scheduledFor, status: "scheduled", sentAt: null },
+      data: { scheduledFor },
+    });
+    await prisma.event_announcements.update({ where: { id: ann.id }, data: { scheduledFor } });
+  }
+}
+
+/**
+ * Discord announcements of events published before announcements were sent by
+ * the event announcement cron: they were copied into scheduledDiscordMessages
+ * and marked "sent" at publish time without a sentAt. Matched back to their
+ * queue entry by channel and send time, so cancel and reschedule reach them.
+ */
+async function legacyQueuedDiscordAnnouncements(eventId) {
+  return prisma.event_announcements.findMany({
+    where: {
+      eventId,
+      platform: "discord",
+      status: "sent",
+      sentAt: null,
+      scheduledFor: { gt: new Date() },
+      channelId: { not: null },
+    },
+  });
+}
+
+/**
+ * Stop everything an event still has queued: unsent Discord announcements are
+ * cancelled and site announcements it created are switched off.
+ */
+async function stopEventAnnouncements(eventId) {
+  await prisma.event_announcements.updateMany({
+    where: { eventId, status: "pending" },
+    data: { status: "cancelled" },
+  });
+
+  for (const ann of await legacyQueuedDiscordAnnouncements(eventId)) {
+    await prisma.scheduledDiscordMessages.updateMany({
+      where: { channelId: ann.channelId, scheduledFor: ann.scheduledFor, status: "scheduled", sentAt: null },
+      data: { status: "failed", lastError: "Event cancelled" },
+    });
+    await prisma.event_announcements.update({ where: { id: ann.id }, data: { status: "cancelled" } });
+  }
+
+  const linked = await prisma.event_announcements.findMany({
+    where: { eventId, linkedAnnouncementId: { not: null } },
+    select: { linkedAnnouncementId: true },
+  });
+  if (linked.length > 0) {
+    await prisma.announcements.updateMany({
+      where: { announcementId: { in: linked.map((l) => l.linkedAnnouncementId) } },
+      data: { enabled: false, updatedDate: new Date() },
+    });
   }
 }
 
@@ -450,11 +515,6 @@ export async function updateEvent(eventId, data, actorId, actorName) {
     }
   }
 
-  // Recalculate announcement schedules if time changed
-  if (data.startAt && existing.status !== "published") {
-    await recalculateAnnouncementSchedules(parseInt(eventId), data.startAt);
-  }
-
   await logEventAudit(
     parseInt(eventId),
     actorId,
@@ -640,8 +700,7 @@ export async function publishEvent(eventId, actorId, actorName) {
     data: { status: "published", publishedAt: new Date() },
   });
 
-  // Schedule enabled announcements through the central scheduler
-  await scheduleAnnouncementsForEvent(event.eventId, event.startAt, actorId);
+  await scheduleAnnouncementsForEvent(event.eventId);
 
   await logEventAudit(parseInt(eventId), actorId, actorName, "published", "Event published");
 
@@ -660,9 +719,10 @@ export async function updatePublishedEvent(eventId, data, actorId, actorName) {
 
   const updated = await updateEvent(eventId, data, actorId, actorName);
 
-  // Recalculate announcement schedules after time change
-  if (data.startAt) {
-    await recalculateAnnouncementSchedules(parseInt(eventId), data.startAt);
+  // Move announcements when either end of the event moves -- after_event
+  // ones hang off the end time.
+  if (data.startAt || data.endAt) {
+    await recalculateAnnouncementSchedules(parseInt(eventId));
   }
 
   await logEventAudit(
@@ -693,11 +753,7 @@ export async function cancelEvent(eventId, actorId, actorName, reason = null) {
     data: { status: "cancelled", cancelledAt: new Date() },
   });
 
-  // Cancel pending announcements
-  await prisma.event_announcements.updateMany({
-    where: { eventId: parseInt(eventId), status: "pending" },
-    data: { status: "cancelled" },
-  });
+  await stopEventAnnouncements(parseInt(eventId));
 
   await logEventAudit(
     parseInt(eventId),
@@ -721,6 +777,8 @@ export async function deleteEvent(eventId, actorId, actorName) {
     where: { eventId: parseInt(eventId) },
     data: { deletedAt: new Date() },
   });
+
+  await stopEventAnnouncements(parseInt(eventId));
 
   await logEventAudit(parseInt(eventId), actorId, actorName, "deleted", "Event soft-deleted");
 
@@ -785,144 +843,125 @@ export async function upsertEventActions(eventId, actions, actorId, actorName) {
   await logEventAudit(parseInt(eventId), actorId, actorName, "actions_updated", "Event actions updated");
 }
 
-/**
- * Upsert event announcements (replace all for the event).
- */
-export async function upsertEventAnnouncements(eventId, announcements, actorId, actorName) {
-  await prisma.event_announcements.deleteMany({
-    where: { eventId: parseInt(eventId), status: "pending" },
-  });
-
-  if (Array.isArray(announcements) && announcements.length > 0) {
-    await prisma.event_announcements.createMany({
-      data: announcements.map((a) => ({
-        eventId: parseInt(eventId),
-        label: a.label || null,
-        announcementType: a.announcementType || "reminder",
-        platform: a.platform || "discord",
-        channelId: a.channelId || null,
-        contentTemplate: a.contentTemplate || null,
-        body: a.body || null,
-        colourMessageFormat: a.colourMessageFormat || null,
-        link: a.link || null,
-        popupButtonText: a.popupButtonText || null,
-        popupImageUrl: a.popupImageUrl || null,
-        triggerType: a.triggerType || "before_event",
-        offsetMinutes: a.offsetMinutes || null,
-        enabled: a.enabled !== undefined ? a.enabled : true,
-        status: "pending",
-      })),
-    });
-  }
-
-  await logEventAudit(parseInt(eventId), actorId, actorName, "announcements_updated", "Event announcements updated");
+/** Announcement fields as stored, from an editor/API payload. */
+function announcementRowData(eventId, a) {
+  return {
+    eventId,
+    label: a.label || null,
+    announcementType: a.announcementType || "reminder",
+    platform: a.platform || "discord",
+    channelId: a.channelId || null,
+    contentTemplate: a.contentTemplate || null,
+    body: a.body || null,
+    colourMessageFormat: a.colourMessageFormat || null,
+    link: a.link || null,
+    popupButtonText: a.popupButtonText || null,
+    popupImageUrl: a.popupImageUrl || null,
+    triggerType: a.triggerType || "before_event",
+    offsetMinutes: parseOffsetMinutes(a.offsetMinutes),
+    enabled: a.enabled !== undefined ? a.enabled : true,
+    status: "pending",
+  };
 }
 
 /**
- * Schedule announcements for a published event.
- * Creates scheduledDiscordMessages entries so the central schedulerCron handles delivery.
- * `onlyIds` limits it to those announcement rows (ones added after publishing).
+ * Replace an event's announcements with the submitted list.
+ *
+ * Announcements already sent are history and cannot be edited: a submitted
+ * row carrying a sent row's `id` keeps it unchanged, and a sent row left out
+ * of the list is removed (switching off any site announcement it created).
+ * Everything else -- pending, failed, cancelled -- is replaced by the
+ * submitted rows, so saving again retries a failed one. Before this, every
+ * save of a published event re-created its sent rows as new, never-sent
+ * duplicates.
+ *
+ * On a published event the new rows are scheduled straight away; otherwise
+ * that happens when it is published.
  */
-async function scheduleAnnouncementsForEvent(eventId, startAt, actorId, onlyIds = null) {
+export async function upsertEventAnnouncements(eventId, announcements, actorId, actorName) {
+  const id = parseInt(eventId);
+  const list = Array.isArray(announcements) ? announcements : [];
+
+  const sent = await prisma.event_announcements.findMany({ where: { eventId: id, status: "sent" } });
+  const keepIds = new Set(list.map((a) => parseInt(a.id, 10)).filter((n) => sent.some((s) => s.id === n)));
+  const dropped = sent.filter((s) => !keepIds.has(s.id));
+
+  const now = new Date();
+  for (const s of dropped) {
+    // Pre-cron Discord announcement still waiting in the old queue
+    if (s.platform === "discord" && !s.sentAt && s.channelId && s.scheduledFor > now) {
+      await prisma.scheduledDiscordMessages.updateMany({
+        where: { channelId: s.channelId, scheduledFor: s.scheduledFor, status: "scheduled", sentAt: null },
+        data: { status: "failed", lastError: "Removed from event" },
+      });
+    }
+  }
+
+  const droppedLinks = dropped.map((s) => s.linkedAnnouncementId).filter(Boolean);
+  if (droppedLinks.length > 0) {
+    await prisma.announcements.updateMany({
+      where: { announcementId: { in: droppedLinks } },
+      data: { enabled: false, updatedDate: new Date() },
+    });
+  }
+
+  await prisma.event_announcements.deleteMany({
+    where: {
+      eventId: id,
+      OR: [{ status: { not: "sent" } }, { id: { in: dropped.map((s) => s.id) } }],
+    },
+  });
+
+  const created = [];
+  for (const a of list) {
+    if (keepIds.has(parseInt(a.id, 10))) continue;
+    created.push(await prisma.event_announcements.create({ data: announcementRowData(id, a) }));
+  }
+
+  const event = await prisma.events.findUnique({ where: { eventId: id }, select: { status: true } });
+  if (event?.status === "published" && created.length > 0) {
+    await scheduleAnnouncementsForEvent(id, created.map((c) => c.id));
+  }
+
+  await logEventAudit(id, actorId, actorName, "announcements_updated", "Event announcements updated");
+}
+
+/**
+ * Schedule a published event's pending announcements.
+ *
+ * Discord announcements stay pending with a send time; the event announcement
+ * cron (cron/eventAnnouncementCron.js) sends them when due, using the event's
+ * details at that moment and skipping it if the event is no longer published.
+ * Site announcements (MOTD, tip, web, popup) are created now with a display
+ * window, and linked so a later cancel or reschedule can reach them.
+ *
+ * `onlyIds` limits it to those rows (ones added after publishing).
+ */
+async function scheduleAnnouncementsForEvent(eventId, onlyIds = null) {
   const event = await prisma.events.findUnique({ where: { eventId } });
+  if (!event) return;
+
   const announcements = await prisma.event_announcements.findMany({
     where: { eventId, enabled: true, status: "pending", ...(onlyIds ? { id: { in: onlyIds } } : {}) },
   });
 
   for (const ann of announcements) {
-    let scheduledFor = null;
-
-    if (ann.triggerType === "on_publish") {
-      scheduledFor = new Date();
-    } else if (ann.triggerType === "before_event" && ann.offsetMinutes != null) {
-      scheduledFor = new Date(new Date(startAt).getTime() - ann.offsetMinutes * 60000);
-    } else if (ann.triggerType === "event_start") {
-      scheduledFor = new Date(startAt);
-    } else if (ann.triggerType === "after_event" && event?.endAt) {
-      const offset = (ann.offsetMinutes || 0) * 60000;
-      scheduledFor = new Date(new Date(event.endAt).getTime() + offset);
-    }
-
-    if (!scheduledFor) continue;
-
-    // Skip if the scheduled time is already in the past
-    if (scheduledFor < new Date()) {
-      scheduledFor = new Date(); // send immediately
-    }
-
     const platform = ann.platform || "discord";
 
     if (platform === "discord") {
-      if (!ann.channelId) continue;
-
-      // Build embed description
-      let description = ann.contentTemplate || null;
-      if (!description && event) {
-        const ts = Math.floor(new Date(startAt).getTime() / 1000);
-        if (ann.triggerType === "on_publish") {
-          description = `A new event has been announced: **${event.title}**\n\n<t:${ts}:F> (<t:${ts}:R>)`;
-        } else if (ann.triggerType === "before_event") {
-          description = `**${event.title}** starts in ${ann.offsetMinutes} minutes! (<t:${ts}:R>)`;
-        } else if (ann.triggerType === "event_start") {
-          description = `**${event.title}** is starting now!`;
-        } else if (ann.triggerType === "after_event") {
-          description = `**${event.title}** has ended. Thanks for participating!`;
-        } else {
-          description = `Reminder: **${event.title}** — <t:${ts}:F>`;
-        }
+      if (!ann.channelId) {
+        await prisma.event_announcements.update({
+          where: { id: ann.id },
+          data: { status: "failed", lastError: "No channel selected" },
+        });
+        continue;
       }
-
-      // Replace template variables
-      if (description && event) {
-        const ts = Math.floor(new Date(startAt).getTime() / 1000);
-        description = description
-          .replace(/\{title\}/g, event.title)
-          .replace(/\{location\}/g, event.locationLabel || "TBA")
-          .replace(/\{startAt\}/g, `<t:${ts}:F>`)
-          .replace(/\{startRelative\}/g, `<t:${ts}:R>`);
-      }
-
-      await prisma.scheduledDiscordMessages.create({
-        data: {
-          channelId: ann.channelId,
-          embedTitle: event?.title || ann.label || "Event Announcement",
-          embedDescription: description,
-          embedColor: "#2f508c",
-          scheduledFor,
-          createdBy: actorId || 0,
-          status: "scheduled",
-        },
-      });
-
-      await prisma.event_announcements.update({
-        where: { id: ann.id },
-        data: { scheduledFor, status: "sent" },
-      });
-    } else {
-      // Non-Discord platforms (motd, tip, web, popup) → create announcements record
-      const validTypes = ["motd", "tip", "web", "popup"];
-      if (!validTypes.includes(platform)) continue;
-
-      // Compute startDate / endDate based on trigger
-      let annStartDate = null;
-      let annEndDate = null;
-
-      if (ann.triggerType === "on_publish") {
-        annStartDate = null; // always active
-        annEndDate = event?.endAt ? new Date(event.endAt) : null;
-      } else if (ann.triggerType === "before_event" && ann.offsetMinutes != null) {
-        annStartDate = new Date(new Date(startAt).getTime() - ann.offsetMinutes * 60000);
-        annEndDate = new Date(startAt);
-      } else if (ann.triggerType === "event_start") {
-        annStartDate = new Date(startAt);
-        annEndDate = event?.endAt ? new Date(event.endAt) : null;
-      } else if (ann.triggerType === "after_event" && event?.endAt) {
-        const offset = (ann.offsetMinutes || 0) * 60000;
-        annStartDate = new Date(new Date(event.endAt).getTime() + offset);
-        annEndDate = null;
-      }
-
-      await prisma.announcements.create({
+      const scheduledFor = discordScheduledFor(ann, event.startAt, event.endAt);
+      if (!scheduledFor) continue;
+      await prisma.event_announcements.update({ where: { id: ann.id }, data: { scheduledFor } });
+    } else if (SITE_ANNOUNCEMENT_PLATFORMS.includes(platform)) {
+      const now = new Date();
+      const site = await prisma.announcements.create({
         data: {
           enabled: true,
           announcementType: platform,
@@ -931,15 +970,15 @@ async function scheduleAnnouncementsForEvent(eventId, startAt, actorId, onlyIds 
           link: ann.link || null,
           popupButtonText: ann.popupButtonText || null,
           popupImageUrl: ann.popupImageUrl || null,
-          startDate: annStartDate,
-          endDate: annEndDate,
-          updatedDate: new Date(),
+          ...siteAnnouncementWindow(ann, event.startAt, event.endAt),
+          createdAt: now,
+          updatedDate: now,
         },
       });
 
       await prisma.event_announcements.update({
         where: { id: ann.id },
-        data: { scheduledFor, status: "sent" },
+        data: { status: "sent", sentAt: now, linkedAnnouncementId: site.announcementId },
       });
     }
   }
@@ -990,30 +1029,12 @@ export async function applyDefaultAnnouncementsToEvents(defaults, { dryRun = fal
     const created = [];
     for (const a of toAdd) {
       created.push(
-        await prisma.event_announcements.create({
-          data: {
-            eventId: event.eventId,
-            label: a.label || null,
-            announcementType: a.announcementType || "reminder",
-            platform: a.platform || "discord",
-            channelId: a.channelId || null,
-            contentTemplate: a.contentTemplate || null,
-            body: a.body || null,
-            colourMessageFormat: a.colourMessageFormat || null,
-            link: a.link || null,
-            popupButtonText: a.popupButtonText || null,
-            popupImageUrl: a.popupImageUrl || null,
-            triggerType: a.triggerType || "before_event",
-            offsetMinutes: a.offsetMinutes || null,
-            enabled: a.enabled !== undefined ? a.enabled : true,
-            status: "pending",
-          },
-        })
+        await prisma.event_announcements.create({ data: announcementRowData(event.eventId, a) })
       );
     }
 
     if (published) {
-      await scheduleAnnouncementsForEvent(event.eventId, event.startAt, actorId, created.map((c) => c.id));
+      await scheduleAnnouncementsForEvent(event.eventId, created.map((c) => c.id));
     }
 
     await logEventAudit(
@@ -1104,6 +1125,14 @@ export async function duplicateEvent(eventId, actorId, actorName) {
         enabled: a.enabled,
         config: a.config || undefined,
       })),
+    });
+  }
+
+  // Copy announcements as fresh, unsent ones (dropping cancelled leftovers)
+  const announcements = (source.announcements || []).filter((a) => a.status !== "cancelled");
+  if (announcements.length > 0) {
+    await prisma.event_announcements.createMany({
+      data: announcements.map((a) => announcementRowData(newEvent.eventId, a)),
     });
   }
 

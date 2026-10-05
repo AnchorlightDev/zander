@@ -392,9 +392,9 @@
                                             <option value="event_start" <%= ann.triggerType === 'event_start' ? 'selected' : '' %>>Event Start</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-2 ann-offset-group <%= ann.triggerType !== 'before_event' ? 'd-none' : '' %>">
-                                        <label class="form-label small">Minutes Before</label>
-                                        <input type="number" class="form-control form-control-sm ann-offsetMinutes" placeholder="60" min="0" value="<%= ann.offsetMinutes || '' %>">
+                                    <div class="col-md-2 ann-offset-group <%= (ann.triggerType !== 'before_event' && ann.triggerType !== 'after_event') ? 'd-none' : '' %>">
+                                        <label class="form-label small ann-offset-label"><%= ann.triggerType === 'after_event' ? 'Minutes After' : 'Minutes Before' %></label>
+                                        <input type="number" class="form-control form-control-sm ann-offsetMinutes" placeholder="60" min="0" value="<%= ann.offsetMinutes ?? '' %>">
                                     </div>
                                     <!-- Discord: Type -->
                                     <div class="col-md-2 ann-discord-group <%= !isDiscord ? 'd-none' : '' %>">
@@ -511,7 +511,7 @@
                             </select>
                         </div>
                         <div class="col-md-2 ann-offset-group">
-                            <label class="form-label small">Minutes Before</label>
+                            <label class="form-label small ann-offset-label">Minutes Before</label>
                             <input type="number" class="form-control form-control-sm ann-offsetMinutes" placeholder="60" min="0" value="">
                         </div>
                         <!-- Discord: Type -->
@@ -945,7 +945,12 @@ function initAnnouncementRow(row) {
     const trigger = row.querySelector('.ann-trigger');
     const offsetGroup = row.querySelector('.ann-offset-group');
     if (trigger && offsetGroup) {
-        const toggleOffset = () => offsetGroup.classList.toggle('d-none', trigger.value !== 'before_event');
+        const offsetLabel = row.querySelector('.ann-offset-label');
+        const toggleOffset = () => {
+            const v = trigger.value;
+            offsetGroup.classList.toggle('d-none', v !== 'before_event' && v !== 'after_event');
+            if (offsetLabel) offsetLabel.textContent = v === 'after_event' ? 'Minutes After' : 'Minutes Before';
+        };
         trigger.addEventListener('change', toggleOffset);
         toggleOffset();
     }

@@ -87,6 +87,22 @@ function isReviewer(req) {
   return checkPermNode(req.session?.user?.permissions || [], "zander.web.events.review");
 }
 
+/**
+ * Why `req` may not change this event's actions or announcements, or null if
+ * it may. Same rule as /update and /update-published: approved and live
+ * events belong to reviewers. These endpoints used to skip it, so an editor
+ * could change what a published event posts.
+ */
+async function eventChangeRefusal(req, eventId) {
+  if (!isEditor(req)) return "You do not have permission to edit events.";
+  const existing = await getEventById(eventId);
+  if (!existing) return "Event not found";
+  if (["approved", "published"].includes(existing.status) && !isReviewer(req)) {
+    return "Only approvers can change an approved or published event.";
+  }
+  return null;
+}
+
 function isEditor(req) {
   const perms = req.session?.user?.permissions || [];
   return checkPermNode(perms, "zander.web.events.edit") || checkPermNode(perms, "zander.web.events.review");
@@ -720,6 +736,9 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     if (!eventId) return res.send({ success: false, message: "eventId is required" });
 
     try {
+      const refusal = await eventChangeRefusal(req, eventId);
+      if (refusal) return res.status(refusal === "Event not found" ? 200 : 403).send({ success: false, message: refusal });
+
       const { actorId, actorName } = actorFromReq(req);
       await upsertEventActions(eventId, actions || [], actorId, actorName);
       return res.send({ success: true, message: "Actions updated" });
@@ -737,6 +756,9 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     if (!eventId) return res.send({ success: false, message: "eventId is required" });
 
     try {
+      const refusal = await eventChangeRefusal(req, eventId);
+      if (refusal) return res.status(refusal === "Event not found" ? 200 : 403).send({ success: false, message: refusal });
+
       const { actorId, actorName } = actorFromReq(req);
       await upsertEventAnnouncements(eventId, announcements || [], actorId, actorName);
       return res.send({ success: true, message: "Announcements updated" });

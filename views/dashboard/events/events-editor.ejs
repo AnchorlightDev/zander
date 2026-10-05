@@ -707,6 +707,7 @@ document.querySelectorAll('#hostsContainer .host-row').forEach(initHostRowSearch
 function collectAnnouncements() {
     const rows = document.querySelectorAll('#announcementsContainer .announcement-row');
     return Array.from(rows).map(row => ({
+        id: row.dataset.id || null,
         label: row.querySelector('.ann-label')?.value || null,
         announcementType: row.querySelector('.ann-type')?.value || 'reminder',
         platform: row.querySelector('.ann-platform')?.value || 'discord',
@@ -718,7 +719,7 @@ function collectAnnouncements() {
         popupButtonText: row.querySelector('.ann-popupButtonText')?.value || null,
         popupImageUrl: row.querySelector('.ann-popupImageUrl')?.value || null,
         triggerType: row.querySelector('.ann-trigger')?.value || 'before_event',
-        offsetMinutes: parseInt(row.querySelector('.ann-offsetMinutes')?.value || '0') || null,
+        offsetMinutes: row.querySelector('.ann-offsetMinutes')?.value || null,
         enabled: row.querySelector('.ann-enabled')?.checked !== false,
     }));
 }
@@ -1221,20 +1222,23 @@ document.getElementById('eventForm').addEventListener('submit', async (e) => {
         if (data.success) {
             // Also update actions and announcements separately
             const eventId = data.data?.eventId || body.eventId;
-            await Promise.all([
-                fetch('/api/events/actions/update', {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ eventId, actions: body.actions }),
-                }),
-                fetch('/api/events/announcements/update', {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ eventId, announcements: body.announcements }),
-                }),
+            const postJson = (url, payload) => fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }).then(r => r.json()).catch(e => ({ success: false, message: e.message }));
+            const [actionsRes, annRes] = await Promise.all([
+                postJson('/api/events/actions/update', { eventId, actions: body.actions }),
+                postJson('/api/events/announcements/update', { eventId, announcements: body.announcements }),
             ]);
+            // The event itself saved; say which part did not rather than
+            // dropping it silently on the redirect.
+            const problems = [
+                !actionsRes.success && `Actions: ${actionsRes.message}`,
+                !annRes.success && `Announcements: ${annRes.message}`,
+            ].filter(Boolean);
+            if (problems.length) alert('Event saved, but:\n' + problems.join('\n'));
             window.location.href = `/dashboard/events/view?eventId=${eventId}`;
         } else {
             alert('Error: ' + data.message);

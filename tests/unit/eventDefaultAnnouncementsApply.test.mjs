@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { announcementKey, announcementSendTime, missingDefaults } from "../../lib/eventDefaultAnnouncements.js";
+import { announcementKey, announcementSendTime, missingDefaults } from "../../lib/eventAnnouncements.js";
 
 const prismaMock = {
   events: { findMany: vi.fn(), findUnique: vi.fn() },

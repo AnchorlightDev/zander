@@ -972,6 +972,7 @@ model event_announcements {
   sentAt          DateTime?
   lastError       String?  @db.Text
   discordMessageId String? @db.VarChar(32)
+  linkedAnnouncementId Int?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

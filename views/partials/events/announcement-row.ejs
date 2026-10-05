@@ -6,9 +6,17 @@ const isMC = ['motd', 'tip'].includes(platform);
 const hasLink = ['tip', 'web', 'popup'].includes(platform);
 const isPopup = platform === 'popup';
 const hasBody = !isDiscord;
+// Already sent: history, saved back unchanged. Removing it still works (and
+// switches off a MOTD/banner it put up).
+const isSent = ann.status === 'sent';
 %>
-<div class="announcement-row border rounded p-3 mb-2 position-relative">
+<div class="announcement-row border rounded p-3 mb-2 position-relative<%= isSent ? ' ann-locked' : '' %>" data-id="<%= ann.id || '' %>">
     <button type="button" class="btn btn-xs btn-danger position-absolute top-0 end-0 m-2 remove-announcement">×</button>
+    <% if (isSent) { %>
+    <div class="small mb-2"><span class="badge bg-success">Sent</span> <span class="text-muted">Already sent, so it can't be changed. Remove it to take down a MOTD or banner it put up.</span></div>
+    <% } else if (ann.status === 'failed') { %>
+    <div class="small mb-2"><span class="badge bg-danger">Failed</span> <span class="text-muted"><%= ann.lastError || '' %> &mdash; saving will try it again.</span></div>
+    <% } %>
     <div class="row g-2">
         <div class="col-md-3">
             <label class="form-label small">Platform</label>
@@ -35,7 +43,7 @@ const hasBody = !isDiscord;
         </div>
         <div class="col-md-2 ann-offset-group <%= (ann.triggerType !== 'before_event' && ann.triggerType !== 'after_event') ? 'd-none' : '' %>">
             <label class="form-label small ann-offset-label"><%= ann.triggerType === 'after_event' ? 'Minutes After' : 'Minutes Before' %></label>
-            <input type="number" class="form-control form-control-sm ann-offsetMinutes" placeholder="60" min="0" value="<%= ann.offsetMinutes || '' %>">
+            <input type="number" class="form-control form-control-sm ann-offsetMinutes" placeholder="60" min="0" value="<%= ann.offsetMinutes ?? '' %>">
         </div>
 
         <!-- Discord: Type -->
@@ -127,6 +135,9 @@ const hasBody = !isDiscord;
     const row = rows[rows.length - 1];
     if (!row) return;
     row.querySelector('.remove-announcement').addEventListener('click', () => row.remove());
+    if (row.classList.contains('ann-locked')) {
+        row.querySelectorAll('input, select, textarea, .ann-ts-btn').forEach(el => { el.disabled = true; });
+    }
 
     const trigger = row.querySelector('.ann-trigger');
     const offsetGroup = row.querySelector('.ann-offset-group');
