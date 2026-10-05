@@ -71,6 +71,6 @@ Read these before deploying.
 
 ### Removed
 
-- **Unused files:** about 145 MB of assets (an old admin theme, unused fonts and videos), dead views, and five unused npm packages.
+- **Unused files:** about 15 MB of assets (an old admin theme and its fonts and scripts), dead views, and five unused npm packages.
 - **`nodemon`** — `npm run dev` now uses Node's built-in `--watch`.
 - **The Waterfall plugin.**
