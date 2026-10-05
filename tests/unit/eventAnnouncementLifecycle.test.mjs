@@ -10,7 +10,7 @@ const prismaMock = {
     updateMany: vi.fn(),
     deleteMany: vi.fn(),
   },
-  announcements: { create: vi.fn(), updateMany: vi.fn() },
+  announcements: { create: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn() },
   scheduledDiscordMessages: { updateMany: vi.fn() },
   event_audit_logs: { create: vi.fn() },
 };
@@ -18,7 +18,7 @@ const prismaMock = {
 vi.mock("../../controllers/databaseController.js", () => ({ prisma: prismaMock, default: {} }));
 vi.mock("../../controllers/discordController.js", () => ({ client: { isReady: () => false } }));
 
-const { upsertEventAnnouncements, cancelEvent, deleteEvent, updatePublishedEvent } = await import("../../services/eventService.js");
+const { upsertEventAnnouncements, cancelEvent, deleteEvent, updatePublishedEvent, updateEvent } = await import("../../services/eventService.js");
 const { getDueAnnouncements, processDueAnnouncements } = await import("../../services/eventAnnouncementService.js");
 
 const START = new Date("2026-10-10T10:00:00Z");
@@ -31,6 +31,8 @@ beforeEach(() => {
   nextId = 100;
   prismaMock.event_announcements.create.mockImplementation(async ({ data }) => ({ id: nextId++, ...data }));
   prismaMock.announcements.create.mockImplementation(async () => ({ announcementId: 900 }));
+  prismaMock.event_announcements.findMany.mockResolvedValue([]);
+  prismaMock.announcements.findFirst.mockResolvedValue(null);
 });
 
 describe("timing helpers", () => {
@@ -121,7 +123,66 @@ describe("stopping a cancelled or deleted event", () => {
   }
 });
 
+describe("moving an unpublished event", () => {
+  it("moves its announcements' planned times, without scheduling on_publish", async () => {
+    const before = { eventId: 2, status: "draft", startAt: START, endAt: END, deletedAt: null };
+    const newStart = new Date("2026-10-17T10:00:00Z");
+    const after = { ...before, startAt: newStart, endAt: new Date("2026-10-17T12:00:00Z") };
+    prismaMock.events.findUnique.mockResolvedValueOnce(before).mockResolvedValue(after);
+    prismaMock.events.update.mockResolvedValue(after);
+    prismaMock.event_announcements.findMany.mockResolvedValue([
+      { id: 1, platform: "discord", status: "pending", triggerType: "before_event", offsetMinutes: 60 },
+      { id: 2, platform: "motd", status: "pending", triggerType: "event_start" },
+      { id: 3, platform: "discord", status: "pending", triggerType: "on_publish", scheduledFor: null },
+    ]);
+
+    await updateEvent(2, { startAt: newStart.toISOString(), endAt: after.endAt.toISOString() }, null, "t");
+
+    const updates = prismaMock.event_announcements.update.mock.calls.map((c) => c[0]);
+    expect(updates).toEqual([
+      { where: { id: 1 }, data: { scheduledFor: new Date("2026-10-17T09:00:00Z") } },
+      { where: { id: 2 }, data: { scheduledFor: newStart } },
+    ]);
+  });
+
+  it("leaves announcements alone when the time did not change", async () => {
+    const ev = { eventId: 2, status: "draft", startAt: START, endAt: END, deletedAt: null };
+    prismaMock.events.findUnique.mockResolvedValue(ev);
+    prismaMock.events.update.mockResolvedValue(ev);
+
+    await updateEvent(2, { startAt: START.toISOString(), title: undefined }, null, "t");
+
+    expect(prismaMock.event_announcements.update).not.toHaveBeenCalled();
+  });
+});
+
 describe("events published before the fix", () => {
+  it("relinks an old MOTD by its original window, then moves it", async () => {
+    const before = { eventId: 1, status: "published", startAt: START, endAt: END, deletedAt: null };
+    const newStart = new Date("2026-10-11T10:00:00Z");
+    const after = { ...before, startAt: newStart, endAt: new Date("2026-10-11T12:00:00Z") };
+    prismaMock.events.findUnique.mockResolvedValueOnce(before).mockResolvedValue(after);
+    prismaMock.events.update.mockResolvedValue(after);
+    const oldMotd = { id: 5, platform: "motd", status: "sent", triggerType: "event_start", body: "On now", linkedAnnouncementId: null };
+    prismaMock.event_announcements.findMany.mockImplementation(async ({ where }) => {
+      if (where.linkedAnnouncementId === null) return [oldMotd]; // unlinked lookup
+      if (where.sentAt === null) return []; // legacy Discord queue
+      return [{ ...oldMotd, linkedAnnouncementId: 70 }];
+    });
+    prismaMock.announcements.findFirst.mockResolvedValue({ announcementId: 70 });
+
+    await updateEvent(1, { startAt: newStart.toISOString(), endAt: after.endAt.toISOString() }, null, "t");
+
+    expect(prismaMock.announcements.findFirst.mock.calls[0][0].where).toEqual({
+      announcementType: "motd", body: "On now", startDate: START, endDate: END,
+    });
+    expect(prismaMock.event_announcements.update).toHaveBeenCalledWith({ where: { id: 5 }, data: { linkedAnnouncementId: 70 } });
+    expect(prismaMock.announcements.updateMany).toHaveBeenCalledWith({
+      where: { announcementId: 70 },
+      data: expect.objectContaining({ startDate: newStart, endDate: after.endAt }),
+    });
+  });
+
   it("cancelling pulls their messages out of the old Discord queue", async () => {
     const queuedAt = new Date(Date.now() + 86400000);
     prismaMock.events.findUnique.mockResolvedValue({ eventId: 1, status: "published", deletedAt: null });
@@ -140,9 +201,13 @@ describe("events published before the fix", () => {
 
 describe("rescheduling a published event", () => {
   it("moves pending Discord rows and linked site windows when only the end time changes", async () => {
-    const event = { eventId: 1, status: "published", startAt: START, endAt: END, deletedAt: null };
-    prismaMock.events.findUnique.mockResolvedValue(event);
-    prismaMock.events.update.mockResolvedValue(event);
+    const before = { eventId: 1, status: "published", startAt: START, endAt: new Date("2026-10-10T11:00:00Z"), deletedAt: null };
+    const after = { ...before, endAt: END };
+    prismaMock.events.findUnique
+      .mockResolvedValueOnce(before) // updatePublishedEvent
+      .mockResolvedValueOnce(before) // updateEvent
+      .mockResolvedValue(after); // recalculation reads the saved event
+    prismaMock.events.update.mockResolvedValue(after);
     prismaMock.event_announcements.findMany.mockImplementation(async ({ where }) => (where.sentAt === null ? [] : [
       { id: 1, platform: "discord", status: "pending", triggerType: "after_event", offsetMinutes: 30 },
       { id: 2, platform: "web", status: "sent", triggerType: "event_start", linkedAnnouncementId: 44 },

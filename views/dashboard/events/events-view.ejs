@@ -217,7 +217,7 @@
                                         <td><%= a.label || '—' %></td>
                                         <td><span class="badge bg-secondary"><%= a.announcementType %></span></td>
                                         <td><%= a.triggerType %><% if (a.offsetMinutes) { %> (<%= a.offsetMinutes %>m)<% } %></td>
-                                        <td><small class="js-datetime" data-iso="<%= a.scheduledFor ? new Date(a.scheduledFor).toISOString() : '' %>" data-fallback="Not scheduled"></small></td>
+                                        <td><small class="js-datetime" data-iso="<%= a.scheduledFor ? new Date(a.scheduledFor).toISOString() : '' %>" data-fallback="<%= a.triggerType === 'on_publish' ? 'When published' : 'Not scheduled' %>"></small></td>
                                         <td>
                                             <% if (a.status === 'sent') { %><span class="badge bg-success">Sent</span><% } %>
                                             <% if (a.status === 'pending') { %><span class="badge bg-warning text-dark">Pending</span><% } %>

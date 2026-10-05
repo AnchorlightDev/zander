@@ -8,6 +8,7 @@ import { sanitizeForumHtml } from "../lib/htmlSanitize.js";
 import { EVENT_VISIBILITY, normaliseRankSlugs } from "../lib/eventAccess.js";
 import {
   SITE_ANNOUNCEMENT_PLATFORMS,
+  announcementSendTime,
   discordScheduledFor,
   missingDefaults,
   parseOffsetMinutes,
@@ -53,33 +54,57 @@ async function generateSlug(title, startAt, existingSlug = null) {
 }
 
 /**
- * Move a published event's announcements after its start or end time changes:
- * unsent Discord announcements get a new send time, and site announcements
- * already created get a new display window. Unpublished events have nothing
- * scheduled yet -- times are worked out when they are published.
+ * Keep an event's announcements in step with its start and end time. Called
+ * whenever either changes, and after announcements are added.
+ *
+ * Every unsent announcement carries its planned send time in scheduledFor --
+ * on unpublished events too, so the event page shows when each one will go
+ * out. Only published events are ever sent (getDueAnnouncements), so a time
+ * on a draft is a plan, not a send. On a published event, site announcements
+ * already put up (MOTD, tip, web, popup) have their display window moved.
+ *
+ * `previous` is the event's start/end before the change, used to find site
+ * announcements created before they were linked to their event.
  */
-async function recalculateAnnouncementSchedules(eventId) {
+async function recalculateAnnouncementSchedules(eventId, previous = null) {
   const event = await prisma.events.findUnique({ where: { eventId } });
-  if (!event || event.status !== "published") return;
+  if (!event) return;
+  const published = event.status === "published";
 
-  const announcements = await prisma.event_announcements.findMany({
-    where: { eventId, enabled: true },
-  });
+  if (published) {
+    await linkLegacySiteAnnouncements(eventId, previous || event);
+  }
+
+  const announcements = await prisma.event_announcements.findMany({ where: { eventId } });
 
   for (const ann of announcements) {
-    if ((ann.platform || "discord") === "discord") {
-      if (ann.status !== "pending" || ann.triggerType === "on_publish") continue;
-      const scheduledFor = discordScheduledFor(ann, event.startAt, event.endAt);
-      if (scheduledFor) {
-        await prisma.event_announcements.update({ where: { id: ann.id }, data: { scheduledFor } });
+    const platform = ann.platform || "discord";
+
+    if (ann.status === "pending") {
+      // on_publish has no time of its own until the event is published
+      if (ann.triggerType === "on_publish") {
+        if (!published && ann.scheduledFor) {
+          await prisma.event_announcements.update({ where: { id: ann.id }, data: { scheduledFor: null } });
+        }
+        continue;
       }
-    } else if (ann.linkedAnnouncementId) {
+      const scheduledFor = published && platform === "discord"
+        ? discordScheduledFor(ann, event.startAt, event.endAt)
+        : announcementSendTime(ann, event.startAt, event.endAt);
+      await prisma.event_announcements.update({ where: { id: ann.id }, data: { scheduledFor } });
+    } else if (published && ann.status === "sent" && ann.linkedAnnouncementId) {
+      const window = siteAnnouncementWindow(ann, event.startAt, event.endAt);
       await prisma.announcements.updateMany({
         where: { announcementId: ann.linkedAnnouncementId },
-        data: { ...siteAnnouncementWindow(ann, event.startAt, event.endAt), updatedDate: new Date() },
+        data: { ...window, updatedDate: new Date() },
       });
+      if (ann.triggerType !== "on_publish" && window.startDate) {
+        await prisma.event_announcements.update({ where: { id: ann.id }, data: { scheduledFor: window.startDate } });
+      }
     }
   }
+
+  if (!published) return;
 
   for (const ann of await legacyQueuedDiscordAnnouncements(eventId)) {
     if (ann.triggerType === "on_publish") continue;
@@ -113,10 +138,50 @@ async function legacyQueuedDiscordAnnouncements(eventId) {
 }
 
 /**
+ * Site announcements created at publish before they were linked to their
+ * event (no linkedAnnouncementId). Found by what they were created with --
+ * type, body and the display window worked out from the event's times at the
+ * time (`times`) -- and linked, so moving or cancelling the event reaches
+ * them from now on.
+ */
+async function linkLegacySiteAnnouncements(eventId, times) {
+  const unlinked = await prisma.event_announcements.findMany({
+    where: {
+      eventId,
+      status: "sent",
+      linkedAnnouncementId: null,
+      platform: { in: SITE_ANNOUNCEMENT_PLATFORMS },
+    },
+  });
+
+  for (const ann of unlinked) {
+    const window = siteAnnouncementWindow(ann, times.startAt, times.endAt);
+    const match = await prisma.announcements.findFirst({
+      where: {
+        announcementType: ann.platform,
+        body: ann.body || null,
+        startDate: window.startDate,
+        endDate: window.endDate,
+      },
+      orderBy: { announcementId: "desc" },
+    });
+    if (match) {
+      await prisma.event_announcements.update({
+        where: { id: ann.id },
+        data: { linkedAnnouncementId: match.announcementId },
+      });
+    }
+  }
+}
+
+/**
  * Stop everything an event still has queued: unsent Discord announcements are
  * cancelled and site announcements it created are switched off.
  */
 async function stopEventAnnouncements(eventId) {
+  const event = await prisma.events.findUnique({ where: { eventId } });
+  if (event) await linkLegacySiteAnnouncements(eventId, event);
+
   await prisma.event_announcements.updateMany({
     where: { eventId, status: "pending" },
     data: { status: "cancelled" },
@@ -515,6 +580,15 @@ export async function updateEvent(eventId, data, actorId, actorName) {
     }
   }
 
+  // Move the announcements with the event -- whichever end moved, since
+  // after_event ones hang off the end time.
+  const timeChanged =
+    (updateData.startAt && updateData.startAt.getTime() !== new Date(existing.startAt).getTime()) ||
+    (updateData.endAt && updateData.endAt.getTime() !== new Date(existing.endAt).getTime());
+  if (timeChanged) {
+    await recalculateAnnouncementSchedules(parseInt(eventId), { startAt: existing.startAt, endAt: existing.endAt });
+  }
+
   await logEventAudit(
     parseInt(eventId),
     actorId,
@@ -717,13 +791,8 @@ export async function updatePublishedEvent(eventId, data, actorId, actorName) {
     throw new Error(`Event is not published (status: ${existing.status})`);
   }
 
+  // updateEvent moves the announcements if the time changed
   const updated = await updateEvent(eventId, data, actorId, actorName);
-
-  // Move announcements when either end of the event moves -- after_event
-  // ones hang off the end time.
-  if (data.startAt || data.endAt) {
-    await recalculateAnnouncementSchedules(parseInt(eventId));
-  }
 
   await logEventAudit(
     parseInt(eventId),
@@ -919,8 +988,10 @@ export async function upsertEventAnnouncements(eventId, announcements, actorId, 
   }
 
   const event = await prisma.events.findUnique({ where: { eventId: id }, select: { status: true } });
-  if (event?.status === "published" && created.length > 0) {
-    await scheduleAnnouncementsForEvent(id, created.map((c) => c.id));
+  if (event?.status === "published") {
+    if (created.length > 0) await scheduleAnnouncementsForEvent(id, created.map((c) => c.id));
+  } else if (event) {
+    await recalculateAnnouncementSchedules(id);
   }
 
   await logEventAudit(id, actorId, actorName, "announcements_updated", "Event announcements updated");
@@ -961,6 +1032,7 @@ async function scheduleAnnouncementsForEvent(eventId, onlyIds = null) {
       await prisma.event_announcements.update({ where: { id: ann.id }, data: { scheduledFor } });
     } else if (SITE_ANNOUNCEMENT_PLATFORMS.includes(platform)) {
       const now = new Date();
+      const window = siteAnnouncementWindow(ann, event.startAt, event.endAt);
       const site = await prisma.announcements.create({
         data: {
           enabled: true,
@@ -970,7 +1042,7 @@ async function scheduleAnnouncementsForEvent(eventId, onlyIds = null) {
           link: ann.link || null,
           popupButtonText: ann.popupButtonText || null,
           popupImageUrl: ann.popupImageUrl || null,
-          ...siteAnnouncementWindow(ann, event.startAt, event.endAt),
+          ...window,
           createdAt: now,
           updatedDate: now,
         },
@@ -978,7 +1050,12 @@ async function scheduleAnnouncementsForEvent(eventId, onlyIds = null) {
 
       await prisma.event_announcements.update({
         where: { id: ann.id },
-        data: { status: "sent", sentAt: now, linkedAnnouncementId: site.announcementId },
+        data: {
+          status: "sent",
+          sentAt: now,
+          scheduledFor: window.startDate || now,
+          linkedAnnouncementId: site.announcementId,
+        },
       });
     }
   }
@@ -1035,6 +1112,8 @@ export async function applyDefaultAnnouncementsToEvents(defaults, { dryRun = fal
 
     if (published) {
       await scheduleAnnouncementsForEvent(event.eventId, created.map((c) => c.id));
+    } else {
+      await recalculateAnnouncementSchedules(event.eventId);
     }
 
     await logEventAudit(
@@ -1134,6 +1213,7 @@ export async function duplicateEvent(eventId, actorId, actorName) {
     await prisma.event_announcements.createMany({
       data: announcements.map((a) => announcementRowData(newEvent.eventId, a)),
     });
+    await recalculateAnnouncementSchedules(newEvent.eventId);
   }
 
   await logEventAudit(newEvent.eventId, actorId, actorName, "created", `Duplicated from event #${eventId}`);
