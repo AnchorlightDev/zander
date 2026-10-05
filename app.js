@@ -36,6 +36,7 @@ import {
   buildSessionCookieOptions,
 } from "./lib/securityConfig.js";
 import { checkRateLimit } from "./lib/rateLimiter.mjs";
+import { serveCustomPage } from "./routes/customPageRoutes.js";
 import { getRegion } from "./lib/region.mjs";
 import {
   createCspOnSendHook,
@@ -61,6 +62,7 @@ import db, { isDbHealthy, prisma } from "./controllers/databaseController.js";
 import { getWebAnnouncement } from "./controllers/announcementController.js";
 import { getNotificationSummary } from "./controllers/notificationController.js";
 import { applyConfigOverrides, startConfigSync } from "./controllers/configSettingsController.js";
+import { siteMenu, startNavigationSync } from "./controllers/navigationController.js";
 import { buildInfo } from "./lib/buildInfo.js";
 
 // Paths
@@ -76,6 +78,7 @@ const __dirname = path.dirname(__filename);
 // features.json on disk, once.
 await applyConfigOverrides();
 startConfigSync();
+startNavigationSync();
 
 import("./controllers/discordController.js");
 import("./cron/userCodeExpiryCron.js");
@@ -162,6 +165,9 @@ const buildApp = async () => {
 
   // When app errors, render the error on a page, do not provide JSON
   app.setNotFoundHandler(async function (req, res) {
+    // Staff-written pages answer only paths no route claimed.
+    if (await serveCustomPage(app, req, res, config, features)) return;
+
     res.status(404);
 
     try {
@@ -320,8 +326,9 @@ const buildApp = async () => {
       ejs: await import("ejs"),
     },
     root: path.join(__dirname, "views"),
-    // Merged into every render, app.view() included -- the footers read it
-    defaultContext: { buildInfo },
+    // Merged into every render, app.view() included -- the footers read
+    // buildInfo, and the header/footer menus come from siteMenu()
+    defaultContext: { buildInfo, siteMenu },
   });
 
   await app.register(await import("@fastify/static"), {

@@ -1,0 +1,219 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<%
+  const tabTitles = { review: "Review queue", published: "Published", rejected: "Rejected", categories: "Categories" };
+  const fmtDate = (d) => d ? new Date(d).toISOString().slice(0, 16).replace("T", " ") + " UTC" : "—";
+  const categoryOptions = (selected) => categories.map((c) =>
+    `<option value="${c.categoryId}"${Number(selected) === c.categoryId ? " selected" : ""}>${String(c.name).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]))}</option>`
+  ).join("");
+%>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-book-open me-2"></i>Resources</h1>
+        <a class="btn btn-outline-secondary" href="/resources" target="_blank" rel="noopener">View public page</a>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (error) { %>
+        <div class="alert alert-danger"><%= error %></div>
+      <% } %>
+      <% if (!features.resources) { %>
+        <div class="alert alert-warning">The Resources module is switched off, so the public page and <code>/resources</code> command are hidden. Turn it on under <a href="/dashboard/modules">Modules</a>.</div>
+      <% } %>
+
+      <ul class="nav nav-tabs mb-4">
+        <% Object.entries(tabTitles).forEach(function ([key, title]) {
+             if (key === 'categories' && !canManage) return; %>
+          <li class="nav-item">
+            <a class="nav-link <%= key === tab ? 'active' : '' %>" href="/dashboard/resources?tab=<%= key %>"><%= title %></a>
+          </li>
+        <% }) %>
+      </ul>
+
+      <% if (tab === "review") { %>
+        <p class="text-muted">
+          A suggestion is approved once <strong>more than half</strong> of the
+          <%= reviewerCount ?? "?" %> reviewer(s) (everyone with <code>zander.web.resources.review</code>) approve it,
+          or rejected once more than half reject it. If the vote window closes first, it stays here as
+          <span class="badge text-bg-warning">Overdue</span> until someone with <code>zander.web.resources</code> decides it.
+          <% if (!reviewChannelSet) { %>No review channel is set, so votes happen here only (Settings → Pages &amp; Resources).<% } %>
+        </p>
+
+        <% if (!resources.length) { %>
+          <div class="card shadow-sm"><div class="card-body text-muted">Nothing waiting for review.</div></div>
+        <% } %>
+
+        <% resources.forEach(function (r) { %>
+          <div class="card shadow-sm mb-3 <%= r.overdue ? 'border-warning' : '' %>">
+            <div class="card-body">
+              <div class="d-flex justify-content-between flex-wrap gap-2">
+                <div>
+                  <h5 class="mb-1"><a href="<%= r.url %>" target="_blank" rel="noopener noreferrer nofollow"><%= r.title %></a></h5>
+                  <div class="small text-muted mb-2">
+                    <span class="badge text-bg-light"><%= r.category?.name %></span>
+                    Suggested by <%= r.submittedByName || "unknown" %> via <%= r.source %> · <%= fmtDate(r.createdAt) %>
+                  </div>
+                </div>
+                <div class="text-end small">
+                  <% if (r.overdue) { %>
+                    <span class="badge text-bg-warning">Overdue</span>
+                  <% } %>
+                  <div class="text-muted">Deadline <%= fmtDate(r.deadlineAt) %></div>
+                </div>
+              </div>
+              <p class="mb-2"><%= r.description %></p>
+              <p class="small text-break mb-3"><code><%= r.url %></code></p>
+
+              <div class="d-flex flex-wrap align-items-center gap-3">
+                <div>
+                  <span class="badge text-bg-success">👍 <%= r.tally.approve %></span>
+                  <span class="badge text-bg-danger">👎 <%= r.tally.reject %></span>
+                  <span class="small text-muted ms-1"><%= r.tally.needed %> of <%= r.tally.eligible %> needed</span>
+                </div>
+
+                <% if (canReview) { %>
+                  <form method="post" action="/dashboard/resources/<%= r.resourceId %>/vote" class="d-flex gap-2">
+                    <button class="btn btn-sm <%= r.myVote === 'approve' ? 'btn-success' : 'btn-outline-success' %>" name="vote" value="approve" type="submit">Approve</button>
+                    <button class="btn btn-sm <%= r.myVote === 'reject' ? 'btn-danger' : 'btn-outline-danger' %>" name="vote" value="reject" type="submit">Reject</button>
+                    <% if (r.myVote) { %><span class="small text-muted align-self-center">You voted <%= r.myVote %>. You can change it while the vote is open.</span><% } %>
+                  </form>
+                <% } %>
+
+                <% if (canManage && r.overdue) { %>
+                  <form method="post" action="/dashboard/resources/<%= r.resourceId %>/decide" class="d-flex gap-2 ms-auto"
+                        onsubmit="return confirm('Decide this suggestion now, without a majority?');">
+                    <span class="small fw-semibold align-self-center">Manual decision:</span>
+                    <button class="btn btn-sm btn-success" name="status" value="approved" type="submit">Publish</button>
+                    <button class="btn btn-sm btn-danger" name="status" value="rejected" type="submit">Reject</button>
+                  </form>
+                <% } %>
+              </div>
+            </div>
+          </div>
+        <% }) %>
+      <% } %>
+
+      <% if (tab === "published" || tab === "rejected") { %>
+        <% if (tab === "published" && canManage) { %>
+          <details class="card shadow-sm mb-4">
+            <summary class="card-header fw-semibold" style="cursor: pointer;"><i class="fa-solid fa-plus me-1"></i>Add a resource directly</summary>
+            <div class="card-body">
+              <% if (!categories.length) { %>
+                <p class="text-muted mb-0">Add a category first.</p>
+              <% } else { %>
+                <form method="post" action="/dashboard/resources" class="row g-2">
+                  <div class="col-md-4"><select class="form-select" name="categoryId" required><option value="">Category…</option><%- categoryOptions(null) %></select></div>
+                  <div class="col-md-8"><input class="form-control" name="title" placeholder="Name" maxlength="<%= limits.title %>" required></div>
+                  <div class="col-12"><input class="form-control" type="url" name="url" placeholder="https://" maxlength="<%= limits.url %>" required></div>
+                  <div class="col-12"><textarea class="form-control" name="description" rows="2" placeholder="Short description" maxlength="<%= limits.description %>" required></textarea></div>
+                  <div class="col-12"><button class="btn btn-primary" type="submit">Publish</button> <span class="small text-muted">Staff additions skip the vote.</span></div>
+                </form>
+              <% } %>
+            </div>
+          </details>
+        <% } %>
+
+        <div class="card shadow-sm">
+          <div class="card-body p-0">
+            <% if (!resources.length) { %>
+              <div class="p-3 text-muted">Nothing here yet.</div>
+            <% } else { %>
+              <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                  <thead><tr><th>Resource</th><th>Category</th><th>Decided</th><% if (canManage) { %><th class="text-end">Actions</th><% } %></tr></thead>
+                  <tbody>
+                    <% resources.forEach(function (r) { %>
+                      <tr>
+                        <td>
+                          <a class="fw-semibold" href="<%= r.url %>" target="_blank" rel="noopener noreferrer nofollow"><%= r.title %></a>
+                          <div class="small text-muted"><%= r.description %></div>
+                        </td>
+                        <td><%= r.category?.name %></td>
+                        <td class="small text-muted text-nowrap"><%= fmtDate(r.decidedAt) %><br><%= { vote: "by vote", manual: "by hand", staff: "added by staff" }[r.decisionMethod] || "" %></td>
+                        <% if (canManage) { %>
+                          <td class="text-end text-nowrap">
+                            <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#edit<%= r.resourceId %>">Edit</button>
+                            <form class="d-inline" method="post" action="/dashboard/resources/<%= r.resourceId %>/delete" onsubmit="return confirm('Delete this resource?');">
+                              <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                            </form>
+                          </td>
+                        <% } %>
+                      </tr>
+                      <% if (canManage) { %>
+                        <tr class="collapse" id="edit<%= r.resourceId %>">
+                          <td colspan="4">
+                            <form method="post" action="/dashboard/resources/<%= r.resourceId %>/edit" class="row g-2">
+                              <div class="col-md-4"><select class="form-select form-select-sm" name="categoryId" required><%- categoryOptions(r.categoryId) %></select></div>
+                              <div class="col-md-8"><input class="form-control form-control-sm" name="title" value="<%= r.title %>" maxlength="<%= limits.title %>" required></div>
+                              <div class="col-12"><input class="form-control form-control-sm" type="url" name="url" value="<%= r.url %>" maxlength="<%= limits.url %>" required></div>
+                              <div class="col-12"><textarea class="form-control form-control-sm" name="description" rows="2" maxlength="<%= limits.description %>" required><%= r.description %></textarea></div>
+                              <div class="col-12"><button class="btn btn-sm btn-primary" type="submit">Save</button></div>
+                            </form>
+                          </td>
+                        </tr>
+                      <% } %>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </div>
+        </div>
+      <% } %>
+
+      <% if (tab === "categories" && canManage) { %>
+        <p class="text-muted">Categories become the tabs on the public page, ordered by their sort number.</p>
+        <div class="card shadow-sm mb-4">
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table align-middle mb-0">
+                <thead><tr><th style="width: 90px;">Order</th><th>Name</th><th>Slug</th><th>Description</th><th class="text-end">Actions</th></tr></thead>
+                <tbody>
+                  <% categories.forEach(function (c) { %>
+                    <tr>
+                      <td colspan="5" class="p-0">
+                        <form method="post" action="/dashboard/resources/categories/<%= c.categoryId %>" class="d-flex flex-wrap gap-2 align-items-center p-2">
+                          <input class="form-control form-control-sm" style="width: 80px;" type="number" name="sortOrder" value="<%= c.sortOrder %>">
+                          <input class="form-control form-control-sm" style="max-width: 200px;" name="name" value="<%= c.name %>" maxlength="80" required>
+                          <input class="form-control form-control-sm font-monospace" style="max-width: 160px;" name="slug" value="<%= c.slug %>" maxlength="64">
+                          <input class="form-control form-control-sm flex-grow-1" style="min-width: 200px; width: auto;" name="description" value="<%= c.description || '' %>" maxlength="500" placeholder="Shown above the list">
+                          <button class="btn btn-sm btn-primary" type="submit">Save</button>
+                          <button class="btn btn-sm btn-outline-danger" type="submit" formaction="/dashboard/resources/categories/<%= c.categoryId %>/delete" onclick="return confirm('Delete this category?');">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% }) %>
+                  <% if (!categories.length) { %>
+                    <tr><td colspan="5" class="text-muted p-3">No categories yet. Add the first one below.</td></tr>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card shadow-sm">
+          <div class="card-header fw-semibold">Add a category</div>
+          <div class="card-body">
+            <form method="post" action="/dashboard/resources/categories" class="row g-2">
+              <div class="col-md-2"><input class="form-control" type="number" name="sortOrder" value="<%= categories.length ? Math.max(...categories.map((c) => c.sortOrder)) + 10 : 10 %>" title="Sort order"></div>
+              <div class="col-md-4"><input class="form-control" name="name" placeholder="e.g. Worship" maxlength="80" required></div>
+              <div class="col-md-6"><input class="form-control" name="description" placeholder="Short description (optional)" maxlength="500"></div>
+              <div class="col-12"><button class="btn btn-primary" type="submit">Add category</button></div>
+            </form>
+          </div>
+        </div>
+      <% } %>
+
+    </div>
+  </div>
+</div>
+
+<%- include("../../admin/_footer.ejs") %>

@@ -1532,3 +1532,74 @@ model boosterRewardGrants {
   @@unique([userId, rankGroup])
   @@index([discordId])
 }
+
+model customPages {
+  pageId          Int      @id @default(autoincrement())
+  slug            String   @unique @db.VarChar(100)
+  title           String   @db.VarChar(150)
+  content         String   @db.MediumText
+  metaDescription String?  @db.VarChar(300)
+  status          String   @default("draft") @db.VarChar(16)
+  createdByUserId Int?
+  updatedByUserId Int?
+  createdAt       DateTime @default(now()) @db.DateTime(0)
+  updatedAt       DateTime @default(now()) @updatedAt @db.DateTime(0)
+
+  @@index([status])
+}
+
+model navigationMenus {
+  location        String   @id @db.VarChar(32)
+  items           Json
+  updatedByUserId Int?
+  updatedAt       DateTime @default(now()) @updatedAt @db.DateTime(0)
+}
+
+model resourceCategories {
+  categoryId  Int         @id @default(autoincrement())
+  slug        String      @unique @db.VarChar(64)
+  name        String      @db.VarChar(80)
+  description String?     @db.VarChar(500)
+  sortOrder   Int         @default(0)
+  createdAt   DateTime    @default(now()) @db.DateTime(0)
+  updatedAt   DateTime    @default(now()) @updatedAt @db.DateTime(0)
+  resources   resources[]
+}
+
+model resources {
+  resourceId           Int                @id @default(autoincrement())
+  categoryId           Int
+  title                String             @db.VarChar(100)
+  description          String             @db.VarChar(500)
+  url                  String             @db.VarChar(500)
+  status               String             @default("pending") @db.VarChar(16)
+  source               String             @db.VarChar(16)
+  submittedByUserId    Int?
+  submittedByDiscordId String?            @db.VarChar(32)
+  submittedByName      String?            @db.VarChar(100)
+  deadlineAt           DateTime?          @db.DateTime(0)
+  decidedAt            DateTime?          @db.DateTime(0)
+  decisionMethod       String?            @db.VarChar(16)
+  decidedByUserId      Int?
+  reviewChannelId      String?            @db.VarChar(32)
+  reviewMessageId      String?            @db.VarChar(32)
+  overdueNotifiedAt    DateTime?          @db.DateTime(0)
+  createdAt            DateTime           @default(now()) @db.DateTime(0)
+  updatedAt            DateTime           @default(now()) @updatedAt @db.DateTime(0)
+  category             resourceCategories @relation(fields: [categoryId], references: [categoryId])
+  votes                resourceVotes[]
+
+  @@index([status])
+  @@index([categoryId])
+}
+
+model resourceVotes {
+  resourceId Int
+  userId     Int
+  vote       String    @db.VarChar(8)
+  createdAt  DateTime  @default(now()) @db.DateTime(0)
+  updatedAt  DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  resource   resources @relation(fields: [resourceId], references: [resourceId], onDelete: Cascade)
+
+  @@id([resourceId, userId])
+}

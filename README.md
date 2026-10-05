@@ -32,6 +32,10 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | `zander.web.apikeys` | Issue, scope and revoke API client credentials |
 | `zander.web.settings` | Edit site settings (site info, links, Discord IDs and webhooks, automation) |
 | `zander.web.modules` | Switch modules (feature flags) on and off |
+| `zander.web.pages` | Create, edit, publish and delete custom pages |
+| `zander.web.menus` | Edit the top bar, header and footer menus |
+| `zander.web.resources` | Manage resource categories and published resources, and decide overdue suggestions |
+| `zander.web.resources.review` | Vote on resource suggestions (every holder counts towards the majority) |
 | `zander.web.users` | Access the user administration dashboard (view only; email addresses are masked) |
 | `zander.web.users.email` | Reveal unmasked email addresses on the user administration pages |
 | `zander.web.users.manage` | Edit user records from the user administration dashboard |

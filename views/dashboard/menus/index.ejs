@@ -1,0 +1,428 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<% const spec = locations[location]; %>
+
+<style>
+  .menu-item { border: 1px solid var(--bs-border-color); border-radius: .375rem; background: var(--bs-body-bg); margin-bottom: .5rem; }
+  .menu-item.is-child { margin-left: 2rem; }
+  .menu-item-head { display: flex; align-items: center; gap: .5rem; padding: .5rem .75rem; }
+  .menu-item-head .menu-label { font-weight: 600; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .menu-item-head .menu-type { font-size: .75rem; }
+  .menu-item-body { border-top: 1px solid var(--bs-border-color); padding: .75rem; }
+  .menu-add-list { max-height: 240px; overflow-y: auto; }
+</style>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-bars me-2"></i>Menus</h1>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <ul class="nav nav-tabs mb-3">
+        <% Object.entries(locations).forEach(function ([key, loc]) { %>
+          <li class="nav-item">
+            <a class="nav-link <%= key === location ? 'active' : '' %>" href="/dashboard/menus?location=<%= key %>"><%= loc.label %></a>
+          </li>
+        <% }) %>
+      </ul>
+
+      <p class="text-muted mb-1"><%= spec.description %></p>
+      <p class="text-muted small">
+        <% if (customised) { %>
+          This menu has been customised.
+        <% } else { %>
+          This is the built-in default menu. Saving it makes it yours to edit.
+        <% } %>
+        Links to a switched-off module or an unpublished page are hidden automatically.
+      </p>
+
+      <div class="row g-4">
+        <!-- Add items -->
+        <div class="col-lg-4">
+          <div class="accordion" id="addItems">
+            <% if (spec.types.includes('page')) { %>
+              <div class="accordion-item">
+                <h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#addPages">Pages</button></h2>
+                <div id="addPages" class="accordion-collapse collapse show" data-bs-parent="#addItems">
+                  <div class="accordion-body">
+                    <% if (!pages.length) { %>
+                      <p class="text-muted small mb-0">No published pages yet. <a href="/dashboard/pages/create">Write one</a>.</p>
+                    <% } else { %>
+                      <div class="menu-add-list mb-2">
+                        <% pages.forEach(function (p) { %>
+                          <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="<%= p.pageId %>" id="addPage<%= p.pageId %>" data-add-page>
+                            <label class="form-check-label" for="addPage<%= p.pageId %>"><%= p.title %> <span class="text-muted small">/<%= p.slug %></span></label>
+                          </div>
+                        <% }) %>
+                      </div>
+                      <button class="btn btn-sm btn-outline-primary" type="button" id="addPagesBtn">Add to menu</button>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+            <% } %>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#addBuiltin">Site pages</button></h2>
+              <div id="addBuiltin" class="accordion-collapse collapse" data-bs-parent="#addItems">
+                <div class="accordion-body">
+                  <div class="menu-add-list mb-2">
+                    <% builtinLinks.forEach(function (l, i) { %>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="<%= i %>" id="addBuiltin<%= i %>" data-add-builtin>
+                        <label class="form-check-label" for="addBuiltin<%= i %>"><%= l.label %> <span class="text-muted small"><%= l.url %></span></label>
+                      </div>
+                    <% }) %>
+                  </div>
+                  <button class="btn btn-sm btn-outline-primary" type="button" id="addBuiltinBtn">Add to menu</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#addLink">Custom link</button></h2>
+              <div id="addLink" class="accordion-collapse collapse" data-bs-parent="#addItems">
+                <div class="accordion-body">
+                  <input class="form-control form-control-sm mb-2" id="addLinkUrl" placeholder="https://… or /path">
+                  <input class="form-control form-control-sm mb-2" id="addLinkLabel" placeholder="Link text" maxlength="60">
+                  <button class="btn btn-sm btn-outline-primary" type="button" id="addLinkBtn">Add to menu</button>
+                </div>
+              </div>
+            </div>
+
+            <% if (spec.types.includes('heading')) { %>
+              <div class="accordion-item">
+                <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#addHeading"><%= location === 'footer' ? 'Column' : 'Dropdown heading' %></button></h2>
+                <div id="addHeading" class="accordion-collapse collapse" data-bs-parent="#addItems">
+                  <div class="accordion-body">
+                    <input class="form-control form-control-sm mb-2" id="addHeadingLabel" placeholder="<%= location === 'footer' ? 'Column title' : 'Heading text' %>" maxlength="60">
+                    <button class="btn btn-sm btn-outline-primary" type="button" id="addHeadingBtn">Add to menu</button>
+                  </div>
+                </div>
+              </div>
+            <% } %>
+
+            <% if (spec.types.includes('server')) { %>
+              <div class="accordion-item">
+                <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#addServer">Server address</button></h2>
+                <div id="addServer" class="accordion-collapse collapse" data-bs-parent="#addItems">
+                  <div class="accordion-body">
+                    <p class="small text-muted">Shows the address from the servers dashboard, and hides itself when none is set.</p>
+                    <button class="btn btn-sm btn-outline-primary me-1" type="button" data-add-server="java">Java</button>
+                    <button class="btn btn-sm btn-outline-primary" type="button" data-add-server="bedrock">Bedrock</button>
+                  </div>
+                </div>
+              </div>
+            <% } %>
+          </div>
+        </div>
+
+        <!-- Menu structure -->
+        <div class="col-lg-8">
+          <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><%= spec.label %> menu</span>
+              <span class="small text-muted">
+                <% if (spec.maxDepth > 1) { %>Use <i class="fa-solid fa-indent"></i> to put an item under the heading above it.<% } %>
+              </span>
+            </div>
+            <div class="card-body">
+              <div id="menuItems"></div>
+              <p class="text-muted small mb-0 d-none" id="menuEmpty">This menu is empty. Add items from the left.</p>
+            </div>
+            <div class="card-footer d-flex justify-content-between">
+              <form method="post" action="/dashboard/menus/<%= location %>/reset"
+                    onsubmit="return confirm('Reset the <%= spec.label.toLowerCase() %> menu to the built-in default? Your changes will be lost.');">
+                <button class="btn btn-outline-danger btn-sm" type="submit" <%= customised ? '' : 'disabled' %>>Reset to default</button>
+              </form>
+              <form method="post" action="/dashboard/menus/<%= location %>" id="saveForm">
+                <input type="hidden" name="items" id="itemsField">
+                <button class="btn btn-primary" type="submit">Save menu</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script type="application/json" id="menuData"><%- JSON.stringify({
+  location,
+  maxDepth: spec.maxDepth,
+  types: spec.types,
+  items,
+  pages,
+  builtinLinks,
+  moduleFlags,
+}).replace(/</g, '\\u003c') %></script>
+
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('menuData').textContent);
+  var isFooter = data.location === 'footer';
+  var pagesById = {};
+  data.pages.forEach(function (p) { pagesById[p.pageId] = p; });
+
+  // Flatten the stored tree into rows with a depth: easier to move around.
+  var rows = [];
+  (function flatten(items, depth) {
+    items.forEach(function (item) {
+      var copy = Object.assign({}, item);
+      delete copy.children;
+      rows.push({ item: copy, depth: depth, open: false });
+      if (item.children) flatten(item.children, depth + 1);
+    });
+  })(data.items || [], 0);
+
+  var TYPE_NAMES = { link: 'Link', page: 'Page', heading: isFooter ? 'Column' : 'Heading', server: 'Server address' };
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === 'text') node.textContent = attrs[k];
+      else if (k === 'class') node.className = attrs[k];
+      else node.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c) node.appendChild(c); });
+    return node;
+  }
+
+  function iconButton(icon, title, onClick, disabled) {
+    var b = el('button', { type: 'button', class: 'btn btn-sm btn-outline-secondary', title: title, 'aria-label': title });
+    b.appendChild(el('i', { class: icon }));
+    if (disabled) b.disabled = true; else b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function canIndent(index) {
+    if (data.maxDepth < 2 || rows[index].depth > 0 || rows[index].item.type === 'heading') return false;
+    for (var i = index - 1; i >= 0; i--) {
+      if (rows[i].depth === 0) return rows[i].item.type === 'heading';
+    }
+    return false;
+  }
+
+  // The block an item moves with: itself plus anything indented under it.
+  function blockEnd(index) {
+    var end = index + 1;
+    while (end < rows.length && rows[end].depth > rows[index].depth) end++;
+    return end;
+  }
+
+  function move(index, direction) {
+    var depth = rows[index].depth;
+    var block = rows.slice(index, blockEnd(index));
+    if (direction < 0) {
+      var prev = index - 1;
+      while (prev >= 0 && rows[prev].depth > depth) prev--;
+      if (prev < 0 || rows[prev].depth < depth) return;
+      rows.splice(index, block.length);
+      rows.splice.apply(rows, [prev, 0].concat(block));
+    } else {
+      var next = index + block.length;
+      if (next >= rows.length || rows[next].depth < depth) return;
+      var nextEnd = blockEnd(next);
+      rows.splice(index, block.length);
+      rows.splice.apply(rows, [nextEnd - block.length, 0].concat(block));
+    }
+    render();
+  }
+
+  function field(label, input, help) {
+    return el('div', { class: 'mb-2' }, [
+      el('label', { class: 'form-label small fw-semibold mb-1', text: label }),
+      input,
+      help ? el('div', { class: 'form-text', text: help }) : null,
+    ]);
+  }
+
+  function textInput(row, key, placeholder, maxLength) {
+    var input = el('input', { class: 'form-control form-control-sm', placeholder: placeholder || '' });
+    if (maxLength) input.maxLength = maxLength;
+    input.value = row.item[key] || '';
+    input.addEventListener('input', function () {
+      row.item[key] = input.value;
+      if (key === 'label') input.closest('.menu-item').querySelector('.menu-label').textContent = input.value || '(no label)';
+    });
+    return input;
+  }
+
+  function select(row, key, options, fallback) {
+    var s = el('select', { class: 'form-select form-select-sm' });
+    options.forEach(function (o) {
+      var opt = el('option', { value: o.value, text: o.label });
+      if (String(row.item[key] ?? fallback ?? '') === String(o.value)) opt.selected = true;
+      s.appendChild(opt);
+    });
+    s.addEventListener('change', function () { row.item[key] = s.value; });
+    return s;
+  }
+
+  function editor(row) {
+    var item = row.item;
+    var body = el('div', { class: 'menu-item-body' });
+    body.appendChild(field(item.type === 'server' ? 'Name (editor only)' : 'Label', textInput(row, 'label', '', 60)));
+
+    if (item.type === 'link') body.appendChild(field('URL', textInput(row, 'url', 'https://… or /path', 500)));
+    if (item.type === 'page') {
+      body.appendChild(field('Page', select(row, 'pageId',
+        [{ value: '', label: '— choose a page —' }].concat(data.pages.map(function (p) { return { value: p.pageId, label: p.title + ' (/' + p.slug + ')' }; })))));
+    }
+    if (item.type === 'server') {
+      body.appendChild(field('Edition', select(row, 'edition', [{ value: 'java', label: 'Java' }, { value: 'bedrock', label: 'Bedrock' }])));
+    }
+    if (item.type !== 'heading' || !isFooter) {
+      body.appendChild(field('Icon', textInput(row, 'icon', 'e.g. fa-solid fa-star', 80), 'Optional Font Awesome classes.'));
+    }
+
+    var row2 = el('div', { class: 'row g-2' });
+    row2.appendChild(el('div', { class: 'col-md-6' }, [field('Show to', select(row, 'visibility', [
+      { value: 'everyone', label: 'Everyone' },
+      { value: 'guests', label: 'Logged-out visitors only' },
+      { value: 'members', label: 'Logged-in members only' },
+    ], 'everyone'))]));
+    row2.appendChild(el('div', { class: 'col-md-6' }, [field('Only while this module is on', select(row, 'feature',
+      [{ value: '', label: 'Always' }].concat(data.moduleFlags.map(function (f) { return { value: f.path, label: f.label }; })), ''))]));
+    body.appendChild(row2);
+
+    if (item.type === 'link' || item.type === 'page') {
+      var check = el('input', { class: 'form-check-input', type: 'checkbox', id: 'nt' + Math.random().toString(36).slice(2) });
+      check.checked = Boolean(item.newTab);
+      check.addEventListener('change', function () { item.newTab = check.checked; });
+      body.appendChild(el('div', { class: 'form-check' }, [check, el('label', { class: 'form-check-label small', for: check.id, text: 'Open in a new tab' })]));
+    }
+    return body;
+  }
+
+  function summary(item) {
+    if (item.type === 'link') return item.url || '';
+    if (item.type === 'page') return pagesById[item.pageId] ? '/' + pagesById[item.pageId].slug : 'Page not published';
+    if (item.type === 'server') return item.edition === 'bedrock' ? 'Bedrock address' : 'Java address';
+    return '';
+  }
+
+  function render() {
+    var list = document.getElementById('menuItems');
+    list.textContent = '';
+    document.getElementById('menuEmpty').classList.toggle('d-none', rows.length > 0);
+
+    rows.forEach(function (row, index) {
+      var item = row.item;
+      var head = el('div', { class: 'menu-item-head' }, [
+        el('span', { class: 'menu-label', text: item.label || (item.type === 'server' ? summary(item) : '(no label)') }),
+        el('span', { class: 'menu-type text-muted d-none d-md-inline', text: summary(item) }),
+        el('span', { class: 'badge text-bg-light menu-type', text: TYPE_NAMES[item.type] || item.type }),
+      ]);
+      if (item.feature) head.appendChild(el('span', { class: 'badge text-bg-info menu-type', title: 'Hidden while this module is off', text: item.feature }));
+
+      var tools = el('div', { class: 'btn-group' }, [
+        iconButton('fa-solid fa-arrow-up', 'Move up', function () { move(index, -1); }, index === 0),
+        iconButton('fa-solid fa-arrow-down', 'Move down', function () { move(index, 1); }, index === rows.length - 1),
+      ]);
+      if (data.maxDepth > 1) {
+        if (row.depth === 0) tools.appendChild(iconButton('fa-solid fa-indent', 'Put under the heading above', function () { row.depth = 1; render(); }, !canIndent(index)));
+        else tools.appendChild(iconButton('fa-solid fa-outdent', 'Move out of the heading', function () {
+          var moved = rows.splice(index, 1)[0];
+          moved.depth = 0;
+          // Out-dented items go after the rest of their old group.
+          var insertAt = index;
+          while (insertAt < rows.length && rows[insertAt].depth > 0) insertAt++;
+          rows.splice(insertAt, 0, moved);
+          render();
+        }, isFooter));
+      }
+      tools.appendChild(iconButton(row.open ? 'fa-solid fa-chevron-up' : 'fa-solid fa-pen', row.open ? 'Close' : 'Edit', function () { row.open = !row.open; render(); }));
+      tools.appendChild(iconButton('fa-solid fa-trash', 'Remove', function () {
+        var count = blockEnd(index) - index;
+        if (count > 1 && !confirm('Remove this heading and the ' + (count - 1) + ' item(s) under it?')) return;
+        rows.splice(index, count);
+        render();
+      }));
+      head.appendChild(tools);
+
+      var box = el('div', { class: 'menu-item' + (row.depth ? ' is-child' : '') }, [head]);
+      if (row.open) box.appendChild(editor(row));
+      list.appendChild(box);
+    });
+  }
+
+  function add(item) {
+    // In the footer, a new link joins the last column.
+    var depth = isFooter && item.type !== 'heading' && rows.length ? 1 : 0;
+    if (isFooter && depth === 0 && item.type !== 'heading') {
+      rows.push({ item: { type: 'heading', label: 'New column' }, depth: 0, open: false });
+      depth = 1;
+    }
+    rows.push({ item: item, depth: depth, open: false });
+    render();
+  }
+
+  function on(id, fn) { var n = document.getElementById(id); if (n) n.addEventListener('click', fn); }
+
+  on('addPagesBtn', function () {
+    document.querySelectorAll('[data-add-page]:checked').forEach(function (c) {
+      var p = pagesById[c.value];
+      add({ type: 'page', label: p.title, pageId: p.pageId });
+      c.checked = false;
+    });
+  });
+  on('addBuiltinBtn', function () {
+    document.querySelectorAll('[data-add-builtin]:checked').forEach(function (c) {
+      var l = data.builtinLinks[Number(c.value)];
+      var item = { type: 'link', label: l.label, url: l.url };
+      if (l.feature) item.feature = l.feature;
+      add(item);
+      c.checked = false;
+    });
+  });
+  on('addLinkBtn', function () {
+    var url = document.getElementById('addLinkUrl');
+    var label = document.getElementById('addLinkLabel');
+    if (!url.value.trim() || !label.value.trim()) { alert('Enter both a URL and the link text.'); return; }
+    add({ type: 'link', label: label.value.trim(), url: url.value.trim() });
+    url.value = ''; label.value = '';
+  });
+  on('addHeadingBtn', function () {
+    var label = document.getElementById('addHeadingLabel');
+    if (!label.value.trim()) { alert('Enter the heading text.'); return; }
+    add({ type: 'heading', label: label.value.trim() });
+    label.value = '';
+  });
+  document.querySelectorAll('[data-add-server]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var edition = b.getAttribute('data-add-server');
+      add({ type: 'server', label: edition === 'bedrock' ? 'Bedrock address' : 'Java address', edition: edition });
+    });
+  });
+
+  // Rebuild the tree from the flat rows on save.
+  document.getElementById('saveForm').addEventListener('submit', function () {
+    var tree = [];
+    rows.forEach(function (row) {
+      var item = Object.assign({}, row.item);
+      Object.keys(item).forEach(function (k) { if (item[k] === '' || item[k] === false) delete item[k]; });
+      if (item.pageId) item.pageId = Number(item.pageId);
+      if (row.depth > 0 && tree.length) {
+        var parent = tree[tree.length - 1];
+        (parent.children = parent.children || []).push(item);
+      } else {
+        tree.push(item);
+      }
+    });
+    document.getElementById('itemsField').value = JSON.stringify(tree);
+  });
+
+  render();
+})();
+</script>
+
+<%- include("../../admin/_footer.ejs") %>

@@ -1,18 +1,25 @@
+<% const _topbarMenu = locals.siteMenu ? siteMenu('topbar', req) : []; %>
+<% const _headerMenu = locals.siteMenu ? siteMenu('header', req) : []; %>
 <header>
+    <% if (_topbarMenu.length) { %>
     <div class="header-top-bar">
         <div class="container">
             <div class="row align-items-center">
                 <div class="col">
                     <ul class="top-bar-info list-inline mb-0 ps-0">
-                        <li class="list-inline-item"><a href="mailto:<%= config.siteConfiguration.email %>"><i class="fas fa-info" style="margin-right: 5px;"></i> <%= config.siteConfiguration.email %></a></li>
-                        <li class="list-inline-item"><a href="<%= config.siteConfiguration.platforms.discord %>"><i class="fab fa-discord" style="margin-right: 5px;"></i> Community Discord</a></li>
-                        <li class="list-inline-item"><a href="#"><i class="fas fa-laptop" style="margin-right: 5px;"></i> play.craftingforchrist.net</a></li>
-                        <li class="list-inline-item"><a href="#"><i class="fas fa-laptop" style="margin-right: 5px;"></i> bedrock.craftingforchrist.net</a></li>
+                        <% _topbarMenu.forEach(function (item) { %>
+                            <li class="list-inline-item">
+                                <% if (item.url) { %><a href="<%= item.url %>"<% if (item.newTab) { %> target="_blank" rel="noopener noreferrer"<% } %>><% } else { %><span><% } %>
+                                <% if (item.icon) { %><i class="<%= item.icon %>" style="margin-right: 5px;"></i><% } %> <%= item.label %>
+                                <% if (item.url) { %></a><% } else { %></span><% } %>
+                            </li>
+                        <% }) %>
                     </ul>
                 </div>
             </div>
         </div>
     </div>
+    <% } %>
     <nav class="navbar navbar-expand-md navigation" id="navbar">
         <div class="container">
             <a class="navbar-brand" href="/"><img src="/images/siteLogo.png" alt="<%= config.siteConfiguration.siteName %> Logo" class="img-fluid"></a>
@@ -21,53 +28,21 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarmain">
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
-
-                    <% if (features.server || features.ranks) { %>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="navPlayDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Play</a>
-                            <div class="dropdown-menu" aria-labelledby="navPlayDropdown">
-                                <% if (features.server) { %>
-                                    <a class="dropdown-item" href="/play">Play</a>
-                                <% } %>
-                                <% if (features.ranks) { %>
-                                    <a class="dropdown-item" href="/ranks">Ranks</a>
-                                <% } %>
-                            </div>
-                        </li>
-                    <% } %>
-
-                    <% if (features.forums || features.events || features.applications) { %>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="navCommunityDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Community</a>
-                            <div class="dropdown-menu" aria-labelledby="navCommunityDropdown">
-                                <% if (features.forums) { %>
-                                    <a class="dropdown-item" href="/forums">Forums</a>
-                                <% } %>
-                                <% if (features.events) { %>
-                                    <a class="dropdown-item" href="/events">Events</a>
-                                <% } %>
-                                <% if (features.applications) { %>
-                                    <a class="dropdown-item" href="/apply">Apply</a>
-                                <% } %>
-                            </div>
-                        </li>
-                    <% } %>
-
-                    <li class="nav-item"><a class="nav-link" href="/webstore">Webstore</a></li>
-
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="navHelpDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Help</a>
-                        <div class="dropdown-menu" aria-labelledby="navHelpDropdown">
-                            <a class="dropdown-item" href="/rules">Rules</a>
-                            <% if (features.report) { %>
-                                <a class="dropdown-item" href="/report">Report</a>
-                            <% } %>
-                            <% if (features.support) { %>
-                                <a class="dropdown-item" href="/support">Support</a>
-                            <% } %>
-                        </div>
-                    </li>
+                    <%# Editable at /dashboard/menus (controllers/navigationController.js) %>
+                    <% _headerMenu.forEach(function (item, index) { %>
+                        <% if (item.children.length) { %>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle<%= item.children.some(function (c) { return c.active; }) ? ' active' : '' %>" href="#" id="navMenu<%= index %>" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><% if (item.icon) { %><i class="<%= item.icon %> me-1"></i><% } %><%= item.label %></a>
+                                <div class="dropdown-menu" aria-labelledby="navMenu<%= index %>">
+                                    <% item.children.forEach(function (child) { %>
+                                        <a class="dropdown-item<%= child.active ? ' active' : '' %>" href="<%= child.url %>"<% if (child.newTab) { %> target="_blank" rel="noopener noreferrer"<% } %>><% if (child.icon) { %><i class="<%= child.icon %> me-1"></i><% } %><%= child.label %></a>
+                                    <% }) %>
+                                </div>
+                            </li>
+                        <% } else if (item.url) { %>
+                            <li class="nav-item"><a class="nav-link<%= item.active ? ' active' : '' %>" href="<%= item.url %>"<% if (item.newTab) { %> target="_blank" rel="noopener noreferrer"<% } %>><% if (item.icon) { %><i class="<%= item.icon %> me-1"></i><% } %><%= item.label %></a></li>
+                        <% } %>
+                    <% }) %>
 
                     <% if (req.session?.user?.permissions?.includes('zander.web.dashboard') || req.session?.user?.permissions?.includes('zander.web.*') || req.session?.user?.permissions?.includes('*')) { %>
                         <li class="nav-item"><a class="nav-link" href="/dashboard">Dashboard</a></li>

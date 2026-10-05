@@ -1,0 +1,124 @@
+<%- include("modules/header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription
+}) %>
+
+<%- include("modules/navigationBar.ejs") %>
+
+<%- include("partials/miniHeader.ejs", {
+  headerTitle: "Resources",
+  backgroundImage: globalImage
+}) %>
+
+<section class="section py-5">
+  <div class="container">
+    <% if (req.cookies.alertType) { %>
+      <%- include("partials/alert.ejs", {
+        alertType: req.cookies.alertType,
+        content: req.cookies.alertContent
+      }) %>
+    <% } %>
+
+    <p>A collection of helpful links, apps and tools suggested by the community and approved by staff.</p>
+
+    <% if (!categories) { %>
+      <%- include("partials/alert.ejs", {
+        alertType: "warning",
+        content: "The resources could not be loaded right now. Please try again later."
+      }) %>
+    <% } else if (!categories.length) { %>
+      <%- include("partials/alert.ejs", {
+        alertType: "info",
+        content: "There are no resources listed yet."
+      }) %>
+    <% } else { %>
+      <ul class="nav nav-tabs mb-4" id="resourceTabs" role="tablist">
+        <% categories.forEach((category, index) => { %>
+          <li class="nav-item" role="presentation">
+            <button
+              class="nav-link <%= index === 0 ? 'active' : '' %>"
+              id="tab-<%= category.slug %>"
+              data-bs-toggle="tab"
+              data-bs-target="#content-<%= category.slug %>"
+              type="button"
+              role="tab"
+              aria-controls="content-<%= category.slug %>"
+              aria-selected="<%= index === 0 ? 'true' : 'false' %>">
+              <%= category.name %>
+            </button>
+          </li>
+        <% }); %>
+      </ul>
+
+      <div class="tab-content" id="resourceTabsContent">
+        <% categories.forEach((category, index) => { %>
+          <div
+            class="tab-pane fade <%= index === 0 ? 'show active' : '' %>"
+            id="content-<%= category.slug %>"
+            role="tabpanel"
+            aria-labelledby="tab-<%= category.slug %>">
+            <% if (category.description) { %>
+              <p class="text-muted mb-4"><%= category.description %></p>
+            <% } %>
+
+            <ul class="list-group">
+              <% category.resources.forEach((resource) => { %>
+                <li class="list-group-item d-flex justify-content-between align-items-start gap-3">
+                  <div>
+                    <h6 class="mb-1"><%= resource.title %></h6>
+                    <p class="mb-1 text-muted small"><%= resource.description %></p>
+                  </div>
+                  <a href="<%= resource.url %>" class="btn btn-outline-primary btn-sm flex-shrink-0" target="_blank" rel="noopener noreferrer nofollow">
+                    Visit
+                  </a>
+                </li>
+              <% }); %>
+            </ul>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
+
+    <hr class="my-5" id="suggest">
+    <h4>Suggest a resource</h4>
+    <% if (!allCategories.length) { %>
+      <p class="text-muted">Suggestions open once staff have set up the categories.</p>
+    <% } else if (!req.session?.user) { %>
+      <p>
+        Know something that belongs here? <a href="/login">Sign in</a> to suggest it<% if (config.siteConfiguration.platforms?.discord) { %>,
+        or use <code>/resources submit</code> in our <a href="<%= config.siteConfiguration.platforms.discord %>" target="_blank" rel="noopener noreferrer">Discord</a> once your account is linked<% } %>.
+        Staff review every suggestion before it is added.
+      </p>
+    <% } else { %>
+      <p class="text-muted">Staff review every suggestion before it is added. You'll get a Discord DM with the decision if your Discord is linked.</p>
+      <form method="post" action="/resources/submit" class="row g-3" style="max-width: 720px;">
+        <div class="col-md-6">
+          <label for="categoryId" class="form-label">Category</label>
+          <select class="form-select" id="categoryId" name="categoryId" required>
+            <option value="">Choose a category…</option>
+            <% allCategories.forEach((c) => { %>
+              <option value="<%= c.categoryId %>"><%= c.name %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label for="title" class="form-label">Name of the resource</label>
+          <input type="text" class="form-control" id="title" name="title" maxlength="<%= limits.title %>" required>
+        </div>
+        <div class="col-12">
+          <label for="url" class="form-label">Link</label>
+          <input type="url" class="form-control" id="url" name="url" maxlength="<%= limits.url %>" placeholder="https://" required>
+        </div>
+        <div class="col-12">
+          <label for="description" class="form-label">Short description</label>
+          <textarea class="form-control" id="description" name="description" rows="3" maxlength="<%= limits.description %>" required></textarea>
+        </div>
+        <div class="col-12">
+          <button type="submit" class="btn btn-primary">Send for review</button>
+        </div>
+      </form>
+    <% } %>
+  </div>
+</section>
+
+<%- include("modules/footer.ejs") %>

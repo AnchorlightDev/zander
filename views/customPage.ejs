@@ -1,0 +1,27 @@
+<%- include("modules/header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription
+}) %>
+
+<%- include("modules/navigationBar.ejs") %>
+
+<%- include("partials/miniHeader.ejs", {
+  headerTitle: page.title,
+  backgroundImage: globalImage
+}) %>
+
+<section class="section">
+  <div class="container">
+    <% if (isPreview) { %>
+      <div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="fa-solid fa-eye me-1"></i> Draft preview. Only staff who can edit pages see this.</span>
+        <a class="btn btn-sm btn-outline-dark" href="/dashboard/pages/<%= page.pageId %>/edit">Edit page</a>
+      </div>
+    <% } %>
+
+    <%# Staff-written HTML, sanitised on save and again in routes/customPageRoutes.js %>
+    <div class="custom-page-content"><%- pageHtml %></div>
+  </div>
+</section>
+
+<%- include("modules/footer.ejs") %>

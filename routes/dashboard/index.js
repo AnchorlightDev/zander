@@ -24,6 +24,9 @@ import dashboardApiClientsRoute from "./apiClients.js";
 import dashboardSettingsRoute from "./settings.js";
 import dashboardModulesRoute from "./modules.js";
 import dashboardFormsRoute from "./forms.js";
+import dashboardPagesRoute from "./pages.js";
+import dashboardMenusRoute from "./menus.js";
+import dashboardResourcesRoute from "./resources.js";
 import { hasStaffFlag } from "../../lib/permissions/staffFlag.mjs";
 
 export default function dashboardSiteRoutes(
@@ -108,4 +111,7 @@ export default function dashboardSiteRoutes(
   dashboardSettingsRoute(app, config, db, features, lang);
   dashboardModulesRoute(app, config, db, features, lang);
   dashboardFormsRoute(app, config, db, features, lang);
+  dashboardPagesRoute(app, config, db, features, lang);
+  dashboardMenusRoute(app, config, db, features, lang);
+  dashboardResourcesRoute(app, config, db, features, lang);
 }

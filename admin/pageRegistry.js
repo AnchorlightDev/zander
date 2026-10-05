@@ -15,6 +15,7 @@
  *  menuTitle     – shorter label shown in the sidebar
  *  icon          – Font Awesome class string
  *  capability    – LuckPerms permission node required to see / access this page
+ *                  (or an array: any one of them is enough)
  *  path          – canonical URL of the primary entry-point
  *  group         – sidebar section heading  (null / omitted → top-level)
  *  sortOrder     – render order within the group
@@ -360,6 +361,37 @@ export const adminPages = [
     group: "Community",
     sortOrder: 23,
   },
+  // ── Content — custom pages, menus and resources ─────────────────────────
+  {
+    slug: "pages",
+    title: "Pages",
+    menuTitle: "Pages",
+    icon: "fa-solid fa-file-lines",
+    capability: "zander.web.pages",
+    path: "/dashboard/pages",
+    group: "Content",
+    sortOrder: 60,
+  },
+  {
+    slug: "menus",
+    title: "Menus",
+    menuTitle: "Menus",
+    icon: "fa-solid fa-bars",
+    capability: "zander.web.menus",
+    path: "/dashboard/menus",
+    group: "Content",
+    sortOrder: 61,
+  },
+  {
+    slug: "resources",
+    title: "Resources",
+    menuTitle: "Resources",
+    icon: "fa-solid fa-book-open",
+    capability: ["zander.web.resources.review", "zander.web.resources"],
+    path: "/dashboard/resources",
+    group: "Content",
+    sortOrder: 62,
+  },
   {
     slug: "apikeys",
     title: "API Keys",
@@ -395,6 +427,8 @@ export const adminPages = [
 // Sub-pages (registered for breadcrumb / title lookup; not shown in sidebar)
 // ---------------------------------------------------------------------------
 export const adminSubPages = [
+  { slug: "pages-create", title: "New Page", parent: "pages", path: "/dashboard/pages/create", capability: "zander.web.pages" },
+  { slug: "pages-edit", title: "Edit Page", parent: "pages", path: "/dashboard/pages/", capability: "zander.web.pages" },
   {
     slug: "forms-create",
     title: "Create Form",
@@ -487,6 +521,7 @@ export const adminSubPages = [
  * Kept here to avoid circular imports into the admin layer.
  */
 function checkPermission(permissionsArray, node) {
+  if (Array.isArray(node)) return node.some((n) => checkPermission(permissionsArray, n));
   if (!node) return true;
   if (!Array.isArray(permissionsArray) || permissionsArray.length === 0)
     return false;

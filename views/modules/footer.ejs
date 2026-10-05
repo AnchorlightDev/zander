@@ -40,47 +40,21 @@
 				</div>
 			</div>
 
-			<!-- Quick Access -->
-			<div class="col-lg-2 col-md-6 col-sm-6">
-				<div class="widget mb-5 mb-lg-0">
-					<h4 class="text-capitalize mb-3">Quick Access</h4>
-					<div class="divider mb-4"></div>
+			<%# Footer columns -- editable at /dashboard/menus (controllers/navigationController.js) %>
+			<% (locals.siteMenu ? siteMenu('footer', req) : []).forEach(function (column) { %>
+				<div class="col-lg-2 col-md-6 col-sm-6">
+					<div class="widget mb-5 mb-lg-0">
+						<h4 class="text-capitalize mb-3"><%= column.label %></h4>
+						<div class="divider mb-4"></div>
 
-					<ul class="list-unstyled footer-menu lh-35">
-						<% if (features.applications) { %>
-							<li><a href="/apply">Apply</a></li>
-						<% } %>
-						<li><a href="/knowledgebase">Knowledgebase</a></li>
-						<% if (features.report) { %>
-							<li><a href="/report">Report a Player</a></li>
-						<% } %>
-						<% if (features.ranks) { %>
-							<li><a href="/ranks">Ranks</a></li>
-						<% } %>
-						<% if (features.vault) { %>
-							<li><a href="/vault">Vault</a></li>
-						<% } %>
-						<% if (features.shopdirectory) { %>
-							<li><a href="/shopdirectory">Shop Directory</a></li>
-						<% } %>
-					</ul>
+						<ul class="list-unstyled footer-menu lh-35">
+							<% column.children.forEach(function (link) { %>
+								<li><a href="<%= link.url %>"<% if (link.newTab) { %> target="_blank" rel="noopener noreferrer"<% } %>><% if (link.icon) { %><i class="<%= link.icon %> me-1"></i><% } %><%= link.label %></a></li>
+							<% }) %>
+						</ul>
+					</div>
 				</div>
-			</div>
-
-			<!-- Legal -->
-			<div class="col-lg-2 col-md-6 col-sm-6">
-				<div class="widget mb-5 mb-lg-0">
-					<h4 class="text-capitalize mb-3">Legal</h4>
-					<div class="divider mb-4"></div>
-
-					<ul class="list-unstyled footer-menu lh-35">
-						<li><a href="/rules">Rules</a></li>
-						<li><a href="/terms">Terms Of Service</a></li>
-						<li><a href="/privacy">Privacy Policy</a></li>
-						<li><a href="/refund">Refund Policy</a></li>
-					</ul>
-				</div>
-			</div>
+			<% }) %>
 		</div>
 		
 		<div class="footer-btm py-4 mt-5">

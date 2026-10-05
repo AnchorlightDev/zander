@@ -1,0 +1,64 @@
+<%- include("modules/header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription
+}) %>
+
+<%- include("modules/navigationBar.ejs") %>
+
+<%- include("partials/miniHeader.ejs", {
+  headerTitle: "Contact Us",
+  backgroundImage: globalImage
+}) %>
+
+<section class="section">
+  <div class="container">
+    <% if (req.cookies.alertType) { %>
+      <%- include("partials/alert.ejs", {
+        alertType: req.cookies.alertType,
+        content: req.cookies.alertContent
+      }) %>
+    <% } %>
+
+    <div class="row g-5">
+      <div class="col-md-5">
+        <h3>Contact information</h3>
+        <% if (config.siteConfiguration.email) { %>
+          <p><strong>Email:</strong> <a href="mailto:<%= config.siteConfiguration.email %>"><%= config.siteConfiguration.email %></a></p>
+        <% } %>
+        <% if (config.siteConfiguration.platforms?.discord) { %>
+          <p><strong>Discord:</strong> <a href="<%= config.siteConfiguration.platforms.discord %>" target="_blank" rel="noopener noreferrer">Join our Discord</a></p>
+        <% } %>
+        <% if (features.report) { %>
+          <p class="text-muted">Reporting a player? Use the <a href="/report">report form</a> instead so staff can act on it quickly.</p>
+        <% } %>
+      </div>
+
+      <div class="col-md-7">
+        <h3>Get in touch</h3>
+        <form action="/contact" method="post">
+          <div class="mb-3">
+            <label for="name" class="form-label">Name and/or username</label>
+            <input type="text" class="form-control" id="name" name="name" maxlength="<%= limits.name %>" required>
+          </div>
+          <div class="mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input type="email" class="form-control" id="email" name="email" maxlength="<%= limits.email %>" required>
+          </div>
+          <div class="mb-3">
+            <label for="message" class="form-label">Message</label>
+            <textarea class="form-control" id="message" name="message" rows="6" maxlength="<%= limits.message %>" required></textarea>
+            <div class="form-text">Up to <%= limits.message %> characters.</div>
+          </div>
+          <%# Honeypot: hidden from people, filled by bots. Checked in routes/pagesRoutes.js. %>
+          <div aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden;">
+            <label for="website">Leave this empty</label>
+            <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+          </div>
+          <button type="submit" class="btn btn-primary">Send message</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include("modules/footer.ejs") %>
