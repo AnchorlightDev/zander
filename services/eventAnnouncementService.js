@@ -6,7 +6,7 @@
 import { prisma } from "../controllers/databaseController.js";
 import { client } from "../controllers/discordController.js";
 import { EmbedBuilder } from "discord.js";
-import { logEventAudit } from "./eventService.js";
+import { cancelDuplicatesOfSent, logEventAudit } from "./eventService.js";
 
 /**
  * Wording used when an announcement has no content template, chosen by when
@@ -101,6 +101,12 @@ export async function sendAnnouncement(announcementId) {
   }
 
   const { event } = announcement;
+
+  // Never post the same announcement twice (see cancelDuplicatesOfSent)
+  if (await cancelDuplicatesOfSent(event.eventId)) {
+    const current = await prisma.event_announcements.findUnique({ where: { id: announcementId } });
+    if (current?.status !== "pending") return;
+  }
 
   if (announcement.platform === "discord") {
     await sendDiscordAnnouncement(announcement, event);

@@ -17,6 +17,12 @@
     </a>
   </span>
   <span>
+    <% const build = locals.buildInfo || {}; %>
+    <% if (build.version || build.shortCommit) { %>
+    <span title="<%= build.commit ? 'Commit ' + build.commit : '' %>" style="margin-right:12px;">
+      <% if (build.version) { %>v<%= build.version %><% } %><% if (build.version && build.shortCommit) { %> &middot; <% } %><% if (build.shortCommit) { %><code style="color:inherit; background:none; padding:0;"><%= build.shortCommit %></code><% } %>
+    </span>
+    <% } %>
     <a href="/" style="color:inherit; text-decoration:none;">← Visit Site</a>
   </span>
 </div>

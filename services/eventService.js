@@ -8,6 +8,7 @@ import { sanitizeForumHtml } from "../lib/htmlSanitize.js";
 import { EVENT_VISIBILITY, normaliseRankSlugs } from "../lib/eventAccess.js";
 import {
   SITE_ANNOUNCEMENT_PLATFORMS,
+  announcementKey,
   announcementSendTime,
   discordScheduledFor,
   missingDefaults,
@@ -73,6 +74,7 @@ async function recalculateAnnouncementSchedules(eventId, previous = null) {
 
   if (published) {
     await linkLegacySiteAnnouncements(eventId, previous || event);
+    await cancelDuplicatesOfSent(eventId);
   }
 
   const announcements = await prisma.event_announcements.findMany({ where: { eventId } });
@@ -981,13 +983,21 @@ export async function upsertEventAnnouncements(eventId, announcements, actorId, 
     },
   });
 
+  const event = await prisma.events.findUnique({ where: { eventId: id }, select: { status: true } });
+
+  // On a live event, a row repeating one already sent is a leftover copy from
+  // the old save bug, not a new announcement -- don't bring it back.
+  const keptSentKeys = event?.status === "published"
+    ? new Set(sent.filter((s) => keepIds.has(s.id)).map(announcementKey))
+    : new Set();
+
   const created = [];
   for (const a of list) {
     if (keepIds.has(parseInt(a.id, 10))) continue;
+    if (keptSentKeys.has(announcementKey(a))) continue;
     created.push(await prisma.event_announcements.create({ data: announcementRowData(id, a) }));
   }
 
-  const event = await prisma.events.findUnique({ where: { eventId: id }, select: { status: true } });
   if (event?.status === "published") {
     if (created.length > 0) await scheduleAnnouncementsForEvent(id, created.map((c) => c.id));
   } else if (event) {
@@ -995,6 +1005,32 @@ export async function upsertEventAnnouncements(eventId, announcements, actorId, 
   }
 
   await logEventAudit(id, actorId, actorName, "announcements_updated", "Event announcements updated");
+}
+
+export const DUPLICATE_OF_SENT = "Duplicate of an announcement already sent";
+
+/**
+ * Cancel pending announcements that repeat one this event already sent (same
+ * platform, trigger, offset and channel -- announcementKey()).
+ *
+ * Before upsertEventAnnouncements kept sent rows, every save of a published
+ * event re-created its sent announcements as new pending copies. Those never
+ * sent then, but would once given a send time, so they are cancelled before
+ * anything is scheduled. Returns how many were cancelled.
+ */
+export async function cancelDuplicatesOfSent(eventId) {
+  const rows = await prisma.event_announcements.findMany({
+    where: { eventId, status: { in: ["sent", "pending"] } },
+  });
+  const sentKeys = new Set(rows.filter((r) => r.status === "sent").map(announcementKey));
+  const dupes = rows.filter((r) => r.status === "pending" && sentKeys.has(announcementKey(r)));
+  if (dupes.length === 0) return 0;
+
+  await prisma.event_announcements.updateMany({
+    where: { id: { in: dupes.map((d) => d.id) } },
+    data: { status: "cancelled", lastError: DUPLICATE_OF_SENT },
+  });
+  return dupes.length;
 }
 
 /**
@@ -1011,6 +1047,8 @@ export async function upsertEventAnnouncements(eventId, announcements, actorId, 
 async function scheduleAnnouncementsForEvent(eventId, onlyIds = null) {
   const event = await prisma.events.findUnique({ where: { eventId } });
   if (!event) return;
+
+  await cancelDuplicatesOfSent(eventId);
 
   const announcements = await prisma.event_announcements.findMany({
     where: { eventId, enabled: true, status: "pending", ...(onlyIds ? { id: { in: onlyIds } } : {}) },

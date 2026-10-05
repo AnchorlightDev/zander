@@ -61,6 +61,7 @@ import db, { isDbHealthy, prisma } from "./controllers/databaseController.js";
 import { getWebAnnouncement } from "./controllers/announcementController.js";
 import { getNotificationSummary } from "./controllers/notificationController.js";
 import { applyConfigOverrides, startConfigSync } from "./controllers/configSettingsController.js";
+import { buildInfo } from "./lib/buildInfo.js";
 
 // Paths
 import path from "path";
@@ -319,6 +320,8 @@ const buildApp = async () => {
       ejs: await import("ejs"),
     },
     root: path.join(__dirname, "views"),
+    // Merged into every render, app.view() included -- the footers read it
+    defaultContext: { buildInfo },
   });
 
   await app.register(await import("@fastify/static"), {

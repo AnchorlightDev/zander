@@ -87,6 +87,7 @@ describe("upsertEventAnnouncements", () => {
   it("schedules rows added to a published event", async () => {
     prismaMock.event_announcements.findMany
       .mockResolvedValueOnce([]) // sent rows
+      .mockResolvedValueOnce([]) // duplicate check
       .mockResolvedValueOnce([{ id: 100, platform: "discord", channelId: "c1", triggerType: "event_start", status: "pending" }]);
     prismaMock.events.findUnique
       .mockResolvedValueOnce({ status: "published" })
@@ -240,5 +241,35 @@ describe("announcement cron", () => {
     expect(result).toEqual({ sent: 0, failed: 0 });
     expect(prismaMock.event_announcements.findMany).not.toHaveBeenCalled();
     expect(prismaMock.event_announcements.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("leftover copies from the old save bug", () => {
+  it("cancels a pending copy of a sent announcement instead of scheduling it", async () => {
+    const { cancelDuplicatesOfSent, DUPLICATE_OF_SENT } = await import("../../services/eventService.js");
+    prismaMock.event_announcements.findMany.mockResolvedValue([
+      { id: 1, status: "sent", platform: "discord", triggerType: "before_event", offsetMinutes: 60, channelId: "c1" },
+      { id: 2, status: "pending", platform: "discord", triggerType: "before_event", offsetMinutes: 60, channelId: "c1" },
+      { id: 3, status: "pending", platform: "discord", triggerType: "before_event", offsetMinutes: 60, channelId: "c2" },
+    ]);
+
+    expect(await cancelDuplicatesOfSent(1)).toBe(1);
+    expect(prismaMock.event_announcements.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [2] } },
+      data: { status: "cancelled", lastError: DUPLICATE_OF_SENT },
+    });
+  });
+
+  it("does not re-create a copy when a published event is saved", async () => {
+    const sentRow = { id: 7, status: "sent", platform: "discord", triggerType: "event_start", channelId: "c1" };
+    prismaMock.event_announcements.findMany.mockResolvedValueOnce([sentRow]);
+    prismaMock.events.findUnique.mockResolvedValue({ eventId: 1, status: "published", startAt: START, endAt: END });
+
+    await upsertEventAnnouncements(1, [
+      { id: "7", platform: "discord", triggerType: "event_start", channelId: "c1" },
+      { platform: "discord", triggerType: "event_start", channelId: "c1" }, // the leftover copy
+    ], null, "t");
+
+    expect(prismaMock.event_announcements.create).not.toHaveBeenCalled();
   });
 });

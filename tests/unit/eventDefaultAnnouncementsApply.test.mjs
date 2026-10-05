@@ -99,7 +99,8 @@ describe("applyDefaultAnnouncementsToEvents", () => {
 
     expect(result).toEqual({ events: 1, announcements: 1, publishedEvents: 1 });
     expect(prismaMock.event_announcements.create).toHaveBeenCalledTimes(1);
-    expect(prismaMock.event_announcements.findMany.mock.calls[0][0].where.id).toEqual({ in: [77] });
+    const scheduled = prismaMock.event_announcements.findMany.mock.calls.find((c) => c[0].where.id);
+    expect(scheduled[0].where.id).toEqual({ in: [77] });
     expect(prismaMock.event_audit_logs.create).toHaveBeenCalledTimes(1);
   });
 });
