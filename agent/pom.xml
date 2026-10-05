@@ -10,8 +10,6 @@
     <packaging>pom</packaging>
 
     <modules>
-        <!-- <module>zander-waterfall</module> -->
-            <!-- Decomissioned Waterfall in v1.3.0 -->
         <module>zander-velocity</module>
         <module>zander-hub</module>
         <module>zander-auth</module>

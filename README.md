@@ -6,7 +6,7 @@ Documentation: [https://modularsoft.org/docs/products/zander](https://modularsof
 This repo is a monorepo with two projects:
 
 - **/** (root) — the Node.js web dashboard, API, and database (this document covers it)
-- **[agent/](agent/)** — the Java/Maven Minecraft plugins (`zander-addon`, `zander-auth`, `zander-hub`, `zander-velocity`, `zander-waterfall`) (see [agent/README.md](agent/README.md))
+- **[agent/](agent/)** — the Java/Maven Minecraft plugins (`zander-addon`, `zander-auth`, `zander-hub`, `zander-velocity`) (see [agent/README.md](agent/README.md))
 
 ## Permissions
 

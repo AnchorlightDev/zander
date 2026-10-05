@@ -4,15 +4,16 @@ This document explains how to set up a local environment for this project.
 
 ## Prerequisites
 
-- Node.js (v18.18.2 or higher)
-- npm (v8.5.0 or higher)
+- Node.js (v20 or higher)
+- npm
 - A MySQL database
 
 ## Database Setup
 
-1. Create a new MySQL database.
-2. Run the `dbinit.sql` script to create the initial database schema.
-3. Run the migration scripts in the `migration` directory in order to get the database up to date.
+1. Create a new MySQL database and set `DATABASE_URL` in `.env` to point at it.
+2. Run `npm run build` (or `npx prisma migrate deploy && npx prisma generate`). Prisma creates the schema and applies every migration in `prisma/migrations/` in order.
+
+Schema changes are made by adding a new migration under `prisma/migrations/` — see `CLAUDE.md`. `dbinit.sql` and the `migration/` directory are the pre-Prisma setup scripts, kept for reference only; do not run them on a new database.
 
 ## Environment Variables
 
