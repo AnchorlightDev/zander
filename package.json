@@ -1,6 +1,6 @@
 {
   "name": "modularsoft-zander-web",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "The web component of the Zander project that contains database, API and website.",
   "main": "app.js",
   "scripts": {
@@ -8,11 +8,11 @@
     "repair:luckperms-contexts": "node admin/repair-luckperms-contexts.mjs",
     "build": "npm install && (npx prisma migrate resolve --rolled-back 0005_add_vote_site_id_to_votes 2>/dev/null || true) && npx prisma migrate deploy && npx prisma generate",
     "prod": "node --experimental-modules --experimental-json-modules --experimental-specifier-resolution=node --max-old-space-size=512 app.js",
-    "dev": "nodemon  --experimental-modules --experimental-json-modules --experimental-specifier-resolution=node"
+    "dev": "node --watch --experimental-modules --experimental-json-modules --experimental-specifier-resolution=node app.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ModularSoftAU/zander-web.git"
+    "url": "git+https://github.com/AnchorlightDev/zander.git"
   },
   "engines": {
     "npm": ">=8.5.0",
@@ -23,9 +23,9 @@
   "type": "module",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/ModularSoftAU/zander-web/issues"
+    "url": "https://github.com/AnchorlightDev/zander/issues"
   },
-  "homepage": "https://github.com/ModularSoftAU/zander-web#readme",
+  "homepage": "https://github.com/AnchorlightDev/zander#readme",
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
     "@fastify/formbody": "^8.0.2",
@@ -51,7 +51,6 @@
     "node-cron": "^4.6.0",
     "node-fetch": "^3.3.2",
     "nodemailer": "^10.0.9",
-    "nodemon": "^3.1.11",
     "p-limit": "^6.1.0",
     "path": "^0.12.7",
     "querystring": "^0.2.1",

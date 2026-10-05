@@ -9,7 +9,7 @@ zander-web is the web + Discord-bot component of the Zander project: a Fastify w
 ## Commands
 
 ```bash
-npm run dev     # nodemon, local development
+npm run dev     # node --watch, local development (restarts on server code changes)
 npm run prod    # production start (app.js directly, larger heap, experimental JSON modules)
 npm run build   # npm install + prisma migrate deploy + prisma generate — used by the deploy pipeline
 npm test        # vitest run (tests/unit + tests/integration, *.test.mjs / *.test.js)

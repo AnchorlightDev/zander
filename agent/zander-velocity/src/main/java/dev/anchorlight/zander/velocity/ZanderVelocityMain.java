@@ -42,7 +42,7 @@ import java.util.Optional;
         authors = "ModularSoft",
         description = "The proxy that allows the connection and integration of the Zander minecraft suite.",
         name = "zander-velocity",
-        version = "2.0.1",
+        version = "2.1.0",
         dependencies = {
                 @Dependency(id = "signedvelocity"),
                 @Dependency(id = "luckperms", optional = false)
