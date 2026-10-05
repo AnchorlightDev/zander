@@ -11,6 +11,9 @@
                     <a href="/dashboard/events" class="btn btn-sm btn-outline-secondary">
                         <i class="fas fa-calendar fa-fw me-1"></i>Calendar
                     </a>
+                    <a href="/dashboard/events/announcement-defaults" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-bullhorn fa-fw me-1"></i>Default Announcements
+                    </a>
                     <a href="/dashboard/events/templates/create" class="btn btn-sm btn-primary">
                         <i class="fas fa-plus fa-fw me-1"></i>New Template
                     </a>
@@ -78,9 +81,17 @@
                                 <a href="/dashboard/events/templates/edit?templateId=<%= tmpl.templateId %>" class="btn btn-sm btn-warning">
                                     <i class="fas fa-edit me-1"></i>Edit
                                 </a>
+                                <% if (tmpl.recurrenceType === 'once') { %>
+                                <%# A master template has no schedule: open the new event form
+                                    pre-filled from it, and pick the date there. %>
+                                <a href="/dashboard/events/create?templateId=<%= tmpl.templateId %>" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-plus me-1"></i>Create Event
+                                </a>
+                                <% } else { %>
                                 <button class="btn btn-sm btn-outline-primary btn-generate-draft" data-template-id="<%= tmpl.templateId %>" data-title="<%= tmpl.title %>">
                                     <i class="fas fa-plus me-1"></i>Generate Draft
                                 </button>
+                                <% } %>
                                 <button class="btn btn-sm btn-outline-danger btn-delete-template ms-auto" data-template-id="<%= tmpl.templateId %>" data-title="<%= tmpl.title %>">
                                     <i class="fas fa-trash me-1"></i>Delete
                                 </button>
@@ -104,36 +115,61 @@ document.querySelectorAll('.js-datetime').forEach(el => {
     }) : '—';
 });
 
-document.querySelectorAll('.btn-generate-draft').forEach(btn => {
-    btn.addEventListener('click', async () => {
-        if (!confirm(`Generate a draft event from template "${btn.dataset.title}"?`)) return;
-        btn.disabled = true;
-        const res = await fetch('/api/events/templates/generate-draft', {
+// POST JSON and always come back with { success, message, ... } -- a network
+// failure or a non-JSON reply used to throw silently and leave the page as it
+// was, looking like nothing happened until a refresh.
+async function postJson(url, body) {
+    try {
+        const res = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
-            body: JSON.stringify({ templateId: btn.dataset.templateId }),
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
         });
-        const data = await res.json();
-        if (data.success) {
-            window.location.href = `/dashboard/events/view?eventId=${data.data.eventId}`;
-        } else {
-            alert('Error: ' + data.message);
-            btn.disabled = false;
-        }
+        const data = await res.json().catch(() => null);
+        if (!data) return { success: false, message: `The server returned an unexpected response (HTTP ${res.status}).` };
+        return data;
+    } catch (err) {
+        return { success: false, message: 'Network error: ' + err.message };
+    }
+}
+
+async function generateDraft(btn) {
+    btn.disabled = true;
+    const data = await postJson('/api/events/templates/generate-draft', { templateId: btn.dataset.templateId });
+    if (data.success) {
+        window.location.href = `/dashboard/events/view?eventId=${data.data.eventId}`;
+        return;
+    }
+    btn.disabled = false;
+    // No next date from the schedule: continue on the pre-filled form instead.
+    if (data.needsDate) {
+        window.location.href = `/dashboard/events/create?templateId=${encodeURIComponent(btn.dataset.templateId)}`;
+        return;
+    }
+    alert('Error: ' + data.message);
+}
+
+document.querySelectorAll('.btn-generate-draft').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (!confirm(`Generate a draft event from template "${btn.dataset.title}"?`)) return;
+        generateDraft(btn);
     });
 });
 
 document.querySelectorAll('.btn-delete-template').forEach(btn => {
     btn.addEventListener('click', async () => {
         if (!confirm(`Delete template "${btn.dataset.title}"? This will not delete generated events.`)) return;
-        const res = await fetch('/api/events/templates/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
-            body: JSON.stringify({ templateId: btn.dataset.templateId }),
-        });
-        const data = await res.json();
-        if (data.success) window.location.reload();
-        else alert('Error: ' + data.message);
+        btn.disabled = true;
+        const data = await postJson('/api/events/templates/delete', { templateId: btn.dataset.templateId });
+        if (data.success) {
+            // Take the card off straight away, then reload for fresh counts.
+            btn.closest('.col-md-6, .col-lg-4, .col-xl-4, .col-12, [class*="col-"]')?.remove();
+            window.location.reload();
+        } else {
+            btn.disabled = false;
+            alert('Error: ' + data.message);
+        }
     });
 });
 </script>

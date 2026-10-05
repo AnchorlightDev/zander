@@ -5,7 +5,6 @@ import com.velocitypowered.api.event.player.ServerConnectedEvent;
 import com.velocitypowered.api.proxy.Player;
 import dev.dejvokep.boostedyaml.route.Route;
 import dev.anchorlight.stonelib.http.Request;
-import dev.anchorlight.stonelib.http.Response;
 import dev.anchorlight.zander.velocity.ZanderVelocityMain;
 import dev.anchorlight.zander.velocity.model.discord.DiscordSwitch;
 import dev.anchorlight.zander.velocity.model.session.SessionSwitch;

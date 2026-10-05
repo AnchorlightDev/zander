@@ -1,0 +1,284 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <h1 class="h2">Default Announcements</h1>
+                <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+                    <a href="/dashboard/events" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-calendar fa-fw me-1"></i>Calendar
+                    </a>
+                    <a href="/dashboard/events/templates" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-copy fa-fw me-1"></i>Templates
+                    </a>
+                    <%- include("../../partials/documentationLink.ejs", {
+                        doclink: "https://modularsoft.org/docs/products/zander/features/events/"
+                    }) %>
+                </div>
+            </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+            <p class="text-muted small">
+                These announcements are added to every <strong>new event</strong> and <strong>new template</strong> as a starting point,
+                where they can be edited or removed. Events created from a template use that template's announcements instead.
+                Saving the defaults does not change events or templates that already exist; use
+                <strong>Apply to existing</strong> below for that.
+            </p>
+
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Announcements</span>
+                    <button type="button" class="btn btn-sm btn-primary" id="addAnnouncementBtn">
+                        <i class="fas fa-plus me-1"></i>Add Announcement
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="announcementsContainer">
+                        <% (announcements || []).forEach((a, i) => { %>
+                            <%- include("../../partials/events/announcement-row.ejs", { announcement: a, index: i }) %>
+                        <% }) %>
+                    </div>
+                    <p class="text-muted small mb-0 <%= (announcements || []).length ? 'd-none' : '' %>" id="noDefaultsNote">
+                        No default announcements. New events start with none.
+                    </p>
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-primary" id="saveBtn">
+                <i class="fas fa-save me-1"></i>Save Defaults
+            </button>
+
+            <div class="card mt-4 mb-3">
+                <div class="card-header">Apply to existing</div>
+                <div class="card-body">
+                    <p class="text-muted small">
+                        Adds the <strong>saved</strong> defaults to every upcoming event that does not already have them
+                        (same platform, trigger, offset and channel), so running it twice adds nothing new.
+                        On <strong>published</strong> events the added announcements are queued straight away; there,
+                        <em>On Publish</em> defaults and any whose send time has already passed are skipped.
+                    </p>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="includeTemplatesCheck" checked>
+                        <label class="form-check-label small" for="includeTemplatesCheck">Also add them to templates, so drafts they generate get them</label>
+                    </div>
+                    <button type="button" class="btn btn-outline-warning" id="applyBtn" <%= (announcements || []).length ? '' : 'disabled' %>>
+                        <i class="fas fa-share-square me-1"></i>Apply to Existing Events
+                    </button>
+                </div>
+            </div>
+
+<!-- New row: the same partial, rendered blank. Scripts inside <template> do not run. -->
+<template id="announcementRowTemplate">
+    <%- include("../../partials/events/announcement-row.ejs", { announcement: { triggerType: 'before_event', announcementType: 'reminder' }, index: 0 }) %>
+</template>
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+.btn-xs { padding: 0.15rem 0.5rem; font-size: 0.75rem; }
+</style>
+
+<script>
+// ============================================================
+// Discord text channel picker
+// ============================================================
+let _textChannels = [];
+
+function populateTextChannelSelect(select, selectedId) {
+    select.innerHTML = '<option value="">— select a channel —</option>';
+    let lastCat = null;
+    let grp;
+    _textChannels.forEach(ch => {
+        if (ch.category !== lastCat) {
+            grp = document.createElement('optgroup');
+            grp.label = ch.category || 'Uncategorised';
+            select.appendChild(grp);
+            lastCat = ch.category;
+        }
+        const opt = document.createElement('option');
+        opt.value = ch.id;
+        opt.textContent = '#' + ch.name;
+        if (ch.id === selectedId) opt.selected = true;
+        (grp || select).appendChild(opt);
+    });
+    if (!_textChannels.length) {
+        select.innerHTML = '<option value="">No text channels found</option>';
+    }
+}
+
+(async function loadTextChannels() {
+    try {
+        const res = await fetch('/api/events/discord/text-channels', {
+            credentials: 'include',
+        });
+        const data = await res.json();
+        _textChannels = data.channels || [];
+    } catch {
+        _textChannels = [];
+    }
+
+    document.querySelectorAll('#announcementsContainer .ann-channelId').forEach(sel => {
+        populateTextChannelSelect(sel, sel.dataset.saved || '');
+    });
+})();
+
+// ============================================================
+// Announcements
+// ============================================================
+function syncEmptyNote() {
+    const empty = !document.querySelector('#announcementsContainer .announcement-row');
+    document.getElementById('noDefaultsNote').classList.toggle('d-none', !empty);
+}
+
+function initAnnouncementRow(row) {
+    row.querySelector('.remove-announcement')?.addEventListener('click', () => { row.remove(); syncEmptyNote(); });
+
+    const trigger = row.querySelector('.ann-trigger');
+    const offsetGroup = row.querySelector('.ann-offset-group');
+    const offsetLabel = row.querySelector('.ann-offset-label');
+    if (trigger && offsetGroup) {
+        const toggleOffset = () => {
+            const v = trigger.value;
+            offsetGroup.classList.toggle('d-none', v !== 'before_event' && v !== 'after_event');
+            if (offsetLabel) offsetLabel.textContent = v === 'after_event' ? 'Minutes After' : 'Minutes Before';
+        };
+        trigger.addEventListener('change', toggleOffset);
+        toggleOffset();
+    }
+
+    const platformSel = row.querySelector('.ann-platform');
+    const togglePlatform = () => {
+        const p = platformSel?.value || 'discord';
+        row.querySelectorAll('.ann-discord-group').forEach(el => el.classList.toggle('d-none', p !== 'discord'));
+        row.querySelector('.ann-body-group')?.classList.toggle('d-none', p === 'discord');
+        row.querySelector('.ann-colour-group')?.classList.toggle('d-none', !['motd','tip'].includes(p));
+        row.querySelector('.ann-link-group')?.classList.toggle('d-none', !['tip','web','popup'].includes(p));
+        row.querySelectorAll('.ann-popup-group').forEach(el => el.classList.toggle('d-none', p !== 'popup'));
+    };
+    platformSel?.addEventListener('change', togglePlatform);
+    togglePlatform();
+
+    row.querySelectorAll('.ann-ts-insert').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const ta = row.querySelector('.ann-contentTemplate');
+            if (!ta) return;
+            const token = link.dataset.token;
+            const start = ta.selectionStart, end = ta.selectionEnd;
+            ta.value = ta.value.slice(0, start) + token + ta.value.slice(end);
+            ta.selectionStart = ta.selectionEnd = start + token.length;
+            ta.focus();
+        });
+    });
+}
+
+function addAnnouncementRow() {
+    const row = document.getElementById('announcementRowTemplate').content
+        .querySelector('.announcement-row').cloneNode(true);
+    document.getElementById('announcementsContainer').appendChild(row);
+    populateTextChannelSelect(row.querySelector('.ann-channelId'), '');
+    initAnnouncementRow(row);
+    syncEmptyNote();
+}
+
+function collectAnnouncements() {
+    return Array.from(document.querySelectorAll('#announcementsContainer .announcement-row')).map(row => ({
+        label: row.querySelector('.ann-label')?.value || null,
+        announcementType: row.querySelector('.ann-type')?.value || 'reminder',
+        platform: row.querySelector('.ann-platform')?.value || 'discord',
+        channelId: row.querySelector('.ann-channelId')?.value || null,
+        contentTemplate: row.querySelector('.ann-contentTemplate')?.value || null,
+        body: row.querySelector('.ann-body')?.value || null,
+        colourMessageFormat: row.querySelector('.ann-colourMessageFormat')?.value || null,
+        link: row.querySelector('.ann-link')?.value || null,
+        popupButtonText: row.querySelector('.ann-popupButtonText')?.value || null,
+        popupImageUrl: row.querySelector('.ann-popupImageUrl')?.value || null,
+        triggerType: row.querySelector('.ann-trigger')?.value || 'before_event',
+        offsetMinutes: row.querySelector('.ann-offsetMinutes')?.value || null,
+        enabled: row.querySelector('.ann-enabled')?.checked !== false,
+    }));
+}
+
+document.getElementById('addAnnouncementBtn').addEventListener('click', addAnnouncementRow);
+
+// Server-rendered rows are wired by the partial's own script; only the empty
+// note needs to follow their removal.
+document.querySelectorAll('#announcementsContainer .announcement-row .remove-announcement').forEach(btn => {
+    btn.addEventListener('click', () => setTimeout(syncEmptyNote));
+});
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.disabled = true;
+    try {
+        const res = await fetch('/api/events/default-announcements/update', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ announcements: collectAnnouncements() }),
+        });
+        const data = await res.json();
+        if (!data.success) { alert('Error: ' + data.message); return; }
+        window.location.reload();
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    } finally {
+        saveBtn.disabled = false;
+    }
+});
+
+// ============================================================
+// Apply saved defaults to existing events / templates
+// ============================================================
+async function applyDefaults(dryRun) {
+    const res = await fetch('/api/events/default-announcements/apply', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun, includeTemplates: document.getElementById('includeTemplatesCheck').checked }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
+    return data.data;
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+document.getElementById('applyBtn').addEventListener('click', async () => {
+    const applyBtn = document.getElementById('applyBtn');
+    applyBtn.disabled = true;
+    try {
+        const preview = await applyDefaults(true);
+        const { events, templates } = preview;
+        if (events.announcements === 0 && templates.announcements === 0) {
+            alert('Every upcoming event and template already has the defaults. Nothing to add.');
+            return;
+        }
+
+        const lines = [
+            `Add ${plural(events.announcements, 'announcement')} to ${plural(events.events, 'upcoming event')}.`,
+        ];
+        if (events.publishedEvents > 0) {
+            lines.push(`${plural(events.publishedEvents, 'of these event')} ${events.publishedEvents === 1 ? 'is' : 'are'} published: their new announcements will be queued to send.`);
+        }
+        if (templates.templates > 0) {
+            lines.push(`Add ${plural(templates.announcements, 'announcement')} to ${plural(templates.templates, 'template')}.`);
+        }
+        if (!confirm(lines.join('\n\n') + '\n\nContinue?')) return;
+
+        const done = await applyDefaults(false);
+        alert(`Added ${plural(done.events.announcements, 'announcement')} to ${plural(done.events.events, 'event')}` +
+            (done.templates.templates ? ` and ${plural(done.templates.announcements, 'announcement')} to ${plural(done.templates.templates, 'template')}` : '') + '.');
+    } catch (err) {
+        alert('Error: ' + err.message);
+    } finally {
+        applyBtn.disabled = false;
+    }
+});
+</script>

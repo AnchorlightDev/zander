@@ -1,0 +1,145 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-box-open fa-fw me-2"></i>Storefront Products</h1>
+        <div class="btn-toolbar gap-2">
+          <a href="/webstore" target="_blank" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>View Store
+          </a>
+          <a href="/dashboard/webstore/categories" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-tags me-1"></i>Categories
+          </a>
+        </div>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <p class="text-muted small">
+        Products come from Stripe, so they are created and priced there. This page sets
+        what Stripe has no opinion about: which category each one sits in on the storefront,
+        and whether the public can see it. Hiding a product also stops it being purchased.
+        Existing subscriptions keep renewing either way.
+      </p>
+
+      <% if (stripeError) { %>
+        <div class="alert alert-warning">
+          Could not reach Stripe, so the product list is unavailable. Settings already saved
+          are unaffected.
+        </div>
+      <% } else if (!products || !products.length) { %>
+        <div class="alert alert-info">
+          No active products found in Stripe. Create a product with an active price there and
+          it will appear here.
+        </div>
+      <% } else { %>
+
+        <% if (!categories || !categories.length) { %>
+          <div class="alert alert-info">
+            No categories yet. Products stay in one flat list until you
+            <a href="/dashboard/webstore/categories" class="alert-link">create a category</a>.
+          </div>
+        <% } %>
+
+        <% groups.forEach(function (group) { %>
+          <div class="card shadow-sm mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">
+                <%= group.displayName %>
+                <% if (group.id !== null && group.visible === false) { %>
+                  <span class="badge bg-warning text-dark ms-2"
+                        title="This whole category is hidden from the storefront, whatever each product below is set to.">
+                    <i class="fa-solid fa-eye-slash me-1"></i>Category hidden
+                  </span>
+                <% } %>
+              </span>
+              <span class="badge bg-secondary">
+                <%= group.packages.length %> <%= group.packages.length === 1 ? 'product' : 'products' %>
+              </span>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Product</th>
+                    <th style="width:150px">Price</th>
+                    <th style="width:200px">Category</th>
+                    <th style="width:90px">Order</th>
+                    <th style="width:96px">Visible</th>
+                    <th style="width:80px"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% group.packages.forEach(function (item) { %>
+                    <tr class="<%= item.visible === false ? 'opacity-50' : '' %>">
+                      <td>
+                        <% if (item.imageUrl) { %>
+                          <img src="<%= item.imageUrl %>" alt="" style="height:24px; object-fit:contain;" class="me-2">
+                        <% } %>
+                        <strong><%= item.displayName %></strong>
+                        <div class="text-muted" style="font-size:0.75rem;">
+                          <code><%= item.stripePriceId %></code>
+                        </div>
+                      </td>
+                      <td class="small">
+                        <%= (item.priceCents / 100).toFixed(2) %> <%= String(item.currency || '').toUpperCase() %>
+                        <span class="d-block text-muted">
+                          <%= item.purchaseType === 'subscription' ? 'Monthly' : 'One-time' %>
+                        </span>
+                      </td>
+                      <td>
+                        <select form="saveProduct<%= item.slug %>" name="categoryId" class="form-select form-select-sm">
+                          <option value="">Uncategorised</option>
+                          <% categories.forEach(function (c) { %>
+                            <option value="<%= c.id %>" <%= String(c.id) === String(item.categoryId) ? 'selected' : '' %>>
+                              <%= c.name %><%= c.visible === false ? ' (hidden)' : '' %>
+                            </option>
+                          <% }) %>
+                        </select>
+                      </td>
+                      <td>
+                        <input form="saveProduct<%= item.slug %>" type="number" name="sortOrder"
+                               class="form-control form-control-sm" value="<%= item.sortOrder %>"
+                               min="0" style="width:74px">
+                      </td>
+                      <td>
+                        <div class="form-check form-switch mb-0">
+                          <input form="saveProduct<%= item.slug %>" class="form-check-input" type="checkbox"
+                                 role="switch" name="visible" value="on"
+                                 <%= item.visible === false ? '' : 'checked' %>
+                                 title="Show this product on the storefront">
+                        </div>
+                      </td>
+                      <td class="text-end">
+                        <%# The form sits here, empty, with the inputs above pointing at it by id,
+                            so nothing above is nested inside another form. %>
+                        <form id="saveProduct<%= item.slug %>" method="post"
+                              action="/dashboard/webstore/products/save" class="d-none">
+                          <input type="hidden" name="stripePriceId" value="<%= item.stripePriceId %>">
+                        </form>
+                        <button form="saveProduct<%= item.slug %>" type="submit"
+                                class="btn btn-sm btn-outline-primary" title="Save">
+                          <i class="fa-solid fa-floppy-disk fa-fw"></i>
+                        </button>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% }) %>
+
+      <% } %>
+
+    </div>
+  </div>
+</div>
+
+<%- include("../../admin/_footer.ejs") %>

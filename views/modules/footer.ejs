@@ -5,7 +5,7 @@
 			<div class="col-lg-3 me-auto col-sm-6">
 				<div class="widget mb-5 mb-lg-0">
 					<div class="logo mb-4">
-						<img src="/images/siteLogo.png" alt="" class="img-fluid">
+						<img src="/images/siteLogo.png" alt="<%= config.siteConfiguration.siteName %> Logo" class="img-fluid">
 					</div>
 
 					<ul class="list-inline footer-socials mt-4">
@@ -90,6 +90,10 @@
 						&copy; Copyright 2018 - <%= new Date().getFullYear() %> <%= config.siteConfiguration.siteName %><br>
 						<%= config.siteConfiguration.siteName %> is not affiliated with or managed by Mojang AB or Microsoft.<br>
 						Designed by <a href="https://themefisher.com/">Themefisher</a> and Developed by <a href="https://modularsoft.org" target="_blank">Modular Software</a>
+						<% const build = locals.buildInfo || {}; %>
+						<% if (build.version || build.shortCommit) { %>
+						<br><small class="text-muted" title="<%= build.commit ? 'Commit ' + build.commit : '' %>"><% if (build.version) { %>v<%= build.version %><% } %><% if (build.version && build.shortCommit) { %> &middot; <% } %><% if (build.shortCommit) { %><%= build.shortCommit %><% } %></small>
+						<% } %>
 					</div>
 				</div>
 			</div>
@@ -108,7 +112,6 @@
     <!-- Essential Scripts -->
     
     <!-- Main jQuery -->
-    <!-- <script src="/vendors/jquery/jquery.js"></script> -->
     <!-- Bootstrap 4.3.2 -->
     <!-- <script src="/vendors/bootstrap/js/popper.js"></script> -->
     <!-- <script src="/vendors/bootstrap/js/bootstrap.min.js"></script> -->

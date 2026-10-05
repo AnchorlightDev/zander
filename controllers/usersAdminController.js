@@ -12,16 +12,23 @@
 
 import db from "./databaseController.js";
 
+// hasPassword / is_placeholder feed classifyAccountState; the hash itself is
+// never selected.
 const SAFE_LIST_COLUMNS = `
   userId, uuid, username, discordId, email, email_verified, account_registered,
-  account_disabled, joined, audit_lastMinecraftLogin, audit_lastWebsiteLogin
+  account_disabled, joined, audit_lastMinecraftLogin, audit_lastWebsiteLogin,
+  (password_hash IS NOT NULL) AS hasPassword, is_placeholder
 `;
+
+// SQL twins of classifyAccountState (controllers/userAccountState.js).
+const REGISTERED_SQL = `((account_registered IS NOT NULL AND password_hash IS NOT NULL) OR (discordId IS NOT NULL AND is_placeholder = 0))`;
+const PROFILE_ONLY_SQL = `(NOT ${REGISTERED_SQL} AND email IS NULL AND password_hash IS NULL AND account_registered IS NULL)`;
 
 const SAFE_DETAIL_COLUMNS = `
   userId, uuid, username, discordId, email, email_verified, email_verified_at,
   account_registered, account_disabled, joined,
   audit_lastMinecraftLogin, audit_lastWebsiteLogin,
-  (password_hash IS NOT NULL) AS hasPassword
+  (password_hash IS NOT NULL) AS hasPassword, is_placeholder
 `;
 
 function runQuery(sql, params = []) {
@@ -55,14 +62,11 @@ function buildUserFilters({ search, platform, accountState, emailStatus, discord
 
   // Keep in sync with controllers/userAccountState.js:classifyAccountState
   if (accountState === "REGISTERED") {
-    clauses.push(`account_registered IS NOT NULL AND password_hash IS NOT NULL`);
+    clauses.push(REGISTERED_SQL);
   } else if (accountState === "MINECRAFT_PROFILE_ONLY") {
-    clauses.push(`email IS NULL AND password_hash IS NULL AND account_registered IS NULL`);
+    clauses.push(PROFILE_ONLY_SQL);
   } else if (accountState === "REGISTRATION_INCOMPLETE") {
-    clauses.push(`
-      NOT (account_registered IS NOT NULL AND password_hash IS NOT NULL)
-      AND NOT (email IS NULL AND password_hash IS NULL AND account_registered IS NULL)
-    `);
+    clauses.push(`NOT ${REGISTERED_SQL} AND NOT ${PROFILE_ONLY_SQL}`);
   }
 
   if (emailStatus === "VERIFIED") {
@@ -140,8 +144,8 @@ export async function getUsersSummaryStats() {
   const rows = await runQuery(`
     SELECT
       COUNT(*) AS totalPlayers,
-      SUM(CASE WHEN account_registered IS NOT NULL AND password_hash IS NOT NULL THEN 1 ELSE 0 END) AS websiteRegistered,
-      SUM(CASE WHEN email IS NULL AND password_hash IS NULL AND account_registered IS NULL THEN 1 ELSE 0 END) AS profileOnly,
+      SUM(CASE WHEN ${REGISTERED_SQL} THEN 1 ELSE 0 END) AS websiteRegistered,
+      SUM(CASE WHEN ${PROFILE_ONLY_SQL} THEN 1 ELSE 0 END) AS profileOnly,
       SUM(CASE WHEN discordId IS NOT NULL THEN 1 ELSE 0 END) AS discordLinked,
       SUM(CASE WHEN account_disabled = 1 THEN 1 ELSE 0 END) AS disabled
     FROM users

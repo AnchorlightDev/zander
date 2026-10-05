@@ -43,15 +43,29 @@ export default async function webApiRoute(app, config, db, features, lang) {
         }),
         new Promise((resolve, reject) => {
           luckpermsDb.query(
+            // meta.staff.1 exactly: the rank editor writes meta.staff.0 on every
+            // non-staff group it saves, so matching meta.staff.% counted every
+            // member of every edited rank. Same staff definition as the staff
+            // page (controllers/staffController.js): staff flag set, not a
+            // donator rank, default/retired excluded. Expired temporary
+            // memberships are left out too.
             `SELECT COUNT(DISTINCT lup.uuid) AS totalStaff
              FROM luckperms_user_permissions lup
              JOIN luckperms_group_permissions lgp
                ON lgp.name = SUBSTRING_INDEX(lup.permission, '.', -1)
-               AND lgp.permission LIKE 'meta.staff.%'
+               AND lgp.permission = 'meta.staff.1'
                AND lgp.value = 1
+               AND lgp.server = 'global' AND lgp.world = 'global'
              WHERE lup.permission LIKE 'group.%'
                AND lup.value = 1
-               AND SUBSTRING_INDEX(lup.permission, '.', -1) NOT IN ('default', 'retired')`,
+               AND (lup.expiry IS NULL OR lup.expiry = 0 OR lup.expiry > UNIX_TIMESTAMP())
+               AND SUBSTRING_INDEX(lup.permission, '.', -1) NOT IN ('default', 'retired')
+               AND NOT EXISTS (
+                 SELECT 1 FROM luckperms_group_permissions don
+                  WHERE don.name = lgp.name
+                    AND don.permission = 'meta.donator.1'
+                    AND don.value = 1
+               )`,
             (err, results) => {
               if (err) return reject(err);
               resolve(results);

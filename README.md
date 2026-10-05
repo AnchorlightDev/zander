@@ -6,7 +6,7 @@ Documentation: [https://modularsoft.org/docs/products/zander](https://modularsof
 This repo is a monorepo with two projects:
 
 - **/** (root) — the Node.js web dashboard, API, and database (this document covers it)
-- **[agent/](agent/)** — the Java/Maven Minecraft plugins (`zander-addon`, `zander-auth`, `zander-hub`, `zander-velocity`, `zander-waterfall`) (see [agent/README.md](agent/README.md))
+- **[agent/](agent/)** — the Java/Maven Minecraft plugins (`zander-addon`, `zander-auth`, `zander-hub`, `zander-velocity`) (see [agent/README.md](agent/README.md))
 
 ## Permissions
 
@@ -20,13 +20,21 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | `zander.web.logs` | View system logs and audit trails |
 | `zander.web.announcements` | Create, edit, and view announcements |
 | `zander.web.application` | Manage player applications |
+| `zander.web.forms` | Build forms and review their submissions |
 | `zander.web.server` | Manage game servers |
 | `zander.web.rank` | Manage individual player ranks via the API |
 | `zander.web.ranks` | Access the ranks dashboard page |
+| `zander.web.ranks.permissions` | Grant and revoke Zander permissions on a rank |
 | `zander.web.scheduler` | Schedule announcements/messages |
 | `zander.web.vault` | Access vault management |
 | `zander.web.bridge` | Manage bridge/integrations |
 | `zander.web.badges` | Access the badge management dashboard (create, edit, assign, delete badges) |
+| `zander.web.apikeys` | Issue, scope and revoke API client credentials |
+| `zander.web.settings` | Edit site settings (site info, links, Discord IDs and webhooks, automation) |
+| `zander.web.modules` | Switch modules (feature flags) on and off |
+| `zander.web.users` | Access the user administration dashboard (view only; email addresses are masked) |
+| `zander.web.users.email` | Reveal unmasked email addresses on the user administration pages |
+| `zander.web.users.manage` | Edit user records from the user administration dashboard |
 
 ### Events
 
@@ -34,13 +42,15 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 |---|---|
 | `zander.web.events` | Access the events dashboard (view only) |
 | `zander.web.events.edit` | Create and edit events |
-| `zander.web.events.review` | Review and publish events (implies edit access) |
+| `zander.web.events.review` | Review and publish events (implies edit access), and edit the default announcements new events start with |
 
 ### Webstore
 
 | Permission Node | Description |
 |---|---|
 | `zander.web.webstore` | Access the webstore admin dashboard (purchases, command configuration) |
+| `zander.web.webstore.manage` | Edit webstore products and command configuration |
+| `zander.web.webstore.*` | Equivalent to both `zander.web.webstore` and `zander.web.webstore.manage` |
 
 ### Finance
 
@@ -83,6 +93,7 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | Permission Node | Description |
 |---|---|
 | `zander.web.forums` | Access the forums management dashboard |
+| `zander.web.forums.{node}` | Free-form node set as a category's **view permission**; only holders see that category. The suffix is chosen by you when creating the category (e.g. `zander.web.forums.staff`, `zander.web.forums.supporter`) — it is not a fixed list |
 | `zander.forums.moderate` | General forum moderation rights |
 | `zander.forums.view` | View forum content |
 | `zander.forums.post.delete` | Delete forum posts |
@@ -102,6 +113,12 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | `zander.discord.punish.mute` | Mute/unmute users in Discord |
 | `zander.discord.punish.history` | View punishment history for users |
 
+### Discord Commands
+
+| Permission Node | Description |
+|---|---|
+| `zander.web.nicknamecheck` | Run the `/nicknamecheck` slash command (bulk-scans linked users for nickname mismatches) |
+
 ### Watch / Creator Content
 
 | Permission Node | Description |
@@ -109,6 +126,67 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 | `zander.watch.creator` | Marks the user as an eligible creator — their linked Twitch/YouTube content is synced to the `/watch` page |
 
 ---
+
+
+## API client credentials
+
+Every caller of the JSON API — each Minecraft server plugin, the uptime monitor,
+and this app's own internal self-calls — authenticates with its own credential
+rather than a single shared secret. A compromised or retired caller is revoked
+on its own, without touching any other.
+
+### Issuing a key
+
+1. Go to **Dashboard → System → API Keys** (`/dashboard/apikeys`, requires
+   `zander.web.apikeys`).
+2. Give the client a name that identifies the caller, e.g. `survival-server`
+   or `uptime-monitor`.
+3. Tick only the scopes that caller needs.
+4. Copy the key it shows you. **It is displayed once.** Only a SHA-256 hash is
+   stored, so a lost key cannot be recovered — revoke the client and issue a
+   new one.
+
+Keys look like `zdr_<8-char prefix>_<40-char secret>`. The prefix is a
+non-secret lookup handle and is safe to quote in logs and support tickets; the
+secret is not.
+
+### Scopes
+
+One scope per API surface, with **no wildcard** — granting broad access has to
+be a deliberate act of selecting every box:
+
+`announcement`, `application`, `badges`, `bridge`, `config`, `discord`,
+`events`, `filter`, `finance`, `punishments`, `ranks`, `report`, `scheduler`,
+`server`, `session`, `shopdirectory`, `user`, `vault`, `web`, `adminUsers`,
+`internal`
+
+A request to a path with no scope mapping is rejected, so a newly added route
+is unreachable until it is deliberately given a scope.
+
+### Responses
+
+| Situation | Status |
+|---|---|
+| Missing or malformed key | `401` |
+| Unknown prefix, wrong secret, or revoked client | `401` |
+| Valid key without the required scope | `403` |
+| Client lookup failed (database unreachable) | `503` |
+
+The body keeps the usual `{ success, message }` shape.
+
+### This app's own calls
+
+The app calls its own API in a number of places (`api/internal_redirect/*`,
+several dashboard routes and Discord commands). It uses a dedicated client —
+conventionally named `zander-web-internal` — supplied via `INTERNAL_API_KEY`
+and applied through `internalApiHeaders()` in `api/common.js`. Never reintroduce
+a shared key that the app both presents and validates.
+
+### Revocation
+
+Revoking is a soft delete: the row is kept for audit with `isRevoked` and
+`revokedAt` set, and the auth cache entry is evicted immediately so the key
+stops working straight away.
 
 ## Creator Content Integration (Twitch & YouTube)
 
@@ -155,7 +233,7 @@ youtubeApiKey=YOUR_API_KEY
 
 ### Configuring CFC content filters
 
-The filters that determine whether content is CFC-related are configured in `config.json` under the `watch.filters` key:
+The filters that determine whether content is CFC-related are set in **Dashboard → Settings → Watch & Events** (stored as `watch.filters`):
 
 ```json
 "watch": {
@@ -185,7 +263,7 @@ The filters that determine whether content is CFC-related are configured in `con
 
 ### Feature flag
 
-The `/watch` route is controlled by the `watch` key in `features.json`. Set it to `false` to disable the page entirely:
+The `/watch` route is controlled by the **Watch** switch in **Dashboard → Modules** (`features.watch`). Turn it off to disable the page entirely:
 
 ```json
 {
@@ -212,7 +290,7 @@ The `/webstore` module is a Stripe-powered store for selling in-game ranks and p
 
 ### Feature flag
 
-The webstore is controlled by the `webstore` key in `features.json`. Set it to `false` to disable the storefront and all checkout routes:
+The webstore is controlled by the **Webstore** switch in **Dashboard → Modules** (`features.webstore`). Turn it off to disable the storefront and all checkout routes:
 
 ```json
 {
@@ -297,7 +375,7 @@ VALUES
 
 ### Discord notifications
 
-The webstore posts to a Discord webhook on key events. Configure the webhook URL in `config.json` under `siteConfiguration.staffWebhook` (shared with other staff notifications).
+The webstore posts to a Discord webhook on key events. Set the webhook in **Dashboard → Settings → Discord** (*Webstore webhook*).
 
 ### Database migration
 
@@ -312,3 +390,80 @@ Run `prisma/migrations/0017_webstore/migration.sql` against your database (or ru
 | `webstoreCommandRuns` | Tracks each individual command dispatched to `executorTasks` and its completion status |
 | `webstoreTransactions` | Audit ledger recording the financial side of every completed payment |
 
+
+---
+
+## Discord Booster Rewards
+
+Linked members who are **boosting your Discord server** can be given one or more LuckPerms ranks automatically. The ranks are removed when the boost ends.
+
+Set it up in **Dashboard → Settings → Discord**:
+
+- **Booster rewards**: the on/off switch. Turning it off removes the ranks it gave.
+- **Booster reward ranks**: LuckPerms group names, one per line.
+
+How it behaves:
+
+- A boost starting or ending is picked up live, and a sweep every 30 minutes (`cron/boosterRewardSyncCron.js`) catches anything missed, such as members who left the server or boosts that ended while the bot was offline. Linking or unlinking Discord on the website takes effect straight away.
+- Only real linked accounts qualify; placeholder accounts created by the support bot do not.
+- Ranks are granted by queueing `lp user <uuid> parent add <group>` for the game servers, so the player does not need to be online. Using the Minecraft UUID means a later name change does not break removal.
+- Each grant is recorded in `boosterRewardGrants`, so ending a boost removes only ranks this feature added. A player who already had one of the ranks, for example one they bought, keeps it.
+- Discord does not let bots see Nitro itself, so this is based on boosting, which the bot can see.
+
+## Forms & Applications
+
+Forms are built at `/dashboard/forms` (permission `zander.web.forms`) and served at `/forms/<slug>`. An `applications` row with a `linkedFormId` is a tile that points at one, so everything below applies to applications too.
+
+### Gating
+
+Two checks run before the questions render, and again on submit — posting straight to `/forms/<slug>` does not skip them.
+
+| Gate | Stored on `forms` | Behaviour |
+|---|---|---|
+| Access code | `accessCode` | One shared code per form. Wrong codes are rejected plainly, with no lockout or attempt counter — it is a code to paste into an announcement, not a password. Accepted codes are remembered per session so a validation error does not force re-entry. |
+| Requirements | `requirements` (JSON) | Playtime, clean record, and in-game/Discord consistency. Failure is a hard block and the message quotes the exact numbers on both sides. |
+| Reapply cooldown | `reapplyCooldownDays` | After a **denial** only, counted from `reviewedAt`. Approved and pending submissions stay governed by `allowMultiple`. |
+
+Rules live in `lib/formRequirements.mjs` (pure, unit-tested); the querying is in `services/formRequirementsService.js`. If a source is unreachable the gate **opens** rather than blocking everyone.
+
+**Punishments count bans and mutes only.** Kicks and warnings are excluded — both are routinely automated or a first-line "please stop", and counting them would block a large share of ordinary players. Change `PUNISHMENT_TABLES` in `services/formRequirementsService.js` to include `litebans_kicks` / `litebans_warnings`.
+
+### Discord activity tracking
+
+The Discord consistency checks read `discordActivityDaily`, filled by `listeners/discordActivity.js`.
+
+This is a **daily rollup, not a message log**: one row per user per day holding a count. No message content, no channel and no per-message timestamps are stored. Please do not extend it into a message log. Bots, DMs and other guilds are ignored, and counts are buffered in memory and flushed periodically rather than written per message.
+
+```json
+{
+  "discord": {
+    "activityTracking": true
+  }
+}
+```
+
+Absent means **on**: it is deliberately not gated on `features.forms`, because activity has to accumulate before anyone first enables a requirement that reads it.
+
+Because of that, the table only has data from the day the listener was deployed. A 30-day Discord window is meaningless until 30 days after that, so while the rollup is younger than the window those two checks report as *skipped* rather than failing everyone. Turn that off with `skipUnmeasurableDiscord: false` in `evaluateRequirements`.
+
+### Image uploads
+
+The `images` field type uploads through the existing `POST /api/upload/image` and stores the returned metadata (`url`, `publicId`, `width`, `height`). The per-field maximum is hard-capped at 10 and re-enforced server-side, and every URL is checked against `CLOUDINARY_CLOUD_NAME` — a submitter cannot hand-craft an answer pointing somewhere else. **Image fields return 503 unless `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` are set.**
+
+### Ticket status thread
+
+Where `createTicket` is on, the submission's ticket carries the decision. Each form supplies its own wording (`ticketPendingMessage`, `ticketApprovedMessage`, `ticketDeniedMessage`); blanks fall back to `lib/formTicketMessages.mjs`. `{form}`, `{submissionId}` and `{reviewer}` are substituted.
+
+The reviewer's comment (`formSubmissions.reviewNotes`) is **shown to the applicant** from this release onwards. It was previously labelled and treated as internal, so `commentIsPublic` guards it: existing rows are `false` and stay withheld, and only decisions saved after this shipped set it `true`.
+
+### Migrations
+
+| Migration | Adds |
+|---|---|
+| `0047_form_field_config` | `formFields.config` — per-field settings (`maxImages`, scale bounds, `showIf`) |
+| `0048_form_access_code` | `forms.accessCode` |
+| `0049_form_requirements` | `forms.requirements` |
+| `0050_discord_activity_daily` | `discordActivityDaily` |
+| `0051_form_drafts` | `formDrafts` — autosaved answers, deleted on submission |
+| `0052_form_reapply_cooldown` | `forms.reapplyCooldownDays` |
+| `0053_form_ticket_messages` | The three ticket message columns, and `formSubmissions.commentIsPublic` |

@@ -19,7 +19,7 @@
  *  group         – sidebar section heading  (null / omitted → top-level)
  *  sortOrder     – render order within the group
  *  hiddenFromMenu– true → page exists but is NOT shown in the sidebar
- *  featureFlag   – key in features.json that must be truthy to show the item
+ *  featureFlag   – module switch (lib/config/features.cjs) that must be on to show the item
  */
 
 // ---------------------------------------------------------------------------
@@ -82,6 +82,18 @@ export const adminPages = [
     featureFlag: "applications",
     group: "Community",
     sortOrder: 21,
+  },
+
+  {
+    slug: "forms",
+    title: "Forms",
+    menuTitle: "Forms",
+    icon: "fas fa-clipboard-list",
+    capability: "zander.web.forms",
+    path: "/dashboard/forms",
+    featureFlag: "forms",
+    group: "Community",
+    sortOrder: 22,
   },
 
   // ── Events group ───────────────────────────────────────────────────────────
@@ -267,6 +279,28 @@ export const adminPages = [
     group: "Webstore",
     sortOrder: 80,
   },
+  {
+    slug: "webstore-products",
+    title: "Storefront Products",
+    menuTitle: "Products",
+    icon: "fa-solid fa-box-open",
+    capability: "zander.web.webstore",
+    path: "/dashboard/webstore/products",
+    featureFlag: "webstore",
+    group: "Webstore",
+    sortOrder: 79.5,
+  },
+  {
+    slug: "webstore-categories",
+    title: "Categories",
+    menuTitle: "Categories",
+    icon: "fa-solid fa-tags",
+    capability: "zander.web.webstore",
+    path: "/dashboard/webstore/categories",
+    featureFlag: "webstore",
+    group: "Webstore",
+    sortOrder: 81,
+  },
 
   // ── Finance group ──────────────────────────────────────────────────────────
   {
@@ -326,12 +360,55 @@ export const adminPages = [
     group: "Community",
     sortOrder: 23,
   },
+  {
+    slug: "apikeys",
+    title: "API Keys",
+    menuTitle: "API Keys",
+    icon: "fa-solid fa-key",
+    capability: "zander.web.apikeys",
+    path: "/dashboard/apikeys",
+    group: "System",
+    sortOrder: 75,
+  },
+  {
+    slug: "settings",
+    title: "Site Settings",
+    menuTitle: "Settings",
+    icon: "fa-solid fa-sliders",
+    capability: "zander.web.settings",
+    path: "/dashboard/settings",
+    group: "System",
+    sortOrder: 80,
+  },
+  {
+    slug: "modules",
+    title: "Modules",
+    menuTitle: "Modules",
+    icon: "fa-solid fa-puzzle-piece",
+    capability: "zander.web.modules",
+    path: "/dashboard/modules",
+    group: "System",
+    sortOrder: 85,
+  },
 ];
-
 // ---------------------------------------------------------------------------
 // Sub-pages (registered for breadcrumb / title lookup; not shown in sidebar)
 // ---------------------------------------------------------------------------
 export const adminSubPages = [
+  {
+    slug: "forms-create",
+    title: "Create Form",
+    parent: "forms",
+    path: "/dashboard/forms/create",
+    capability: "zander.web.forms",
+  },
+  {
+    slug: "forms-submissions",
+    title: "Form Submissions",
+    parent: "forms",
+    path: "/dashboard/forms/submissions",
+    capability: "zander.web.forms",
+  },
   {
     slug: "announcements-create",
     title: "Create Announcement",
@@ -428,7 +505,7 @@ function checkPermission(permissionsArray, node) {
  * Return all menu pages visible to the current user, sorted by sortOrder.
  *
  * @param {string[]} userPermissions  – req.session.user.permissions
- * @param {object}   features         – parsed features.json
+ * @param {object}   features         – live module switches (lib/config/features.cjs)
  */
 export function getMenuItems(userPermissions, features) {
   return adminPages

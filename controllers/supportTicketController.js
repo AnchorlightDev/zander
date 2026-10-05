@@ -1,6 +1,6 @@
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
+const config = require("../lib/config/config.cjs");
 import db, { luckpermsDb } from "./databaseController.js";
 import { ChannelType, PermissionFlagsBits, OverwriteType } from "discord.js";
 import { hashEmail } from "../api/common.js";

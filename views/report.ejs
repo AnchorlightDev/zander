@@ -42,7 +42,10 @@
         <%- include("partials/form/inputText.ejs", {
             elementName: "reportReason",
             required: true,
-            elementValue: null
+            elementValue: null,
+            // reports.reportReason is VARCHAR(100); the API truncates beyond
+            // this, so stop the reporter from losing text they cannot see.
+            maxLength: 100
         }) %>
         <br>
 

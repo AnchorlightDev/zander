@@ -5,7 +5,7 @@ import {
   getPopupAnnouncements,
   getWebAnnouncement,
 } from "../controllers/announcementController.js";
-import { isFeatureWebRouteEnabled, getGlobalImage, getJumboVideo, hasPermission, isLoggedIn } from "../api/common.js";
+import { isFeatureWebRouteEnabled, getGlobalImage, getJumboVideo, hasPermission, isLoggedIn, internalApiHeaders} from "../api/common.js";
 import { getTicketsAccessibleByUser } from "../controllers/supportTicketController.js";
 import { getStaffPageData } from "../controllers/staffController.js";
 import {
@@ -26,7 +26,16 @@ import sitemapRoutes from "./sitemapRoute.js";
 import eventsSiteRoutes from "./eventsRoutes.js";
 import financeRoutes from "./financeRoutes.js";
 import webstoreSiteRoutes from "./webstoreRoutes.js";
+import formSiteRoutes from "./formRoutes.js";
+import bedrockSiteRoutes from "./bedrockRoutes.js";
 import { getRankCatalogForPublicPage } from "../controllers/rankCatalogController.js";
+import { createTranslator } from "../lib/langText.mjs";
+import {
+  forumViewerPermissions,
+  getCategoriesForUser,
+  getLatestDiscussions,
+} from "../controllers/forumController.js";
+import { homepageCategoryIds } from "../lib/homepageForum.js";
 import {
   buildGraph,
   webPageNode,
@@ -36,6 +45,35 @@ import {
   itemListNode,
 } from "../lib/seo/jsonLd.js";
 import { rankCatalogSchema } from "../lib/seo/rankSchema.js";
+
+/**
+ * The homepage's "Latest from the forums" posts for this visitor, or null to
+ * leave the section out. Never throws: a forum problem must not take the
+ * homepage down with it.
+ */
+async function homepageForumPosts(req, config, features) {
+  const settings = config.forums?.homepage || {};
+  const count = Number(settings.count ?? 4);
+  if (!features.forums || !(count > 0)) return null;
+
+  try {
+    const categoryData = await getCategoriesForUser(forumViewerPermissions(req));
+    const slug = String(settings.categorySlug || "").trim();
+    const categoryIds = homepageCategoryIds(categoryData, slug);
+    const discussions = await getLatestDiscussions({ categoryIds, limit: Math.min(count, 12) });
+    if (discussions.length === 0) return null;
+
+    const category = slug ? categoryData.flat.find((c) => c.slug === slug) : null;
+    return {
+      discussions,
+      title: category ? category.name : "Latest from the forums",
+      viewAllUrl: category ? `/forums/category/${category.slug}` : "/forums",
+    };
+  } catch (error) {
+    console.error("[homepage] Latest forum posts unavailable:", error.message);
+    return null;
+  }
+}
 
 export default function applicationSiteRoutes(
   app,
@@ -60,6 +98,8 @@ export default function applicationSiteRoutes(
   eventsSiteRoutes(app, config, features);
   financeRoutes(app, config, features);
   webstoreSiteRoutes(app, config, features);
+  formSiteRoutes(app, config, features);
+  bedrockSiteRoutes(app, config, features, lang);
 
   // Summernote editor fetches /emojis to populate its emoji picker.
   // Return an empty map so it silently falls back to the GitHub emoji list
@@ -73,7 +113,7 @@ export default function applicationSiteRoutes(
     try {
       const fetchURL = `${process.env.siteAddress}/api/web/statistics`;
       const response = await fetch(fetchURL, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       });
       const json = await response.json();
       if (json?.data) statApiData = json;
@@ -116,9 +156,14 @@ export default function applicationSiteRoutes(
       config: config,
       req: req,
       features: features,
+      t: createTranslator(lang, {
+        SITENAME: config.siteConfiguration.siteName,
+        REGION: config.siteConfiguration.region?.name ?? "",
+      }),
       globalImage: await getGlobalImage(),
       jumboVideo: getJumboVideo(),
       statApiData: statApiData,
+      forumPosts: await homepageForumPosts(req, config, features),
       announcementWeb: await getWebAnnouncement(),
     }));
     return;
@@ -148,7 +193,7 @@ export default function applicationSiteRoutes(
 
     const fetchURL = `${process.env.siteAddress}/api/server/get?type=EXTERNAL`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 
@@ -219,7 +264,7 @@ export default function applicationSiteRoutes(
 
     const fetchURL = `${process.env.siteAddress}/api/application/get`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 
@@ -365,7 +410,7 @@ export default function applicationSiteRoutes(
           req.session.user.username
         )}`;
         const punishmentsResponse = await fetch(fetchPunishmentsURL, {
-          headers: { "x-access-token": process.env.apiKey },
+          headers: internalApiHeaders(),
         });
         appealPunishmentsApiData = await punishmentsResponse.json();
 
@@ -450,7 +495,7 @@ export default function applicationSiteRoutes(
         req.session.user.username
       )}`;
       const punishmentsResponse = await fetch(fetchPunishmentsURL, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       });
       const appealPunishmentsApiData = await punishmentsResponse.json();
       const punishments = Array.isArray(appealPunishmentsApiData.data)
@@ -550,7 +595,7 @@ export default function applicationSiteRoutes(
 
     try {
       const shopResponse = await fetch(shopFetchURL, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       });
 
       if (!shopResponse.ok) {
@@ -588,7 +633,7 @@ export default function applicationSiteRoutes(
 
     const fetchURL = `${process.env.siteAddress}/api/vault/get`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 
@@ -624,7 +669,7 @@ export default function applicationSiteRoutes(
 
     const fetchURL = `${process.env.siteAddress}/api/punishments/get?page=${page}&limit=${limit}`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 

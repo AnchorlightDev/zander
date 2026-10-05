@@ -974,6 +974,32 @@ a:focus {
   display: none;
 }
 
+/* Main nav: a small chevron shows which items open a menu. Drawn with borders
+   rather than an icon font, and flips upward while the menu is open. */
+#navbarmain .dropdown > .dropdown-toggle::after {
+  display: inline-block;
+  content: "";
+  width: 0.4em;
+  height: 0.4em;
+  margin-left: 0.45em;
+  border: 0;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  vertical-align: middle;
+  transform: translateY(-0.2em) rotate(45deg);
+  transition: transform 0.25s ease;
+}
+
+#navbarmain .dropdown:hover > .dropdown-toggle::after,
+#navbarmain .dropdown > .dropdown-toggle[aria-expanded="true"]::after {
+  transform: translateY(0.05em) rotate(-135deg);
+}
+
+/* The notification bell is an icon with a badge, not a menu label. */
+#navbarmain #notificationDropdown::after {
+  display: none;
+}
+
 .navbar-brand {
   margin-top: 10px;
 }
@@ -2143,6 +2169,21 @@ a:focus {
   color: #2f508c;
 }
 
+/* Footer logo.  .navbar-brand img is capped at a fixed height, but the footer
+   copy had no constraint, so img-fluid let the 264x372 source render at its
+   full natural size and dominate the column. */
+.footer .logo img {
+  height: 90px;
+  width: auto;
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  .footer .logo img {
+    height: 72px;
+  }
+}
+
 .widget .divider {
   height: 3px;
 }
@@ -2279,6 +2320,32 @@ a:focus {
   background-color: #92b4f2;
   text-align: center;
   padding: 15px;
+  /* The dismiss button sits at the end without pushing the text off centre:
+     the body flexes to fill and stays centred within itself. */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.announcementWebBanner-body {
+  flex: 1 1 auto;
+}
+
+.announcementWebBanner-dismiss {
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+.announcementWebBanner-dismiss:hover,
+.announcementWebBanner-dismiss:focus {
+  opacity: 1;
 }
 
 @media only screen and (max-width: 767px) {

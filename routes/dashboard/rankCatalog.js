@@ -6,7 +6,10 @@ import {
   createCatalogEntry,
   updateCatalogEntry,
   deleteCatalogEntry,
+  setCatalogEntryVisibility,
 } from "../../controllers/rankCatalogController.js";
+import { getAllCategories } from "../../controllers/webstoreCategoryController.js";
+import { groupByCategory, withEmptyCategories } from "../../lib/webstore/catalogVisibility.mjs";
 import { fetchStripePrices } from "../../controllers/webstoreController.js";
 
 async function getStripeOptions() {
@@ -48,23 +51,29 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
     if (!await isFeatureWebRouteEnabled(app, features.webstore, req, res, features)) return;
     if (!await hasPermission("zander.web.webstore", req, res, features)) return;
 
-    const [entries, announcementWeb] = await Promise.all([
+    const [entries, categories, announcementWeb] = await Promise.all([
       getAllCatalogEntries(),
+      getAllCategories(),
       getWebAnnouncement(),
     ]);
 
-    const categoryMap = new Map();
-    for (const e of entries) {
-      if (!categoryMap.has(e.category)) categoryMap.set(e.category, []);
-      categoryMap.get(e.category).push(e);
-    }
+    // Not publicOnly: the dashboard has to show hidden products, and
+    // withEmptyCategories keeps a brand-new empty category on screen so you can
+    // put the first product into it.
+    const groups = withEmptyCategories(groupByCategory(entries), categories);
 
     return res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/rank-catalog/index", {
         pageTitle: "Rank Catalog",
         config, features, req, announcementWeb,
         entries,
-        categoryGroups: Array.from(categoryMap.entries()).map(([name, items]) => ({ name, items })),
+        categories,
+        categoryGroups: groups.map((g) => ({
+          id: g.id,
+          name: g.displayName,
+          visible: g.visible,
+          items: g.packages,
+        })),
       })
     );
   });
@@ -74,8 +83,9 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
     if (!await isFeatureWebRouteEnabled(app, features.webstore, req, res, features)) return;
     if (!await hasPermission("zander.web.webstore", req, res, features)) return;
 
-    const [stripeOptions, announcementWeb] = await Promise.all([
+    const [stripeOptions, categories, announcementWeb] = await Promise.all([
       getStripeOptions(),
+      getAllCategories(),
       getWebAnnouncement(),
     ]);
 
@@ -85,6 +95,7 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
         config, features, req, announcementWeb,
         entry: null,
         stripeOptions,
+        categories,
         formAction: "/dashboard/rank-catalog/create",
       })
     );
@@ -106,10 +117,10 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
         displayName: body.displayName.trim(),
         description: body.description?.trim() || null,
         imageUrl: body.imageUrl?.trim() || null,
-        category: body.category?.trim() || "Ranks",
-        categorySortOrder: body.categorySortOrder,
+        categoryId: body.categoryId,
         sortOrder: body.sortOrder,
         perks: parsePerkGroups(body.perks),
+        visible: body.visible === "on" || body.visible === "1" || body.visible === "true",
       });
       return res.redirect("/dashboard/rank-catalog");
     } catch (err) {
@@ -123,9 +134,10 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
     if (!await isFeatureWebRouteEnabled(app, features.webstore, req, res, features)) return;
     if (!await hasPermission("zander.web.webstore", req, res, features)) return;
 
-    const [entry, stripeOptions, announcementWeb] = await Promise.all([
+    const [entry, stripeOptions, categories, announcementWeb] = await Promise.all([
       getCatalogEntry(req.params.id),
       getStripeOptions(),
+      getAllCategories(),
       getWebAnnouncement(),
     ]);
 
@@ -137,6 +149,7 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
         config, features, req, announcementWeb,
         entry,
         stripeOptions,
+        categories,
         formAction: `/dashboard/rank-catalog/${entry.id}/edit`,
       })
     );
@@ -158,16 +171,35 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
         displayName: body.displayName.trim(),
         description: body.description?.trim() || null,
         imageUrl: body.imageUrl?.trim() || null,
-        category: body.category?.trim() || "Ranks",
-        categorySortOrder: body.categorySortOrder,
+        categoryId: body.categoryId,
         sortOrder: body.sortOrder,
         perks: parsePerkGroups(body.perks),
+        visible: body.visible === "on" || body.visible === "1" || body.visible === "true",
       });
       return res.redirect("/dashboard/rank-catalog");
     } catch (err) {
       console.error("[rank-catalog] edit error:", err);
       return res.redirect(`/dashboard/rank-catalog/${req.params.id}/edit`);
     }
+  });
+
+  // ── Show / hide POST ──────────────────────────────────────────────────────
+  // A one-click toggle from the list, so publishing does not mean opening the
+  // full edit form and re-submitting every field.
+  app.post("/dashboard/rank-catalog/:id/visibility", async (req, res) => {
+    if (!await isFeatureWebRouteEnabled(app, features.webstore, req, res, features)) return;
+    if (!await hasPermission("zander.web.webstore", req, res, features)) return;
+
+    try {
+      const visible = (req.body || {}).visible;
+      await setCatalogEntryVisibility(
+        req.params.id,
+        visible === "on" || visible === "1" || visible === "true"
+      );
+    } catch (err) {
+      console.error("[rank-catalog] visibility error:", err);
+    }
+    return res.redirect("/dashboard/rank-catalog");
   });
 
   // ── Delete POST ───────────────────────────────────────────────────────────

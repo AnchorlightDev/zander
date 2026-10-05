@@ -4,7 +4,7 @@ import { Colors } from "discord.js";
 import { MessageBuilder, Webhook } from "discord-webhook-node";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
+const config = require("../lib/config/config.cjs");
 import moment from "moment";
 import { sendWebhookMessage } from "../lib/discord/webhooks.mjs";
 

@@ -1,4 +1,5 @@
 import { Listener } from "@sapphire/framework";
+import { MessageFlags } from "discord.js";
 
 const DB_ERROR_CODES = new Set([
   "EHOSTUNREACH",
@@ -27,7 +28,7 @@ export class ChatInputCommandErrorListener extends Listener {
         if (interaction.deferred || interaction.replied) {
           await interaction.editReply({ content: message });
         } else {
-          await interaction.reply({ content: message, ephemeral: true });
+          await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
         }
       } catch {
         // Interaction may have already expired — nothing more we can do.

@@ -1,3 +1,16 @@
 {
-    "java.compile.nullAnalysis.mode": "automatic"
+  // Eclipse JDT's null analysis is disabled deliberately.
+  //
+  // The Bukkit/Paper and Velocity APIs are only partially annotated, so with
+  // this on ("automatic") the language server flags roughly a hundred
+  // "Null type safety (type annotations): ... needs unchecked conversion to
+  // '@NonNull X'" warnings on ordinary, correct calls into those APIs.
+  //
+  // javac reports none of them: `mvn clean compile` is warning-free on this
+  // count. They are an artefact of the IDE's optional analysis meeting an
+  // un-annotated third-party API, not defects in this code.
+  //
+  // Turning it back on is only worthwhile alongside annotating our own APIs,
+  // which is a project in itself and buys little for a plugin codebase.
+  "java.compile.nullAnalysis.mode": "disabled"
 }

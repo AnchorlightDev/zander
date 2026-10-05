@@ -6,7 +6,6 @@ import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ServerConnection;
 import dev.dejvokep.boostedyaml.route.Route;
 import dev.anchorlight.stonelib.http.Request;
-import dev.anchorlight.stonelib.http.Response;
 import dev.anchorlight.zander.velocity.ZanderVelocityMain;
 import dev.anchorlight.zander.velocity.model.discord.spy.DiscordSocialSpy;
 import org.slf4j.Logger;

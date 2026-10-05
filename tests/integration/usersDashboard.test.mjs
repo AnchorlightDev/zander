@@ -30,9 +30,12 @@ describe("usersAdminController — data exposure safety", () => {
     await getUsersList({ page: 1, limit: 25 });
 
     for (const call of mockQuery.mock.calls) {
-      const sql = call[0];
-      expect(sql.toLowerCase()).not.toContain("password_hash");
-      expect(sql.toLowerCase()).not.toContain("codehash");
+      const sql = call[0].toLowerCase();
+      // The hash may only be tested for presence (a derived hasPassword
+      // boolean, or a NULL check in a filter) -- never returned as a column.
+      const occurrences = sql.match(/password_hash(?!\s+is\s+(not\s+)?null)/g) || [];
+      expect(occurrences).toEqual([]);
+      expect(sql).not.toContain("codehash");
     }
   });
 

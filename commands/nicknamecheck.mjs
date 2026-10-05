@@ -9,8 +9,8 @@ import { runBulkNicknameCheck } from "../lib/discord/nicknameCheck.mjs";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
-const features = require("../features.json");
+const config = require("../lib/config/config.cjs");
+const features = require("../lib/config/features.cjs");
 
 const NICKNAME_CHECK_PERMISSION = "zander.web.nicknamecheck";
 

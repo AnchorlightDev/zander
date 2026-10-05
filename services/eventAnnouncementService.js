@@ -6,28 +6,33 @@
 import { prisma } from "../controllers/databaseController.js";
 import { client } from "../controllers/discordController.js";
 import { EmbedBuilder } from "discord.js";
-import { logEventAudit } from "./eventService.js";
+import { cancelDuplicatesOfSent, logEventAudit } from "./eventService.js";
+
+/**
+ * Wording used when an announcement has no content template, chosen by when
+ * it fires (announcementType is a free label and was never reliable for this).
+ * Relative timestamps keep it right even if it goes out late.
+ */
+function defaultAnnouncementText(announcement) {
+  switch (announcement.triggerType) {
+    case "on_publish":
+      return "A new event has been announced: **{title}**\n\n{startAt} ({startRelative})";
+    case "before_event":
+      return "**{title}** starts {startRelative}!";
+    case "event_start":
+      return "**{title}** is starting now!";
+    case "after_event":
+      return "**{title}** has ended. Thanks for participating!";
+    default:
+      return "Reminder: **{title}** — {startAt}";
+  }
+}
 
 /**
  * Build a Discord embed for an event announcement.
  */
-function buildAnnouncementEmbed(event, template, announcementType) {
-  let description = template || null;
-
-  if (!description) {
-    // Default templates by type
-    if (announcementType === "reminder_24h") {
-      description = `**${event.title}** is happening in 24 hours!\n\n${event.description ? event.description.slice(0, 300) : ""}`;
-    } else if (announcementType === "reminder_1h") {
-      description = `**${event.title}** starts in 1 hour! Get ready!`;
-    } else if (announcementType === "event_start") {
-      description = `**${event.title}** is starting now!`;
-    } else if (announcementType === "on_publish") {
-      description = `A new event has been announced: **${event.title}**\n\n${event.description ? event.description.slice(0, 300) : ""}`;
-    } else {
-      description = `Reminder: **${event.title}**\n\n${event.description ? event.description.slice(0, 300) : ""}`;
-    }
-  }
+function buildAnnouncementEmbed(event, announcement) {
+  let description = announcement.contentTemplate || defaultAnnouncementText(announcement);
 
   // Replace template variables
   const startTs = Math.floor(new Date(event.startAt).getTime() / 1000);
@@ -97,6 +102,12 @@ export async function sendAnnouncement(announcementId) {
 
   const { event } = announcement;
 
+  // Never post the same announcement twice (see cancelDuplicatesOfSent)
+  if (await cancelDuplicatesOfSent(event.eventId)) {
+    const current = await prisma.event_announcements.findUnique({ where: { id: announcementId } });
+    if (current?.status !== "pending") return;
+  }
+
   if (announcement.platform === "discord") {
     await sendDiscordAnnouncement(announcement, event);
   }
@@ -130,7 +141,7 @@ async function sendDiscordAnnouncement(announcement, event) {
       throw new Error(`Channel ${channelId} is not text-based`);
     }
 
-    const embed = buildAnnouncementEmbed(event, announcement.contentTemplate, announcement.announcementType);
+    const embed = buildAnnouncementEmbed(event, announcement);
     const msg = await channel.send({ embeds: [embed] });
 
     await prisma.event_announcements.update({
@@ -171,7 +182,9 @@ async function sendDiscordAnnouncement(announcement, event) {
 }
 
 /**
- * Get all due announcements (pending, scheduledFor <= now, event not cancelled).
+ * Discord announcements that are due. Only for published events: a draft's
+ * announcements must never post, and cancelled, archived and deleted events
+ * are over.
  */
 export async function getDueAnnouncements() {
   const now = new Date();
@@ -179,8 +192,9 @@ export async function getDueAnnouncements() {
     where: {
       status: "pending",
       enabled: true,
+      platform: "discord",
       scheduledFor: { lte: now },
-      event: { status: { not: "cancelled" }, deletedAt: null },
+      event: { status: "published", deletedAt: null },
     },
     include: { event: true },
     orderBy: { scheduledFor: "asc" },
@@ -192,8 +206,12 @@ export async function getDueAnnouncements() {
  * Process all due announcements. Called by cron.
  */
 export async function processDueAnnouncements() {
-  const due = await getDueAnnouncements();
   const results = { sent: 0, failed: 0 };
+  // Wait for the bot rather than failing everything due while it reconnects:
+  // a failed announcement is never retried.
+  if (!client?.isReady?.()) return results;
+
+  const due = await getDueAnnouncements();
 
   for (const announcement of due) {
     try {

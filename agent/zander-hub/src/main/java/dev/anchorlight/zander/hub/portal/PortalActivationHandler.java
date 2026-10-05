@@ -112,11 +112,11 @@ public class PortalActivationHandler {
         if (portal.sound() == null) {
             return;
         }
-        try {
-            player.playSound(player.getLocation(), Sound.valueOf(portal.sound()), 1f, 1f);
-        } catch (IllegalArgumentException ignored) {
-            // invalid sound values are already rejected at load time by PortalRepository
+        Sound sound = PortalSounds.resolve(portal.sound());
+        if (sound != null) {
+            player.playSound(player.getLocation(), sound, 1f, 1f);
         }
+        // invalid sound values are already rejected at load time by PortalRepository
     }
 
     private void send(Player player, String configPath, String fallback) {

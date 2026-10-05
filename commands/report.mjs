@@ -1,11 +1,12 @@
 import { Command, RegisterBehavior } from "@sapphire/framework";
-import { Colors, EmbedBuilder } from "discord.js";
+import { Colors, EmbedBuilder, MessageFlags } from "discord.js";
 import fetch from "node-fetch";
 import { UserGetter } from "../controllers/userController.js";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const features = require("../features.json");
+const features = require("../lib/config/features.cjs");
 
+import { internalApiHeaders } from "../api/common.js";
 export class ReportCommand extends Command {
   constructor(context, options) {
     super(context, { ...options });
@@ -27,6 +28,10 @@ export class ReportCommand extends Command {
             .setName("reason")
             .setDescription("The reason for reporting the user.")
             .setRequired(true)
+            // reports.reportReason is VARCHAR(100). Discord enforces this in
+            // the client, so a long reason is caught before submission rather
+            // than being silently truncated by the API.
+            .setMaxLength(100)
         )
     );
   }
@@ -42,7 +47,7 @@ export class ReportCommand extends Command {
 
       return interaction.reply({
         embeds: [errorEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -64,7 +69,7 @@ export class ReportCommand extends Command {
 
       return interaction.reply({
         embeds: [errorEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -74,10 +79,7 @@ export class ReportCommand extends Command {
     const reportURL = `${process.env.siteAddress}/api/report/create`;
     const response = await fetch(reportURL, {
       method: "POST",
-      headers: {
-        "x-access-token": process.env.apiKey,
-        "Content-Type": "application/json",
-      },
+      headers: internalApiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         reporterUser: userData.username,
         reportedUser: reportedUser,
@@ -97,7 +99,7 @@ export class ReportCommand extends Command {
 
       interaction.reply({
         embeds: [errorEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     } else {
       const successEmbed = new EmbedBuilder()
@@ -109,7 +111,7 @@ export class ReportCommand extends Command {
 
       interaction.reply({
         embeds: [successEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   }

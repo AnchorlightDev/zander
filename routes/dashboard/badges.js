@@ -20,6 +20,7 @@
 import {
   getGlobalImage,
   hasPermission,
+  internalApiHeaders,
 } from "../../api/common.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import db from "../../controllers/databaseController.js";
@@ -33,10 +34,7 @@ import {
 async function proxyToApi(fetch, method, path, body) {
   const res = await fetch(`${process.env.siteAddress}${path}`, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "x-access-token": process.env.apiKey,
-    },
+    headers: internalApiHeaders({ "Content-Type": "application/json" }),
     body: body ? JSON.stringify(body) : undefined,
   });
   return res.json();
@@ -53,7 +51,7 @@ export default function dashboardBadgesRoute(app, fetch, config, db, features, l
     let badgesData = { success: false, data: [] };
     try {
       const r = await fetch(`${process.env.siteAddress}/admin/badges`, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       });
       badgesData = await r.json();
     } catch (error) {
@@ -141,7 +139,7 @@ export default function dashboardBadgesRoute(app, fetch, config, db, features, l
     let badge = null;
     try {
       const r = await fetch(`${process.env.siteAddress}/admin/badges`, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       });
       const all = await r.json();
       badge = (all.data || []).find((b) => b.badgeId === id) || null;
@@ -178,7 +176,7 @@ export default function dashboardBadgesRoute(app, fetch, config, db, features, l
     let badge = null;
     try {
       const r = await fetch(`${process.env.siteAddress}/admin/badges`, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       });
       const all = await r.json();
       badge = (all.data || []).find((b) => b.badgeId === id) || null;

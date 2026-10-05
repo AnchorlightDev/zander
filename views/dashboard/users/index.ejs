@@ -198,19 +198,39 @@
         <% if (totalPages > 1) { %>
         <div class="card-footer bg-white">
           <nav>
-            <ul class="pagination justify-content-center mb-0">
+            <%
+              // Windowed pager: first, last, and two either side of the current
+              // page, with an ellipsis for each gap. Listing every page ran to
+              // hundreds of links and pushed off the side of the page.
+              const pageHref = (n) => "?page=" + n
+                + "&search=" + encodeURIComponent(filters.search || "")
+                + "&platform=" + encodeURIComponent(filters.platform || "")
+                + "&accountState=" + encodeURIComponent(filters.accountState || "")
+                + "&emailStatus=" + encodeURIComponent(filters.emailStatus || "")
+                + "&discordStatus=" + encodeURIComponent(filters.discordStatus || "")
+                + "&disabledStatus=" + encodeURIComponent(filters.disabledStatus || "");
+              const shown = [];
+              for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || Math.abs(i - page) <= 2) shown.push(i);
+              }
+            %>
+            <ul class="pagination justify-content-center flex-wrap mb-0">
               <li class="page-item <%= page <= 1 ? 'disabled' : '' %>">
-                <a class="page-link" href="?page=<%= page - 1 %>&search=<%= encodeURIComponent(filters.search) %>&platform=<%= filters.platform %>&accountState=<%= filters.accountState %>&emailStatus=<%= filters.emailStatus %>&discordStatus=<%= filters.discordStatus %>&disabledStatus=<%= filters.disabledStatus %>">Previous</a>
+                <a class="page-link" href="<%= pageHref(page - 1) %>">Previous</a>
               </li>
-              <% for (let i = 1; i <= totalPages; i++) { %>
-                <li class="page-item <%= i === page ? 'active' : '' %>">
-                  <a class="page-link" href="?page=<%= i %>&search=<%= encodeURIComponent(filters.search) %>&platform=<%= filters.platform %>&accountState=<%= filters.accountState %>&emailStatus=<%= filters.emailStatus %>&discordStatus=<%= filters.discordStatus %>&disabledStatus=<%= filters.disabledStatus %>"><%= i %></a>
+              <% shown.forEach(function (n, index) { %>
+                <% if (index > 0 && n - shown[index - 1] > 1) { %>
+                  <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                <% } %>
+                <li class="page-item <%= n === page ? 'active' : '' %>">
+                  <a class="page-link" href="<%= pageHref(n) %>"><%= n %></a>
                 </li>
-              <% } %>
+              <% }) %>
               <li class="page-item <%= page >= totalPages ? 'disabled' : '' %>">
-                <a class="page-link" href="?page=<%= page + 1 %>&search=<%= encodeURIComponent(filters.search) %>&platform=<%= filters.platform %>&accountState=<%= filters.accountState %>&emailStatus=<%= filters.emailStatus %>&discordStatus=<%= filters.discordStatus %>&disabledStatus=<%= filters.disabledStatus %>">Next</a>
+                <a class="page-link" href="<%= pageHref(page + 1) %>">Next</a>
               </li>
             </ul>
+            <div class="text-center text-muted small mt-2">Page <%= page %> of <%= totalPages %></div>
           </nav>
         </div>
         <% } %>

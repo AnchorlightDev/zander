@@ -1,0 +1,49 @@
+<%# Homepage "Latest from the forums". forumPosts comes from homepageForumPosts() in routes/index.js and only holds posts this visitor may see. %>
+<section class="section-sm latest-forum-posts">
+	<div class="container">
+		<div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+			<div>
+				<h2 class="mb-2" style="color:#2f508c;"><%= forumPosts.title %></h2>
+				<div class="divider"></div>
+			</div>
+			<a href="<%= forumPosts.viewAllUrl %>" class="btn btn-main btn-round-full">View all</a>
+		</div>
+
+		<div class="row g-4">
+			<% forumPosts.discussions.forEach(function (d) { %>
+			<div class="col-md-6 col-lg-<%= forumPosts.discussions.length >= 4 ? 3 : (forumPosts.discussions.length === 3 ? 4 : 6) %>">
+				<article class="card h-100 border-0 shadow-sm latest-forum-card">
+					<div class="card-body d-flex flex-column">
+						<a href="/forums/category/<%= d.categorySlug %>" class="badge rounded-pill text-decoration-none align-self-start mb-2" style="background:#2f508c;"><%= d.categoryName %></a>
+						<h3 class="h5 card-title mb-2">
+							<a href="/forums/discussion/<%= d.discussionId %>/<%= d.slug %>" class="stretched-link text-reset text-decoration-none"><%= d.title %></a>
+						</h3>
+						<% if (d.excerpt) { %>
+						<p class="card-text text-muted small mb-3"><%= d.excerpt %></p>
+						<% } %>
+						<div class="mt-auto d-flex align-items-center small text-muted">
+							<% if (d.author && d.author.avatarUrl) { %>
+							<img src="<%= d.author.avatarUrl %>" alt="" class="rounded-circle me-2" width="24" height="24" style="object-fit:cover;" loading="lazy">
+							<% } else { %>
+							<i class="fas fa-user-circle me-2"></i>
+							<% } %>
+							<span class="text-truncate">
+								<%= d.author ? d.author.username : "Unknown" %>
+								&middot; <span data-relative-time="<%= new Date(d.createdAt).toISOString() %>"></span>
+							</span>
+							<span class="ms-auto flex-shrink-0" title="Replies"><i class="far fa-comment me-1"></i><%= d.replyCount %></span>
+						</div>
+					</div>
+				</article>
+			</div>
+			<% }) %>
+		</div>
+	</div>
+</section>
+
+<style>
+.latest-forum-card { transition: transform .15s ease, box-shadow .15s ease; }
+.latest-forum-card:hover { transform: translateY(-3px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.12) !important; }
+/* Links inside the card sit above the stretched title link */
+.latest-forum-card .badge { position: relative; z-index: 2; }
+</style>

@@ -1,0 +1,105 @@
+<%- include("../header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription
+}) %>
+
+<%- include("../navigationBar.ejs") %>
+
+<%- include("../../partials/miniHeader.ejs", {
+  headerTitle: form.name,
+  backgroundImage: globalImage
+}) %>
+
+<section class="section">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+
+        <% if (form.description) { %>
+          <p class="mb-4" style="white-space: pre-wrap;"><%= form.description %></p>
+        <% } %>
+
+        <% if (mode === "code") { %>
+          <%#
+            Passcode gate. A wrong code is rejected plainly and can be retried
+            straight away -- no lockout, no counter. The code is a shared secret
+            pasted into an announcement, so throttling would mostly punish the
+            people who were given it.
+          %>
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">This form needs an access code</h5>
+              <p class="text-muted">
+                Enter the code you were given to see the questions.
+              </p>
+
+              <% if (codeError) { %>
+                <div class="alert alert-danger" role="alert"><%= codeError %></div>
+              <% } %>
+
+              <form method="post" action="/forms/<%= form.slug %>/access">
+                <div class="mb-3">
+                  <label class="form-label" for="accessCode">Access code</label>
+                  <input type="text" class="form-control" id="accessCode" name="accessCode"
+                         maxlength="190" autocomplete="off" required autofocus>
+                </div>
+                <button type="submit" class="btn btn-primary">Continue</button>
+              </form>
+            </div>
+          </div>
+
+        <% } else if (mode === "cooldown") { %>
+          <%#
+            Reapply cooldown after a denial. The exact date is shown for the
+            same reason the requirement failures quote exact numbers -- "try
+            again later" only generates a ticket asking when later is.
+          %>
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">You cannot apply again yet</h5>
+              <p class="mb-0"><%= cooldownMessage %></p>
+            </div>
+          </div>
+
+        <% } else { %>
+          <%#
+            Requirements gate. The exact numbers are shown on both sides, which
+            publishes the thresholds to anyone who fails one. That was the
+            deliberate trade: far fewer "why can't I apply?" questions for staff.
+          %>
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">You are not eligible for this form yet</h5>
+              <p class="text-muted">
+                Everything below has to be met before you can apply. Come back once it is.
+              </p>
+
+              <ul class="list-group list-group-flush mb-0">
+                <% checks.forEach(function (check) { %>
+                  <li class="list-group-item d-flex align-items-start gap-3 px-0">
+                    <span class="mt-1">
+                      <% if (check.skipped) { %>
+                        <span class="badge bg-secondary">Skipped</span>
+                      <% } else if (check.ok) { %>
+                        <span class="badge bg-success">Met</span>
+                      <% } else { %>
+                        <span class="badge bg-danger">Not met</span>
+                      <% } %>
+                    </span>
+                    <span>
+                      <strong><%= check.label %></strong><br>
+                      <span class="<%= check.ok ? 'text-muted' : '' %>"><%= check.message %></span>
+                    </span>
+                  </li>
+                <% }) %>
+              </ul>
+            </div>
+          </div>
+        <% } %>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include("../footer.ejs") %>

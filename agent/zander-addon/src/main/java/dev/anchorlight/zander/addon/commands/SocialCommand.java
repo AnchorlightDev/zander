@@ -7,15 +7,12 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
-import dev.anchorlight.zander.addon.ZanderAddonMain;
 import dev.anchorlight.zander.addon.gui.SocialGUI;
 
 public class SocialCommand implements CommandExecutor {
-    private final ZanderAddonMain plugin;
     private final SocialGUI socialGUI;
 
-    public SocialCommand(ZanderAddonMain plugin, SocialGUI socialGUI) {
-        this.plugin = plugin;
+    public SocialCommand(SocialGUI socialGUI) {
         this.socialGUI = socialGUI;
     }
 

@@ -193,13 +193,45 @@ export function formatPrice(priceCents, currency, locale = "en-US") {
  * Interpolate {{ placeholder }} tokens in a command template string.
  * Unknown tokens are left as empty strings.
  */
+/** Escape regex metacharacters so a placeholder name is matched literally. */
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Strip anything from an interpolated value that could change a command's
+ * shape. Whitespace is the one that matters: a value containing a space
+ * becomes two arguments, which can silently retarget a command such as
+ * `lp user {{username}} parent add vip`.
+ */
+export function sanitiseCommandValue(value) {
+  return String(value).replace(/[^A-Za-z0-9_.:@#-]/g, "");
+}
+
 export function resolveCommandTemplate(template, metadata) {
   if (typeof template !== "string") return "";
   if (!metadata) return template;
 
+  // The output of this function is dispatched as a console command on a game
+  // server (StoreCommandService in zander-addon), so substitution is hardened
+  // even though every current caller already validates its inputs:
+  //
+  //   - the key is escaped before becoming a regex, so a placeholder
+  //     containing regex syntax cannot throw or backtrack pathologically
+  //   - the value is applied via a replacer function, so "$&", "$1" and
+  //     friends are inserted literally rather than expanded by
+  //     String.prototype.replace
+  //   - values are restricted to characters valid in a command argument, so a
+  //     value can never introduce a new argument or flag
+  //
+  // Today the only user-supplied value is a Minecraft username already
+  // constrained to /^[A-Za-z0-9_]{1,16}$/ at checkout. This keeps the
+  // guarantee inside the function rather than resting on its callers.
   return Object.entries(metadata).reduce((cmd, [key, value]) => {
-    const replacement = value === null || value === undefined ? "" : String(value);
-    return cmd.replace(new RegExp(`{{\\s*${key}\\s*}}`, "gi"), replacement);
+    const raw = value === null || value === undefined ? "" : String(value);
+    const replacement = sanitiseCommandValue(raw);
+    const pattern = new RegExp(`{{\\s*${escapeRegExp(key)}\\s*}}`, "gi");
+    return cmd.replace(pattern, () => replacement);
   }, template);
 }
 
@@ -512,18 +544,48 @@ export async function updateSubscriptionPeriod(stripeSubscriptionId, currentPeri
 // ---------------------------------------------------------------------------
 
 /** Returns true if this Stripe event ID has already been processed. */
-export async function hasWebhookEvent(stripeEventId) {
-  const rows = await query(
-    "SELECT webhookEventId FROM webstoreWebhookEvents WHERE stripeEventId = ? LIMIT 1",
-    [stripeEventId]
-  );
-  return rows.length > 0;
+/**
+ * Claim a Stripe event for processing, atomically.
+ *
+ * hasWebhookEvent() followed by processing is check-then-act: Stripe retries
+ * events, and a retry can arrive while the first delivery is still working
+ * (the HTTP response is sent before processing begins). Both deliveries would
+ * see "not processed" and both would credit the purchase.
+ *
+ * Inserting first makes the stripeEventId UNIQUE index the arbiter — exactly
+ * one caller can win, and the loser is told to stand down before any money
+ * moves. Handlers then fill in the detail via recordWebhookEvent(), which
+ * upserts onto the claimed row.
+ *
+ * @returns {Promise<boolean>} true if this caller now owns the event
+ */
+export async function claimWebhookEvent(stripeEventId, eventType) {
+  try {
+    await query(
+      `INSERT INTO webstoreWebhookEvents (stripeEventId, purchaseId, eventType, payload)
+       VALUES (?, NULL, ?, NULL)`,
+      [stripeEventId, eventType]
+    );
+    return true;
+  } catch (error) {
+    // Someone else already claimed it.
+    if (error?.code === "ER_DUP_ENTRY" || error?.errno === 1062) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 export async function recordWebhookEvent({ stripeEventId, purchaseId, eventType, payload }) {
+  // Upsert: the row usually already exists because claimWebhookEvent() created
+  // it, so this fills in the purchase link and payload rather than colliding.
   return query(
     `INSERT INTO webstoreWebhookEvents (stripeEventId, purchaseId, eventType, payload)
-     VALUES (?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       purchaseId = COALESCE(VALUES(purchaseId), purchaseId),
+       eventType  = VALUES(eventType),
+       payload    = COALESCE(VALUES(payload), payload)`,
     [stripeEventId, purchaseId || null, eventType, payload ? JSON.stringify(payload) : null]
   );
 }

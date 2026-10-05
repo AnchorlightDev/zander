@@ -1,0 +1,221 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Forms</h1>
+        <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+          <a href="/dashboard/forms/submissions" class="btn btn-sm btn-secondary">All Submissions</a>
+          <a href="/dashboard/forms/create" class="btn btn-sm btn-info">Create Form</a>
+        </div>
+      </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+      <%# Site-wide eligibility defaults. Here rather than in a settings area of
+          its own: it is about forms, it is the only site-wide setting so far,
+          and it reuses this page's permission. %>
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Default eligibility for applications</h5>
+          <button class="btn btn-sm btn-light" type="button" data-bs-toggle="collapse"
+                  data-bs-target="#defaultRequirements" aria-expanded="false">
+            Edit defaults
+          </button>
+        </div>
+        <div class="collapse<%= Object.keys(defaultRequirements).length ? ' show' : '' %>"
+             id="defaultRequirements">
+          <div class="card-body">
+            <p class="text-muted small">
+              Set the thresholds once here, then tick <strong>&ldquo;Use the site-wide
+              defaults&rdquo;</strong> on each application form rather than retyping them.
+              A form can still set its own value for any single check to override the default,
+              or enter <strong>0</strong> to switch that inherited check off for that form only.
+              Forms that do not tick the box are unaffected &mdash; a feedback survey never
+              inherits anything.
+            </p>
+
+            <form method="post" action="/dashboard/forms/defaults">
+              <div class="row">
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minPlaytimeHours">Minimum playtime (hours)</label>
+                  <input type="number" min="1" class="form-control" id="g_minPlaytimeHours"
+                         name="req_minPlaytimeHours"
+                         value="<%= defaultRequirements.minPlaytimeHours || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_noPunishmentsDays">Clean record for (days)</label>
+                  <input type="number" min="1" class="form-control" id="g_noPunishmentsDays"
+                         name="req_noPunishmentsDays"
+                         value="<%= defaultRequirements.noPunishmentsDays || '' %>">
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minMinecraftActiveDays">Played on at least (days)</label>
+                  <input type="number" min="1" class="form-control" id="g_minMinecraftActiveDays"
+                         name="req_minMinecraftActiveDays"
+                         value="<%= defaultRequirements.minMinecraftActiveDays || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minMinecraftActiveWindowDays">...within the last (days)</label>
+                  <input type="number" min="1" class="form-control" id="g_minMinecraftActiveWindowDays"
+                         name="req_minMinecraftActiveWindowDays" placeholder="30"
+                         value="<%= defaultRequirements.minMinecraftActiveWindowDays || '' %>">
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minDiscordActiveDays">Posted in Discord on (days)</label>
+                  <input type="number" min="1" class="form-control" id="g_minDiscordActiveDays"
+                         name="req_minDiscordActiveDays"
+                         value="<%= defaultRequirements.minDiscordActiveDays || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minDiscordMessages">Discord messages at least</label>
+                  <input type="number" min="1" class="form-control" id="g_minDiscordMessages"
+                         name="req_minDiscordMessages"
+                         value="<%= defaultRequirements.minDiscordMessages || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minDiscordActiveWindowDays">...within the last (days)</label>
+                  <input type="number" min="1" class="form-control" id="g_minDiscordActiveWindowDays"
+                         name="req_minDiscordActiveWindowDays" placeholder="30"
+                         value="<%= defaultRequirements.minDiscordActiveWindowDays || '' %>">
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary">Save defaults</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <% if (!forms.length) { %>
+        <%- include("../../partials/alert.ejs", {
+          alertType: "info",
+          content: "No forms yet. Create one to start collecting submissions."
+        }) %>
+      <% } else { %>
+        <div class="table-responsive">
+          <table class="table align-middle forms-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Public link</th>
+                <th>Fields</th>
+                <th>Submissions</th>
+                <th>Used by</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% forms.forEach(function (form) { %>
+                <tr>
+                  <td data-label="Name">
+                    <strong><%= form.name %></strong>
+                    <% if (form.description) { %>
+                      <div class="text-muted small"><%= form.description.slice(0, 90) %></div>
+                    <% } %>
+                  </td>
+                  <td data-label="Public link">
+                    <a href="/forms/<%= form.slug %>" target="_blank" rel="noopener">/forms/<%= form.slug %></a>
+                  </td>
+                  <td data-label="Fields"><%= form.fieldCount %></td>
+                  <td data-label="Submissions">
+                    <a href="/dashboard/forms/submissions?formId=<%= form.formId %>">
+                      <%= form.submissionCount %>
+                    </a>
+                    <% if (form.submissionCount > 0) { %>
+                      <a class="btn btn-sm btn-light ms-1"
+                         href="/dashboard/forms/<%= form.formId %>/export.csv"
+                         title="Download every response as a spreadsheet">CSV</a>
+                    <% } %>
+                    <% if (form.requiresReview === false) { %>
+                      <span class="badge bg-light text-muted border ms-1">no review</span>
+                    <% } else if (form.pendingCount > 0) { %>
+                      <span class="badge bg-warning text-dark ms-1"><%= form.pendingCount %> pending</span>
+                    <% } %>
+                  </td>
+                  <td data-label="Used by">
+                    <% if (!form.applications.length) { %>
+                      <span class="text-muted">&mdash;</span>
+                    <% } else { %>
+                      <% form.applications.forEach(function (linkedApplication) { %>
+                        <a class="badge bg-info text-decoration-none"
+                           href="/dashboard/applications/edit?applicationId=<%= linkedApplication.applicationId %>">
+                          <%= linkedApplication.displayName %>
+                        </a>
+                      <% }) %>
+                    <% } %>
+                  </td>
+                  <td data-label="Status">
+                    <% if (form.status) { %>
+                      <span class="badge bg-success">Open</span>
+                    <% } else { %>
+                      <span class="badge bg-secondary">Closed</span>
+                    <% } %>
+                    <% if (form.createTicket) { %>
+                      <span class="badge bg-light text-dark" title="Opens a support ticket per submission">Ticket</span>
+                    <% } %>
+                  </td>
+                  <td data-label="Action">
+                    <div class="d-flex flex-wrap gap-2">
+                      <a href="/dashboard/forms/<%= form.formId %>/edit" class="btn btn-sm btn-warning">Edit</a>
+                      <form action="/dashboard/forms/<%= form.formId %>/duplicate" method="post">
+                        <button class="btn btn-sm btn-secondary" type="submit"
+                                title="Copy this form's settings and fields into a new, closed form">Duplicate</button>
+                      </form>
+                      <form action="/dashboard/forms/<%= form.formId %>/delete" method="post"
+                            onsubmit="return confirm('Delete this form and all <%= form.submissionCount %> of its submissions?<%= form.applicationCount ? ` This will also leave ${form.applicationCount} linked application(s) without a destination.` : "" %> This cannot be undone.');">
+                        <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+  @media (max-width: 768px) {
+    .forms-table thead { display: none; }
+
+    .forms-table tr {
+      display: block;
+      border: 1px solid #e6e6e6;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .forms-table td {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      border: none;
+      padding: 6px 0;
+      font-size: 0.9rem;
+      word-break: break-word;
+    }
+
+    .forms-table td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      color: #5f6b7a;
+      min-width: 110px;
+    }
+  }
+</style>

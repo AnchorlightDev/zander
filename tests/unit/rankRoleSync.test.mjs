@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { diffTrackedRoles, normalizeUuid } from "../../lib/discord/rankRoleSync.mjs";
+import {
+  describeRankRoleSync,
+  diffTrackedRoles,
+  normalizeUuid,
+} from "../../lib/discord/rankRoleSync.mjs";
 
 describe("diffTrackedRoles", () => {
   it("adds a role the member should have but doesn't", () => {
@@ -56,5 +60,62 @@ describe("normalizeUuid", () => {
     expect(normalizeUuid(null)).toBeNull();
     expect(normalizeUuid(undefined)).toBeNull();
     expect(normalizeUuid("")).toBeNull();
+  });
+});
+
+describe("describeRankRoleSync", () => {
+  it("explains a placeholder account that has no LuckPerms player", () => {
+    const result = describeRankRoleSync({ ok: false, reason: "NO_LUCKPERMS_PLAYER" });
+    expect(result.ok).toBe(false);
+    expect(result.level).toBe("warning");
+    expect(result.message).toMatch(/could not be matched to a LuckPerms player/);
+  });
+
+  it("explains an unlinked Discord account", () => {
+    expect(describeRankRoleSync({ ok: false, reason: "NOT_LINKED" }).message).toMatch(
+      /no Discord account is linked/
+    );
+  });
+
+  it("surfaces the underlying error, with the Manage Roles hint", () => {
+    const result = describeRankRoleSync({ ok: false, reason: "ERROR", error: "Missing Permissions" });
+    expect(result.message).toContain("Missing Permissions");
+    expect(result.message).toMatch(/Manage Roles/);
+  });
+
+  it("falls back to a generic reason for an unrecognised failure", () => {
+    expect(describeRankRoleSync({ ok: false, reason: "SOMETHING_NEW" }).message).toMatch(
+      /unknown reason/
+    );
+    expect(describeRankRoleSync(undefined).ok).toBe(false);
+  });
+
+  it("distinguishes 'already in sync' from 'no discord role configured'", () => {
+    expect(
+      describeRankRoleSync({ ok: true, toAdd: [], toRemove: [], shouldHaveRoleIds: ["role-a"] }).message
+    ).toMatch(/already matched/);
+    expect(
+      describeRankRoleSync({ ok: true, toAdd: [], toRemove: [], shouldHaveRoleIds: [] }).message
+    ).toMatch(/meta\.discordid/);
+  });
+
+  it("lists the roles it added and removed", () => {
+    const result = describeRankRoleSync({
+      ok: true,
+      toAdd: ["role-a"],
+      toRemove: ["role-b"],
+      shouldHaveRoleIds: ["role-a"],
+    });
+    expect(result.ok).toBe(true);
+    expect(result.level).toBe("success");
+    expect(result.message).toBe("Added: role-a\nRemoved: role-b");
+  });
+
+  it("renders role mentions for Discord embeds when asked", () => {
+    const result = describeRankRoleSync(
+      { ok: true, toAdd: ["123"], toRemove: [], shouldHaveRoleIds: ["123"] },
+      { mentionRoles: true }
+    );
+    expect(result.message).toBe("Added: <@&123>");
   });
 });

@@ -17,6 +17,7 @@ import {
   getPostRevisions,
   moveDiscussion,
   getAllCategoriesForAdmin,
+  forumViewerPermissions,
 } from "../controllers/forumController.js";
 import {
   validatePollInput,
@@ -30,8 +31,15 @@ import {
   isFeatureWebRouteEnabled,
   isLoggedIn,
   setBannerCookie,
+  internalApiHeaders,
 } from "../api/common.js";
 import { UserGetter } from "../controllers/userController.js";
+import {
+  getGroupsGrantingPermission,
+  getDonatorRankSlugs,
+  getRankMetaMap,
+} from "../services/rankMetaService.js";
+import { buildLockCopy, isSupporterEvent } from "../lib/eventAccess.js";
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import { MessageBuilder, Webhook } from "discord-webhook-node";
 import { sendWebhookMessage } from "../lib/discord/webhooks.mjs";
@@ -46,19 +54,8 @@ const PERMISSIONS = {
   ARCHIVE: "zander.forums.discussion.archive",
 };
 
-function getUserPermissions(req) {
-  const permissions = Array.isArray(req.session?.user?.permissions)
-    ? [...req.session.user.permissions]
-    : [];
-
-  // Add @authenticated pseudo-permission for logged-in users
-  // This allows categories to require login by setting viewPermission to "@authenticated"
-  if (isLoggedIn(req)) {
-    permissions.push("@authenticated");
-  }
-
-  return permissions;
-}
+// Shared with the homepage's latest-posts section (forumViewerPermissions)
+const getUserPermissions = forumViewerPermissions;
 
 function getCurrentUserId(req) {
   return req.session?.user?.userId || null;
@@ -253,6 +250,62 @@ function sendForumLog(config, { action, title, description, url, avatarUrl, fiel
   }
 }
 
+/**
+ * Render the right thing when someone cannot view a forum category.
+ *
+ * A bare 404 was wrong for the case this exists to serve: a supporter-only
+ * board such as "ChunkBound Supporter Early Access" is *meant* to be
+ * discoverable -- telling a visitor it does not exist is both untrue and a
+ * wasted chance to explain how to get in.
+ *
+ * But a 404 is exactly right for a staff-only board, where confirming the
+ * thread exists leaks something.  So the decision follows the rank: if any
+ * group granting the category's viewPermission is a purchasable (donator)
+ * rank, show the locked page with an upsell; otherwise keep the 404.
+ *
+ * `title` is shown only on the locked page, never on the 404 path.
+ *
+ * @returns true if a response was sent.
+ */
+async function renderCategoryLocked(app, res, req, category, config, features, { title = null, subject = "discussion" } = {}) {
+  const [grantingRanks, donatorSlugs, rankMeta] = await Promise.all([
+    getGroupsGrantingPermission(category?.viewPermission),
+    getDonatorRankSlugs(),
+    getRankMetaMap(),
+  ]);
+
+  const requiredRanks = grantingRanks.map((r) => r.rankSlug);
+  const supporter = isSupporterEvent(requiredRanks, donatorSlugs);
+
+  // Nothing purchasable grants it (staff-only, or LuckPerms unreachable):
+  // fall back to the old behaviour rather than advertising a board the
+  // visitor has no route into.
+  if (!supporter) {
+    await renderForumsView(app, res, req, "session/notFound", { pageTitle: `404 Not Found` }, config, features);
+    return true;
+  }
+
+  const lock = buildLockCopy(requiredRanks, rankMeta, supporter, Boolean(req.session?.user), subject);
+
+  res.status(403);
+  await renderForumsView(
+    app,
+    res,
+    req,
+    "modules/forums/locked",
+    {
+      pageTitle: lock.heading,
+      pageDescription: lock.body,
+      lock,
+      lockedTitle: title,
+      categoryName: category?.name || null,
+    },
+    config,
+    features
+  );
+  return true;
+}
+
 async function renderForumsView(app, res, req, viewPath, data, config, features) {
   const [globalImage, announcementWeb] = await Promise.all([
     getGlobalImage(),
@@ -300,7 +353,7 @@ export default function forumRoutes(
       return;
     }
 
-    return res.redirect(301, "/forums");
+    return res.redirect("/forums", 301);
   });
 
   app.get("/forums", async function (req, res) {
@@ -362,18 +415,15 @@ export default function forumRoutes(
       const permissions = getUserPermissions(req);
       const categoryTree = await getCategoriesForUser(permissions);
 
-      if (!category || !userCanViewCategory(category, req)) {
-        await renderForumsView(
-          app,
-          res,
-          req,
-          "session/notFound",
-          {
-            pageTitle: `404 Not Found`,
-          },
-          config,
-          features
-        );
+      if (!category) {
+        await renderForumsView(app, res, req, "session/notFound", { pageTitle: `404 Not Found` }, config, features);
+        return;
+      }
+
+      if (!userCanViewCategory(category, req)) {
+        // The category exists but is gated. A supporter board says so and
+        // offers a way in; anything else still 404s.
+        await renderCategoryLocked(app, res, req, category, config, features, { subject: "board" });
         return;
       }
 
@@ -663,17 +713,12 @@ export default function forumRoutes(
       const { discussion, category } = result;
 
       if (!userCanViewCategory(category, req)) {
-        await renderForumsView(
-          app,
-          res,
-          req,
-          "session/notFound",
-          {
-            pageTitle: `404 Not Found`,
-          },
-          config,
-          features
-        );
+        // Supporter boards get an explanation and a way in; everything else
+        // still 404s. See renderCategoryLocked.
+        await renderCategoryLocked(app, res, req, category, config, features, {
+          title: discussion.title,
+          subject: "discussion",
+        });
         return;
       }
 
@@ -1494,10 +1539,7 @@ export default function forumRoutes(
         `${process.env.siteAddress}/api/report/create`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-access-token": process.env.apiKey,
-          },
+          headers: internalApiHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify(reportBody),
         }
       );

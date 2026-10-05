@@ -35,18 +35,34 @@
     </div>
 
     <%# Product grid -%>
-    <div class="row g-4">
-      <% if (itemsError) { %>
+    <% if (itemsError) { %>
+      <div class="row g-4">
         <div class="col-12">
           <div class="alert alert-warning">Webstore items are temporarily unavailable. Please try again shortly.</div>
         </div>
-      <% } else if (!items || !items.length) { %>
+      </div>
+    <% } else if (!items || !items.length) { %>
+      <div class="row g-4">
         <div class="col-12">
           <div class="alert alert-info">The webstore is being stocked — check back soon!</div>
         </div>
-      <% } %>
+      </div>
+    <% } %>
 
-      <% items.forEach(function (item) { %>
+    <%
+      // Until a category is actually assigned to something, this stays the flat
+      // grid it has always been -- one unnamed group holding every item.
+      const _groups = useCategories
+        ? categoryGroups
+        : [{ id: null, displayName: null, packages: items }];
+    %>
+
+    <% _groups.forEach(function (group) { %>
+      <% if (group.displayName) { %>
+        <h2 class="h4 mt-5 mb-3"><%= group.displayName %></h2>
+      <% } %>
+      <div class="row g-4">
+        <% group.packages.forEach(function (item) { %>
         <div class="col-lg-4 col-md-6 col-sm-12">
           <div class="card h-100 shadow-sm" id="ws-<%= item.slug %>">
             <% if (item.imageUrl) { %>
@@ -89,8 +105,9 @@
             </div>
           </div>
         </div>
-      <% }) %>
-    </div>
+        <% }) %>
+      </div>
+    <% }) %>
 
     <%# Purchase / gift modal (shown only when logged in) -%>
     <% if (loggedIn) { %>

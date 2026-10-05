@@ -1,10 +1,82 @@
+<%#
+    Site-wide announcement banner.
+
+    Two things govern whether this is on screen:
+
+      1. Expiry, server side. getWebAnnouncement() only returns a row whose
+         startDate/endDate window covers now, so a banner with an endDate
+         retires itself. A banner with endDate NULL renders forever by design --
+         that is a content decision, not a bug.
+
+      2. Dismissal, per visitor. Kept in localStorage against the announcement's
+         id AND its updatedDate, so editing a banner brings it back for everyone
+         who had dismissed the previous wording. That is deliberate: changed
+         content deserves to be read again.
+
+    The dismiss button sits outside the link. It used to be one <a> wrapping the
+    whole banner, and a <button> inside an <a> is invalid and unclickable.
+%>
 <% if (announcementData) { %>
-    <a href="<%= announcementData.link %>">
-        <div class="announcementWebBanner">
-            <small><%= announcementData.body %></small><br>
+    <%
+        const announcementVersion = announcementData.updatedDate
+            ? new Date(announcementData.updatedDate).getTime()
+            : 0;
+        const announcementKey =
+            "zander.ann." + announcementData.announcementId + "." + announcementVersion;
+    %>
+    <div class="announcementWebBanner" data-announcement-key="<%= announcementKey %>">
+        <div class="announcementWebBanner-body">
             <% if (announcementData.link) { %>
-                <small>Click me for more information.</small>
+                <a href="<%= announcementData.link %>">
+                    <small><%= announcementData.body %></small><br>
+                    <small>Click me for more information.</small>
+                </a>
+            <% } else { %>
+                <small><%= announcementData.body %></small>
             <% } %>
         </div>
-    </a>
+
+        <button type="button" class="announcementWebBanner-dismiss"
+                aria-label="Dismiss this announcement" title="Dismiss">&times;</button>
+    </div>
+
+    <script>
+    (function () {
+        var banner = document.querySelector(".announcementWebBanner[data-announcement-key]");
+        if (!banner) return;
+
+        var key = banner.getAttribute("data-announcement-key");
+
+        // Reading and writing are both wrapped: localStorage throws outright in
+        // some private-browsing modes, and a banner is not worth an exception.
+        function dismissed() {
+            try {
+                return window.localStorage.getItem(key) === "1";
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // Runs inline, immediately after the markup, so an already-dismissed
+        // banner is hidden before the browser paints rather than flashing up
+        // and disappearing.
+        if (dismissed()) {
+            banner.style.display = "none";
+            return;
+        }
+
+        var button = banner.querySelector(".announcementWebBanner-dismiss");
+        if (!button) return;
+
+        button.addEventListener("click", function () {
+            banner.style.display = "none";
+            try {
+                window.localStorage.setItem(key, "1");
+            } catch (e) {
+                // Storage unavailable: it stays dismissed for this page view
+                // only, which is still better than no dismiss at all.
+            }
+        });
+    })();
+    </script>
 <% } %>

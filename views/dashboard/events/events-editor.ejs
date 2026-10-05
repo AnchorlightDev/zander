@@ -74,10 +74,75 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold">Visibility</label>
-                                    <select class="form-select" name="visibility">
-                                        <option value="public" <%= (ev.visibility || 'public') === 'public' ? 'selected' : '' %>>Public</option>
-                                        <option value="private" <%= ev.visibility === 'private' ? 'selected' : '' %>>Private</option>
+                                    <select class="form-select" name="visibility" id="visibilitySelect">
+                                        <option value="public" <%= (ev.visibility || 'public') === 'public' ? 'selected' : '' %>>Public — anyone can see it</option>
+                                        <option value="rank" <%= ev.visibility === 'rank' ? 'selected' : '' %>>Rank-locked — details for chosen ranks</option>
+                                        <option value="private" <%= ev.visibility === 'private' ? 'selected' : '' %>>Private — hidden from the public site</option>
                                     </select>
+                                </div>
+                            </div>
+
+                            <!-- Rank lock (shown only for visibility = rank) -->
+                            <% const ranksForPicker = (typeof selectableRanks !== 'undefined' && Array.isArray(selectableRanks)) ? selectableRanks : []; %>
+                            <% const lockedRanks = (ev.rankAccess || []).map(r => String(r.rankSlug || '').toLowerCase()); %>
+                            <div class="border rounded-3 p-3 mb-3 bg-light" id="rankLockPanel" style="display:none;">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="fas fa-lock me-2 text-secondary"></i>
+                                    <span class="fw-semibold">Who can see the details?</span>
+                                </div>
+
+                                <% if (ranksForPicker.length === 0) { %>
+                                <div class="alert alert-warning mb-0 small">
+                                    No LuckPerms groups could be loaded, so no ranks can be chosen. The event will behave as public until this is fixed.
+                                </div>
+                                <% } else { %>
+                                <p class="text-muted small">
+                                    Anyone holding <strong>any one</strong> of the selected ranks sees the full event. Everyone else
+                                    sees the teaser below. Ranks marked <span class="badge bg-success">Supporter</span> are
+                                    purchasable, so those events show a "Support the Server" button linking to the webstore.
+                                </p>
+
+                                <div class="row g-2 mb-3" id="rankCheckboxes" style="max-height:220px;overflow-y:auto;">
+                                    <% ranksForPicker.forEach(rank => { %>
+                                    <div class="col-md-4 col-sm-6">
+                                        <div class="form-check">
+                                            <input class="form-check-input js-rank-check" type="checkbox"
+                                                   value="<%= rank.rankSlug %>"
+                                                   id="rank_<%= rank.rankSlug %>"
+                                                   <%= lockedRanks.includes(rank.rankSlug) ? 'checked' : '' %>>
+                                            <label class="form-check-label small" for="rank_<%= rank.rankSlug %>">
+                                                <%= rank.displayName %>
+                                                <% if (rank.isDonator) { %><span class="badge bg-success ms-1" style="font-size:.6rem;">Supporter</span><% } %>
+                                                <% if (rank.isStaff) { %><span class="badge bg-primary ms-1" style="font-size:.6rem;">Staff</span><% } %>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <% }) %>
+                                </div>
+                                <% } %>
+
+
+                                <div class="mt-3">
+                                    <label class="form-label fw-semibold" for="teaserDescriptionInput">Teaser description</label>
+                                    <div id="teaserDescriptionEditor"><%- ev.teaserDescription || '' %></div>
+                                    <small class="text-muted d-block mt-1">
+                                        Shown to anyone without the rank &mdash; on the website, in the Discord announcement
+                                        and on the Discord scheduled event. Say what the event is and why the rank is worth
+                                        having; leave it empty to fall back to a generated line naming the rank.
+                                    </small>
+                                </div>
+
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="teaserPublicCheck"
+                                           <%= ev.teaserPublic === false ? '' : 'checked' %>>
+                                    <label class="form-check-label" for="teaserPublicCheck">
+                                        <span class="fw-semibold">Show a teaser to everyone else</span>
+                                        <span class="d-block text-muted small">
+                                            On: the event appears in the public listing with its title, banner and time, but the
+                                            description, hosts, location and server details are replaced with an unlock prompt.
+                                            Off: the event is invisible to anyone without the rank.
+                                        </span>
+                                    </label>
                                 </div>
                             </div>
 
@@ -178,7 +243,7 @@
                                 <select class="form-select" name="templateId" id="templateSelector">
                                     <option value="">— No template —</option>
                                     <% templatesData.data.forEach(t => { %>
-                                        <option value="<%= t.templateId %>"><%= t.title %></option>
+                                        <option value="<%= t.templateId %>" <%= String(ev.templateId || '') === String(t.templateId) ? 'selected' : '' %>><%= t.title %></option>
                                     <% }) %>
                                 </select>
                             </div>
@@ -206,8 +271,13 @@
                                     <small class="text-muted flex-grow-1">Or enter URL directly:</small>
                                     <span id="bannerUploadStatus" class="small d-none"></span>
                                 </div>
-                                <input type="url" class="form-control form-control-sm" id="bannerUrlManual" value="<%= ev.bannerUrl || '' %>" placeholder="https://…">
-                                <small class="text-muted">Recommended: <strong>1920×480px</strong> (4:1) for website; <strong>1280×720px</strong> (16:9) for Discord. PNG/JPG, max 8 MB.</small>
+                                <input type="text" inputmode="url" class="form-control form-control-sm" id="bannerUrlManual" value="<%= ev.bannerUrl || '' %>" placeholder="https://…">
+                                <small class="text-muted">
+									Recommended: <strong>1280×512px</strong> (5:2) — one image that works everywhere.
+									This is the size Discord uses for event covers, so it passes through untouched, and the
+									website shows it whole. Keep the important artwork near the centre: very wide screens
+									trim the top and bottom edges evenly. PNG/JPG, max 8 MB.
+								</small>
                                 <div id="bannerPreview" class="mt-2 <%= ev.bannerUrl ? '' : 'd-none' %>">
                                     <div class="position-relative d-inline-block">
                                         <img src="<%= ev.bannerUrl || '' %>" class="img-fluid rounded" style="max-height:200px" alt="Banner preview">
@@ -228,7 +298,7 @@
                                     <small class="text-muted flex-grow-1">Or enter URL directly:</small>
                                     <span id="logoUploadStatus" class="small d-none"></span>
                                 </div>
-                                <input type="url" class="form-control form-control-sm" id="logoUrlManual" value="<%= ev.logoUrl || '' %>" placeholder="https://…">
+                                <input type="text" inputmode="url" class="form-control form-control-sm" id="logoUrlManual" value="<%= ev.logoUrl || '' %>" placeholder="https://…">
                                 <small class="text-muted">Recommended: <strong>512×512px</strong> (1:1 square). PNG with transparency preferred. Max 8 MB.</small>
                                 <div id="logoPreview" class="mt-2 <%= ev.logoUrl ? '' : 'd-none' %>">
                                     <div class="position-relative d-inline-block">
@@ -493,7 +563,7 @@
             </div>
             <div class="col-md-8 ann-link-group d-none">
                 <label class="form-label small">Link URL <small class="text-muted">(optional)</small></label>
-                <input type="url" class="form-control form-control-sm ann-link" placeholder="https://…">
+                <input type="text" inputmode="url" class="form-control form-control-sm ann-link" placeholder="https://…">
             </div>
             <div class="col-md-4 ann-popup-group d-none">
                 <label class="form-label small">Button Text</label>
@@ -501,7 +571,7 @@
             </div>
             <div class="col-12 ann-popup-group d-none">
                 <label class="form-label small">Popup Image URL</label>
-                <input type="url" class="form-control form-control-sm ann-popupImageUrl" placeholder="https://…">
+                <input type="text" inputmode="url" class="form-control form-control-sm ann-popupImageUrl" placeholder="https://…">
             </div>
             <div class="col-md-3 d-flex align-items-end">
                 <div class="form-check form-switch mb-1">
@@ -591,7 +661,6 @@ function initHostRowSearch(row) {
         try {
             const res = await fetch(`/api/events/users/search?q=${encodeURIComponent(term)}`, {
                 credentials: 'include',
-                headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
             });
             if (!res.ok) { clearSuggestions(); return; }
             const data = await res.json();
@@ -638,6 +707,7 @@ document.querySelectorAll('#hostsContainer .host-row').forEach(initHostRowSearch
 function collectAnnouncements() {
     const rows = document.querySelectorAll('#announcementsContainer .announcement-row');
     return Array.from(rows).map(row => ({
+        id: row.dataset.id || null,
         label: row.querySelector('.ann-label')?.value || null,
         announcementType: row.querySelector('.ann-type')?.value || 'reminder',
         platform: row.querySelector('.ann-platform')?.value || 'discord',
@@ -649,7 +719,7 @@ function collectAnnouncements() {
         popupButtonText: row.querySelector('.ann-popupButtonText')?.value || null,
         popupImageUrl: row.querySelector('.ann-popupImageUrl')?.value || null,
         triggerType: row.querySelector('.ann-trigger')?.value || 'before_event',
-        offsetMinutes: parseInt(row.querySelector('.ann-offsetMinutes')?.value || '0') || null,
+        offsetMinutes: row.querySelector('.ann-offsetMinutes')?.value || null,
         enabled: row.querySelector('.ann-enabled')?.checked !== false,
     }));
 }
@@ -775,6 +845,7 @@ function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, st
     uploadBtn.addEventListener('click', async () => {
         const file = fileInput.files[0];
         if (!file) return;
+        let ok = false;
         uploadBtn.disabled = true;
         statusEl.className = 'small text-info';
         statusEl.textContent = 'Uploading…';
@@ -793,6 +864,7 @@ function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, st
                 statusEl.className = 'small text-success';
                 statusEl.textContent = 'Uploaded!';
                 fileInput.value = '';
+                ok = true;
             } else {
                 statusEl.className = 'small text-danger';
                 statusEl.textContent = json.message || 'Upload failed';
@@ -801,8 +873,17 @@ function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, st
             statusEl.className = 'small text-danger';
             statusEl.textContent = 'Upload failed';
         }
-        uploadBtn.disabled = true;
-        setTimeout(() => statusEl.classList.add('d-none'), 4000);
+
+        // A failed upload leaves the form looking perfectly fine while the
+        // image field stays empty, so the event saves with no banner and
+        // nothing says why.  Keep the reason on screen and let them retry the
+        // file they already picked; only the success note auto-hides.
+        if (ok) {
+            uploadBtn.disabled = true;
+            setTimeout(() => statusEl.classList.add('d-none'), 4000);
+        } else {
+            uploadBtn.disabled = !fileInput.files.length;
+        }
     });
 
     manual.addEventListener('change', () => setUrl(manual.value.trim()));
@@ -896,7 +977,6 @@ function localInputToUtc(localStr, ianaTimezone) {
         try {
             const res = await fetch('/api/events/discord/voice-channels', {
                 credentials: 'include',
-                headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
             });
             const data = await res.json();
             voiceSelect.innerHTML = '<option value="">— select a channel —</option>';
@@ -933,7 +1013,6 @@ function localInputToUtc(localStr, ianaTimezone) {
         try {
             const res = await fetch('/api/server/get', {
                 credentials: 'include',
-                headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
             });
             const data = await res.json();
             mcSelect.innerHTML = '<option value="">— select a server —</option>';
@@ -995,7 +1074,6 @@ function populateTextChannelSelect(select, selectedId) {
     try {
         const res = await fetch('/api/events/discord/text-channels', {
             credentials: 'include',
-            headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
         });
         const data = await res.json();
         _textChannels = data.channels || [];
@@ -1016,6 +1094,41 @@ function populateTextChannelSelect(select, selectedId) {
 // ============================================================
 // Form submission
 // ============================================================
+// Rank-lock panel only applies to the "rank" visibility; kept in the DOM either
+// way so an accidental switch to Public and back does not lose the selection.
+(function initRankLockPanel() {
+    const select = document.getElementById('visibilitySelect');
+    const panel  = document.getElementById('rankLockPanel');
+    if (!select || !panel) return;
+
+    const sync = () => { panel.style.display = select.value === 'rank' ? '' : 'none'; };
+    select.addEventListener('change', sync);
+    sync();
+})();
+
+
+// A field that fails HTML5 validation while its tab is hidden cannot be
+// focused, so the browser blocks the submit, logs "An invalid form control is
+// not focusable" to the console, and the page simply does nothing -- no error,
+// no save.  Reveal the offending field's tab so the message is visible and the
+// user can see why nothing happened.
+(function revealInvalidFieldsTab(formId) {
+    const form = document.getElementById(formId);
+    if (!form) return;
+
+    form.addEventListener('invalid', (e) => {
+        const pane = e.target.closest('.tab-pane');
+        if (pane && !pane.classList.contains('active')) {
+            const trigger = document.querySelector('[data-bs-target="#' + pane.id + '"], [href="#' + pane.id + '"]');
+            if (trigger && window.bootstrap?.Tab) {
+                window.bootstrap.Tab.getOrCreateInstance(trigger).show();
+                // Re-report once the pane is visible, so the browser can focus it.
+                setTimeout(() => e.target.reportValidity(), 200);
+            }
+        }
+    }, true); // capture: 'invalid' does not bubble
+})('eventForm');
+
 document.getElementById('eventForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -1026,6 +1139,10 @@ document.getElementById('eventForm').addEventListener('submit', async (e) => {
     // Sync Summernote description content
     if (typeof $.fn.summernote !== 'undefined') {
         body.description = $('#descriptionEditor').summernote('code');
+        // Summernote leaves an empty editor as "<p><br></p>"; store that as
+        // empty so the lock falls back to generated copy rather than a blank.
+        const teaserHtml = $('#teaserDescriptionEditor').summernote('code');
+        body.teaserDescription = /^\s*(<p>(<br\s*\/?>)?<\/p>)?\s*$/i.test(teaserHtml) ? '' : teaserHtml;
     }
 
     // Convert local datetimes to UTC ISO strings using the selected timezone
@@ -1068,8 +1185,25 @@ document.getElementById('eventForm').addEventListener('submit', async (e) => {
     // Announcements
     body.announcements = collectAnnouncements();
 
+    // Image fields.
+    //
+    // The visible URL boxes are not form fields -- each pairs with a hidden
+    // input that only gets written by setUrl(), which fires on the visible
+    // box's 'change' event.  A URL typed and then submitted without the box
+    // ever losing focus therefore never reached the hidden field, and the
+    // event saved with no banner and no indication why.  Read the visible
+    // boxes directly at submit time so what you can see is what gets saved.
+    [['bannerUrlManual', 'bannerUrl'], ['logoUrlManual', 'logoUrl']].forEach(([manualId, field]) => {
+        const manual = document.getElementById(manualId);
+        if (manual) body[field] = manual.value.trim();
+    });
+
     // Boolean
     body.featured = document.getElementById('featuredCheck').checked;
+
+    // Rank lock
+    body.allowedRanks = Array.from(document.querySelectorAll('.js-rank-check:checked')).map(c => c.value);
+    body.teaserPublic = document.getElementById('teaserPublicCheck').checked;
 
     const saveBtn = document.getElementById('saveBtn');
     saveBtn.disabled = true;
@@ -1080,7 +1214,7 @@ document.getElementById('eventForm').addEventListener('submit', async (e) => {
         const res = await fetch(apiEndpoint, {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
         const data = await res.json();
@@ -1088,20 +1222,23 @@ document.getElementById('eventForm').addEventListener('submit', async (e) => {
         if (data.success) {
             // Also update actions and announcements separately
             const eventId = data.data?.eventId || body.eventId;
-            await Promise.all([
-                fetch('/api/events/actions/update', {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
-                    body: JSON.stringify({ eventId, actions: body.actions }),
-                }),
-                fetch('/api/events/announcements/update', {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
-                    body: JSON.stringify({ eventId, announcements: body.announcements }),
-                }),
+            const postJson = (url, payload) => fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }).then(r => r.json()).catch(e => ({ success: false, message: e.message }));
+            const [actionsRes, annRes] = await Promise.all([
+                postJson('/api/events/actions/update', { eventId, actions: body.actions }),
+                postJson('/api/events/announcements/update', { eventId, announcements: body.announcements }),
             ]);
+            // The event itself saved; say which part did not rather than
+            // dropping it silently on the redirect.
+            const problems = [
+                !actionsRes.success && `Actions: ${actionsRes.message}`,
+                !annRes.success && `Announcements: ${annRes.message}`,
+            ].filter(Boolean);
+            if (problems.length) alert('Event saved, but:\n' + problems.join('\n'));
             window.location.href = `/dashboard/events/view?eventId=${eventId}`;
         } else {
             alert('Error: ' + data.message);
@@ -1119,15 +1256,21 @@ const submitBtn = document.getElementById('submitReviewBtn');
 if (submitBtn) {
     submitBtn.addEventListener('click', async () => {
         if (!confirm('Submit this event for admin review?')) return;
-        const res = await fetch('/api/events/submit-review', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
-            body: JSON.stringify({ eventId: submitBtn.dataset.eventId }),
-        });
-        const data = await res.json();
-        if (data.success) window.location.href = `/dashboard/events/view?eventId=${submitBtn.dataset.eventId}`;
-        else alert('Error: ' + data.message);
+        submitBtn.disabled = true;
+        try {
+            const res = await fetch('/api/events/submit-review', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ eventId: submitBtn.dataset.eventId }),
+            });
+            const data = await res.json();
+            if (data.success) return void (window.location.href = `/dashboard/events/view?eventId=${submitBtn.dataset.eventId}`);
+            alert('Error: ' + data.message);
+        } catch (err) {
+            alert('Network error: ' + err.message);
+        }
+        submitBtn.disabled = false;
     });
 }
 
@@ -1139,7 +1282,7 @@ if (publishBtn) {
         const res = await fetch('/api/events/publish', {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ eventId: publishBtn.dataset.eventId }),
         });
         const data = await res.json();
@@ -1166,6 +1309,19 @@ $(document).ready(function () {
             { title: 'Heading 3', tag: 'h3', className: '', value: 'h3' },
             { title: 'Heading 4', tag: 'h4', className: '', value: 'h4' },
             { title: 'Quote', tag: 'blockquote', className: 'blockquote', value: 'blockquote' },
+        ],
+    });
+
+    // The teaser is published copy in its own right (it is what a non-member
+    // reads on the site and in Discord), so it gets rich text too -- a lighter
+    // toolbar, since it should stay short.
+    $('#teaserDescriptionEditor').summernote({
+        height: 140,
+        toolbar: [
+            ['font', ['bold', 'italic', 'underline']],
+            ['para', ['ul', 'ol']],
+            ['insert', ['link']],
+            ['view', ['codeview']],
         ],
     });
 });

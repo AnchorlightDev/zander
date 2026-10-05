@@ -17,6 +17,12 @@
     </a>
   </span>
   <span>
+    <% const build = locals.buildInfo || {}; %>
+    <% if (build.version || build.shortCommit) { %>
+    <span title="<%= build.commit ? 'Commit ' + build.commit : '' %>" style="margin-right:12px;">
+      <% if (build.version) { %>v<%= build.version %><% } %><% if (build.version && build.shortCommit) { %> &middot; <% } %><% if (build.shortCommit) { %><code style="color:inherit; background:none; padding:0;"><%= build.shortCommit %></code><% } %>
+    </span>
+    <% } %>
     <a href="/" style="color:inherit; text-decoration:none;">← Visit Site</a>
   </span>
 </div>
@@ -350,7 +356,7 @@ webstoreChannel</div>
 </script>
 
 <!-- Bootstrap 5 JS bundle (includes Popper) -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+<script src="/vendors/cdn/bootstrap/5.3.2/bootstrap.bundle.min.js"
         integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
         crossorigin="anonymous"></script>
 

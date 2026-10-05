@@ -1,7 +1,7 @@
 import { Listener } from "@sapphire/framework";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const features = require("../features.json");
+const features = require("../lib/config/features.cjs");
 
 export class GuildMessageListener extends Listener {
   constructor(context, options) {

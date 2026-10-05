@@ -3,12 +3,10 @@ package dev.anchorlight.zander.addon.service;
 import com.jayway.jsonpath.JsonPath;
 import dev.anchorlight.stonelib.http.Request;
 import dev.anchorlight.stonelib.http.Response;
-import com.google.gson.reflect.TypeToken;
 import dev.anchorlight.zander.addon.ZanderAddonMain;
 import dev.anchorlight.zander.addon.model.PolicyConfig;
 import dev.anchorlight.zander.addon.model.SocialConfig;
 
-import java.lang.reflect.Type;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 

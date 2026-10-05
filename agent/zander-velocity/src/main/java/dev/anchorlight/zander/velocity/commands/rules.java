@@ -32,7 +32,7 @@ public class rules implements SimpleCommand {
 
                 Component message = Component.text("Please read and abide by the rules which you can find on our website here: " + siteAddress + "/rules")
                         .color(NamedTextColor.RED);
-                message = message.clickEvent(ClickEvent.clickEvent(ClickEvent.Action.OPEN_URL, siteAddress + "/rules"));
+                message = message.clickEvent(ClickEvent.openUrl(siteAddress + "/rules"));
                 source.sendMessage(message);
             } catch (Exception e) {
                 Component builder = Component.text("An error has occurred. Is the API down?").color(NamedTextColor.RED);

@@ -6,6 +6,7 @@ import {
   isFeatureWebRouteEnabled,
   setBannerCookie,
   getGlobalImage,
+  internalApiHeaders,
 } from "../api/common.js";
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import {
@@ -31,6 +32,15 @@ import {
 } from "../controllers/sessionController.js";
 import { sendMail } from "../controllers/emailController.js";
 import { checkRateLimit } from "../lib/rateLimiter.mjs";
+import { hasStaffFlag } from "../lib/permissions/staffFlag.mjs";
+
+/**
+ * A post-login redirect target must be a path on this site. "//evil.com" and
+ * "/\evil.com" both start with "/" but browsers treat them as another host.
+ */
+function isSafeLocalPath(value) {
+  return typeof value === "string" && /^\/(?![\/\\])/.test(value);
+}
 
 export default function sessionSiteRoute(
   app,
@@ -42,6 +52,14 @@ export default function sessionSiteRoute(
   features,
   lang
 ) {
+  // A POST with no form body (scanners, empty submissions) leaves req.body
+  // undefined, and every handler below reads req.body.x directly -- that was a
+  // 500 on /login. Treat it as an empty form so each handler's own "fields are
+  // required" message answers instead.
+  app.addHook("preValidation", async (req) => {
+    if (req.method === "POST" && (req.body === undefined || req.body === null)) req.body = {};
+  });
+
   //
   // Session
   //
@@ -100,6 +118,23 @@ export default function sessionSiteRoute(
   };
 
   async function hydrateUserSession(req, userLoginData) {
+    // Issue a fresh session id at the moment privilege is granted.
+    //
+    // Without this the id the visitor arrived with survives login, so anyone
+    // who managed to fix a known session id on the victim's browser
+    // beforehand would hold an authenticated session afterwards. Every login
+    // path (local, Discord OAuth, verification link) funnels through here, so
+    // regenerating once covers all four callers.
+    //
+    // returnTo is preserved: it is set before login to remember where the
+    // visitor was headed, and dropping it would send them to the dashboard
+    // instead of back to the page they wanted.
+    try {
+      await req.session.regenerate(["returnTo"]);
+    } catch (error) {
+      logRouteError("session regenerate on login", error);
+    }
+
     const userPermissionData = await getUserPermissions(userLoginData);
     // userPermissionData.userRanks is an array of rank slug strings e.g. ["admin","member"]
     const rankSlugs = userPermissionData.userRanks || [];
@@ -108,9 +143,7 @@ export default function sessionSiteRoute(
     const userRanks = rankSlugs.map((slug) => ({ rankSlug: slug }));
 
     // Derive isStaff from whether the user's resolved permissions include meta.staff.1 (set on staff groups in LuckPerms)
-    const isStaff = userPermissionData.some(
-      (p) => p && String(p).trim().toLowerCase().startsWith("meta.staff.")
-    );
+    const isStaff = hasStaffFlag(userPermissionData);
 
     req.session.authenticated = true;
     req.session.user = {
@@ -132,11 +165,7 @@ export default function sessionSiteRoute(
     if (!checkRateLimit(req, res, { windowMs: 60_000, max: 30 })) return;
 
     if (req.query.returnTo && typeof req.query.returnTo === "string") {
-      const sanitizedReturnTo =
-        req.query.returnTo.startsWith("/") &&
-        !req.query.returnTo.startsWith("//")
-          ? req.query.returnTo
-          : null;
+      const sanitizedReturnTo = isSafeLocalPath(req.query.returnTo) ? req.query.returnTo : null;
       if (sanitizedReturnTo) {
         req.session.returnTo = sanitizedReturnTo;
       }
@@ -161,12 +190,7 @@ export default function sessionSiteRoute(
     }
 
     if (req.session.user) {
-      const returnTo =
-        typeof req.session.returnTo === "string" &&
-        req.session.returnTo.startsWith("/") &&
-        !req.session.returnTo.startsWith("//")
-          ? req.session.returnTo
-          : null;
+      const returnTo = isSafeLocalPath(req.session.returnTo) ? req.session.returnTo : null;
       if (returnTo) {
         delete req.session.returnTo;
         return res.redirect(returnTo);
@@ -274,11 +298,7 @@ export default function sessionSiteRoute(
       }
 
       setBannerCookie("success", "Logged in successfully.", res);
-      const returnTo =
-        typeof req.session.returnTo === "string" &&
-        req.session.returnTo.startsWith("/")
-          ? req.session.returnTo
-          : null;
+      const returnTo = isSafeLocalPath(req.session.returnTo) ? req.session.returnTo : null;
       if (returnTo) {
         delete req.session.returnTo;
         return res.redirect(returnTo);
@@ -298,10 +318,7 @@ export default function sessionSiteRoute(
       return;
 
     if (req.query.returnTo && typeof req.query.returnTo === "string") {
-      const sanitizedReturnTo =
-        req.query.returnTo.startsWith("/") && !req.query.returnTo.startsWith("//")
-          ? req.query.returnTo
-          : null;
+      const sanitizedReturnTo = isSafeLocalPath(req.query.returnTo) ? req.query.returnTo : null;
       if (sanitizedReturnTo) {
         req.session.returnTo = sanitizedReturnTo;
       }
@@ -382,11 +399,7 @@ export default function sessionSiteRoute(
       await hydrateUserSession(req, userLoginData);
       delete req.session.passwordReset;
 
-      const returnTo =
-        typeof req.session.returnTo === "string" &&
-        req.session.returnTo.startsWith("/")
-          ? req.session.returnTo
-          : null;
+      const returnTo = isSafeLocalPath(req.session.returnTo) ? req.session.returnTo : null;
       if (returnTo) {
         delete req.session.returnTo;
         return res.redirect(returnTo);
@@ -494,6 +507,8 @@ export default function sessionSiteRoute(
   });
 
   app.get("/forgot-password/verify", async function (req, res) {
+    if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 10 })) return;
+
     if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
@@ -695,6 +710,8 @@ export default function sessionSiteRoute(
   });
 
   app.post("/register", async function (req, res) {
+    if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 5 })) return;
+
     if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
       return;
 
@@ -990,7 +1007,7 @@ export default function sessionSiteRoute(
 
     const fetchURL = `${process.env.siteAddress}/api/server/get?type=VERIFICATION`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 
@@ -1073,7 +1090,7 @@ export default function sessionSiteRoute(
 
     const fetchURL = `${process.env.siteAddress}/api/server/get?type=VERIFICATION`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 

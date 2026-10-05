@@ -1,8 +1,8 @@
 import { Command, RegisterBehavior } from "@sapphire/framework";
-import pkg, { Colors } from "discord.js";
+import pkg, { Colors, MessageFlags } from "discord.js";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const features = require("../features.json");
+const features = require("../lib/config/features.cjs");
 const { EmbedBuilder } = pkg;
 
 export class PolicyCommand extends Command {
@@ -31,7 +31,7 @@ export class PolicyCommand extends Command {
 
       return interaction.reply({
         embeds: [errorEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -44,7 +44,6 @@ export class PolicyCommand extends Command {
 
     const messageContent = {
       embeds: [embed],
-      ephemeral: false,
     };
 
     interaction.reply(messageContent);

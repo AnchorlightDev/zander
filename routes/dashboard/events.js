@@ -8,17 +8,82 @@ import {
   hasPermission,
   isFeatureWebRouteEnabled,
   setBannerCookie,
+  internalApiHeaders,
 } from "../../api/common.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { hasPermission as hasPermissionNode } from "../../lib/discord/permissions.mjs";
 import { getEventById } from "../../services/eventService.js";
+import {
+  computeNextEventDate,
+  eventPrefillFromTemplate,
+  getDefaultAnnouncements,
+  getTemplateById,
+} from "../../services/eventTemplateService.js";
+import { getSelectableRanks } from "../../services/rankMetaService.js";
 import { enrichHostsWithAvatars } from "../../lib/avatarHelpers.js";
+import { sanitizeForumHtml } from "../../lib/htmlSanitize.js";
+import { renderDiscordTimestamps } from "../../lib/discordTimestamps.js";
+
+/**
+ * Render the dashboard error page instead of letting a route reject.
+ *
+ * Fastify's default handler answers a rejected route with a bare 500, which
+ * the browser shows as a blank page -- the failure is invisible to whoever hit
+ * it and the reason only exists in the server log.  These editor routes now
+ * depend on LuckPerms (an external database this app does not own) for the
+ * rank picker, so "one dependency is down" has to degrade into something
+ * readable rather than nothing at all.
+ */
+/**
+ * The site-wide default announcements, or none if they cannot be read -- a
+ * missing starting set should not stop anyone creating an event.
+ */
+async function defaultAnnouncementsOrEmpty(context) {
+  try {
+    return await getDefaultAnnouncements();
+  } catch (error) {
+    console.warn(`[dashboard/events] Default announcements unavailable (${context}):`, error.message);
+    return [];
+  }
+}
+
+async function renderRouteError(app, res, error, context, config, features, req) {
+  console.error(`[dashboard/events] ${context}:`, error);
+  res.status(500).header("content-type", "text/html; charset=utf-8").send(
+    await app.view("session/error", {
+      pageTitle: "Error",
+      pageDescription: `Error loading ${context}`,
+      config,
+      req,
+      error,
+      features,
+      globalImage: await getGlobalImage(),
+      announcementWeb: await getWebAnnouncement(),
+    })
+  );
+}
+
+/**
+ * Selectable ranks for the editor's rank picker, never throwing.
+ *
+ * A LuckPerms outage must not take down event editing: the picker degrades to
+ * an empty list (the editor shows an explanatory warning in that case) rather
+ * than failing the whole page.
+ */
+async function selectableRanksOrEmpty(context) {
+  try {
+    return await getSelectableRanks();
+  } catch (error) {
+    console.error(`[dashboard/events] rank picker unavailable for ${context}:`, error);
+    return [];
+  }
+}
 
 /** Fetch a URL with the internal API key and parse JSON, returning fallback on error. */
 async function fetchJson(fetchFn, url, fallback = null) {
   try {
     const res = await fetchFn(url, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     return await res.json();
   } catch (error) {
@@ -62,6 +127,10 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
       getWebAnnouncement(),
     ]);
 
+    const userPerms = req.session.user?.permissions || [];
+    const hasReviewPermission = hasPermissionNode(userPerms, "zander.web.events.review");
+    const hasEditPermission = hasPermissionNode(userPerms, "zander.web.events.edit") || hasReviewPermission;
+
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-calendar", {
         pageTitle: "Dashboard - Events Calendar",
@@ -70,6 +139,8 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
         req,
         globalImage,
         announcementWeb,
+        hasReviewPermission,
+        hasEditPermission,
       })
     );
   });
@@ -159,20 +230,50 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     if (!await isFeatureWebRouteEnabled(app, features.events, req, res, features)) return;
     if (!await hasPermission("zander.web.events.edit", req, res, features)) return;
 
-    const [templatesData, globalImage, announcementWeb] = await Promise.all([
+    try {
+    const [templatesData, selectableRanks, globalImage, announcementWeb] = await Promise.all([
       fetchJson(fetch, `${process.env.siteAddress}/api/events/templates/get`, { data: [] }),
+      selectableRanksOrEmpty("create event"),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
 
+    // ?templateId=N — start the new event pre-filled from a template (the
+    // templates page sends master templates here). A recurring template also
+    // fills its next date; a master template leaves the date to the organiser.
+    // Without a template the event starts with the site-wide default
+    // announcements; a template's own announcements replace them.
+    let ev = null;
+    const templateId = parseInt(req.query.templateId, 10);
+    if (templateId) {
+      const template = await getTemplateById(templateId);
+      if (template) {
+        let nextDate = null;
+        try {
+          nextDate = computeNextEventDate(template);
+        } catch {
+          nextDate = null;
+        }
+        try {
+          ev = eventPrefillFromTemplate(template, nextDate);
+        } catch (prefillError) {
+          // A bad default time only costs the pre-filled date, not the form.
+          console.warn("[events] Template default times unusable:", prefillError.message);
+          ev = eventPrefillFromTemplate(template, null);
+        }
+      }
+    }
+    if (!ev) ev = { announcements: await defaultAnnouncementsOrEmpty("create event") };
+
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-editor", {
         pageTitle: "Dashboard - Create Event",
+        selectableRanks,
         config,
         features,
         req,
         mode: "create",
-        ev: {},
+        ev,
         isPublished: false,
         apiEndpoint: "/api/events/create",
         templatesData,
@@ -180,6 +281,9 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
         announcementWeb,
       })
     );
+    } catch (error) {
+      await renderRouteError(app, res, error, "the event editor", config, features, req);
+    }
   });
 
   // ============================================================================
@@ -192,9 +296,11 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     const eventId = req.query.eventId;
     if (!eventId) return res.redirect("/dashboard/events/list");
 
-    const [apiData, templatesData, globalImage, announcementWeb] = await Promise.all([
+    try {
+    const [apiData, templatesData, selectableRanks, globalImage, announcementWeb] = await Promise.all([
       fetchJson(fetch, `${process.env.siteAddress}/api/events/single?eventId=${eventId}`, null),
       fetchJson(fetch, `${process.env.siteAddress}/api/events/templates/get`, { data: [] }),
+      selectableRanksOrEmpty("edit event"),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
@@ -219,6 +325,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-editor", {
         pageTitle: `Dashboard - Edit Event`,
+        selectableRanks,
         config,
         features,
         req,
@@ -231,6 +338,9 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
         announcementWeb,
       })
     );
+    } catch (error) {
+      await renderRouteError(app, res, error, "the event editor", config, features, req);
+    }
   });
 
   // ============================================================================
@@ -263,6 +373,14 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     const isReviewer = userIsReviewer(req);
     // userCanEditEvent already accounts for status; only exclude terminal states
     const canEdit = !["cancelled", "archived"].includes(ev.status) && userCanEditEvent(ev, req);
+
+    // events-view.ejs renders the description unescaped.  New writes are
+    // sanitized in eventService, but rows created before that are not, so
+    // sanitize again here — sanitizeForumHtml is idempotent.
+    ev.description = ev.description ? sanitizeForumHtml(ev.description) : ev.description;
+    // Render Discord's <t:...> tokens so the dashboard shows the same times a
+    // visitor will see, rather than the raw token text.
+    ev.description = renderDiscordTimestamps(ev.description);
 
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-view", {
@@ -313,7 +431,9 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     if (!await isFeatureWebRouteEnabled(app, features.events, req, res, features)) return;
     if (!await hasPermission("zander.web.events.edit", req, res, features)) return;
 
-    const [globalImage, announcementWeb] = await Promise.all([
+    const [selectableRanks, defaultAnnouncements, globalImage, announcementWeb] = await Promise.all([
+      selectableRanksOrEmpty("create template"),
+      defaultAnnouncementsOrEmpty("create template"),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
@@ -323,17 +443,48 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-template-editor", {
         pageTitle: "Dashboard - Create Event Template",
+        selectableRanks,
         config,
         features,
         req,
         mode: "create",
-        tmpl: {},
+        tmpl: { announcements: defaultAnnouncements },
         dayNames: DAY_NAMES,
         recDays: [],
         globalImage,
         announcementWeb,
       })
     );
+  });
+
+  // ============================================================================
+  // Default Announcements (starting set for every new event and template)
+  // ============================================================================
+  app.get("/dashboard/events/announcement-defaults", async (req, res) => {
+    if (!await isFeatureWebRouteEnabled(app, features.events, req, res, features)) return;
+    if (!await hasPermission("zander.web.events.review", req, res, features)) return;
+
+    try {
+      const [announcements, globalImage, announcementWeb] = await Promise.all([
+        getDefaultAnnouncements(),
+        getGlobalImage(),
+        getWebAnnouncement(),
+      ]);
+
+      res.header("content-type", "text/html; charset=utf-8").send(
+        await app.view("dashboard/events/events-announcement-defaults", {
+          pageTitle: "Dashboard - Default Event Announcements",
+          config,
+          features,
+          req,
+          announcements,
+          globalImage,
+          announcementWeb,
+        })
+      );
+    } catch (error) {
+      await renderRouteError(app, res, error, "the default announcements", config, features, req);
+    }
   });
 
   // ============================================================================
@@ -359,6 +510,8 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
       }
 
       event.hosts = await enrichHostsWithAvatars(event.hosts || []);
+      // Preview must match the live page, tokens included.
+      event.description = renderDiscordTimestamps(event.description);
 
       const startTs = Math.floor(new Date(event.startAt).getTime() / 1000);
       const endTs = Math.floor(new Date(event.endAt).getTime() / 1000);
@@ -413,8 +566,9 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     const templateId = req.query.templateId;
     if (!templateId) return res.redirect("/dashboard/events/templates");
 
-    const [apiData, globalImage, announcementWeb] = await Promise.all([
+    const [apiData, selectableRanks, globalImage, announcementWeb] = await Promise.all([
       fetchJson(fetch, `${process.env.siteAddress}/api/events/templates/single?templateId=${templateId}`, null),
+      selectableRanksOrEmpty("edit template"),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
@@ -430,6 +584,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-template-editor", {
         pageTitle: "Dashboard - Edit Event Template",
+        selectableRanks,
         config,
         features,
         req,

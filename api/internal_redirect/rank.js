@@ -1,5 +1,11 @@
+// TODO: These proxies authenticate an HTTP round trip from this app back to
+// itself, which is why the app has to hold an API credential at all. The
+// long-term fix is to call the underlying controller function directly
+// in-process and drop the self-call entirely; until then this route depends on
+// the `zander-web-internal` client in INTERNAL_API_KEY.
 import fetch from "node-fetch";
 
+import { internalApiHeaders } from "../common.js";
 function ensureRankPermission(req, res) {
   const permissions = req.session?.user?.permissions;
 
@@ -27,10 +33,7 @@ async function forwardJson(path, options = {}) {
 
   const response = await fetch(`${process.env.siteAddress}${path}`, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "x-access-token": process.env.apiKey,
-    },
+    headers: internalApiHeaders({ "Content-Type": "application/json" }),
     body: method === "GET" ? undefined : JSON.stringify(body),
   });
 
@@ -104,6 +107,10 @@ export default function rankRedirectRoute(app) {
     }
 
     payload.actor = req.session?.user?.username || null;
+    // From the session, overwriting anything the browser sent: the API uses
+    // these to stop people promoting themselves above their own rank.
+    payload.actorUserId = req.session?.user?.userId ?? null;
+    payload.actorUuid = req.session?.user?.uuid ?? null;
 
     try {
       const { data } = await forwardJson(`/api/rank/user/assign`, {

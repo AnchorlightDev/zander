@@ -6,6 +6,7 @@ import {
   Colors,
   ComponentType,
   EmbedBuilder,
+  MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
   WebhookClient,
@@ -31,7 +32,7 @@ import {
 } from "../controllers/discordPunishmentController.js";
 
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
+const config = require("../lib/config/config.cjs");
 
 const PUNISHMENT_TYPES = {
   warn: "WARN",
@@ -673,7 +674,7 @@ export class PunishCommand extends Command {
     const subcommand = interaction.options.getSubcommand();
 
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     } catch (error) {
       console.error("Failed to defer punish command reply:", error);
       return;

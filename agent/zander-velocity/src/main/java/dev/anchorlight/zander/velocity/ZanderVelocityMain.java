@@ -42,7 +42,7 @@ import java.util.Optional;
         authors = "ModularSoft",
         description = "The proxy that allows the connection and integration of the Zander minecraft suite.",
         name = "zander-velocity",
-        version = "1.2.0",
+        version = "2.1.0",
         dependencies = {
                 @Dependency(id = "signedvelocity"),
                 @Dependency(id = "luckperms", optional = false)
@@ -129,10 +129,13 @@ public class ZanderVelocityMain {
             CommandManager commandManager,
             @DataDirectory Path dataDirectory
     ) {
-        this.proxy = proxy;
-        this.logger = logger;
+        // proxy, logger and dataDirectory are static; assigning them through
+        // `this` compiles but reads as instance state and is what the
+        // "should be accessed in a static way" warning is pointing at.
+        ZanderVelocityMain.proxy = proxy;
+        ZanderVelocityMain.logger = logger;
+        ZanderVelocityMain.dataDirectory = dataDirectory;
         this.commandManager = commandManager;
-        this.dataDirectory = dataDirectory;
         instance = this;
 
         // Create configuration file

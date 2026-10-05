@@ -3,7 +3,7 @@ dotenv.config();
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 import path from "path";
-const config = require(path.join(process.cwd(), "config.json"));
+const config = require("../lib/config/config.cjs");
 import fetch from "node-fetch";
 import { readdirSync } from "fs";
 import crypto from "crypto";
@@ -193,8 +193,28 @@ export async function hasPermission(permissionNode, req, res, features) {
 }
 
 /*
+    Headers for this app's calls to its own API.
+
+    The app used to present the same app-wide `apiKey` it validated, which made
+    rotating that key impossible without a simultaneous redeploy.  It now holds
+    a dedicated client credential (`zander-web-internal`) in INTERNAL_API_KEY,
+    so it can be rotated and scoped like any other caller.
+
+    Centralised here rather than repeated in every call site so there is one
+    place to change when the internal credential moves again.
+
+    @param extraHeaders Additional headers to merge, e.g. Content-Type.
+*/
+export function internalApiHeaders(extraHeaders = {}) {
+  return {
+    ...extraHeaders,
+    "x-access-token": process.env.INTERNAL_API_KEY,
+  };
+}
+
+/*
     Makes a POST API request to the specified postURL with the provided apiPostBody.
-    It includes a header with the x-access-token value taken from an environment variable named apiKey.
+    It authenticates with this app's own internal client credential via internalApiHeaders().
     If the request is successful, it logs the response data.
     If the request fails, it sets a cookie with a "danger" alert type and an error message,
     then redirects the user to the specified failureRedirectURL.
@@ -213,10 +233,7 @@ export async function postAPIRequest(
   const response = await fetch(postURL, {
     method: "POST",
     body: JSON.stringify(apiPostBody),
-    headers: {
-      "Content-Type": "application/json",
-      "x-access-token": process.env.apiKey,
-    },
+    headers: internalApiHeaders({ "Content-Type": "application/json" }),
   });
 
   let data = null;
@@ -389,13 +406,28 @@ function verifyCodeIsActive(code) {
   });
 }
 
+/**
+ * Draw a 6-digit verification code from a cryptographically secure source.
+ *
+ * This was Math.random(), which is V8's xorshift128+ — fast, but its internal
+ * state is recoverable from a handful of outputs, so subsequent codes become
+ * predictable. That matters here because this code authorises linking a
+ * Minecraft account to a Discord account: an attacker able to sample the
+ * stream (by requesting codes for accounts they control) could predict the
+ * next code issued to someone else and link that account to themselves.
+ */
+function secureVerifyCode() {
+  // randomInt is uniform over [min, max) and draws from the CSPRNG.
+  return crypto.randomInt(100000, 1000000);
+}
+
 export async function generateVerifyCode() {
   // 6-digit code space is 900,000 wide and only a handful are ever active
   // at once, so a collision is very unlikely — but an active duplicate would
   // let one player's code verify another's account, so retry a few times if
   // the generated code is already in use.
   for (let attempt = 0; attempt < 10; attempt++) {
-    const code = Math.floor(Math.random() * 900000) + 100000;
+    const code = secureVerifyCode();
 
     try {
       if (!(await verifyCodeIsActive(code))) {
@@ -410,5 +442,5 @@ export async function generateVerifyCode() {
   }
 
   // Extremely unlikely: 10 straight collisions. Return a fresh code anyway.
-  return Math.floor(Math.random() * 900000) + 100000;
+  return secureVerifyCode();
 }

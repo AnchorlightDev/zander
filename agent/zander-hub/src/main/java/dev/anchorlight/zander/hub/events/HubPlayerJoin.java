@@ -3,19 +3,20 @@ package dev.anchorlight.zander.hub.events;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import net.md_5.bungee.api.ChatColor;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.FireworkEffect;
 import org.bukkit.Location;
 import org.bukkit.Sound;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Firework;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.inventory.meta.FireworkMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scoreboard.Scoreboard;
@@ -47,14 +48,6 @@ public class HubPlayerJoin implements Listener {
         this.plugin = plugin;
     }
 
-    /// Triggers when player's client first connects.
-    /// Good for validation and basic setup (permission, flags, etc).
-    @EventHandler
-    public void onPlayerLogin(PlayerLoginEvent event) {
-        Player player = event.getPlayer();
-        setPermissions(player);
-    }
-
     /// Triggers when player's client has joined the world.
     /// Good for initial player world interactions (gameplay state etc).
     /// Runs at LOW priority so the inventory clear happens before other
@@ -62,6 +55,11 @@ public class HubPlayerJoin implements Listener {
     @EventHandler(priority = EventPriority.LOW)
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
+        // Previously done from PlayerLoginEvent, which is deprecated since
+        // 1.21.6 and whose replacements are all pre-login events with no
+        // Player. Nothing here needs login timing — the player is not in the
+        // world yet at that point anyway.
+        setPermissions(player);
         setInitialState(player); // * just be aware, runs before checking vanish
         if (Misc.isVanish(player))
             return;
@@ -84,6 +82,32 @@ public class HubPlayerJoin implements Listener {
         player.getInventory().clear();
         player.getInventory().setHeldItemSlot(compassSlot);
         player.getInventory().setItem(compassSlot, NavigationCompassItem.createCompass());
+        resetVitals(player);
+    }
+
+    /// Reset the player's survival state on arrival in the hub.
+    ///
+    /// HubProtection cancels FoodLevelChangeEvent, which stops hunger draining
+    /// but equally stops it ever refilling, and nothing here previously set it.
+    /// A player therefore kept whatever food level their hub playerdata last
+    /// stored, permanently — arriving hungry meant staying hungry forever.
+    /// The same applied to health, since EntityDamageEvent is cancelled but
+    /// nothing heals.
+    ///
+    /// setFoodLevel/setHealth are direct setters and do not fire the cancelled
+    /// FoodLevelChangeEvent, so these take effect.
+    private void resetVitals(Player player) {
+        player.setFoodLevel(20);
+        player.setSaturation(20.0f);
+        player.setExhaustion(0.0f);
+
+        AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+        player.setHealth(maxHealth != null ? maxHealth.getValue() : 20.0);
+
+        // Carried over from wherever the player came from; damage is cancelled
+        // in the hub so these would otherwise persist as a cosmetic artefact.
+        player.setFireTicks(0);
+        player.setRemainingAir(player.getMaximumAir());
     }
 
     /// Delayed login triggers (logic that's not immediate on login).
@@ -115,16 +139,23 @@ public class HubPlayerJoin implements Listener {
 
     /// Send a 'normal welcome' message in player's chat.
     private void chatWelcomeMessageNormal(Player player) {
-        List<String> message = ConfigurationManager.getWelcome().getStringList("welcome");
-        for (String row : message)
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&', row));
+        sendWelcomeLines(player, "welcome");
     }
 
     /// Send a 'new player welcome' message in player's chat.
     private void chatWelcomeMessageFirst(Player player) {
-        List<String> message = ConfigurationManager.getWelcome().getStringList("welcome_newplayer");
-        for (String row : message)
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&', row));
+        sendWelcomeLines(player, "welcome_newplayer");
+    }
+
+    /// Send each configured line, translating the legacy '&' colour codes the
+    /// welcome files use.  ChatColor.translateAlternateColorCodes is
+    /// deprecated; LegacyComponentSerializer is the Adventure equivalent and
+    /// reads exactly the same '&' syntax, so the config files are unchanged.
+    private void sendWelcomeLines(Player player, String configKey) {
+        List<String> message = ConfigurationManager.getWelcome().getStringList(configKey);
+        for (String row : message) {
+            player.sendMessage(LegacyComponentSerializer.legacyAmpersand().deserialize(row));
+        }
     }
 
     /// Play a random sound for the player.

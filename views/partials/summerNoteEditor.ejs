@@ -36,6 +36,9 @@
 
     fetchEmojiData('<%= process.env.siteAddress %>/emojis')
       .done(function(data) {
+        // /emojis currently returns {}; an empty list must not replace the
+        // GitHub one if it happens to arrive second.
+        if (!data || !Object.keys(data).length) return;
         hasCustomEmojiData = true;
         updateEmojiData(data);
       })

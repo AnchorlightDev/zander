@@ -1,7 +1,6 @@
 package dev.anchorlight.zander.velocity.events;
 
 import com.jayway.jsonpath.JsonPath;
-import com.velocitypowered.api.event.PostOrder;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.proxy.ProxyPingEvent;
 import com.velocitypowered.api.proxy.server.ServerPing.Builder;
@@ -21,12 +20,13 @@ public class UserOnProxyPing {
 
     private static final Logger logger = ZanderVelocityMain.getLogger();
 
-    private final ZanderVelocityMain plugin;
     private volatile List<Component> cachedMotds = List.of();
 
     public UserOnProxyPing(ZanderVelocityMain plugin) {
-        this.plugin = plugin;
-        ZanderVelocityMain.getProxy().getEventManager().register(plugin, this);
+        // Deliberately does NOT register itself: ZanderVelocityMain registers
+        // the instance it constructs, the same as every other listener. Doing
+        // both registered this listener twice, so onProxyPingEvent ran twice
+        // per ping. `plugin` is still needed to own the scheduled task below.
 
         // Fetch MOTD immediately, then refresh every 60 seconds
         ZanderVelocityMain.getProxy().getScheduler()
@@ -55,12 +55,33 @@ public class UserOnProxyPing {
             cachedMotds = formats.stream()
                     .map(fmt -> (Component) serializer.deserialize(motdTopLine + "\n" + fmt))
                     .toList();
-        } catch (Exception e) {
-            logger.error("Failed to refresh MOTD from API", e);
+        } catch (Throwable t) {
+            // Deliberately Throwable, not Exception.
+            //
+            // An Error (a NoClassDefFoundError from a stripped dependency, an
+            // ExceptionInInitializerError, a LinkageError) is not an Exception,
+            // so `catch (Exception)` let it escape to Velocity's scheduler.
+            // Velocity catches it and logs a bare
+            // "Exception in task ...$$Lambda ... by plugin zander-velocity"
+            // with no stack of its own, which says nothing about which stage
+            // failed — that is exactly why the 2026-09-16 failure could not be
+            // diagnosed from the logs.
+            //
+            // Catching Throwable puts the real cause in our log with context.
+            //
+            // VirtualMachineError (OutOfMemoryError, StackOverflowError) is
+            // rethrown: the JVM itself is in trouble and quietly swallowing
+            // that on a 60-second timer would hide a far bigger problem.
+            if (t instanceof VirtualMachineError) {
+                throw (VirtualMachineError) t;
+            }
+            logger.error("Failed to refresh MOTD from API", t);
         }
     }
 
-    @Subscribe(order = PostOrder.FIRST)
+    // PostOrder is deprecated in favour of priority, where a higher value
+    // runs earlier — so FIRST becomes Short.MAX_VALUE.
+    @Subscribe(priority = Short.MAX_VALUE)
     public void onProxyPingEvent(ProxyPingEvent event) {
         Builder pingBuilder = event.getPing().asBuilder();
 

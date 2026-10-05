@@ -11,6 +11,8 @@ import dev.anchorlight.zander.velocity.ZanderVelocityMain;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public class TipChatter {
@@ -36,8 +38,24 @@ public class TipChatter {
                 Response res = req.execute();
                 String json = res.getBody();
 
-                String colourMessageFormat = JsonPath.read(json, "$.data[0].colourMessageFormat");
-                String link = JsonPath.read(json, "$.data[0].link");
+                // $.data[0] is a definite path, so it throws rather than
+                // returning empty when no tip announcement is active. Read the
+                // list first and skip this cycle quietly if there is nothing to
+                // broadcast — "no tips configured" is not an error worth
+                // logging every interval.
+                List<Map<String, Object>> tips = JsonPath.read(json, "$.data[*]");
+                if (tips == null || tips.isEmpty()) {
+                    return;
+                }
+
+                Object rawFormat = tips.get(0).get("colourMessageFormat");
+                if (rawFormat == null) {
+                    return;
+                }
+
+                String colourMessageFormat = String.valueOf(rawFormat);
+                Object rawLink = tips.get(0).get("link");
+                String link = rawLink == null ? null : String.valueOf(rawLink);
 
                 // Broadcast the message to all online players
                 ZanderVelocityMain.getProxy().getAllPlayers().forEach(player -> {

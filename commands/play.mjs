@@ -2,6 +2,7 @@ import { Command, RegisterBehavior } from "@sapphire/framework";
 import { Colors, EmbedBuilder } from "discord.js";
 import fetch from "node-fetch";
 
+import { internalApiHeaders } from "../api/common.js";
 export class PlayCommand extends Command {
   constructor(context, options) {
     super(context, { ...options });
@@ -18,7 +19,7 @@ export class PlayCommand extends Command {
   async chatInputRun(interaction) {
     const fetchURL = `${process.env.siteAddress}/api/server/get?type=EXTERNAL`;
     const response = await fetch(fetchURL, {
-      headers: { "x-access-token": process.env.apiKey },
+      headers: internalApiHeaders(),
     });
     const apiData = await response.json();
 

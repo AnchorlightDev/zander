@@ -3,8 +3,10 @@ import {
   hasPermission,
   isFeatureWebRouteEnabled,
   setBannerCookie,
+  internalApiHeaders,
 } from "../../api/common.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
+import { listFormsForPicker } from "../../controllers/formController.js";
 
 export default function dashboardApplicationsSiteRoute(
   app,
@@ -37,7 +39,7 @@ export default function dashboardApplicationsSiteRoute(
 
     const [response, globalImage, announcementWeb] = await Promise.all([
       fetch(`${process.env.siteAddress}/api/application/get`, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       }).catch(() => null),
       getGlobalImage(),
       getWebAnnouncement(),
@@ -65,9 +67,10 @@ export default function dashboardApplicationsSiteRoute(
 
     if (!await hasPermission("zander.web.application", req, res, features)) return;
 
-    const [globalImage, announcementWeb] = await Promise.all([
+    const [globalImage, announcementWeb, availableForms] = await Promise.all([
       getGlobalImage(),
       getWebAnnouncement(),
+      listFormsForPicker(),
     ]);
 
     res.header("content-type", "text/html; charset=utf-8").send(
@@ -79,6 +82,7 @@ export default function dashboardApplicationsSiteRoute(
         req: req,
         globalImage,
         announcementWeb,
+        availableForms,
       })
     );
     return;
@@ -93,12 +97,13 @@ export default function dashboardApplicationsSiteRoute(
     const applicationId = req.query.applicationId;
     const fetchURL = `${process.env.siteAddress}/api/application/get?id=${applicationId}`;
 
-    const [response, globalImage, announcementWeb] = await Promise.all([
+    const [response, globalImage, announcementWeb, availableForms] = await Promise.all([
       fetch(fetchURL, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       }).catch(() => null),
       getGlobalImage(),
       getWebAnnouncement(),
+      listFormsForPicker(),
     ]);
 
     const applicationApiData = response ? await parseApiResponse(response) : { success: false };
@@ -118,6 +123,7 @@ export default function dashboardApplicationsSiteRoute(
         req: req,
         globalImage,
         announcementWeb,
+        availableForms,
       })
     );
     return;

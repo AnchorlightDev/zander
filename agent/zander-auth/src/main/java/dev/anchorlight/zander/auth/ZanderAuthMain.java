@@ -18,7 +18,7 @@ public class ZanderAuthMain extends JavaPlugin {
         TextComponent enabledMessage = Component.empty()
                 .color(NamedTextColor.GREEN)
                 .append(Component.text("\n\nZander Auth has been enabled.\n"))
-                .append(Component.text("Running Version " + plugin.getDescription().getVersion() + "\n"))
+                .append(Component.text("Running Version " + plugin.getPluginMeta().getVersion() + "\n"))
                 .append(Component.text("GitHub Repository: https://github.com/ModularSoftAU/zander\n"))
                 .append(Component.text("Created by Modular Software\n\n", NamedTextColor.DARK_PURPLE));
         getServer().sendMessage(enabledMessage);

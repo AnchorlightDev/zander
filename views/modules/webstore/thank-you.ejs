@@ -34,6 +34,23 @@
           </ul>
         </div>
 
+        <% if (!discordLinked) { %>
+        <div class="alert alert-info">
+          <h5 class="alert-heading">Link your Discord account</h5>
+          <p>
+            Some perks include a Discord role. We can only give you that role once your
+            Discord account is linked. Link it now and any roles from this purchase are
+            added straight away.
+          </p>
+          <p class="small mb-3">
+            Bought this as a gift? The player you gifted it to needs to link their own Discord account.
+          </p>
+          <a href="/profile/social/discord/connect?redirect=/webstore/history" class="btn btn-primary">
+            <i class="fab fa-discord me-1"></i> Link Discord
+          </a>
+        </div>
+        <% } %>
+
         <p class="text-muted">
           If your rank has not appeared within a few minutes of joining the server,
           please contact staff with your Minecraft username and transaction details.

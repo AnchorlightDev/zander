@@ -1,6 +1,8 @@
 <%- include("../modules/header.ejs", {
     pageTitle: pageTitle,
-    pageDescription: "Verify your Minecraft account to finish registration."
+    pageDescription: "Verify your Minecraft account to finish registration.",
+    // Auth / account utility page: never useful in search results.
+    pageRobots: "noindex, follow"
 }) %>
 
 <%- include("../modules/navigationBar.ejs") %>

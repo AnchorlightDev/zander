@@ -3,8 +3,9 @@ import { Colors, EmbedBuilder } from "discord.js";
 import fetch from "node-fetch";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const features = require("../features.json");
+const features = require("../lib/config/features.cjs");
 
+import { internalApiHeaders } from "../api/common.js";
 // Phrases that indicate someone is asking for the server IP / how to join.
 const IP_PHRASES = [
   "what is the ip",
@@ -42,7 +43,7 @@ export class IpDetectionListener extends Listener {
     try {
       const fetchURL = `${process.env.siteAddress}/api/server/get?type=EXTERNAL`;
       const response = await fetch(fetchURL, {
-        headers: { "x-access-token": process.env.apiKey },
+        headers: internalApiHeaders(),
       });
       const apiData = await response.json();
 

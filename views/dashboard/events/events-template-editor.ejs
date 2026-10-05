@@ -117,6 +117,78 @@
                                     <label class="form-check-label" for="isActiveCheck">Template active</label>
                                 </div>
                             </div>
+                            <div class="col-md-8">
+                                <label class="form-label fw-semibold">Default Visibility</label>
+                                <select class="form-select" name="visibility" id="tmplVisibilitySelect">
+                                    <option value="public" <%= (tmpl.visibility || 'public') === 'public' ? 'selected' : '' %>>Public — anyone can see it</option>
+                                    <option value="rank" <%= tmpl.visibility === 'rank' ? 'selected' : '' %>>Rank-locked — details for chosen ranks</option>
+                                    <option value="private" <%= tmpl.visibility === 'private' ? 'selected' : '' %>>Private — hidden from the public site</option>
+                                </select>
+                                <small class="text-muted">Applied to every draft this template generates.</small>
+                            </div>
+                        </div>
+
+                        <!-- Rank lock (shown only for visibility = rank) -->
+                        <% const tmplRanksForPicker = (typeof selectableRanks !== 'undefined' && Array.isArray(selectableRanks)) ? selectableRanks : []; %>
+                            <% const tmplLockedRanks = (tmpl.rankAccess || []).map(r => String(r.rankSlug || '').toLowerCase()); %>
+                        <div class="border rounded-3 p-3 mt-3 bg-light" id="tmplRankLockPanel" style="display:none;">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-lock me-2 text-secondary"></i>
+                                <span class="fw-semibold">Who can see the details?</span>
+                            </div>
+
+                            <% if (tmplRanksForPicker.length === 0) { %>
+                            <div class="alert alert-warning mb-0 small">
+                                No LuckPerms groups could be loaded, so no ranks can be chosen. Generated drafts will behave as public until this is fixed.
+                            </div>
+                            <% } else { %>
+                            <p class="text-muted small">
+                                Anyone holding <strong>any one</strong> of the selected ranks sees the full event. Ranks marked
+                                <span class="badge bg-success">Supporter</span> are purchasable, so those events show a
+                                "Support the Server" button linking to the webstore.
+                            </p>
+                            <div class="row g-2 mb-3" style="max-height:220px;overflow-y:auto;">
+                                <% tmplRanksForPicker.forEach(rank => { %>
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input js-tmpl-rank-check" type="checkbox"
+                                               value="<%= rank.rankSlug %>"
+                                               id="tmplrank_<%= rank.rankSlug %>"
+                                               <%= tmplLockedRanks.includes(rank.rankSlug) ? 'checked' : '' %>>
+                                        <label class="form-check-label small" for="tmplrank_<%= rank.rankSlug %>">
+                                            <%= rank.displayName %>
+                                            <% if (rank.isDonator) { %><span class="badge bg-success ms-1" style="font-size:.6rem;">Supporter</span><% } %>
+                                            <% if (rank.isStaff) { %><span class="badge bg-primary ms-1" style="font-size:.6rem;">Staff</span><% } %>
+                                        </label>
+                                    </div>
+                                </div>
+                                <% }) %>
+                            </div>
+                            <% } %>
+
+
+                                <div class="mt-3">
+                                    <label class="form-label fw-semibold" for="teaserDescriptionInput">Teaser description</label>
+                                    <textarea class="form-control" id="teaserDescriptionInput" name="teaserDescription" rows="4"
+                                              placeholder="What everyone else sees instead of the full description."><%= tmpl.teaserDescription || '' %></textarea>
+                                    <small class="text-muted d-block mt-1">
+                                        Shown to anyone without the rank &mdash; on the website, in the Discord announcement
+                                        and on the Discord scheduled event. Say what the event is and why the rank is worth
+                                        having; leave it empty to fall back to a generated line naming the rank.
+                                    </small>
+                                </div>
+
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="tmplTeaserPublicCheck"
+                                       <%= tmpl.teaserPublic === false ? '' : 'checked' %>>
+                                <label class="form-check-label" for="tmplTeaserPublicCheck">
+                                    <span class="fw-semibold">Show a teaser to everyone else</span>
+                                    <span class="d-block text-muted small">
+                                        On: generated events appear publicly with title, banner and time, but the details are
+                                        replaced with an unlock prompt. Off: they are invisible without the rank.
+                                    </span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -197,8 +269,13 @@
                                 <small class="text-muted flex-grow-1">Or enter URL directly:</small>
                                 <span id="bannerUploadStatus" class="small d-none"></span>
                             </div>
-                            <input type="url" class="form-control form-control-sm" id="bannerUrlManual" value="<%= tmpl.bannerUrl || '' %>" placeholder="https://…">
-                            <small class="text-muted">Recommended: <strong>1920×480px</strong> (4:1) for website; <strong>1280×720px</strong> (16:9) for Discord. PNG/JPG, max 8 MB.</small>
+                            <input type="text" inputmode="url" class="form-control form-control-sm" id="bannerUrlManual" value="<%= tmpl.bannerUrl || '' %>" placeholder="https://…">
+                            <small class="text-muted">
+									Recommended: <strong>1280×512px</strong> (5:2) — one image that works everywhere.
+									This is the size Discord uses for event covers, so it passes through untouched, and the
+									website shows it whole. Keep the important artwork near the centre: very wide screens
+									trim the top and bottom edges evenly. PNG/JPG, max 8 MB.
+								</small>
                             <div id="bannerPreview" class="mt-2 <%= tmpl.bannerUrl ? '' : 'd-none' %>">
                                 <div class="position-relative d-inline-block">
                                     <img src="<%= tmpl.bannerUrl || '' %>" class="img-fluid rounded" style="max-height:200px" alt="Banner preview">
@@ -219,7 +296,7 @@
                                 <small class="text-muted flex-grow-1">Or enter URL directly:</small>
                                 <span id="logoUploadStatus" class="small d-none"></span>
                             </div>
-                            <input type="url" class="form-control form-control-sm" id="logoUrlManual" value="<%= tmpl.logoUrl || '' %>" placeholder="https://…">
+                            <input type="text" inputmode="url" class="form-control form-control-sm" id="logoUrlManual" value="<%= tmpl.logoUrl || '' %>" placeholder="https://…">
                             <small class="text-muted">Recommended: <strong>512×512px</strong> (1:1 square). PNG with transparency preferred. Max 8 MB.</small>
                             <div id="logoPreview" class="mt-2 <%= tmpl.logoUrl ? '' : 'd-none' %>">
                                 <div class="position-relative d-inline-block">
@@ -315,9 +392,9 @@
                                             <option value="event_start" <%= ann.triggerType === 'event_start' ? 'selected' : '' %>>Event Start</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-2 ann-offset-group <%= ann.triggerType !== 'before_event' ? 'd-none' : '' %>">
-                                        <label class="form-label small">Minutes Before</label>
-                                        <input type="number" class="form-control form-control-sm ann-offsetMinutes" placeholder="60" min="0" value="<%= ann.offsetMinutes || '' %>">
+                                    <div class="col-md-2 ann-offset-group <%= (ann.triggerType !== 'before_event' && ann.triggerType !== 'after_event') ? 'd-none' : '' %>">
+                                        <label class="form-label small ann-offset-label"><%= ann.triggerType === 'after_event' ? 'Minutes After' : 'Minutes Before' %></label>
+                                        <input type="number" class="form-control form-control-sm ann-offsetMinutes" placeholder="60" min="0" value="<%= ann.offsetMinutes ?? '' %>">
                                     </div>
                                     <!-- Discord: Type -->
                                     <div class="col-md-2 ann-discord-group <%= !isDiscord ? 'd-none' : '' %>">
@@ -375,7 +452,7 @@
                                     <!-- Tip/Web/Popup: Link -->
                                     <div class="col-md-8 ann-link-group <%= !hasLink ? 'd-none' : '' %>">
                                         <label class="form-label small">Link URL <small class="text-muted">(optional)</small></label>
-                                        <input type="url" class="form-control form-control-sm ann-link" placeholder="https://…" value="<%= ann.link || '' %>">
+                                        <input type="text" inputmode="url" class="form-control form-control-sm ann-link" placeholder="https://…" value="<%= ann.link || '' %>">
                                     </div>
                                     <!-- Popup: Button text & image -->
                                     <div class="col-md-4 ann-popup-group <%= !isPopup ? 'd-none' : '' %>">
@@ -384,7 +461,7 @@
                                     </div>
                                     <div class="col-12 ann-popup-group <%= !isPopup ? 'd-none' : '' %>">
                                         <label class="form-label small">Popup Image URL</label>
-                                        <input type="url" class="form-control form-control-sm ann-popupImageUrl" placeholder="https://…" value="<%= ann.popupImageUrl || '' %>">
+                                        <input type="text" inputmode="url" class="form-control form-control-sm ann-popupImageUrl" placeholder="https://…" value="<%= ann.popupImageUrl || '' %>">
                                     </div>
                                     <!-- Enabled -->
                                     <div class="col-md-3 d-flex align-items-end">
@@ -434,7 +511,7 @@
                             </select>
                         </div>
                         <div class="col-md-2 ann-offset-group">
-                            <label class="form-label small">Minutes Before</label>
+                            <label class="form-label small ann-offset-label">Minutes Before</label>
                             <input type="number" class="form-control form-control-sm ann-offsetMinutes" placeholder="60" min="0" value="">
                         </div>
                         <!-- Discord: Type -->
@@ -495,7 +572,7 @@
                         <!-- Tip/Web/Popup: Link -->
                         <div class="col-md-8 ann-link-group d-none">
                             <label class="form-label small">Link URL <small class="text-muted">(optional)</small></label>
-                            <input type="url" class="form-control form-control-sm ann-link" placeholder="https://…" value="">
+                            <input type="text" inputmode="url" class="form-control form-control-sm ann-link" placeholder="https://…" value="">
                         </div>
                         <!-- Popup: Button text -->
                         <div class="col-md-4 ann-popup-group d-none">
@@ -505,7 +582,7 @@
                         <!-- Popup: Image URL -->
                         <div class="col-12 ann-popup-group d-none">
                             <label class="form-label small">Popup Image URL <small class="text-muted">(optional)</small></label>
-                            <input type="url" class="form-control form-control-sm ann-popupImageUrl" placeholder="https://…" value="">
+                            <input type="text" inputmode="url" class="form-control form-control-sm ann-popupImageUrl" placeholder="https://…" value="">
                         </div>
                         <!-- Enabled -->
                         <div class="col-md-3 d-flex align-items-end">
@@ -643,7 +720,6 @@ function initTemplateHostSearch(row) {
         try {
             const res = await fetch(`/api/events/users/search?q=${encodeURIComponent(term)}`, {
                 credentials: 'include',
-                headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
             });
             if (!res.ok) { clearSuggestions(); return; }
             const data = await res.json();
@@ -724,7 +800,7 @@ document.querySelectorAll('#templateHostsContainer .host-row').forEach(initTempl
     const savedChannelId = '<%= tmpl.locationDiscordChannelId || "" %>';
     async function loadVoiceChannels() {
         try {
-            const res = await fetch('/api/events/discord/voice-channels', { credentials: 'include', headers: { 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> } });
+            const res = await fetch('/api/events/discord/voice-channels', { credentials: 'include' });
             const data = await res.json();
             voiceSelect.innerHTML = '<option value="">— select a channel —</option>';
             let lastCat = null, grp;
@@ -748,6 +824,29 @@ document.querySelectorAll('#templateHostsContainer .host-row').forEach(initTempl
 })();
 
 // Form submission
+
+// A field that fails HTML5 validation while its tab is hidden cannot be
+// focused, so the browser blocks the submit, logs "An invalid form control is
+// not focusable" to the console, and the page simply does nothing -- no error,
+// no save.  Reveal the offending field's tab so the message is visible and the
+// user can see why nothing happened.
+(function revealInvalidFieldsTab(formId) {
+    const form = document.getElementById(formId);
+    if (!form) return;
+
+    form.addEventListener('invalid', (e) => {
+        const pane = e.target.closest('.tab-pane');
+        if (pane && !pane.classList.contains('active')) {
+            const trigger = document.querySelector('[data-bs-target="#' + pane.id + '"], [href="#' + pane.id + '"]');
+            if (trigger && window.bootstrap?.Tab) {
+                window.bootstrap.Tab.getOrCreateInstance(trigger).show();
+                // Re-report once the pane is visible, so the browser can focus it.
+                setTimeout(() => e.target.reportValidity(), 200);
+            }
+        }
+    }, true); // capture: 'invalid' does not bubble
+})('templateForm');
+
 document.getElementById('templateForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -768,7 +867,18 @@ document.getElementById('templateForm').addEventListener('submit', async (e) => 
     body.recurrenceDays = days;
     const isOnce = body.recurrenceType === 'once';
     body.autoGenerateDrafts = isOnce ? false : document.getElementById('autoGenCheck').checked;
+    // Same fix as the event editor: the visible URL boxes are not form fields,
+    // so a typed URL submitted without the box losing focus was silently lost.
+    [['bannerUrlManual', 'bannerUrl'], ['logoUrlManual', 'logoUrl']].forEach(([manualId, field]) => {
+        const manual = document.getElementById(manualId);
+        if (manual) body[field] = manual.value.trim();
+    });
+
     body.isActive = document.getElementById('isActiveCheck').checked;
+
+    // Rank lock defaults carried onto every generated draft
+    body.allowedRanks = Array.from(document.querySelectorAll('.js-tmpl-rank-check:checked')).map(c => c.value);
+    body.teaserPublic = document.getElementById('tmplTeaserPublicCheck').checked;
     body.recurrenceEveryDays = body.recurrenceEveryDays ? parseInt(body.recurrenceEveryDays) : null;
     body.defaultDurationMins = body.defaultDurationMins ? parseInt(body.defaultDurationMins) : null;
     body.draftAdvanceDays = parseInt(body.draftAdvanceDays) || 7;
@@ -806,7 +916,7 @@ document.getElementById('templateForm').addEventListener('submit', async (e) => 
     const res = await fetch(endpoint, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     });
     const data = await res.json();
@@ -818,7 +928,7 @@ document.getElementById('templateForm').addEventListener('submit', async (e) => 
         const annRes = await fetch('/api/events/templates/announcements/update', {
             method: 'POST',
             credentials: 'include',
-            headers: { 'Content-Type': 'application/json', 'x-access-token': <%- JSON.stringify(process.env.apiKey || '') %> },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ templateId: savedTemplateId, announcements: collectTemplateAnnouncements() }),
         });
         const annData = await annRes.json();
@@ -835,7 +945,12 @@ function initAnnouncementRow(row) {
     const trigger = row.querySelector('.ann-trigger');
     const offsetGroup = row.querySelector('.ann-offset-group');
     if (trigger && offsetGroup) {
-        const toggleOffset = () => offsetGroup.classList.toggle('d-none', trigger.value !== 'before_event');
+        const offsetLabel = row.querySelector('.ann-offset-label');
+        const toggleOffset = () => {
+            const v = trigger.value;
+            offsetGroup.classList.toggle('d-none', v !== 'before_event' && v !== 'after_event');
+            if (offsetLabel) offsetLabel.textContent = v === 'after_event' ? 'Minutes After' : 'Minutes Before';
+        };
         trigger.addEventListener('change', toggleOffset);
         toggleOffset();
     }
@@ -932,6 +1047,7 @@ function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, st
     uploadBtn.addEventListener('click', async () => {
         const file = fileInput.files[0];
         if (!file) return;
+        let ok = false;
         uploadBtn.disabled = true;
         statusEl.className = 'small text-info';
         statusEl.textContent = 'Uploading…';
@@ -950,6 +1066,7 @@ function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, st
                 statusEl.className = 'small text-success';
                 statusEl.textContent = 'Uploaded!';
                 fileInput.value = '';
+                ok = true;
             } else {
                 statusEl.className = 'small text-danger';
                 statusEl.textContent = json.message || 'Upload failed';
@@ -958,8 +1075,17 @@ function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, st
             statusEl.className = 'small text-danger';
             statusEl.textContent = 'Upload failed';
         }
-        uploadBtn.disabled = true;
-        setTimeout(() => statusEl.classList.add('d-none'), 4000);
+
+        // A failed upload leaves the form looking perfectly fine while the
+        // image field stays empty, so the event saves with no banner and
+        // nothing says why.  Keep the reason on screen and let them retry the
+        // file they already picked; only the success note auto-hides.
+        if (ok) {
+            uploadBtn.disabled = true;
+            setTimeout(() => statusEl.classList.add('d-none'), 4000);
+        } else {
+            uploadBtn.disabled = !fileInput.files.length;
+        }
     });
 
     manual.addEventListener('change', () => setUrl(manual.value.trim()));
@@ -974,4 +1100,18 @@ function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, st
 }
 setupImageUpload('bannerUrlInput', 'bannerFileInput', 'bannerUploadBtn', 'bannerUrlManual', 'bannerPreview', 'bannerUploadStatus', 'bannerClearBtn', 'zander/events/banners');
 setupImageUpload('logoUrlInput', 'logoFileInput', 'logoUploadBtn', 'logoUrlManual', 'logoPreview', 'logoUploadStatus', 'logoClearBtn', 'zander/events/logos');
+</script>
+
+<script>
+// Mirrors the event editor: the rank panel only applies to "rank" visibility,
+// but stays in the DOM so toggling away and back does not lose the selection.
+(function initTemplateRankLockPanel() {
+    const select = document.getElementById('tmplVisibilitySelect');
+    const panel  = document.getElementById('tmplRankLockPanel');
+    if (!select || !panel) return;
+
+    const sync = () => { panel.style.display = select.value === 'rank' ? '' : 'none'; };
+    select.addEventListener('change', sync);
+    sync();
+})();
 </script>

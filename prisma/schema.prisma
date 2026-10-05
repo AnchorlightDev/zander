@@ -143,11 +143,20 @@ model users {
   audit_lastDiscordPunishment  DateTime?
   audit_lastWebsiteLogin       DateTime?
 
+  /// IANA zone name. Decides which day "today" is for this user.
+  timezone                     String?                    @db.VarChar(64)
+  /// Day and month only -- deliberately no year. See 0058.
+  birthdayDay                  Int?                       @db.UnsignedTinyInt
+  birthdayMonth                Int?                       @db.UnsignedTinyInt
+  /// Local year the birthday rank last fired, so the hourly job grants once.
+  birthdayLastGrantedYear      Int?                       @db.UnsignedSmallInt
+
   emailVerifications           userEmailVerifications[]
   passwordResets               userPasswordResets[]
 
   @@index([username])
   @@index([discordId])
+  @@index([birthdayMonth, birthdayDay], map: "users_birthday_idx")
 }
 
 model userEmailVerifications {
@@ -300,6 +309,7 @@ model servers {
   serverId              Int                 @id @default(autoincrement())
   displayName           String?             @db.Text
   serverConnectionAddress String?           @db.Text
+  bedrockAddress        String?             @db.VarChar(255)
   serverType            servers_serverType?
   position              Int?
 }
@@ -321,6 +331,8 @@ model gameSessions {
 
 model announcements {
   announcementId     Int                  @id @default(autoincrement())
+  /// NULL for rows that predate 0057_announcement_created_at; see that migration.
+  createdAt          DateTime?
   enabled            Boolean              @default(true)
   announcementType   announcements_type?
   body               String?              @db.Text
@@ -356,6 +368,126 @@ model applications {
   redirectUrl          String? @db.Text
   position             Int?
   applicationStatus    Boolean @default(false)
+  applicationType      String  @default("external") @db.VarChar(20)
+  linkedFormId         Int?
+
+  linkedForm           forms?  @relation(fields: [linkedFormId], references: [formId], onDelete: SetNull)
+
+  @@index([linkedFormId], map: "applications_linkedFormId_fkey")
+}
+
+model forms {
+  formId           Int      @id @default(autoincrement())
+  name             String   @db.VarChar(100)
+  slug             String   @unique(map: "forms_slug_key") @db.VarChar(100)
+  description      String?  @db.Text
+  status           Boolean  @default(false)
+  successMessage   String?  @db.Text
+  discordChannelId String?  @db.VarChar(255)
+  discordForumChannelId String? @db.VarChar(255)
+  notifyDiscordUserIds  Json?
+  allowMultiple    Boolean  @default(false)
+  requiresReview   Boolean  @default(true)
+  accessCode          String?  @db.VarChar(190)
+  requirements        Json?
+  useGlobalRequirements Boolean @default(false)
+  reapplyCooldownDays Int?
+  createTicket     Boolean  @default(false)
+  ticketCategoryId Int?
+  ticketPendingMessage  String? @db.Text
+  ticketApprovedMessage String? @db.Text
+  ticketDeniedMessage   String? @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  fields           formFields[]
+  submissions      formSubmissions[]
+  drafts           formDrafts[]
+  applications     applications[]
+  ticketCategory   supportTicketCategories? @relation(fields: [ticketCategoryId], references: [categoryId], onDelete: SetNull)
+
+  @@index([ticketCategoryId], map: "forms_ticketCategoryId_fkey")
+}
+
+model formFields {
+  fieldId     Int     @id @default(autoincrement())
+  formId      Int
+  label       String  @db.VarChar(255)
+  fieldKey    String  @db.VarChar(64)
+  fieldType   String  @default("text") @db.VarChar(32)
+  placeholder String? @db.VarChar(255)
+  helpText    String? @db.Text
+  options     Json?
+  isRequired  Boolean @default(false)
+  maxLength   Int?
+  config      Json?
+  position    Int     @default(0)
+
+  form        forms   @relation(fields: [formId], references: [formId], onDelete: Cascade)
+
+  @@unique([formId, fieldKey], map: "formFields_formId_fieldKey_key")
+  @@index([formId, position], map: "formFields_formId_position_idx")
+}
+
+/// Autosaved, unsubmitted answers -- one row per person per form, overwritten
+/// in place and deleted once the form is actually submitted.
+model formDrafts {
+  draftId   Int      @id @default(autoincrement())
+  formId    Int
+  userId    Int
+  answers   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  form      forms    @relation(fields: [formId], references: [formId], onDelete: Cascade)
+
+  @@unique([formId, userId], map: "formDrafts_formId_userId_key")
+  @@index([userId], map: "formDrafts_userId_idx")
+}
+
+model formSubmissions {
+  submissionId     Int       @id @default(autoincrement())
+  formId           Int
+  userId           Int
+  status           String    @default("pending") @db.VarChar(16)
+  answers          Json
+  reviewedBy       Int?
+  reviewNotes      String?   @db.Text
+  commentIsPublic  Boolean   @default(false)
+  reviewedAt       DateTime?
+  discordMessageId String?   @db.VarChar(255)
+  discordThreadId  String?   @db.VarChar(255)
+  ticketId         Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
+
+  form             forms           @relation(fields: [formId], references: [formId], onDelete: Cascade)
+  ticket           supportTickets? @relation(fields: [ticketId], references: [ticketId], onDelete: SetNull)
+
+  @@index([ticketId], map: "formSubmissions_ticketId_idx")
+
+  @@index([formId, status], map: "formSubmissions_formId_status_idx")
+  @@index([userId], map: "formSubmissions_userId_idx")
+}
+
+/// Daily Discord message counts. A rollup, not a message log: no content and
+/// no per-message timestamps are kept -- see 0050_discord_activity_daily.
+model discordActivityDaily {
+  id            Int      @id @default(autoincrement())
+  discordUserId String   @db.VarChar(24)
+  activityDate  DateTime @db.Date
+  messageCount  Int      @default(0)
+
+  @@unique([discordUserId, activityDate], map: "discordActivityDaily_user_date_key")
+  @@index([discordUserId, activityDate], map: "discordActivityDaily_user_date_idx")
+}
+
+/// Generic site-wide settings, one JSON value per named key. See
+/// 0056_site_settings_and_global_requirements.
+model siteSettings {
+  settingKey   String   @id @db.VarChar(100)
+  settingValue Json?
+  updatedAt    DateTime @default(now()) @updatedAt
 }
 
 model reports {
@@ -563,6 +695,7 @@ model supportTicketCategories {
 
   tickets     supportTickets[]
   permissions supportTicketCategoryPermissions[]
+  forms       forms[]
 }
 
 model supportTickets {
@@ -577,6 +710,7 @@ model supportTickets {
 
   category         supportTicketCategories @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
   messages         supportTicketMessages[]
+  formSubmissions  formSubmissions[]
 }
 
 model supportTicketMessages {
@@ -630,12 +764,20 @@ model events {
   title               String    @db.VarChar(255)
   slug                String    @unique @db.VarChar(300)
   description         String?   @db.LongText
+  /// Shown in place of `description` to anyone who cannot see a rank-locked
+  /// event -- website, Discord embed and Discord scheduled event alike.
+  /// NULL falls back to generated lock copy.
+  teaserDescription   String?   @db.LongText
   eventType           String    @default("once") @db.VarChar(32)
   startAt             DateTime
   endAt               DateTime
   timezone            String    @default("UTC") @db.VarChar(64)
   status              String    @default("draft") @db.VarChar(32)
+  /// "public" | "private" | "rank" — "rank" restricts the detail view to the
+  /// LuckPerms groups listed in rankAccess.
   visibility          String    @default("public") @db.VarChar(32)
+  /// Rank-locked events only: show a locked teaser publicly, or hide entirely.
+  teaserPublic        Boolean   @default(true)
   locationLabel       String?   @db.VarChar(255)
   locationType        String?   @db.VarChar(32)
   locationDiscordChannelId String? @db.VarChar(64)
@@ -669,12 +811,25 @@ model events {
   actions             event_actions[]
   announcements       event_announcements[]
   auditLogs           event_audit_logs[]
+  rankAccess          event_rank_access[]
+}
+
+model event_rank_access {
+  id       Int    @id @default(autoincrement())
+  eventId  Int
+  rankSlug String @db.VarChar(64)
+
+  event    events @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+
+  @@unique([eventId, rankSlug])
+  @@index([rankSlug])
 }
 
 model event_templates {
   templateId          Int       @id @default(autoincrement())
   title               String    @db.VarChar(255)
   description         String?   @db.LongText
+  teaserDescription   String?   @db.LongText
   defaultStartTime    String?   @db.VarChar(8)
   defaultEndTime      String?   @db.VarChar(8)
   defaultDurationMins Int?
@@ -696,6 +851,9 @@ model event_templates {
   tags                Json?
   creatorId           Int
   isActive            Boolean   @default(true)
+  /// Defaults applied to every draft this template generates — see events.
+  visibility          String    @default("public") @db.VarChar(32)
+  teaserPublic        Boolean   @default(true)
   deletedAt           DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
@@ -703,6 +861,17 @@ model event_templates {
   events              events[]
   defaultHosts        event_template_hosts[]
   announcements       event_template_announcements[]
+  rankAccess          event_template_rank_access[]
+}
+
+model event_template_rank_access {
+  id         Int             @id @default(autoincrement())
+  templateId Int
+  rankSlug   String          @db.VarChar(64)
+
+  template   event_templates @relation(fields: [templateId], references: [templateId], onDelete: Cascade)
+
+  @@unique([templateId, rankSlug])
 }
 
 model event_template_announcements {
@@ -725,6 +894,25 @@ model event_template_announcements {
   updatedAt           DateTime @updatedAt
 
   template            event_templates @relation(fields: [templateId], references: [templateId], onDelete: Cascade)
+}
+
+model event_default_announcements {
+  id                  Int      @id @default(autoincrement())
+  label               String?  @db.VarChar(100)
+  announcementType    String   @default("reminder") @db.VarChar(32)
+  platform            String   @default("discord") @db.VarChar(32)
+  channelId           String?  @db.VarChar(32)
+  contentTemplate     String?  @db.Text
+  body                String?  @db.Text
+  colourMessageFormat String?  @db.Text
+  link                String?  @db.Text
+  popupButtonText     String?  @db.VarChar(60)
+  popupImageUrl       String?  @db.Text
+  triggerType         String   @default("before_event") @db.VarChar(32)
+  offsetMinutes       Int?
+  enabled             Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model event_template_hosts {
@@ -784,6 +972,7 @@ model event_announcements {
   sentAt          DateTime?
   lastError       String?  @db.Text
   discordMessageId String? @db.VarChar(32)
+  linkedAnnouncementId Int?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1248,6 +1437,8 @@ model financeOperationsBudget {
   iconImageUrl        String?  @db.VarChar(500)
   notes               String?  @db.Text
   isActive            Int      @default(1) @db.TinyInt
+  removedFromYear     Int?     @db.SmallInt
+  removedFromMonth    Int?     @db.TinyInt
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -1307,4 +1498,37 @@ model financeMonthlyReports {
 
   @@unique([year, month])
   @@index([isPublished])
+}
+
+/// Per-client API credentials.  Replaces the single app-wide `apiKey`: each
+/// caller (Minecraft server, uptime monitor, this app's own internal calls)
+/// gets its own key with an explicit scope list so it can be revoked alone.
+/// Only the SHA-256 hash of the full key is stored.
+model apiClients {
+  clientId        Int       @id @default(autoincrement())
+  name            String    @db.VarChar(100)
+  description     String?   @db.VarChar(255)
+  keyPrefix       String    @unique @db.VarChar(20)
+  keyHash         String    @db.Char(64)
+  scopes          String    @db.Text
+  isRevoked       Int       @default(0) @db.TinyInt
+  lastUsedAt      DateTime?
+  lastUsedIp      String?   @db.VarChar(45)
+  createdAt       DateTime  @default(now())
+  createdByUserId Int?
+  revokedAt       DateTime?
+
+  @@index([isRevoked])
+}
+
+model boosterRewardGrants {
+  grantId   Int      @id @default(autoincrement())
+  userId    Int
+  discordId String   @db.VarChar(32)
+  uuid      String   @db.VarChar(36)
+  rankGroup String   @db.VarChar(64)
+  grantedAt DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([userId, rankGroup])
+  @@index([discordId])
 }

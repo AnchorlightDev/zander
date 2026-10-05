@@ -5,6 +5,8 @@
 
 <%- include("../navigationBar.ejs") %>
 
+<% const eventLock = (typeof lock !== 'undefined' && lock) ? lock : null; %>
+
 <% if (typeof isPreview !== 'undefined' && isPreview) { %>
 <div class="alert alert-warning text-center mb-0 rounded-0 border-start-0 border-end-0 border-top-0" role="alert" style="position:relative;z-index:1050;">
     <i class="fas fa-eye me-2"></i><strong>Preview Mode</strong> — This is how the event will appear to the public. It is not yet visible to visitors.
@@ -14,13 +16,29 @@
 </div>
 <% } %>
 
+<%#
+    Banner hero.
+
+    Rendered as a real <img> at its natural aspect ratio rather than a
+    fixed-height background.  The old version was height:320px with
+    background-size:cover, which on a phone cropped a wide banner down to its
+    centre fifth, and on a wide desktop cut a third off a 4:1 banner.  Letting
+    the image keep its own ratio means whatever an organiser uploads is shown
+    whole, at any width.
+
+    The title overlays the image only from md up, where there is vertical room
+    for it; on a phone the banner would be too short to read a title over, so
+    it sits underneath in normal flow.
+%>
 <% if (event.bannerUrl) { %>
-<div style="background:url('<%= event.bannerUrl %>') center/cover no-repeat;height:320px;position:relative;overflow:hidden;">
-    <div style="position:absolute;inset:0;background:linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.85) 100%);"></div>
-    <div class="container h-100 d-flex align-items-end pb-4 position-relative">
-        <div>
-            <% if (event.featured) { %><span class="badge bg-warning text-dark mb-2"><i class="fas fa-star me-1"></i>Featured</span><br><% } %>
-            <h1 class="fw-bold mb-0" style="color:#ffffff;font-size:clamp(1.5rem, 4vw, 2.5rem);text-shadow:0 2px 12px rgba(0,0,0,0.8);"><%= event.title %></h1>
+<div class="event-hero">
+    <img src="<%= event.bannerUrl %>" alt="<%= event.title %>" class="event-hero-img">
+    <div class="event-hero-caption">
+        <div class="container">
+            <% if (event.featured) { %><span class="badge bg-warning text-dark mb-2"><i class="fas fa-star me-1"></i>Featured</span><% } %>
+            <% if (eventLock) { %><span class="badge <%= eventLock.supporter ? 'bg-success' : 'bg-secondary' %> mb-2 ms-1"><i class="fas fa-lock me-1"></i><%= eventLock.heading %></span><% } %>
+            <% if (event.featured || eventLock) { %><br><% } %>
+            <h1 class="event-hero-title fw-bold mb-0"><%= event.title %></h1>
         </div>
     </div>
 </div>
@@ -29,12 +47,54 @@
 <% } %>
 
 <style>
+.event-hero { position: relative; background: #1c2f53; }
+.event-hero-img {
+    display: block;
+    width: 100%;
+    height: auto;              /* natural ratio -- never crops */
+    /* Sized so the recommended 1280x512 (5:2) banner shows whole at a typical
+       desktop width. Beyond that it trims evenly top and bottom rather than
+       growing past the fold before any event detail is visible -- which is why
+       the editor tells organisers to keep key artwork centred. */
+    max-height: 520px;
+    object-fit: cover;
+    object-position: center;
+}
+.event-hero-caption { padding: 1rem 0; }
+.event-hero-title { font-size: clamp(1.35rem, 5vw, 2.5rem); }
+
+@media (min-width: 768px) {
+    .event-hero-caption {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding-bottom: 1.5rem;
+        background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.85) 100%);
+        padding-top: 4rem;
+    }
+    .event-hero-title {
+        color: #ffffff;
+        text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+    }
+}
+
 .event-description img { max-width: 100%; }
 .event-description p:last-child { margin-bottom: 0; }
 .info-row { display: flex; gap: .75rem; padding: .6rem 0; border-bottom: 1px solid var(--bs-border-color); }
 .info-row:last-child { border-bottom: none; }
 .info-icon { width: 1.25rem; flex-shrink: 0; text-align: center; margin-top: .1rem; }
 .btn-xs { padding: 0.15rem 0.4rem; font-size: 0.75rem; }
+.lock-panel {
+    border: 1px dashed var(--bs-border-color);
+    border-radius: .75rem;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+}
+.lock-panel-icon {
+    width: 56px; height: 56px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+}
 </style>
 
 <div class="container py-5">
@@ -43,7 +103,32 @@
         <!-- Main Content -->
         <div class="col-lg-8">
 
-            <% if (event.description) { %>
+            <% if (eventLock) { %>
+            <div class="card border-0 shadow-sm mb-4 lock-panel">
+                <div class="card-body p-4 text-center">
+                    <div class="lock-panel-icon mx-auto mb-3 <%= eventLock.supporter ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' %>">
+                        <i class="fas fa-lock fa-lg"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2"><%= eventLock.heading %></h5>
+                    <%#
+                        redactLockedEvent swaps the gated description for the
+                        organiser's teaser copy when one was written, so prefer
+                        it here and keep the generated line as the fallback.
+                        Sanitized on write in eventService, same as description.
+                    %>
+                    <% if (event.description) { %>
+                    <div class="event-description text-start mx-auto" style="max-width:52ch;"><%- event.description %></div>
+                    <% } else { %>
+                    <p class="text-muted mb-0 mx-auto" style="max-width:46ch;"><%= eventLock.body %></p>
+                    <% } %>
+                    <% if (eventLock.ctaUrl) { %>
+                    <a href="<%= eventLock.ctaUrl %>" class="btn <%= eventLock.supporter ? 'btn-success' : 'btn-primary' %> mt-3">
+                        <% if (eventLock.supporter) { %><i class="fas fa-heart me-2"></i><% } %><%= eventLock.ctaLabel %>
+                    </a>
+                    <% } %>
+                </div>
+            </div>
+            <% } else if (event.description) { %>
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-body p-4">
                     <h5 class="fw-bold mb-3"><i class="fas fa-info-circle me-2 text-primary"></i>About This Event</h5>
@@ -162,11 +247,25 @@
                     <% } %>
 
                     <!-- Calendar -->
+                    <% if (eventLock) { %>
+                    <div class="d-grid">
+                        <% if (eventLock.ctaUrl) { %>
+                        <a href="<%= eventLock.ctaUrl %>" class="btn <%= eventLock.supporter ? 'btn-success' : 'btn-primary' %> btn-sm">
+                            <i class="fas fa-unlock me-2"></i><%= eventLock.ctaLabel %>
+                        </a>
+                        <% } else { %>
+                        <span class="text-muted small d-block text-center">
+                            <i class="fas fa-lock me-1"></i>Restricted to <%= eventLock.rankList %>
+                        </span>
+                        <% } %>
+                    </div>
+                    <% } else { %>
                     <div class="d-grid">
                         <a href="<%= gcalUrl %>" target="_blank" rel="noopener noreferrer" class="btn btn-outline-danger btn-sm">
                             <i class="fab fa-google me-2"></i>Add to Google Calendar
                         </a>
                     </div>
+                    <% } %>
                 </div>
             </div>
         </div>
@@ -199,3 +298,46 @@ document.querySelectorAll('.js-datetime-relative').forEach(el => {
     else el.textContent = 'Starting now!';
 });
 </script>
+
+<script>
+// Localise Discord <t:...> timestamps rendered by lib/discordTimestamps.js.
+document.querySelectorAll('.js-discord-ts').forEach(function (el) {
+    var seconds = Number(el.dataset.ts);
+    if (!Number.isFinite(seconds)) return;
+    var d = new Date(seconds * 1000);
+    if (isNaN(d)) return;
+    var style = el.dataset.tsStyle || 'f';
+
+    if (style === 'R') {
+        var diff = d.getTime() - Date.now();
+        var future = diff >= 0;
+        var abs = Math.abs(diff);
+        var units = [
+            ['year', 31536000000], ['month', 2592000000], ['day', 86400000],
+            ['hour', 3600000], ['minute', 60000], ['second', 1000],
+        ];
+        var label = 'now';
+        for (var i = 0; i < units.length; i++) {
+            var n = Math.floor(abs / units[i][1]);
+            if (n >= 1) {
+                label = n + ' ' + units[i][0] + (n === 1 ? '' : 's');
+                label = future ? 'in ' + label : label + ' ago';
+                break;
+            }
+        }
+        el.textContent = label;
+        el.title = d.toLocaleString();
+        return;
+    }
+
+    var opts = {
+        t: { hour: '2-digit', minute: '2-digit' },
+        T: { hour: '2-digit', minute: '2-digit', second: '2-digit' },
+        d: { year: 'numeric', month: '2-digit', day: '2-digit' },
+        D: { year: 'numeric', month: 'long', day: 'numeric' },
+        f: { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' },
+        F: { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' },
+    }[style] || { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+
+    el.textContent = d.toLocaleString(undefined, opts);
+});</script>

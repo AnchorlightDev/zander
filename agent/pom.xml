@@ -6,17 +6,15 @@
 
     <groupId>dev.anchorlight</groupId>
     <artifactId>zander</artifactId>
-    <version>1.4.0</version>
+    <version>2.1.0</version>
     <packaging>pom</packaging>
 
     <modules>
-        <!-- <module>zander-waterfall</module> -->
-            <!-- Decomissioned Waterfall in v1.3.0 -->
         <module>zander-velocity</module>
         <module>zander-hub</module>
         <module>zander-auth</module>
         <module>zander-addon</module>
-        <module>zander-pgm</module>
+        <!-- zander-pgm is deferred out of 2.0.0 — see the feat-deferred-features branch -->
     </modules>
 
     <properties>
@@ -34,7 +32,17 @@
                 <executions>
                     <execution>
                         <id>copy-artifacts</id>
-                        <phase>package</phase>
+                        <!--
+                            verify, not package. maven-shade-plugin binds to
+                            package and replaces the module's jar with the
+                            shaded one, and this inherited execution ran before
+                            it — so the last module in the reactor had its
+                            pre-shade jar collected here, missing every bundled
+                            dependency. Earlier modules were corrected by
+                            accident when a later module re-globbed the tree.
+                            verify runs after package, so the artifact is final.
+                        -->
+                        <phase>verify</phase>
                         <goals>
                             <goal>run</goal>
                         </goals>

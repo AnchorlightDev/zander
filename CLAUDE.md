@@ -9,7 +9,7 @@ zander-web is the web + Discord-bot component of the Zander project: a Fastify w
 ## Commands
 
 ```bash
-npm run dev     # nodemon, local development
+npm run dev     # node --watch, local development (restarts on server code changes)
 npm run prod    # production start (app.js directly, larger heap, experimental JSON modules)
 npm run build   # npm install + prisma migrate deploy + prisma generate — used by the deploy pipeline
 npm test        # vitest run (tests/unit + tests/integration, *.test.mjs / *.test.js)
@@ -17,7 +17,7 @@ npm test        # vitest run (tests/unit + tests/integration, *.test.mjs / *.tes
 
 Run a single test file: `npx vitest run tests/unit/permissions.test.mjs`
 
-Database schema changes are Prisma-migration-only (no ORM query usage at runtime for most tables — see below). Add a new folder under `prisma/migrations/NNNN_description/migration.sql` (numeric-prefixed, sequential) and run `npx prisma migrate deploy`. `config.json` and `.env` are gitignored; copy `config.json.example` as a starting point.
+Database schema changes are Prisma-migration-only (no ORM query usage at runtime for most tables — see below). Add a new folder under `prisma/migrations/NNNN_description/migration.sql` (numeric-prefixed, sequential) and run `npx prisma migrate deploy`. `.env` is gitignored. There is no `config.json` or `features.json` — see Config layering.
 
 ## Architecture
 
@@ -39,9 +39,10 @@ Several *other* databases are connected via raw connection URLs (`LUCKPERMS_URL`
 
 ### Config layering
 
-- `config.json` (gitignored, copy from `config.json.example`) — non-secret operational config, loaded via CommonJS `createRequire` at the top of any file that needs it (`const require = createRequire(import.meta.url); const config = require("../config.json");`), since the project is `"type": "module"` but `config.json` is loaded as CJS.
-- `features.json` — boolean feature flags gating entire modules/routes (e.g. `features.webstore`, `features.events`). Check this before assuming a module is reachable.
-- `.env` — secrets and connection strings, read via `process.env.X` (dotenv loaded once in `app.js`/`api/common.js`). Never put secrets in `config.json`.
+- **Site settings and module switches live in the database**, edited at `/dashboard/settings` (`zander.web.settings`) and `/dashboard/modules` (`zander.web.modules`). There is no `config.json` or `features.json`. Load them with `const config = require("../lib/config/config.cjs")` / `require("../lib/config/features.cjs")` (via `createRequire`, since the project is `"type": "module"`). Every module shares the same two objects; `controllers/configSettingsController.js` writes the saved values into them at boot and on save, so read `config.x.y` / `features.x` at use time rather than copying at import.
+- Layers: built-in defaults (`lib/config/defaults.cjs`) → a legacy `config.json`/`features.json` imported once into `siteSettings` (`legacy.config` / `legacy.features`) on the first boot that finds one on disk → per-field edits (`config:<path>` / `feature:<path>` rows). To add a setting: give it a default in `defaults.cjs`, and if staff should edit it, add it to `lib/config/settingsRegistry.mjs` (mark `restart: true` if a module copies it at import). New module switches only need a default in `defaults.cjs`. `web.login` cannot be switched from the dashboard, so nobody can lock themselves out.
+- Feature flags gate entire modules/routes (e.g. `features.webstore`, `features.events`). Check the flag before assuming a module is reachable.
+- `.env` — secrets and connection strings, read via `process.env.X` (dotenv loaded once in `app.js`/`api/common.js`). Never put secrets in site settings.
 - `lang.json` — user-facing string overrides.
 
 ### Module pattern (self-contained feature slices)
@@ -52,7 +53,7 @@ Larger features (Webstore, Events, Finance, Watch/creator content) each follow t
 
 Permissions are dot-notation LuckPerms nodes (e.g. `zander.web.webstore`), checked via `hasPermission(node, req, res, features)` from `api/common.js` for dashboard routes. Wildcards (`zander.web.*`, `*`) grant broader access — always check for both the specific node and its wildcard ancestors when writing new permission checks; the matching logic lives in `hasPermission` in `api/common.js`. Full permission node reference is in `README.md`.
 
-Plugin-to-server ingestion endpoints use the app-wide `apiKey` Bearer-token scheme, not session auth — see `api/routes/verifyToken.js`.
+Plugin-to-server ingestion endpoints use **per-client API credentials**, not session auth — see `api/routes/verifyToken.js`. Each caller (a Minecraft server, the uptime monitor, this app's own internal self-calls) has a row in `apiClients` holding a SHA-256 hash of its key plus an explicit scope list; keys look like `zdr_<prefix>_<secret>` and are matched by the non-secret prefix, then verified with `crypto.timingSafeEqual`. Scopes are coarse, one per API surface, with no wildcard — an unmapped path fails closed. Key format and scope resolution live in `lib/apiKeys.js` (no DB import, so it is unit-testable); the database side is `controllers/apiClientController.js`. Manage clients at `/dashboard/apikeys` (`zander.web.apikeys`). This app authenticates its own self-calls with `INTERNAL_API_KEY` via `internalApiHeaders()` in `api/common.js` — never reintroduce a shared `process.env.apiKey`. There is no shared-key fallback: a token that is not a well-formed `zdr_` client key is rejected with 401.
 
 ### Views
 

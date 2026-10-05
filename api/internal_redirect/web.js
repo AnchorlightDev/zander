@@ -1,3 +1,8 @@
+// TODO: These proxies authenticate an HTTP round trip from this app back to
+// itself, which is why the app has to hold an API credential at all. The
+// long-term fix is to call the underlying controller function directly
+// in-process and drop the self-call entirely; until then this route depends on
+// the `zander-web-internal` client in INTERNAL_API_KEY.
 import { postAPIRequest } from "../common.js";
 
 export default function webRedirectRoute(app, config, lang, features) {
@@ -24,6 +29,22 @@ export default function webRedirectRoute(app, config, lang, features) {
     // Make the API request
     await postAPIRequest(
       `${process.env.siteAddress}/api/user/profile/display`,
+      req.body,
+      `${process.env.siteAddress}/`,
+      res
+    );
+
+    if (!res.sent) {
+      return res.redirect(`${process.env.siteAddress}/profile/${req.session.user.username}`);
+    }
+    return res;
+  });
+
+  app.post(baseEndpoint + "/user/profile/personal", async function (req, res) {
+    req.body.userId = req.session.user.userId;
+
+    await postAPIRequest(
+      `${process.env.siteAddress}/api/user/profile/personal`,
       req.body,
       `${process.env.siteAddress}/`,
       res

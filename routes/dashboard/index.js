@@ -18,6 +18,13 @@ import dashboardUsersRoute from "./users.js";
 import dashboardFinanceRoute from "./finance.js";
 import dashboardWebstoreRoute from "./webstore.js";
 import dashboardRankCatalogRoute from "./rankCatalog.js";
+import dashboardWebstoreCategoriesRoute from "./webstoreCategories.js";
+import dashboardWebstoreProductsRoute from "./webstoreProducts.js";
+import dashboardApiClientsRoute from "./apiClients.js";
+import dashboardSettingsRoute from "./settings.js";
+import dashboardModulesRoute from "./modules.js";
+import dashboardFormsRoute from "./forms.js";
+import { hasStaffFlag } from "../../lib/permissions/staffFlag.mjs";
 
 export default function dashboardSiteRoutes(
   app,
@@ -53,9 +60,7 @@ export default function dashboardSiteRoutes(
 
     req.session.user.permissions = refreshedPermissions;
     req.session.user.ranks = rankSlugs.map((rankSlug) => ({ rankSlug }));
-    req.session.user.isStaff = refreshedPermissions.some(
-      (permission) => permission && String(permission).trim().toLowerCase().startsWith("meta.staff.")
-    );
+    req.session.user.isStaff = hasStaffFlag(refreshedPermissions);
     req.session.user.permissionsRefreshedAt = Date.now();
   }
 
@@ -97,4 +102,10 @@ export default function dashboardSiteRoutes(
   dashboardFinanceRoute(app, fetch, config, db, features, lang);
   dashboardWebstoreRoute(app, fetch, config, db, features, lang);
   dashboardRankCatalogRoute(app, config, db, features, lang);
+  dashboardWebstoreCategoriesRoute(app, config, db, features, lang);
+  dashboardWebstoreProductsRoute(app, config, db, features, lang);
+  dashboardApiClientsRoute(app, config, db, features, lang);
+  dashboardSettingsRoute(app, config, db, features, lang);
+  dashboardModulesRoute(app, config, db, features, lang);
+  dashboardFormsRoute(app, config, db, features, lang);
 }

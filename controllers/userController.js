@@ -488,6 +488,30 @@ export async function setProfileDisplayPreferences(
   );
 }
 
+/**
+ * Timezone and birthday.
+ *
+ * Both optional and both nullable -- clearing them is a supported action, not
+ * an error, so nulls are written rather than skipped. Validation happens in
+ * lib/birthday.mjs and lib/timezones.mjs before this is called; anything that
+ * did not survive it arrives here as null.
+ */
+export async function setProfileUserPersonal(userId, { timezone, birthdayDay, birthdayMonth }) {
+  return new Promise((resolve, reject) => {
+    db.query(
+      `UPDATE users SET timezone = ?, birthdayDay = ?, birthdayMonth = ? WHERE userId = ?`,
+      [timezone ?? null, birthdayDay ?? null, birthdayMonth ?? null, userId],
+      (error) => {
+        if (error) {
+          console.error("Failed to update profile personal details", error);
+          return reject(error);
+        }
+        resolve(true);
+      }
+    );
+  });
+}
+
 export async function setProfileUserInterests(
   userId,
   social_interests
@@ -812,6 +836,32 @@ export async function getUserStats(userId) {
   };
 }
 
+/**
+ * Total playtime in raw seconds.
+ *
+ * getUserStats returns the same figure already, but run through
+ * convertSecondsToDuration into something like "3 hours" -- fine to print,
+ * useless to compare against a threshold. Parsing that string back into a
+ * number would break the moment the wording changed, so the requirements
+ * engine reads the seconds from here instead.
+ */
+export async function getUserPlaytimeSeconds(userId) {
+  const rows = await new Promise((resolve, reject) => {
+    db.query(
+      `SELECT SUM(TIME_TO_SEC(TIMEDIFF(COALESCE(sessionEnd, NOW()), sessionStart))) AS totalSeconds
+       FROM gameSessions WHERE userId = ?`,
+      [userId],
+      function (err, results) {
+        if (err) return reject(err);
+        resolve(results);
+      }
+    );
+  });
+
+  // SUM over no rows is NULL, which is a player who has never joined.
+  return Number(rows?.[0]?.totalSeconds ?? 0) || 0;
+}
+
 export function convertSecondsToDuration(seconds) {
   const MINUTE = 60;
   const HOUR = 60 * MINUTE;
@@ -1091,6 +1141,26 @@ async function repointUserReferences(fromUserId, toUserId) {
 
     Returns a summary object describing what was moved (for logging).
 */
+/**
+ * Decides what to do when the Discord account being linked is already held by
+ * a different users row.
+ *
+ * A placeholder ("ghost") row is the same person — createUnlinkedUser() made it
+ * from Discord before they had a Minecraft account attached — so it should be
+ * absorbed, not treated as a rival account. Refusing instead is what leaves a
+ * player split across two rows: ranks on one, the Discord link on the other,
+ * which silently breaks rank-to-Discord-role sync.
+ *
+ * A link held by a *real* account must still be refused — absorbing that would
+ * be an account takeover.
+ *
+ * @returns {"none"|"absorb"|"refuse"}
+ */
+export function resolveDiscordLinkConflict(existingLink, currentUserId) {
+  if (!existingLink || existingLink.userId === currentUserId) return "none";
+  return existingLink.is_placeholder ? "absorb" : "refuse";
+}
+
 export async function mergePlaceholderUser(placeholderUserId, survivingUserId) {
   if (!placeholderUserId || !survivingUserId || placeholderUserId === survivingUserId) {
     throw new Error("mergePlaceholderUser requires two distinct user ids");

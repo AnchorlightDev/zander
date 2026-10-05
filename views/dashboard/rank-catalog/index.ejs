@@ -12,6 +12,9 @@
           <a href="/ranks" target="_blank" class="btn btn-sm btn-outline-secondary">
             <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>View Page
           </a>
+          <a href="/dashboard/webstore/categories" class="btn btn-sm btn-outline-secondary">
+            <i class="fa-solid fa-tags me-1"></i>Categories
+          </a>
           <a href="/dashboard/rank-catalog/create" class="btn btn-sm btn-primary">
             <i class="fa-solid fa-plus me-1"></i>Add Entry
           </a>
@@ -20,19 +23,33 @@
 
       <%- include("../../admin/_notices.ejs") %>
 
-      <% if (!entries || !entries.length) { %>
+      <% if (!categoryGroups || !categoryGroups.length) { %>
         <div class="alert alert-info">
-          No rank catalog entries yet.
-          <a href="/dashboard/rank-catalog/create" class="alert-link">Add your first entry</a> to populate the public ranks page.
+          No categories yet.
+          <a href="/dashboard/webstore/categories" class="alert-link">Create a category</a> first —
+          every product belongs to one.
         </div>
       <% } else { %>
 
         <% categoryGroups.forEach(function(group) { %>
           <div class="card shadow-sm mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
-              <span class="fw-semibold"><%= group.name %></span>
+              <span class="fw-semibold">
+                <%= group.name %>
+                <% if (group.visible === false) { %>
+                  <span class="badge bg-warning text-dark ms-2" title="This whole category is hidden from the ranks page, whatever each product below is set to.">
+                    <i class="fa-solid fa-eye-slash me-1"></i>Category hidden
+                  </span>
+                <% } %>
+              </span>
               <span class="badge bg-secondary"><%= group.items.length %> <%= group.items.length === 1 ? 'entry' : 'entries' %></span>
             </div>
+            <% if (!group.items.length) { %>
+              <div class="card-body text-muted small">
+                Nothing in this category yet.
+                <a href="/dashboard/rank-catalog/create">Add an entry</a> and pick it.
+              </div>
+            <% } else { %>
             <div class="table-responsive">
               <table class="table table-sm table-hover align-middle mb-0">
                 <thead class="table-light">
@@ -41,12 +58,13 @@
                     <th>Name</th>
                     <th>Stripe Prices</th>
                     <th>Perks</th>
+                    <th style="width:96px">Visible</th>
                     <th style="width:110px"></th>
                   </tr>
                 </thead>
                 <tbody>
                   <% group.items.forEach(function(entry) { %>
-                    <tr>
+                    <tr class="<%= entry.visible === false ? 'opacity-50' : '' %>">
                       <td class="text-muted"><%= entry.sortOrder %></td>
                       <td>
                         <% if (entry.imageUrl) { %>
@@ -67,6 +85,17 @@
                         <% } %>
                       </td>
                       <td class="text-muted small"><%= entry.perks ? entry.perks.length : 0 %> perks</td>
+                      <td>
+                        <%# One click to publish or pull a product, without reopening the form. %>
+                        <form method="post" action="/dashboard/rank-catalog/<%= entry.id %>/visibility" class="d-inline">
+                          <input type="hidden" name="visible" value="<%= entry.visible === false ? 'on' : 'off' %>">
+                          <button type="submit"
+                                  class="btn btn-sm <%= entry.visible === false ? 'btn-outline-secondary' : 'btn-outline-success' %>"
+                                  title="<%= entry.visible === false ? 'Hidden — click to show' : 'Visible — click to hide' %>">
+                            <i class="fa-solid <%= entry.visible === false ? 'fa-eye-slash' : 'fa-eye' %> fa-fw"></i>
+                          </button>
+                        </form>
+                      </td>
                       <td class="text-end">
                         <a href="/dashboard/rank-catalog/<%= entry.id %>/edit" class="btn btn-sm btn-outline-secondary me-1">
                           <i class="fa-solid fa-pencil fa-fw"></i>
@@ -83,6 +112,7 @@
                 </tbody>
               </table>
             </div>
+            <% } %>
           </div>
         <% }) %>
 

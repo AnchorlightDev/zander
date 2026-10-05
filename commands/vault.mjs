@@ -1,8 +1,8 @@
 import { Command, RegisterBehavior } from "@sapphire/framework";
-import { Colors, EmbedBuilder } from "discord.js";
+import { Colors, EmbedBuilder, MessageFlags } from "discord.js";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const features = require("../features.json");
+const features = require("../lib/config/features.cjs");
 
 export class RanksCommand extends Command {
   constructor(context, options) {
@@ -28,7 +28,7 @@ export class RanksCommand extends Command {
 
       return interaction.reply({
         embeds: [errorEmbed],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });      
     }
 

@@ -24,8 +24,8 @@ import { diffTrackedRoles } from "../lib/discord/rankRoleSync.mjs";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
-const features = require("../features.json");
+const config = require("../lib/config/config.cjs");
+const features = require("../lib/config/features.cjs");
 
 function queryDb(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -72,18 +72,27 @@ async function reconcileRankDiscordRoles() {
         // lib/discord/rankRoleSync.mjs normalizeUuid / services/profileService.js
         // getUserRanks for the same fix applied elsewhere).
         const lpRows = await queryLuckPermsDb(
-          `SELECT LOWER(uuid) AS uuid FROM luckperms_user_permissions
-            WHERE permission = ? AND value = 1
-              AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
+          `SELECT LOWER(lup.uuid) AS uuid, LOWER(lp.username) AS username
+             FROM luckperms_user_permissions lup
+             LEFT JOIN luckperms_players lp ON lp.uuid = lup.uuid
+            WHERE lup.permission = ? AND lup.value = 1
+              AND (lup.expiry IS NULL OR lup.expiry = 0 OR lup.expiry > UNIX_TIMESTAMP())`,
           [`group.${rank.rankSlug}`]
         );
         if (lpRows.length === 0) continue;
         anyRankHadMembers = true;
 
+        // Match on uuid only. A placeholder ("ghost") row's username is the
+        // person's self-chosen Discord handle, so matching placeholders by
+        // username let anyone claim a staff member's rank roles by copying
+        // their Minecraft name. Placeholders are skipped by the sweep below
+        // instead, so their roles are not stripped either.
         const uuids = lpRows.map((r) => r.uuid);
-        const placeholders = uuids.map(() => "?").join(", ");
+        const uuidPlaceholders = uuids.map(() => "?").join(", ");
         const webUsers = await queryDb(
-          `SELECT userId, discordId FROM users WHERE LOWER(uuid) IN (${placeholders}) AND discordId IS NOT NULL`,
+          `SELECT userId, discordId FROM users
+            WHERE discordId IS NOT NULL
+              AND LOWER(uuid) IN (${uuidPlaceholders})`,
           uuids
         );
 
@@ -119,8 +128,8 @@ async function reconcileRankDiscordRoles() {
       // privileged intent being disabled, or a slow chunk on a large guild.
       // Skip this run rather than surfacing it as a fatal reconciliation error.
       console.warn(
-        "[rankRoleSync-cron] Could not fetch guild members (%s). Skipping this run — check the GuildMembers privileged intent.",
-        err?.message || err
+        `[rankRoleSync-cron] Could not fetch guild members (${err?.message || err}). Skipping this run — ` +
+          "if this is not a rate limit, check the GuildMembers privileged intent."
       );
       return;
     }
@@ -131,8 +140,16 @@ async function reconcileRankDiscordRoles() {
       shouldHaveByDiscordId.set(discordId, [...roleIds]);
     }
 
+    // Unverified placeholder accounts are left as they are until merged into
+    // a real account -- see syncMemberRankRoles in lib/discord/rankRoleSync.mjs.
+    const placeholderRows = await queryDb(
+      `SELECT discordId FROM users WHERE is_placeholder = 1 AND discordId IS NOT NULL`
+    );
+    const placeholderDiscordIds = new Set(placeholderRows.map((r) => String(r.discordId)));
+
     let updated = 0;
     for (const [, member] of guild.members.cache) {
+      if (!shouldHaveByDiscordId.has(member.id) && placeholderDiscordIds.has(member.id)) continue;
       const shouldHaveRoleIds = shouldHaveByDiscordId.get(member.id) || [];
       const currentRoleIds = [...member.roles.cache.keys()];
       const { toAdd, toRemove } = diffTrackedRoles(currentRoleIds, shouldHaveRoleIds, trackedRoleIds);

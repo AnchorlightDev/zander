@@ -1,0 +1,71 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-puzzle-piece me-2"></i>Modules</h1>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (error) { %>
+        <div class="alert alert-danger"><%= error %></div>
+      <% } else { %>
+
+      <p class="text-muted">
+        Switch parts of the site and bot on or off. Changes apply straight away. A module you have not
+        changed here keeps its default.
+        <span class="badge bg-warning text-dark">Restart</span> means the change applies after the next deploy or restart.
+      </p>
+
+      <form method="post" action="/dashboard/modules">
+        <div class="row g-4">
+          <% groups.forEach(function (group) { %>
+            <div class="col-lg-6">
+              <div class="card shadow-sm h-100">
+                <div class="card-header fw-semibold"><%= group.title %></div>
+                <ul class="list-group list-group-flush">
+                  <% group.flags.forEach(function (flag) {
+                       const id = "m_" + flag.path.replace(/[^\w]/g, "_");
+                  %>
+                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                      <div class="me-3">
+                        <label class="fw-semibold mb-0" for="<%= id %>"><%= flag.label %></label>
+                        <% if (flag.restart) { %><span class="badge bg-warning text-dark ms-1">Restart</span><% } %>
+                        <% if (flag.overridden) { %>
+                          <span class="badge bg-info text-dark ms-1" title="Default is <%= flag.fileValue ? 'on' : 'off' %>">Edited</span>
+                        <% } %>
+                        <% if (flag.description) { %><div class="small text-muted"><%= flag.description %></div><% } %>
+                        <% if (flag.locked) { %>
+                          <div class="small text-muted">Always follows its default &mdash; switching it off here could lock everyone out.</div>
+                        <% } %>
+                      </div>
+                      <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="<%= id %>"
+                               name="<%= flag.path %>" value="1"
+                               <%= flag.enabled ? "checked" : "" %> <%= flag.locked ? "disabled" : "" %>>
+                      </div>
+                    </li>
+                  <% }) %>
+                </ul>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+
+        <div class="d-flex justify-content-end mt-4">
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Save modules</button>
+        </div>
+      </form>
+
+      <% } %>
+
+    </div>
+  </div>
+</div>
+
+<%- include("../../admin/_footer.ejs") %>

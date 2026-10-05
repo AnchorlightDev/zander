@@ -9,12 +9,16 @@ import {
   setProfileSocialConnections,
   setProfileUserAboutMe,
   setProfileUserInterests,
+  setProfileUserPersonal,
 } from "../../controllers/userController.js";
+import { normaliseBirthday } from "../../lib/birthday.mjs";
+import { normaliseTimeZone } from "../../lib/timezones.mjs";
 import { syncMemberRankRoles } from "../../lib/discord/rankRoleSync.mjs";
 import {
   required,
   optional,
   generateVerifyCode,
+  internalApiHeaders,
 } from "../common.js";
 import { hasActiveWebBan } from "../../controllers/discordPunishmentController.js";
 import { checkRateLimit } from "../../lib/rateLimiter.mjs";
@@ -123,6 +127,9 @@ export default function userApiRoute(app, config, db, features, lang) {
       "account_disabled",
       "social_aboutMe",
       "social_interests",
+      "timezone",
+      "birthdayDay",
+      "birthdayMonth",
       "social_discord",
       "social_steam",
       "social_twitch",
@@ -216,7 +223,7 @@ export default function userApiRoute(app, config, db, features, lang) {
       if (username) {
         const fetchURL = `${process.env.siteAddress}/api/user/get?username=${encodeURIComponent(username)}`;
         const response = await fetch(fetchURL, {
-          headers: { "x-access-token": process.env.apiKey },
+          headers: internalApiHeaders(),
         });
 
         const apiData = await response.json();
@@ -232,7 +239,7 @@ export default function userApiRoute(app, config, db, features, lang) {
       } else if (discordId) {
         const fetchURL = `${process.env.siteAddress}/api/user/get?discordId=${encodeURIComponent(discordId)}`;
         const response = await fetch(fetchURL, {
-          headers: { "x-access-token": process.env.apiKey },
+          headers: internalApiHeaders(),
         });
 
         const apiData = await response.json();
@@ -263,6 +270,8 @@ export default function userApiRoute(app, config, db, features, lang) {
   });
 
   app.get(baseEndpoint + "/punishments", async function (req, res) {
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 60 })) return;
+
     const uuid = optional(req.query, "uuid");
     const username = optional(req.query, "username");
     const discordId = optional(req.query, "discordId");
@@ -629,6 +638,54 @@ export default function userApiRoute(app, config, db, features, lang) {
     }
   });
 
+  /**
+   * Timezone and birthday.
+   *
+   * No content filter: these are a dropdown selection and two numbers, not
+   * free text, and both are validated against real IANA zones and real
+   * calendar days before anything is written. Blank clears the field.
+   */
+  app.post(baseEndpoint + "/profile/personal", async function (req, res) {
+    const userId = required(req.body, "userId", res);
+    if (res.sent) return;
+
+    if (await hasActiveWebBan(req.session?.user?.userId)) {
+      return res.send({ success: false, message: "You are currently banned from editing your profile." });
+    }
+
+    const timezone = normaliseTimeZone(req.body.timezone);
+    const birthday = normaliseBirthday(req.body.birthdayDay, req.body.birthdayMonth);
+
+    // A month with no day is half a birthday, and normaliseBirthday rejects it.
+    // Say so rather than silently dropping what they picked.
+    const attemptedBirthday =
+      String(req.body.birthdayDay || "").trim() !== "" ||
+      String(req.body.birthdayMonth || "").trim() !== "";
+
+    if (attemptedBirthday && !birthday) {
+      return res.send({
+        success: false,
+        message: "Please choose both a day and a month, and make sure the date exists.",
+      });
+    }
+
+    if (String(req.body.timezone || "").trim() !== "" && !timezone) {
+      return res.send({ success: false, message: "That is not a time zone we recognise." });
+    }
+
+    try {
+      await setProfileUserPersonal(userId, {
+        timezone,
+        birthdayDay: birthday?.day ?? null,
+        birthdayMonth: birthday?.month ?? null,
+      });
+      return res.send({ success: true, message: "Your details have been saved." });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).send({ success: false, message: `${error}` });
+    }
+  });
+
   app.post(baseEndpoint + "/profile/interests", async function (req, res) {
     const userId = required(req.body, "userId", res);
     if (res.sent) return;
@@ -646,10 +703,7 @@ export default function userApiRoute(app, config, db, features, lang) {
       const response = await fetch(filterURL, {
         method: "POST",
         body: JSON.stringify(bodyJSON),
-        headers: {
-          "Content-Type": "application/json",
-          "x-access-token": process.env.apiKey,
-        },
+        headers: internalApiHeaders({ "Content-Type": "application/json" }),
       });
 
       const dataResponse = await response.json();
@@ -702,10 +756,7 @@ export default function userApiRoute(app, config, db, features, lang) {
       const response = await fetch(filterURL, {
         method: "POST",
         body: JSON.stringify(bodyJSON),
-        headers: {
-          "Content-Type": "application/json",
-          "x-access-token": process.env.apiKey,
-        },
+        headers: internalApiHeaders({ "Content-Type": "application/json" }),
       });
 
       const dataResponse = await response.json();

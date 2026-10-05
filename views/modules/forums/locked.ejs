@@ -1,0 +1,78 @@
+<%- include("../header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription
+}) %>
+
+<%- include("../navigationBar.ejs") %>
+
+<%- include("../../partials/miniHeader.ejs", {
+  headerTitle: "Forums",
+  backgroundImage: globalImage
+}) %>
+
+<style>
+.forum-lock-panel {
+    border: 1px dashed var(--bs-border-color);
+    border-radius: .75rem;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+}
+.forum-lock-icon {
+    width: 64px; height: 64px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+}
+</style>
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+
+            <div class="card border-0 shadow-sm forum-lock-panel">
+                <div class="card-body p-4 p-md-5 text-center">
+
+                    <div class="forum-lock-icon mx-auto mb-3 <%= lock.supporter ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' %>">
+                        <i class="fas fa-lock fa-lg"></i>
+                    </div>
+
+                    <span class="badge <%= lock.supporter ? 'bg-success' : 'bg-secondary' %> mb-3">
+                        <%= lock.heading %>
+                    </span>
+
+                    <%# The title is the whole point of showing this page rather
+                        than a 404 -- it is what makes the rank worth buying.
+                        The route only passes it for boards a visitor can
+                        actually buy their way into. %>
+                    <% if (typeof lockedTitle !== 'undefined' && lockedTitle) { %>
+                    <h1 class="h3 fw-bold mb-2"><%= lockedTitle %></h1>
+                    <% } else if (typeof categoryName !== 'undefined' && categoryName) { %>
+                    <h1 class="h3 fw-bold mb-2"><%= categoryName %></h1>
+                    <% } %>
+
+                    <% if (typeof lockedTitle !== 'undefined' && lockedTitle && typeof categoryName !== 'undefined' && categoryName) { %>
+                    <p class="text-muted small mb-3">
+                        <i class="fas fa-folder me-1"></i><%= categoryName %>
+                    </p>
+                    <% } %>
+
+                    <p class="text-muted mb-0 mx-auto" style="max-width: 48ch;"><%= lock.body %></p>
+
+                    <% if (lock.ctaUrl) { %>
+                    <a href="<%= lock.ctaUrl %>" class="btn <%= lock.supporter ? 'btn-success' : 'btn-main' %> mt-4">
+                        <% if (lock.supporter) { %><i class="fas fa-heart me-2"></i><% } %><%= lock.ctaLabel %>
+                    </a>
+                    <% } %>
+
+                    <div class="mt-4">
+                        <a href="/forums" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Forums
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<%- include("../footer.ejs") %>

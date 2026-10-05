@@ -30,13 +30,38 @@ import fastify from "fastify";
 import fastifySession from "@fastify/session";
 import fastifyCookie from "@fastify/cookie";
 import { FastifyPrismaSessionStore } from "./lib/fastifyPrismaSessionStore.js";
+import {
+  isHttpsDeployment as detectHttpsDeployment,
+  buildHelmetOptions,
+  buildSessionCookieOptions,
+} from "./lib/securityConfig.js";
+import { checkRateLimit } from "./lib/rateLimiter.mjs";
+import { getRegion } from "./lib/region.mjs";
+import {
+  createCspOnSendHook,
+  registerCspReportParser,
+  normaliseCspReports,
+} from "./lib/csp.js";
 
-const config = require("./config.json");
-const features = require("./features.json");
+const config = require("./lib/config/config.cjs");
+
+// Derived config, computed once at boot.
+//
+// `config` already reaches every template, and @fastify/view does not merge
+// reply.locals into the app.view() path this codebase renders through (see the
+// CSP note further down). Normalising here is what lets the shared header read
+// one consistent region without threading a new local through 126 render calls.
+// getRegion is idempotent, so re-running it over its own output is harmless.
+config.siteConfiguration = config.siteConfiguration || {};
+config.siteConfiguration.region = getRegion(config);
+
+const features = require("./lib/config/features.cjs");
 const lang = require("./lang.json");
 import db, { isDbHealthy, prisma } from "./controllers/databaseController.js";
 import { getWebAnnouncement } from "./controllers/announcementController.js";
 import { getNotificationSummary } from "./controllers/notificationController.js";
+import { applyConfigOverrides, startConfigSync } from "./controllers/configSettingsController.js";
+import { buildInfo } from "./lib/buildInfo.js";
 
 // Paths
 import path from "path";
@@ -44,10 +69,19 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Site settings and module switches live in the database (/dashboard/settings,
+// /dashboard/modules). Load them into the shared config/features objects before
+// the Discord client and cron jobs load, because a few of them copy values once
+// at import time. The first boot also imports any legacy config.json /
+// features.json on disk, once.
+await applyConfigOverrides();
+startConfigSync();
+
 import("./controllers/discordController.js");
 import("./cron/userCodeExpiryCron.js");
 import("./cron/bridgeCleanupCron.js");
 import("./cron/cakeDayUserCheck.js");
+import("./cron/birthdayRankCron.js");
 import("./cron/staffAuditReportCron.js");
 import("./cron/schedulerCron.js");
 import("./cron/nicknameCheckCron.js");
@@ -61,6 +95,7 @@ import("./cron/announcementExpiryCron.js");
 import("./cron/webstoreCommandSyncCron.js");
 import("./cron/badgeLuckpermsSyncCron.js");
 import("./cron/rankDiscordRoleSyncCron.js");
+import("./cron/boosterRewardSyncCron.js");
 import("./cron/shopItemIndexCron.js");
 
 //
@@ -97,7 +132,19 @@ const buildApp = async () => {
   // take 60+ seconds while registering Discord slash commands, which can delay
   // event-loop ticks long enough for avvio to fire the default 10-second
   // timeout before route-registration plugins have a chance to complete.
-  const app = fastify({ logger: config.debug, pluginTimeout: 120000 });
+  // trustProxy: the app is deployed behind a TLS-terminating reverse proxy
+  // (see Procfile).  Without it req.protocol is always "http", which both
+  // defeats secure-cookie issuance below and makes req.ip the proxy address
+  // rather than the client's — breaking per-IP rate limiting.
+  const app = fastify({
+    logger: config.debug,
+    pluginTimeout: 120000,
+    trustProxy: true,
+  });
+
+  // Drives both the Secure flag on the session cookie and HSTS below, so local
+  // http development still works while any https deployment is hardened.
+  const isHttpsDeployment = detectHttpsDeployment(process.env.siteAddress);
 
   if (process.env.SENTRY_DSN) {
     Sentry.setupFastifyErrorHandler(app, {
@@ -232,17 +279,64 @@ const buildApp = async () => {
     }
   });
 
+  // Security headers.  Options live in lib/securityConfig.js so the exact
+  // object registered here is the one covered by tests.
+  await app.register(
+    await import("@fastify/helmet"),
+    buildHelmetOptions(isHttpsDeployment)
+  );
+
+  // Content Security Policy — REPORT-ONLY.
+  //
+  // Browsers never block on a report-only policy, so this cannot break a page;
+  // it reports what would have been blocked so the policy can be tightened
+  // against real traffic first. See lib/csp.js for what must be closed before
+  // switching the header name to Content-Security-Policy.
+  //
+  // The nonce is stamped onto the finished HTML rather than passed through the
+  // templates because this codebase renders via app.view() (the instance
+  // decorator) in 126 places, which @fastify/view does not merge reply.locals
+  // into. Rewriting on the way out covers every render path identically.
+  app.addHook(
+    "onSend",
+    createCspOnSendHook({ reportUri: "/api/csp-report", enforce: false })
+  );
+
+  // Logged-in pages must always come fresh from the server. Without a
+  // Cache-Control header browsers may reuse an earlier copy (back/forward,
+  // redirects to a page just viewed), so a dashboard list could still show a
+  // template that was just deleted -- or miss one just created -- until a
+  // manual refresh. no-store also keeps personal pages out of shared caches.
+  app.addHook("onSend", async (req, res, payload) => {
+    if (req.session?.user && String(res.getHeader("content-type") || "").includes("text/html")) {
+      res.header("cache-control", "private, no-store");
+    }
+    return payload;
+  });
+
   // EJS Rendering Engine
   await app.register(await import("@fastify/view"), {
     engine: {
       ejs: await import("ejs"),
     },
     root: path.join(__dirname, "views"),
+    // Merged into every render, app.view() included -- the footers read it
+    defaultContext: { buildInfo },
   });
 
   await app.register(await import("@fastify/static"), {
     root: path.join(__dirname, "assets"),
     prefix: "/",
+    // Third-party libraries are served from here rather than their CDNs so a
+    // first visit depends on one host, not five: a stalled connection to any
+    // render-blocking CDN left the page white until refresh. The paths carry
+    // the version, so the files never change and can be cached for good.
+    // @fastify/static v10 passes the Fastify reply here, not the raw response.
+    setHeaders(reply, filePath) {
+      if (filePath.includes(`${path.sep}vendors${path.sep}cdn${path.sep}`)) {
+        reply.header("cache-control", "public, max-age=31536000, immutable");
+      }
+    },
   });
 
   await app.register(await import("@fastify/formbody"), { bodyLimit: 10485760 }); // 10 MB
@@ -258,6 +352,26 @@ const buildApp = async () => {
     }
     next();
   });
+
+  registerCspReportParser(app);
+
+  // CSP violation collector — public by necessity: the browser posts these
+  // with no credentials. Rate limited because it is an unauthenticated write
+  // path, and only the fields worth acting on are logged.
+  app.post(
+    "/api/csp-report",
+    { config: { rawBody: false } },
+    async function (req, res) {
+      if (!checkRateLimit(req, res, { windowMs: 60_000, max: 60 })) return;
+
+      for (const report of normaliseCspReports(req.body)) {
+        app.log.warn(report, "[CSP] report-only violation");
+      }
+
+      // 204: the browser ignores the body and this keeps the endpoint cheap.
+      return res.status(204).send();
+    }
+  );
 
   // Heartbeat — public, no token required so monitoring tools can reach it
   app.get("/api/heartbeat", async function (req, res) {
@@ -371,12 +485,7 @@ const buildApp = async () => {
     cookieName: "sessionId",
     secret: process.env.sessionCookieSecret,
     store: sessionStore,
-    cookie: {
-      secure: false,
-      maxAge: 86400000 * 7, // 7 days default
-      httpOnly: true,
-      sameSite: "lax",
-    },
+    cookie: buildSessionCookieOptions(isHttpsDeployment),
     saveUninitialized: false,
     // rolling: false — do not refresh the session cookie / extend TTL on every
     // read-only request.  Without this, @fastify/session calls store.touch()

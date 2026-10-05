@@ -22,7 +22,7 @@ import { getMenuGroups } from "./pageRegistry.js";
  *   });
  *
  * @param {FastifyRequest} req       – Fastify request (needs req.session.user)
- * @param {object}         features  – parsed features.json object
+ * @param {object}         features  – live module switches (lib/config/features.cjs)
  * @returns {{ adminMenuGroups: object[], adminCurrentPath: string }}
  */
 export function adminViewData(req, features) {

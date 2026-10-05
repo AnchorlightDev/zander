@@ -4,7 +4,7 @@
     <parent>
         <artifactId>zander</artifactId>
         <groupId>dev.anchorlight</groupId>
-        <version>1.4.0</version>
+        <version>2.1.0</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -14,9 +14,34 @@
     <name>zander-velocity</name>
 
     <properties>
-        <java.version>25</java.version>
-        <maven.compiler.source>25</maven.compiler.source>
-        <maven.compiler.target>25</maven.compiler.target>
+        <!--
+            Kept in step with <release> in maven-compiler-plugin below, which
+            is what actually governs the build (<release> overrides these).
+            They previously said 25 while the compiler built for 21, which
+            advertised a target this module does not produce.
+
+            Our own classes are built for 21 so they load on any JVM from 21
+            up.  That is NOT the whole story for the shipped jar: shading
+            copies a dependency's class files verbatim and never recompiles
+            them, so the jar can only run on a JVM new enough for its NEWEST
+            bundled class.  Setting <release> here does nothing for those.
+
+            StoneLib used to be built for 25, which silently forced this plugin
+            onto a Java 25 proxy however this module was configured; on Java 21
+            it failed at first use with
+
+                UnsupportedClassVersionError: ...stonelib/http/Request
+                has been compiled by a more recent version of the Java Runtime
+
+            which is an Error, not an Exception, so it bypassed ordinary
+            catch (Exception) handlers and surfaced as a dead feature rather
+            than a startup failure.  StoneLib 2.2.1 builds for 21, so the whole
+            shaded jar now loads on 21.  Keep the StoneLib dependency below on
+            a 21-targeted build; raising it re-breaks this silently.
+        -->
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -31,9 +56,9 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <version>3.14.0</version>
                 <configuration>
-                    <release>25</release>
+                    <release>21</release>
                     <!-- JDK 23+ no longer discovers annotation processors implicitly. -->
                     <annotationProcessorPaths>
                         <path>
@@ -118,7 +143,7 @@
         <dependency>
             <groupId>dev.anchorlight</groupId>
             <artifactId>StoneLib</artifactId>
-            <version>2.1.0</version>
+            <version>2.2.1</version>
             <scope>compile</scope>
             <exclusions>
                 <exclusion>

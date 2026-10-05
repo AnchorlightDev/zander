@@ -5,6 +5,14 @@
 
 import { prisma } from "../controllers/databaseController.js";
 import { createEvent, logEventAudit, upsertEventAnnouncements } from "./eventService.js";
+import { EVENT_VISIBILITY, normaliseRankSlugs } from "../lib/eventAccess.js";
+import { missingDefaults, parseOffsetMinutes } from "../lib/eventAnnouncements.js";
+
+/** Reject anything outside the known set so a bad payload cannot invent a visibility. */
+function coerceVisibility(value, fallback = "public") {
+  const v = String(value ?? "").trim().toLowerCase();
+  return EVENT_VISIBILITY.includes(v) ? v : fallback;
+}
 
 /**
  * Get all active templates.
@@ -15,7 +23,7 @@ export async function getTemplates({ includeDeleted = false } = {}) {
 
   return prisma.event_templates.findMany({
     where,
-    include: { defaultHosts: true, _count: { select: { events: true } } },
+    include: { defaultHosts: true, rankAccess: true, _count: { select: { events: true } } },
     orderBy: { createdAt: "asc" },
   });
 }
@@ -28,6 +36,7 @@ export async function getTemplateById(templateId, includeDeleted = false) {
     where: { templateId: parseInt(templateId) },
     include: {
       defaultHosts: true,
+      rankAccess: true,
       announcements: { orderBy: { id: "asc" } },
       events: {
         where: { deletedAt: null },
@@ -55,6 +64,7 @@ export async function createTemplate(data, creatorId) {
     data: {
       title: data.title,
       description: data.description || null,
+      teaserDescription: data.teaserDescription || null,
       defaultStartTime: data.defaultStartTime || null,
       defaultEndTime: data.defaultEndTime || null,
       defaultDurationMins: data.defaultDurationMins || null,
@@ -74,8 +84,20 @@ export async function createTemplate(data, creatorId) {
       tags: data.tags || undefined,
       creatorId,
       isActive: true,
+      visibility: coerceVisibility(data.visibility),
+      teaserPublic: data.teaserPublic !== undefined ? Boolean(data.teaserPublic) : true,
     },
   });
+
+  // Rank lock carried onto every draft this template generates
+  if (Array.isArray(data.allowedRanks) && data.allowedRanks.length > 0) {
+    await prisma.event_template_rank_access.createMany({
+      data: normaliseRankSlugs(data.allowedRanks).map((rankSlug) => ({
+        templateId: tmpl.templateId,
+        rankSlug,
+      })),
+    });
+  }
 
   // Create default hosts
   if (Array.isArray(data.defaultHosts) && data.defaultHosts.length > 0) {
@@ -110,6 +132,7 @@ export async function updateTemplate(templateId, data, actorId) {
 
   if (data.title !== undefined) updateData.title = data.title;
   if (data.description !== undefined) updateData.description = data.description;
+  if (data.teaserDescription !== undefined) updateData.teaserDescription = data.teaserDescription;
   if (data.defaultStartTime !== undefined) updateData.defaultStartTime = data.defaultStartTime;
   if (data.defaultEndTime !== undefined) updateData.defaultEndTime = data.defaultEndTime;
   if (data.defaultDurationMins !== undefined) updateData.defaultDurationMins = data.defaultDurationMins;
@@ -128,11 +151,25 @@ export async function updateTemplate(templateId, data, actorId) {
   if (data.logoUrl !== undefined) updateData.logoUrl = data.logoUrl;
   if (data.tags !== undefined) updateData.tags = data.tags;
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
+  if (data.visibility !== undefined) updateData.visibility = coerceVisibility(data.visibility);
+  if (data.teaserPublic !== undefined) updateData.teaserPublic = Boolean(data.teaserPublic);
 
   const updated = await prisma.event_templates.update({
     where: { templateId: parseInt(templateId) },
     data: updateData,
   });
+
+  if (data.allowedRanks !== undefined) {
+    const rankSlugs = normaliseRankSlugs(data.allowedRanks);
+    await prisma.event_template_rank_access.deleteMany({
+      where: { templateId: parseInt(templateId) },
+    });
+    if (rankSlugs.length > 0) {
+      await prisma.event_template_rank_access.createMany({
+        data: rankSlugs.map((rankSlug) => ({ templateId: parseInt(templateId), rankSlug })),
+      });
+    }
+  }
 
   // Update default hosts
   if (Array.isArray(data.defaultHosts)) {
@@ -176,22 +213,27 @@ export async function deleteTemplate(templateId) {
  * Generate a draft event from a template.
  * The event inherits template defaults but remains fully editable.
  */
-export async function generateDraftFromTemplate(template, targetDate, actorId = null, actorName = "System") {
-  const { defaultStartTime, defaultEndTime, defaultDurationMins, timezone } = template;
-
-  // Build start/end datetimes for the target date in the template's timezone
-  // We store UTC; targetDate is a JS Date already set to the occurrence date (midnight UTC)
+/**
+ * Start and end for a template's default times on `targetDate` (a Date at
+ * midnight UTC). Times are stored in UTC ("HH:MM" or "HH:MM:SS"); an end at
+ * or before the start runs overnight. Shared by draft generation and the
+ * "create event from template" form so both agree.
+ */
+export function templateTimesOn(template, targetDate) {
+  const { defaultStartTime, defaultEndTime, defaultDurationMins } = template;
   const dateStr = targetDate.toISOString().slice(0, 10);
 
-  const startTime = defaultStartTime || "18:00:00";
-  const endTime = defaultEndTime || null;
+  const startAt = new Date(`${dateStr}T${defaultStartTime || "18:00:00"}Z`);
+  if (Number.isNaN(startAt.getTime())) {
+    throw new Error(`Template default start time "${defaultStartTime}" is not a valid time.`);
+  }
 
-  // Parse times as UTC (no conversion; operators should configure times in UTC or use timezone field)
-  const startAt = new Date(`${dateStr}T${startTime}Z`);
   let endAt;
-
-  if (endTime) {
-    endAt = new Date(`${dateStr}T${endTime}Z`);
+  if (defaultEndTime) {
+    endAt = new Date(`${dateStr}T${defaultEndTime}Z`);
+    if (Number.isNaN(endAt.getTime())) {
+      throw new Error(`Template default end time "${defaultEndTime}" is not a valid time.`);
+    }
     // Handle overnight events
     if (endAt <= startAt) endAt = new Date(endAt.getTime() + 86400000);
   } else if (defaultDurationMins) {
@@ -199,10 +241,66 @@ export async function generateDraftFromTemplate(template, targetDate, actorId = 
   } else {
     endAt = new Date(startAt.getTime() + 3600000); // default 1 hour
   }
+  return { startAt, endAt };
+}
+
+/**
+ * A new-event form pre-filled from a template, in the shape the event editor
+ * renders (views/dashboard/events/events-editor.ejs reads `ev`). Dates are
+ * filled only when `targetDate` is given -- a master template has none, so
+ * the organiser picks the date on the form.
+ */
+export function eventPrefillFromTemplate(template, targetDate = null) {
+  const times = targetDate ? templateTimesOn(template, targetDate) : null;
+  return {
+    templateId: template.templateId,
+    title: template.title,
+    description: template.description,
+    teaserDescription: template.teaserDescription,
+    locationType: template.locationType,
+    locationLabel: template.locationLabel,
+    locationDiscordChannelId: template.locationDiscordChannelId,
+    serverName: template.serverName,
+    serverIp: template.serverIp,
+    bannerUrl: template.bannerUrl,
+    logoUrl: template.logoUrl,
+    tags: template.tags,
+    visibility: template.visibility || "public",
+    teaserPublic: template.teaserPublic !== false,
+    rankAccess: (template.rankAccess || []).map((r) => ({ rankSlug: r.rankSlug })),
+    hosts: (template.defaultHosts || []).map((h) => ({
+      userId: h.userId,
+      discordUserId: h.discordUserId,
+      displayName: h.displayName,
+      role: h.role,
+    })),
+    announcements: (template.announcements || []).map((a) => ({
+      label: a.label,
+      announcementType: a.announcementType,
+      platform: a.platform,
+      channelId: a.channelId,
+      contentTemplate: a.contentTemplate,
+      body: a.body,
+      colourMessageFormat: a.colourMessageFormat,
+      link: a.link,
+      popupButtonText: a.popupButtonText,
+      popupImageUrl: a.popupImageUrl,
+      triggerType: a.triggerType,
+      offsetMinutes: a.offsetMinutes,
+      enabled: a.enabled,
+    })),
+    ...(times ? { startAt: times.startAt.toISOString(), endAt: times.endAt.toISOString() } : {}),
+  };
+}
+
+export async function generateDraftFromTemplate(template, targetDate, actorId = null, actorName = "System") {
+  const { timezone } = template;
+  const { startAt, endAt } = templateTimesOn(template, targetDate);
 
   const eventData = {
     title: template.title,
     description: template.description,
+    teaserDescription: template.teaserDescription,
     eventType: "standard",
     startAt: startAt.toISOString(),
     endAt: endAt.toISOString(),
@@ -214,6 +312,12 @@ export async function generateDraftFromTemplate(template, targetDate, actorId = 
     logoUrl: template.logoUrl,
     tags: template.tags,
     templateId: template.templateId,
+    // A recurring supporter event must generate already-locked drafts; leaving
+    // each week's draft public until someone remembers to lock it is exactly
+    // the leak this feature exists to prevent.
+    visibility: template.visibility || "public",
+    teaserPublic: template.teaserPublic !== false,
+    allowedRanks: (template.rankAccess || []).map((r) => r.rankSlug),
     hosts: (template.defaultHosts || []).map((h) => ({
       userId: h.userId,
       discordUserId: h.discordUserId,
@@ -283,11 +387,107 @@ export async function upsertTemplateAnnouncements(templateId, announcements) {
         popupButtonText: a.popupButtonText || null,
         popupImageUrl: a.popupImageUrl || null,
         triggerType: a.triggerType || "before_event",
-        offsetMinutes: a.offsetMinutes ? parseInt(a.offsetMinutes) : null,
+        offsetMinutes: parseOffsetMinutes(a.offsetMinutes),
         enabled: a.enabled !== undefined ? a.enabled : true,
       })),
     });
   }
+}
+
+/**
+ * The site-wide default announcements, without row ids, ready to seed a new
+ * event or template. Editing them never touches events or templates that
+ * already exist.
+ */
+export async function getDefaultAnnouncements() {
+  const rows = await prisma.event_default_announcements.findMany({ orderBy: { id: "asc" } });
+  return rows.map((a) => ({
+    label: a.label,
+    announcementType: a.announcementType,
+    platform: a.platform,
+    channelId: a.channelId,
+    contentTemplate: a.contentTemplate,
+    body: a.body,
+    colourMessageFormat: a.colourMessageFormat,
+    link: a.link,
+    popupButtonText: a.popupButtonText,
+    popupImageUrl: a.popupImageUrl,
+    triggerType: a.triggerType,
+    offsetMinutes: a.offsetMinutes,
+    enabled: a.enabled,
+  }));
+}
+
+/**
+ * Replace the site-wide default announcements (delete + recreate).
+ */
+export async function upsertDefaultAnnouncements(announcements) {
+  await prisma.event_default_announcements.deleteMany({});
+
+  if (Array.isArray(announcements) && announcements.length > 0) {
+    await prisma.event_default_announcements.createMany({
+      data: announcements.map((a) => ({
+        label: a.label || null,
+        announcementType: a.announcementType || "reminder",
+        platform: a.platform || "discord",
+        channelId: a.channelId || null,
+        contentTemplate: a.contentTemplate || null,
+        body: a.body || null,
+        colourMessageFormat: a.colourMessageFormat || null,
+        link: a.link || null,
+        popupButtonText: a.popupButtonText || null,
+        popupImageUrl: a.popupImageUrl || null,
+        triggerType: a.triggerType || "before_event",
+        offsetMinutes: parseOffsetMinutes(a.offsetMinutes),
+        enabled: a.enabled !== undefined ? a.enabled : true,
+      })),
+    });
+  }
+}
+
+/**
+ * Add the default announcements to every template that does not already have
+ * them, so drafts it generates from now on carry them too.
+ *
+ * With `dryRun` nothing is written. Returns { templates, announcements }.
+ */
+export async function applyDefaultAnnouncementsToTemplates(defaults, { dryRun = false } = {}) {
+  const templates = await prisma.event_templates.findMany({
+    where: { deletedAt: null },
+    select: { templateId: true, announcements: true },
+  });
+
+  const result = { templates: 0, announcements: 0 };
+
+  for (const tmpl of templates) {
+    const toAdd = missingDefaults(tmpl.announcements, defaults);
+    if (toAdd.length === 0) continue;
+
+    result.templates++;
+    result.announcements += toAdd.length;
+    if (dryRun) continue;
+
+    await prisma.event_template_announcements.createMany({
+      data: toAdd.map((a) => ({
+        templateId: tmpl.templateId,
+        label: a.label || null,
+        announcementType: a.announcementType || "reminder",
+        platform: a.platform || "discord",
+        channelId: a.channelId || null,
+        contentTemplate: a.contentTemplate || null,
+        body: a.body || null,
+        colourMessageFormat: a.colourMessageFormat || null,
+        link: a.link || null,
+        popupButtonText: a.popupButtonText || null,
+        popupImageUrl: a.popupImageUrl || null,
+        triggerType: a.triggerType || "before_event",
+        offsetMinutes: parseOffsetMinutes(a.offsetMinutes),
+        enabled: a.enabled !== undefined ? a.enabled : true,
+      })),
+    });
+  }
+
+  return result;
 }
 
 /**
@@ -302,8 +502,8 @@ export function computeNextGenerationDate(template, fromDate = null) {
 
   const advanceDays = template.draftAdvanceDays || 7;
 
-  if (template.recurrenceType === "weekly" && Array.isArray(template.recurrenceDays)) {
-    const days = template.recurrenceDays.map(Number).sort();
+  if (template.recurrenceType === "weekly") {
+    const days = recurrenceDaysOf(template);
     if (days.length === 0) return null;
 
     // Find the next occurrence that is at least advanceDays in the future
@@ -350,6 +550,25 @@ export function computeNextGenerationDate(template, fromDate = null) {
 }
 
 /**
+ * The weekday numbers (0 = Sunday) a weekly template runs on. The column is
+ * JSON and older rows hold it as a JSON string ("[1,3]") rather than an
+ * array; both mean the same thing. Treating the string as "no days" is what
+ * made Generate Draft fail with "Could not determine next event date".
+ */
+export function recurrenceDaysOf(template) {
+  let days = template?.recurrenceDays;
+  if (typeof days === "string") {
+    try {
+      days = JSON.parse(days);
+    } catch {
+      days = days.split(",");
+    }
+  }
+  if (!Array.isArray(days)) return [];
+  return [...new Set(days.map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b);
+}
+
+/**
  * Find the next event occurrence date for a template.
  */
 export function computeNextEventDate(template, fromDate = null) {
@@ -358,8 +577,8 @@ export function computeNextEventDate(template, fromDate = null) {
 
   if (template.recurrenceType === "once") return null;
 
-  if (template.recurrenceType === "weekly" && Array.isArray(template.recurrenceDays)) {
-    const days = template.recurrenceDays.map(Number).sort();
+  if (template.recurrenceType === "weekly") {
+    const days = recurrenceDaysOf(template);
     if (days.length === 0) return null;
 
     const currentDay = base.getUTCDay();
@@ -400,7 +619,7 @@ export async function getTemplatesDueForGeneration() {
       autoGenerateDrafts: true,
       nextGenerateAt: { lte: now },
     },
-    include: { defaultHosts: true, announcements: { orderBy: { id: "asc" } } },
+    include: { defaultHosts: true, rankAccess: true, announcements: { orderBy: { id: "asc" } } },
   });
 }
 

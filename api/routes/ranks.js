@@ -4,8 +4,12 @@ import {
   getUserPermissions,
 } from "../../controllers/userController.js";
 import { luckpermsDb } from "../../controllers/databaseController.js";
-import { syncMemberRankRoles } from "../../lib/discord/rankRoleSync.mjs";
+import {
+  describeRankRoleSync,
+  syncMemberRankRoles,
+} from "../../lib/discord/rankRoleSync.mjs";
 import { syncAllRanks, syncUserRanks } from "../../controllers/rankSyncController.js";
+import { isAboveHighestRank, isSameUser } from "../../lib/rankPromotion.mjs";
 
 const LUCKPERMS_PLAYERS_TABLE = "luckperms_players";
 const LUCKPERMS_GROUP_PERMISSIONS_TABLE = "luckperms_group_permissions";
@@ -129,15 +133,35 @@ export default function rankApiRoute(app, config, db, features, lang) {
       return null;
     }
 
-    const [webUser] = await queryDb(
-      `SELECT userId, username, uuid FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1`,
-      [trimmedUsername]
-    );
-
     const [luckPermsUser] = await queryLuckPermsDb(
       `SELECT username, LOWER(uuid) AS uuid FROM ${LUCKPERMS_PLAYERS_TABLE} WHERE LOWER(username) = LOWER(?) LIMIT 1`,
       [trimmedUsername]
     );
+
+    // users.username is not unique, and a placeholder ("ghost") row created
+    // from Discord by createUnlinkedUser() can carry the same name as the real
+    // account while holding a random UUID() and a different discordId. Match on
+    // the LuckPerms uuid first — that is the authoritative identity — and only
+    // fall back to the name, preferring a real account over a placeholder, so a
+    // rank change never ends up syncing the ghost row's Discord link.
+    let webUser = null;
+
+    if (luckPermsUser?.uuid) {
+      [webUser] = await queryDb(
+        `SELECT userId, username, uuid FROM users WHERE LOWER(uuid) = ? LIMIT 1`,
+        [luckPermsUser.uuid]
+      );
+    }
+
+    if (!webUser) {
+      [webUser] = await queryDb(
+        `SELECT userId, username, uuid FROM users
+          WHERE LOWER(username) = LOWER(?)
+          ORDER BY is_placeholder ASC, userId ASC
+          LIMIT 1`,
+        [trimmedUsername]
+      );
+    }
 
     if (!webUser && !luckPermsUser) {
       return null;
@@ -620,7 +644,7 @@ export default function rankApiRoute(app, config, db, features, lang) {
   app.post(`${baseEndpoint}/user/assign`, async function (req, res) {
     if (!isFeatureEnabled(features.ranks, res, lang)) return;
 
-    const { username, rankSlug, title, expiresAt } = req.body || {};
+    const { username, rankSlug, title, expiresAt, actorUserId, actorUuid } = req.body || {};
 
     if (!username || !rankSlug) {
       return res.send({
@@ -646,6 +670,23 @@ export default function rankApiRoute(app, config, db, features, lang) {
 
       if (!player || !player.uuid) {
         return res.send({ success: false, message: "Player not found." });
+      }
+
+      // Nobody may hand themselves a rank that outweighs the highest one they
+      // already hold. Only dashboard calls carry an actor; server-to-server
+      // callers have no "self" to promote.
+      if (isSameUser({ userId: actorUserId, uuid: actorUuid }, player)) {
+        const [heldRanks, metaMap] = await Promise.all([
+          getRanksForUuid(player.uuid),
+          getRankMetaMap(),
+        ]);
+        const rankWeight = rankRowFromMeta(rankSlug, metaMap).priority;
+        if (isAboveHighestRank(rankWeight, heldRanks.map((r) => r.priority))) {
+          return res.send({
+            success: false,
+            message: "You cannot promote yourself to a rank higher than your own.",
+          });
+        }
       }
 
       await normalizeUserPermissionContexts(player.uuid, rankSlug);
@@ -690,13 +731,26 @@ export default function rankApiRoute(app, config, db, features, lang) {
 
       await syncUserRanks(player.uuid);
 
-      if (player.userId) {
-        await syncMemberRankRoles(player.userId);
+      // The Discord role sync never throws, so without reporting its outcome
+      // an admin sees "Rank assigned successfully" even when no Discord role
+      // was touched (unlinked account, no meta.discordid on the rank, bot
+      // missing Manage Roles, ...). Surface it instead of claiming blind success.
+      const discordSync = describeRankRoleSync(
+        player.userId
+          ? await syncMemberRankRoles(player.userId, { luckPermsUuid: player.uuid })
+          : { ok: false, reason: "NO_USER_ID" }
+      );
+
+      if (!discordSync.ok) {
+        console.warn(
+          `[RANKS] Assigned ${rankSlug} to ${player.username} but Discord roles were not updated: ${discordSync.message}`
+        );
       }
 
       return res.send({
         success: true,
         message: "Rank assigned successfully.",
+        discordSync,
       });
     } catch (error) {
       console.error(error);
@@ -749,16 +803,27 @@ export default function rankApiRoute(app, config, db, features, lang) {
 
       await syncUserRanks(player.uuid);
 
-      if (player.userId && result?.affectedRows > 0) {
-        await syncMemberRankRoles(player.userId);
+      const removed = result?.affectedRows > 0;
+      const discordSync = removed
+        ? describeRankRoleSync(
+            player.userId
+              ? await syncMemberRankRoles(player.userId, { luckPermsUuid: player.uuid })
+              : { ok: false, reason: "NO_USER_ID" }
+          )
+        : null;
+
+      if (discordSync && !discordSync.ok) {
+        console.warn(
+          `[RANKS] Removed ${rankSlug} from ${player.username} but Discord roles were not updated: ${discordSync.message}`
+        );
       }
 
       return res.send({
         success: true,
-        message:
-          result?.affectedRows > 0
-            ? "Rank removed successfully."
-            : "Rank was not assigned to the player.",
+        message: removed
+          ? "Rank removed successfully."
+          : "Rank was not assigned to the player.",
+        discordSync,
       });
     } catch (error) {
       console.error(error);

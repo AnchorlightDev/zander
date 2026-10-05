@@ -41,14 +41,17 @@ vi.mock("../../controllers/databaseController.js", () => ({
 
 const {
   createGuildScheduledEvent,
+  editGuildScheduledEvent,
   runDiscordActionsForEvent,
 } = await import("../../services/eventDiscordService.js");
 
 const baseEvent = {
   eventId: 1,
   title: "Test Event",
-  startAt: new Date("2025-01-01T10:00:00Z"),
-  endAt: new Date("2025-01-01T12:00:00Z"),
+  // Relative to now: Discord will not schedule an event in the past, so a
+  // fixed date here silently turns into a "skipped" case once it passes.
+  startAt: new Date(Date.now() + 7 * 86400_000),
+  endAt: new Date(Date.now() + 7 * 86400_000 + 2 * 3600_000),
   description: null,
   locationType: "external",
   locationLabel: "Online",
@@ -177,5 +180,59 @@ describe("runDiscordActionsForEvent — on_update guild event behaviour", () => 
     };
     await runDiscordActionsForEvent(event, "on_publish", { guildId: "guild-789" });
     expect(mockCreate).toHaveBeenCalledOnce();
+  });
+});
+
+describe("guild events and the event's start time", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCreate.mockResolvedValue({ id: "guild-event-id-123" });
+  });
+
+  const started = {
+    ...baseEvent,
+    startAt: new Date(Date.now() - 30 * 60_000),
+    endAt: new Date(Date.now() + 60 * 60_000),
+  };
+  const ended = {
+    ...baseEvent,
+    startAt: new Date(Date.now() - 3 * 3600_000),
+    endAt: new Date(Date.now() - 3600_000),
+  };
+
+  it("skips creating a Discord event that has already started", async () => {
+    const id = await createGuildScheduledEvent(started, "guild-123");
+    expect(id).toBeNull();
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockLogEventAudit).toHaveBeenCalledWith(1, null, "System", "discord_guild_event_skipped", expect.stringContaining("already started"));
+  });
+
+  it("does not blame the cover image for an unrelated failure", async () => {
+    mockCreate.mockRejectedValueOnce(new Error("Invalid Form Body\nscheduled_start_time[GUILD_SCHEDULED_EVENT_SCHEDULE_PAST]"));
+    const event = { ...baseEvent, bannerUrl: "https://example.com/banner.png" };
+    await expect(createGuildScheduledEvent(event, "guild-123")).rejects.toThrow("SCHEDULE_PAST");
+    expect(mockCreate).toHaveBeenCalledOnce();
+  });
+
+  it("retries without the cover image when the image was the problem", async () => {
+    mockCreate.mockRejectedValueOnce(new Error("Invalid Form Body\nimage[IMAGE_INVALID]"));
+    const event = { ...baseEvent, bannerUrl: "https://example.com/banner.png" };
+    await createGuildScheduledEvent(event, "guild-123");
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(mockCreate.mock.calls[1][0].image).toBeUndefined();
+  });
+
+  it("leaves the start time alone when editing an event in progress", async () => {
+    mockScheduledEventsFetch.mockResolvedValueOnce({ id: "existing-id", edit: mockEdit });
+    await editGuildScheduledEvent(started, "guild-123", "existing-id");
+    expect(mockEdit).toHaveBeenCalledOnce();
+    expect(mockEdit.mock.calls[0][0].scheduledStartTime).toBeUndefined();
+  });
+
+  it("does not touch a Discord event once the event has ended", async () => {
+    const id = await editGuildScheduledEvent(ended, "guild-123", "existing-id");
+    expect(id).toBe("existing-id");
+    expect(mockScheduledEventsFetch).not.toHaveBeenCalled();
+    expect(mockEdit).not.toHaveBeenCalled();
   });
 });

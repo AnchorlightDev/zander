@@ -32,7 +32,7 @@ public class website implements SimpleCommand {
 
                 Component message = Component.text("For all information regarding the Network, visit our website: " + siteAddress)
                         .color(NamedTextColor.YELLOW);
-                message = message.clickEvent(ClickEvent.clickEvent(ClickEvent.Action.OPEN_URL, siteAddress));
+                message = message.clickEvent(ClickEvent.openUrl(siteAddress));
                 source.sendMessage(message);
             } catch (Exception e) {
                 Component builder = Component.text("An error has occurred. Is the API down?").color(NamedTextColor.RED);

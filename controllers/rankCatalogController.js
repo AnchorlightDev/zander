@@ -1,5 +1,6 @@
 import db from "./databaseController.js";
 import { fetchStripePrices, resolveStripePriceAmount, formatPrice } from "./webstoreController.js";
+import { groupByCategory } from "../lib/webstore/catalogVisibility.mjs";
 
 function query(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -21,41 +22,49 @@ function rowToEntry(r) {
     ...r,
     stripePriceIds: parseJsonArray(r.stripePriceIds),
     perks: parseJsonArray(r.perks),
+    // TINYINT(1) arrives as 1/0; the rest of the app wants booleans.
+    visible: r.visible === 1 || r.visible === true,
+    categoryVisible: r.categoryVisible === 1 || r.categoryVisible === true,
   };
 }
 
 export async function getAllCatalogEntries() {
   const rows = await query(
-    `SELECT id, stripePriceIds, displayName, description, imageUrl,
-            category, categorySortOrder, sortOrder, perks, createdAt, updatedAt
-     FROM rankCatalog
-     ORDER BY categorySortOrder ASC, sortOrder ASC, displayName ASC`
+    `SELECT rc.id, rc.stripePriceIds, rc.displayName, rc.description, rc.imageUrl,
+            rc.visible, rc.categoryId, rc.sortOrder, rc.perks, rc.createdAt, rc.updatedAt,
+            c.name AS categoryName, c.sortOrder AS categorySortOrder, c.visible AS categoryVisible
+       FROM rankCatalog rc
+       LEFT JOIN webstoreCategories c ON c.id = rc.categoryId
+      ORDER BY c.sortOrder ASC, rc.sortOrder ASC, rc.displayName ASC`
   );
   return rows.map(rowToEntry);
 }
 
 export async function getCatalogEntry(id) {
   const rows = await query(
-    `SELECT id, stripePriceIds, displayName, description, imageUrl,
-            category, categorySortOrder, sortOrder, perks, createdAt, updatedAt
-     FROM rankCatalog WHERE id = ?`,
+    `SELECT rc.id, rc.stripePriceIds, rc.displayName, rc.description, rc.imageUrl,
+            rc.visible, rc.categoryId, rc.sortOrder, rc.perks, rc.createdAt, rc.updatedAt,
+            c.name AS categoryName, c.sortOrder AS categorySortOrder, c.visible AS categoryVisible
+       FROM rankCatalog rc
+       LEFT JOIN webstoreCategories c ON c.id = rc.categoryId
+      WHERE rc.id = ?`,
     [id]
   );
   if (!rows.length) return null;
   return rowToEntry(rows[0]);
 }
 
-export async function createCatalogEntry({ stripePriceIds, displayName, description, imageUrl, category, categorySortOrder, sortOrder, perks }) {
+export async function createCatalogEntry({ stripePriceIds, displayName, description, imageUrl, categoryId, sortOrder, perks, visible = true }) {
   const result = await query(
-    `INSERT INTO rankCatalog (stripePriceIds, displayName, description, imageUrl, category, categorySortOrder, sortOrder, perks)
+    `INSERT INTO rankCatalog (stripePriceIds, displayName, description, imageUrl, visible, categoryId, sortOrder, perks)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       JSON.stringify(Array.isArray(stripePriceIds) ? stripePriceIds : []),
       displayName,
       description || null,
       imageUrl || null,
-      category || "Ranks",
-      Number(categorySortOrder) || 0,
+      visible ? 1 : 0,
+      Number(categoryId) || null,
       Number(sortOrder) || 0,
       JSON.stringify(Array.isArray(perks) ? perks : []),
     ]
@@ -63,23 +72,31 @@ export async function createCatalogEntry({ stripePriceIds, displayName, descript
   return result.insertId;
 }
 
-export async function updateCatalogEntry(id, { stripePriceIds, displayName, description, imageUrl, category, categorySortOrder, sortOrder, perks }) {
+export async function updateCatalogEntry(id, { stripePriceIds, displayName, description, imageUrl, categoryId, sortOrder, perks, visible = true }) {
   await query(
     `UPDATE rankCatalog
      SET stripePriceIds = ?, displayName = ?, description = ?, imageUrl = ?,
-         category = ?, categorySortOrder = ?, sortOrder = ?, perks = ?, updatedAt = NOW()
+         visible = ?, categoryId = ?, sortOrder = ?, perks = ?, updatedAt = NOW()
      WHERE id = ?`,
     [
       JSON.stringify(Array.isArray(stripePriceIds) ? stripePriceIds : []),
       displayName,
       description || null,
       imageUrl || null,
-      category || "Ranks",
-      Number(categorySortOrder) || 0,
+      visible ? 1 : 0,
+      Number(categoryId) || null,
       Number(sortOrder) || 0,
       JSON.stringify(Array.isArray(perks) ? perks : []),
       id,
     ]
+  );
+}
+
+/** Show/hide one product without touching the rest of the row. */
+export async function setCatalogEntryVisibility(id, visible) {
+  await query(
+    `UPDATE rankCatalog SET visible = ?, updatedAt = NOW() WHERE id = ?`,
+    [visible ? 1 : 0, id]
   );
 }
 
@@ -119,8 +136,9 @@ export async function getRankCatalogForPublicPage(preferredCurrency = null) {
     }
   }
 
-  // Enrich entries and group by category
-  const categoryMap = new Map();
+  // Enrich entries, then group. Hidden products -- and every product inside a
+  // hidden category -- are dropped by groupByCategory's publicOnly pass.
+  const enriched = [];
   for (const entry of entries) {
     const prices = entry.stripePriceIds
       .map((priceId) => {
@@ -138,15 +156,9 @@ export async function getRankCatalogForPublicPage(preferredCurrency = null) {
       })
       .filter(Boolean);
 
-    const pkg = { ...entry, prices };
-
-    if (!categoryMap.has(entry.category)) {
-      categoryMap.set(entry.category, { sortOrder: entry.categorySortOrder, packages: [] });
-    }
-    categoryMap.get(entry.category).packages.push(pkg);
+    enriched.push({ ...entry, prices });
   }
 
-  return Array.from(categoryMap.entries())
-    .sort((a, b) => a[1].sortOrder - b[1].sortOrder)
-    .map(([name, { packages }]) => ({ displayName: name, packages }));
+  return groupByCategory(enriched, { publicOnly: true })
+    .map(({ displayName, packages }) => ({ displayName, packages }));
 }

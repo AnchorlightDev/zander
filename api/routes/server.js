@@ -5,6 +5,16 @@ import {
   generateLog,
 } from "../common.js";
 
+/**
+ * Optional Bedrock (Geyser) address: "host" or "host:port". Blank clears it.
+ * Returns undefined for a malformed value so the caller can reject it.
+ */
+function parseBedrockAddress(raw) {
+  const text = String(raw ?? "").trim();
+  if (!text) return null;
+  return /^[A-Za-z0-9.-]+(:\d{1,5})?$/.test(text) ? text : undefined;
+}
+
 export default function serverApiRoute(app, config, db, features, lang) {
   const baseEndpoint = "/api/server";
 
@@ -74,6 +84,10 @@ export default function serverApiRoute(app, config, db, features, lang) {
     if (res.sent) return;
     const position = required(req.body, "position", res);
     if (res.sent) return;
+    const bedrockAddress = parseBedrockAddress(req.body.bedrockAddress);
+    if (bedrockAddress === undefined) {
+      return res.send({ success: false, message: "Bedrock address must look like host or host:port." });
+    }
 
     const serverCreatedLang = lang.server.serverCreated;
 
@@ -87,9 +101,10 @@ export default function serverApiRoute(app, config, db, features, lang) {
               displayName,
               serverType,
               serverConnectionAddress,
+              bedrockAddress,
               position
-          ) VALUES (?, ?, ?, ?)`,
-          [displayName, serverType, serverConnectionAddress, position],
+          ) VALUES (?, ?, ?, ?, ?)`,
+          [displayName, serverType, serverConnectionAddress, bedrockAddress, position],
           (error, results) => {
             if (error) return reject(error);
             resolve(results);
@@ -138,6 +153,10 @@ export default function serverApiRoute(app, config, db, features, lang) {
     if (res.sent) return;
     const position = required(req.body, "position", res);
     if (res.sent) return;
+    const bedrockAddress = parseBedrockAddress(req.body.bedrockAddress);
+    if (bedrockAddress === undefined) {
+      return res.send({ success: false, message: "Bedrock address must look like host or host:port." });
+    }
 
     try {
       await new Promise((resolve, reject) => {
@@ -149,10 +168,11 @@ export default function serverApiRoute(app, config, db, features, lang) {
                   displayName=?,
                   serverType=?,
                   serverConnectionAddress=?,
+                  bedrockAddress=?,
                   position=?
               WHERE
                   serverId=?`,
-          [displayName, serverType, serverConnectionAddress, position, serverId],
+          [displayName, serverType, serverConnectionAddress, bedrockAddress, position, serverId],
           (error, results) => {
             if (error) return reject(error);
             resolve(results);

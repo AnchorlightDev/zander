@@ -3,6 +3,7 @@ import {
   AttachmentBuilder,
   Colors,
   EmbedBuilder,
+  MessageFlags,
   SlashCommandBuilder,
 } from "discord.js";
 import { hasPermission } from "../lib/discord/permissions.mjs";
@@ -151,7 +152,7 @@ export class LpAuditCommand extends Command {
 
   async chatInputRun(interaction) {
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     } catch (err) {
       console.error("[lp-audit] Failed to defer reply:", err);
       return;

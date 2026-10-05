@@ -1,4 +1,6 @@
 import crypto from "crypto";
+import { MONTHS } from "../lib/birthday.mjs";
+import { groupedTimeZones } from "../lib/timezones.mjs";
 import qs from "querystring";
 import { getGlobalImage, isLoggedIn, setBannerCookie } from "../api/common.js";
 import { checkRateLimit } from "../lib/rateLimiter.mjs";
@@ -10,6 +12,8 @@ import {
   getUserPermissions,
   getUserStats,
   linkDiscordAccount,
+  mergePlaceholderUser,
+  resolveDiscordLinkConflict,
   unlinkDiscordAccount,
 } from "../controllers/userController.js";
 import { getTicketsAccessibleByUser, getOpenTicketsWithChannelForUser } from "../controllers/supportTicketController.js";
@@ -32,6 +36,7 @@ import {
 } from "../controllers/watchController.js";
 import { checkAndReportNickname } from "../lib/discord/nicknameCheck.mjs";
 import { syncMemberRankRoles, stripAllTrackedRankRoles } from "../lib/discord/rankRoleSync.mjs";
+import { syncBoosterRewardsForDiscordId } from "../controllers/boosterRewardController.js";
 
 export default function profileSiteRoutes(
   app,
@@ -289,6 +294,8 @@ export default function profileSiteRoutes(
   // Edit Signed in User profile
   //
   app.get("/profile/:username/edit", async function (req, res) {
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 30 })) return;
+
     const username = req.params.username;
 
     try {
@@ -366,6 +373,9 @@ export default function profileSiteRoutes(
           profileSession: await getUserLastSession(profileData.userId),
           moment: moment,
           platformConnections: platformConnections,
+          // Straight from the runtime's ICU data, so the list never goes stale.
+          timeZoneGroups: groupedTimeZones(),
+          months: MONTHS,
         }));
         return;
       }
@@ -484,13 +494,38 @@ export default function profileSiteRoutes(
       const userData = new UserGetter();
       const existingLink = await userData.byDiscordId(discordUser.id);
 
-      if (existingLink && existingLink.userId !== req.session.user.userId) {
-        setBannerCookie(
-          "danger",
-          "That Discord account is already linked to another profile.",
-          res
-        );
-        return res.redirect(redirectPath);
+      const linkConflict = resolveDiscordLinkConflict(
+        existingLink,
+        req.session.user.userId
+      );
+
+      if (linkConflict !== "none") {
+        // A placeholder ("ghost") row holds this discordId only because the
+        // person used the support bot before linking a Minecraft account
+        // (createUnlinkedUser in controllers/supportTicketController.js).
+        // Refusing the link here is what stranded their Discord identity on a
+        // row with a random UUID and no ranks, permanently splitting them
+        // across two accounts — fold the ghost into the real account instead,
+        // exactly as registration already does (routes/sessionRoutes.js).
+        // A link held by a *real* account is still refused: that would be an
+        // account takeover, not a merge.
+        if (linkConflict === "absorb") {
+          const mergeSummary = await mergePlaceholderUser(
+            existingLink.userId,
+            req.session.user.userId
+          );
+          console.log(
+            `[PROFILE] Absorbed placeholder userId=${existingLink.userId} into userId=${req.session.user.userId} while linking Discord`,
+            mergeSummary
+          );
+        } else {
+          setBannerCookie(
+            "danger",
+            "That Discord account is already linked to another profile.",
+            res
+          );
+          return res.redirect(redirectPath);
+        }
       }
 
       await linkDiscordAccount(
@@ -513,6 +548,14 @@ export default function profileSiteRoutes(
         });
       } catch (roleErr) {
         console.error("[PROFILE] Deferred webstore role retry after Discord link failed:", roleErr.message);
+      }
+
+      // Already boosting the server? Grant the booster reward rank(s) now
+      // rather than waiting for the next sweep.
+      try {
+        await syncBoosterRewardsForDiscordId(discordUser.id);
+      } catch (boostErr) {
+        console.error("[PROFILE] Booster reward sync after Discord link failed:", boostErr.message);
       }
 
       // Trigger nickname enforcement now that the account is linked
@@ -588,6 +631,10 @@ export default function profileSiteRoutes(
       req.session.user.discordID = null;
       if (discordIdBeingUnlinked) {
         await stripAllTrackedRankRoles(discordIdBeingUnlinked);
+        // No longer linked, so no longer eligible for booster reward ranks.
+        await syncBoosterRewardsForDiscordId(discordIdBeingUnlinked).catch((boostErr) =>
+          console.error("[PROFILE] Booster reward sync after Discord unlink failed:", boostErr.message)
+        );
       }
       setBannerCookie("success", "Discord account disconnected.", res);
     } catch (error) {

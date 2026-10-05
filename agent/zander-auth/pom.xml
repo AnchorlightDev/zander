@@ -5,7 +5,7 @@
     <parent>
         <artifactId>zander</artifactId>
         <groupId>dev.anchorlight</groupId>
-        <version>1.4.0</version>
+        <version>2.1.0</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -36,7 +36,7 @@
         <dependency>
             <groupId>dev.anchorlight</groupId>
             <artifactId>StoneLib</artifactId>
-            <version>2.1.0</version>
+            <version>2.2.1</version>
             <scope>compile</scope>
             <exclusions>
                 <exclusion>
@@ -58,9 +58,9 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <version>3.14.0</version>
                 <configuration>
-                    <release>25</release>
+                    <release>21</release>
                     <!-- JDK 23+ no longer discovers annotation processors implicitly. -->
                     <annotationProcessorPaths>
                         <path>

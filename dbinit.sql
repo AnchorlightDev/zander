@@ -368,6 +368,26 @@ CREATE TABLE applications (
     PRIMARY KEY (applicationId)
 );
 
+-- ###########################################################################
+-- ## SUPERSEDED -- DO NOT RUN THE forms/formBlocks/formResponses SECTION.  ##
+-- ###########################################################################
+--
+-- These three tables were replaced by prisma/migrations/0044_forms, which
+-- creates a `forms` table of the same name and a completely different shape.
+-- No application code reads formBlocks or formResponses any more, and neither
+-- is modelled in prisma/schema.prisma.
+--
+-- Running this against a database that Prisma then migrates will break the
+-- deploy: 0044_forms opens with a plain `CREATE TABLE forms` (no IF NOT
+-- EXISTS) and fails with "Table 'forms' already exists", after which Prisma
+-- refuses every later migration with P3009. That is exactly what happened to
+-- production on 2026-09-22; see migration/repair_0044_forms_legacy_conflict.sql.
+--
+-- The applications.applicationType / linkedFormId columns below are likewise
+-- added by 0044_forms, as VARCHAR(20) rather than an ENUM.
+--
+-- ###########################################################################
+
 CREATE TABLE forms (
     formId INT NOT NULL AUTO_INCREMENT,
     name VARCHAR(120) NOT NULL,

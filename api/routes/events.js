@@ -24,6 +24,7 @@ import {
   upsertEventAnnouncements,
   getPendingReviewEvents,
   duplicateEvent,
+  applyDefaultAnnouncementsToEvents,
 } from "../../services/eventService.js";
 
 import {
@@ -33,6 +34,9 @@ import {
   updateTemplate,
   deleteTemplate,
   upsertTemplateAnnouncements,
+  getDefaultAnnouncements,
+  upsertDefaultAnnouncements,
+  applyDefaultAnnouncementsToTemplates,
 } from "../../services/eventTemplateService.js";
 
 import {
@@ -50,11 +54,12 @@ import { ChannelType } from "discord.js";
 import { client as discordClient } from "../../controllers/discordController.js";
 import { required, optional } from "../common.js";
 import { hasPermission as checkPermNode } from "../../lib/discord/permissions.mjs";
+import { resolveEventAccess, redactLockedEvent, viewerRankSlugs } from "../../lib/eventAccess.js";
 import { searchLinkedUsers } from "../../controllers/supportTicketController.js";
 import { createRequire } from "module";
 import path from "path";
 const _require = createRequire(import.meta.url);
-const config = _require(path.join(process.cwd(), "config.json"));
+const config = _require("../../lib/config/config.cjs");
 
 function actorFromReq(req) {
   const user = req.session?.user;
@@ -64,8 +69,38 @@ function actorFromReq(req) {
   };
 }
 
+/**
+ * Apply an event's rank lock to an API response.
+ *
+ * These two endpoints are reachable with nothing but an API token, so a
+ * rank-locked event must come back as the same teaser the website shows —
+ * otherwise the JSON feed becomes the way around the lock.
+ */
+function redactForCaller(events, viewerRanks, isStaff) {
+  return (events || []).map((ev) => {
+    const access = resolveEventAccess(ev, viewerRanks, { isStaff });
+    return access.locked ? redactLockedEvent(ev) : ev;
+  });
+}
+
 function isReviewer(req) {
   return checkPermNode(req.session?.user?.permissions || [], "zander.web.events.review");
+}
+
+/**
+ * Why `req` may not change this event's actions or announcements, or null if
+ * it may. Same rule as /update and /update-published: approved and live
+ * events belong to reviewers. These endpoints used to skip it, so an editor
+ * could change what a published event posts.
+ */
+async function eventChangeRefusal(req, eventId) {
+  if (!isEditor(req)) return "You do not have permission to edit events.";
+  const existing = await getEventById(eventId);
+  if (!existing) return "Event not found";
+  if (["approved", "published"].includes(existing.status) && !isReviewer(req)) {
+    return "Only approvers can change an approved or published event.";
+  }
+  return null;
 }
 
 function isEditor(req) {
@@ -83,8 +118,10 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     if (!features.events) return res.send({ success: false, message: "Events feature disabled" });
     try {
       const limit = Math.min(parseInt(req.query.limit || "20"), 50);
-      const events = await getUpcomingPublishedEvents(limit);
-      return res.send({ success: true, data: events });
+      const viewerRanks = viewerRankSlugs(req);
+      const isStaff = Boolean(req.session?.user?.isStaff);
+      const events = await getUpcomingPublishedEvents(limit, viewerRanks, isStaff);
+      return res.send({ success: true, data: redactForCaller(events, viewerRanks, isStaff) });
     } catch (err) {
       console.error("[Events API] upcoming:", err);
       return res.send({ success: false, message: "Failed to fetch upcoming events" });
@@ -97,7 +134,10 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     try {
       const page = Math.max(parseInt(req.query.page || "1"), 1);
       const limit = Math.min(parseInt(req.query.limit || "20"), 100);
-      const result = await getAllPublishedEvents(page, limit);
+      const viewerRanks = viewerRankSlugs(req);
+      const isStaff = Boolean(req.session?.user?.isStaff);
+      const result = await getAllPublishedEvents(page, limit, viewerRanks, isStaff);
+      result.events = redactForCaller(result.events, viewerRanks, isStaff);
       return res.send({ success: true, ...result });
     } catch (err) {
       console.error("[Events API] published:", err);
@@ -304,6 +344,9 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     try {
       const { actorId, actorName } = actorFromReq(req);
       const event = await submitForReview(eventId, actorId, actorName);
+      if (event.alreadySubmitted) {
+        return res.send({ success: true, data: event, message: "Event is already awaiting review" });
+      }
 
       // Fire review notification asynchronously — don't block the response
       setImmediate(async () => {
@@ -435,6 +478,11 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
 
     const body = req.body || {};
     if (!body?.eventId) return res.send({ success: false, message: "eventId is required" });
+    // A published event is live on the site and Discord: same rule as /update
+    // applies to approved events -- only reviewers may change it.
+    if (!isReviewer(req)) {
+      return res.status(403).send({ success: false, message: "Only approvers can edit a published event." });
+    }
 
     try {
       const { actorId, actorName } = actorFromReq(req);
@@ -597,8 +645,8 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
             await editGuildScheduledEvent(event, resolvedGuildId, event.discordGuildEventId);
             results.guildEvent = "updated";
           } else if (resolvedGuildId) {
-            await createGuildScheduledEvent(event, resolvedGuildId);
-            results.guildEvent = "created";
+            const createdId = await createGuildScheduledEvent(event, resolvedGuildId);
+            results.guildEvent = createdId ? "created" : "skipped: event already started or not public";
           } else {
             results.guildEvent = "skipped: no guild configured";
           }
@@ -638,8 +686,18 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
 
     const { eventId } = req.body || {};
     if (!eventId) return res.send({ success: false, message: "eventId is required" });
+    if (!isEditor(req)) {
+      return res.status(403).send({ success: false, message: "You do not have permission to delete events." });
+    }
 
     try {
+      const existing = await getEventById(eventId);
+      if (!existing) return res.send({ success: false, message: "Event not found" });
+      // Deleting an approved or published event removes it from public view,
+      // so it needs the same reviewer rights as editing one.
+      if ((existing.status === "approved" || existing.status === "published") && !isReviewer(req)) {
+        return res.status(403).send({ success: false, message: "Only approvers can delete an approved or published event." });
+      }
       const { actorId, actorName } = actorFromReq(req);
       const event = await deleteEvent(eventId, actorId, actorName);
       return res.send({ success: true, data: event, message: "Event deleted" });
@@ -678,6 +736,9 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     if (!eventId) return res.send({ success: false, message: "eventId is required" });
 
     try {
+      const refusal = await eventChangeRefusal(req, eventId);
+      if (refusal) return res.status(refusal === "Event not found" ? 200 : 403).send({ success: false, message: refusal });
+
       const { actorId, actorName } = actorFromReq(req);
       await upsertEventActions(eventId, actions || [], actorId, actorName);
       return res.send({ success: true, message: "Actions updated" });
@@ -695,6 +756,9 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     if (!eventId) return res.send({ success: false, message: "eventId is required" });
 
     try {
+      const refusal = await eventChangeRefusal(req, eventId);
+      if (refusal) return res.status(refusal === "Event not found" ? 200 : 403).send({ success: false, message: refusal });
+
       const { actorId, actorName } = actorFromReq(req);
       await upsertEventAnnouncements(eventId, announcements || [], actorId, actorName);
       return res.send({ success: true, message: "Announcements updated" });
@@ -806,6 +870,68 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     }
   });
 
+  // ============================================================================
+  // Default announcements (seed every new event and template)
+  // ============================================================================
+
+  /** GET /api/events/default-announcements/get */
+  app.get("/api/events/default-announcements/get", async (req, res) => {
+    if (!features.events) return res.send({ success: false, message: "Events feature disabled" });
+
+    try {
+      return res.send({ success: true, data: await getDefaultAnnouncements() });
+    } catch (err) {
+      console.error("[Events API] default-announcements/get:", err);
+      return res.send({ success: false, message: "Failed to fetch default announcements" });
+    }
+  });
+
+  /** POST /api/events/default-announcements/update */
+  app.post("/api/events/default-announcements/update", async (req, res) => {
+    if (!features.events) return res.send({ success: false, message: "Events feature disabled" });
+
+    const { announcements } = req.body || {};
+    if (announcements !== undefined && !Array.isArray(announcements)) {
+      return res.send({ success: false, message: "announcements must be an array" });
+    }
+
+    try {
+      await upsertDefaultAnnouncements(announcements || []);
+      return res.send({ success: true, message: "Default announcements updated" });
+    } catch (err) {
+      console.error("[Events API] default-announcements/update:", err);
+      return res.send({ success: false, message: err.message || "Failed to update default announcements" });
+    }
+  });
+
+  /**
+   * POST /api/events/default-announcements/apply
+   * Body: { dryRun?: boolean, includeTemplates?: boolean }
+   * Adds the current defaults to upcoming events (and templates) missing them.
+   */
+  app.post("/api/events/default-announcements/apply", async (req, res) => {
+    if (!features.events) return res.send({ success: false, message: "Events feature disabled" });
+
+    const dryRun = req.body?.dryRun === true;
+    const includeTemplates = req.body?.includeTemplates !== false;
+
+    try {
+      const defaults = await getDefaultAnnouncements();
+      if (defaults.length === 0) return res.send({ success: false, message: "There are no default announcements to apply" });
+
+      const { actorId, actorName } = actorFromReq(req);
+      const events = await applyDefaultAnnouncementsToEvents(defaults, { dryRun, actorId, actorName });
+      const templates = includeTemplates
+        ? await applyDefaultAnnouncementsToTemplates(defaults, { dryRun })
+        : { templates: 0, announcements: 0 };
+
+      return res.send({ success: true, dryRun, data: { events, templates } });
+    } catch (err) {
+      console.error("[Events API] default-announcements/apply:", err);
+      return res.send({ success: false, message: err.message || "Failed to apply default announcements" });
+    }
+  });
+
   /** POST /api/events/templates/generate-draft - manually trigger draft generation */
   app.post("/api/events/templates/generate-draft", async (req, res) => {
     if (!features.events) return res.send({ success: false, message: "Events feature disabled" });
@@ -820,8 +946,28 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
 
       const { generateDraftFromTemplate, computeNextEventDate } = await import("../../services/eventTemplateService.js");
 
-      const date = targetDate ? new Date(targetDate) : computeNextEventDate(tmpl);
-      if (!date) return res.send({ success: false, message: "Could not determine next event date" });
+      // A picked date (YYYY-MM-DD) wins; otherwise the template's recurrence
+      // decides. A once-off (master) template has no recurrence, so the
+      // caller has to pick -- needsDate tells the page to ask.
+      let date = null;
+      if (targetDate) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(targetDate))) {
+          return res.send({ success: false, message: "Pick a valid date for the event." });
+        }
+        date = new Date(`${targetDate}T00:00:00Z`);
+      } else {
+        date = computeNextEventDate(tmpl);
+      }
+      if (!date || Number.isNaN(date.getTime())) {
+        return res.send({
+          success: false,
+          needsDate: true,
+          message:
+            tmpl.recurrenceType === "once"
+              ? "This is a master template, so choose the date for the new event."
+              : "This template's schedule doesn't give a next date, so choose one for the new event.",
+        });
+      }
 
       const event = await generateDraftFromTemplate(tmpl, date, actorId, actorName);
       return res.send({ success: true, data: event, message: "Draft event generated from template" });

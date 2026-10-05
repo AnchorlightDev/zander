@@ -22,9 +22,25 @@ describe("classifyAccountState", () => {
     expect(classifyAccountState(user)).toBe(ACCOUNT_STATE.MINECRAFT_PROFILE_ONLY);
   });
 
-  it("classifies a Minecraft-only profile even when Discord is forcelinked without local credentials", () => {
+  it("classifies a Discord-linked account as registered, since Discord login works without a password", () => {
     const user = { email: null, password_hash: null, account_registered: null, discordId: "12345" };
+    expect(classifyAccountState(user)).toBe(ACCOUNT_STATE.REGISTERED);
+  });
+
+  it("classifies a Discord-linked account with an unfinished password signup as registered", () => {
+    const user = { email: "player@example.com", password_hash: "hash", account_registered: null, discordId: "12345" };
+    expect(classifyAccountState(user)).toBe(ACCOUNT_STATE.REGISTERED);
+  });
+
+  it("never counts a placeholder (support-bot ghost) as registered through Discord", () => {
+    const user = { email: null, password_hash: null, account_registered: null, discordId: "12345", is_placeholder: 1 };
     expect(classifyAccountState(user)).toBe(ACCOUNT_STATE.MINECRAFT_PROFILE_ONLY);
+  });
+
+  it("accepts the hasPassword flag the admin queries select instead of the hash", () => {
+    const user = { email: "player@example.com", hasPassword: 1, account_registered: new Date() };
+    expect(classifyAccountState(user)).toBe(ACCOUNT_STATE.REGISTERED);
+    expect(classifyAccountState({ ...user, hasPassword: 0 })).toBe(ACCOUNT_STATE.REGISTRATION_INCOMPLETE);
   });
 
   it("classifies email+password set but registration not completed as incomplete", () => {

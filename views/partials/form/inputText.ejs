@@ -8,4 +8,8 @@
     <% if (required) { %>
         required
     <% } %>
+    <%# Optional — guarded with typeof so callers that omit it still render. %>
+    <% if (typeof maxLength !== "undefined" && maxLength) { %>
+        maxlength="<%= maxLength %>"
+    <% } %>
 >

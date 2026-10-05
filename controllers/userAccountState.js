@@ -14,29 +14,44 @@ export const ACCOUNT_STATE = {
 };
 
 /**
- * Classify a `users` row into one of three account states.
+ * Classify a `users` row into one of three account states, by whether the
+ * person can actually sign in to the website:
  *
- * A row can exist purely because a player joined Minecraft (see
- * POST /api/user/create) with no email/password/discordId ever set — that is
- * "Minecraft profile only". Registration is only "complete" once
- * account_registered has been stamped AND a password exists; anything with
- * partial credentials (email/password set mid-flow, or a Discord-only
- * forcelink with no local password) is "incomplete", since a discordId alone
- * does not prove a working local login exists.
+ *   REGISTERED               has a working sign-in: a finished password
+ *                            registration (account_registered + password), or
+ *                            a Discord link on a real account -- Discord login
+ *                            only needs a users row with that discordId
+ *                            (UserGetter.isRegistered in controllers/userController.js).
+ *   REGISTRATION_INCOMPLETE  started signing up (email, password or a
+ *                            registration stamp) but cannot sign in yet.
+ *   MINECRAFT_PROFILE_ONLY   a row that exists only because the player joined
+ *                            Minecraft (POST /api/user/create).
  *
- * @param {{email?: string|null, password_hash?: string|null, account_registered?: Date|string|null}} user
+ * Placeholder rows (support-bot "ghost" users, is_placeholder = 1) never count
+ * as registered through Discord: they have no proven Minecraft identity.
+ *
+ * Accepts either `password_hash` or a `hasPassword` flag, since the admin
+ * queries never select the hash itself.
+ *
+ * SQL twins of these rules: controllers/usersAdminController.js (REGISTERED_SQL,
+ * PROFILE_ONLY_SQL). Keep them in sync.
+ *
+ * @param {{email?: string|null, password_hash?: string|null, hasPassword?: boolean|number,
+ *          account_registered?: Date|string|null, discordId?: string|null, is_placeholder?: boolean|number}} user
  * @returns {"REGISTERED"|"REGISTRATION_INCOMPLETE"|"MINECRAFT_PROFILE_ONLY"}
  */
 export function classifyAccountState(user) {
   const email = user?.email ?? null;
-  const passwordHash = user?.password_hash ?? null;
+  const hasPassword = Boolean(user?.password_hash) || Number(user?.hasPassword) === 1 || user?.hasPassword === true;
   const accountRegistered = user?.account_registered ?? null;
+  const isPlaceholder = Number(user?.is_placeholder) === 1 || user?.is_placeholder === true;
+  const hasDiscordLogin = Boolean(user?.discordId) && !isPlaceholder;
 
-  if (accountRegistered && passwordHash) {
+  if ((accountRegistered && hasPassword) || hasDiscordLogin) {
     return ACCOUNT_STATE.REGISTERED;
   }
 
-  if (!email && !passwordHash && !accountRegistered) {
+  if (!email && !hasPassword && !accountRegistered) {
     return ACCOUNT_STATE.MINECRAFT_PROFILE_ONLY;
   }
 

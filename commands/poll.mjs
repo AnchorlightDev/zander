@@ -29,10 +29,12 @@ export class PollCommand extends Command {
       .setFooter({ text: "Vote using the reactions below to have your say!" })
       .setColor(Colors.Blue);
 
-    const message = await interaction.reply({
+    // withResponse replaces the deprecated fetchReply option.
+    const response = await interaction.reply({
       embeds: [embed],
-      fetchReply: true,
+      withResponse: true,
     });
+    const message = response.resource.message;
 
     await message.react("⬆️");
     await message.react("⬇️");

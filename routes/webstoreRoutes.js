@@ -29,16 +29,38 @@ import {
   getWebstoreItems,
   preferredCurrencyFromLocale,
 } from "../controllers/webstoreController.js";
+import { getAllCategories } from "../controllers/webstoreCategoryController.js";
+import { getAllItemSettings } from "../controllers/webstoreItemSettingsController.js";
+import {
+  applyItemSettings,
+  groupByCategory,
+  isPubliclyVisible,
+} from "../lib/webstore/catalogVisibility.mjs";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Extract a best-effort locale from the Accept-Language header. */
+/**
+ * Extract a best-effort locale from the Accept-Language header.
+ * Entries carry optional weights ("en-us;q=0.7") and may be "*" or malformed,
+ * any of which would make Intl.NumberFormat throw, so each candidate is
+ * stripped and validated before use.
+ */
 function parseLocale(req) {
   const header = req.headers["accept-language"];
   if (typeof header !== "string") return "en-US";
-  return header.split(",")[0].trim() || "en-US";
+  for (const entry of header.split(",")) {
+    const tag = entry.split(";")[0].trim();
+    if (!tag || tag === "*") continue;
+    try {
+      const [canonical] = Intl.getCanonicalLocales(tag);
+      if (canonical) return canonical;
+    } catch {
+      // invalid tag -- try the next one
+    }
+  }
+  return "en-US";
 }
 
 /** Validate a Minecraft username: 1-16 alphanumeric / underscore characters. */
@@ -81,15 +103,36 @@ export default function webstoreRoutes(app, config, features) {
     }
 
     let items = [];
+    let categoryGroups = [];
+    let useCategories = false;
     let itemsError = false;
     try {
-      items = (await getWebstoreItems(preferredCurrency)).map((item) => ({
+      // getWebstoreItems() deliberately returns everything -- it also serves
+      // checkout and renewal. Hiding happens here, on the way to the page.
+      const [rawItems, settings, categories] = await Promise.all([
+        getWebstoreItems(preferredCurrency),
+        getAllItemSettings().catch(() => []),
+        getAllCategories().catch(() => []),
+      ]);
+
+      const decorated = applyItemSettings(rawItems, settings, categories).map((item) => ({
         ...item,
         priceDisplay: formatPrice(item.priceCents, item.currency, locale),
         purchaseLabel: item.purchaseType === "subscription" ? "Subscribe" : "Buy Now",
         badgeLabel: item.purchaseType === "subscription" ? "Monthly" : "One-time",
       }));
-      console.log(`[webstore] loaded ${items.length} item(s) for storefront`);
+
+      categoryGroups = groupByCategory(decorated, { publicOnly: true });
+      // Until somebody actually assigns a category, the page stays the flat
+      // list it has always been rather than growing an "Uncategorised" heading.
+      useCategories = categoryGroups.some((g) => g.id !== null);
+      items = categoryGroups.flatMap((g) => g.packages);
+
+      const hidden = decorated.length - items.length;
+      console.log(
+        `[webstore] loaded ${items.length} item(s) for storefront` +
+        (hidden > 0 ? ` (${hidden} hidden)` : "")
+      );
     } catch (err) {
       console.error("[webstore] Failed to load items:", err.message);
       itemsError = true;
@@ -104,6 +147,8 @@ export default function webstoreRoutes(app, config, features) {
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
       items,
+      categoryGroups,
+      useCategories,
       itemsError,
       username: loggedIn ? req.session.user.username : null,
       loggedIn,
@@ -152,6 +197,27 @@ export default function webstoreRoutes(app, config, features) {
     if (!item.stripePriceId) {
       setBannerCookie("danger", "Item configuration error — please contact staff.", res);
       return res.redirect("/webstore");
+    }
+
+    // findWebstoreItem() does not filter -- renewal depends on it resolving
+    // hidden items -- so the storefront has to refuse them itself. Without this
+    // a hidden product is still purchasable by posting its slug.
+    try {
+      const [settings, categories] = await Promise.all([
+        getAllItemSettings(),
+        getAllCategories(),
+      ]);
+      const [decorated] = applyItemSettings([item], settings, categories);
+      if (!isPubliclyVisible(decorated)) {
+        console.log(`[webstore] checkout refused for hidden item | user=${req.session.user.userId} itemSlug=${itemSlug}`);
+        setBannerCookie("warning", "That item is no longer available.", res);
+        return res.redirect("/webstore");
+      }
+    } catch (err) {
+      // A settings lookup failure must not block a legitimate purchase; the
+      // item was already resolved and is assumed visible, as it was before
+      // this table existed.
+      console.error("[webstore] visibility check failed, allowing checkout:", err.message);
     }
 
     // --- Determine recipient ---
@@ -261,6 +327,9 @@ export default function webstoreRoutes(app, config, features) {
       features,
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
+      // discord_role perks are deferred until the recipient links Discord;
+      // linking re-drives them (retryDeferredDiscordRoles), so prompt here.
+      discordLinked: Boolean(req.session.user.discordID),
     });
   });
 
@@ -329,6 +398,6 @@ export default function webstoreRoutes(app, config, features) {
   // GET /give — legacy entry point now redirected to the Finance Centre support section
   // -------------------------------------------------------------------------
   app.get("/give", async function (req, res) {
-    return res.redirect(301, "/finance#support");
+    return res.redirect("/finance#support", 301);
   });
 }
