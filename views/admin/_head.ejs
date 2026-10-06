@@ -15,8 +15,11 @@
   <link href="/vendors/cdn/bootstrap/5.3.2/bootstrap.min.css" rel="stylesheet"
         integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
 
-  <!-- jQuery (required by Summernote) -->
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+  <!-- jQuery (required by Summernote and inline page scripts, so it must load
+       before the body). Served from this site: a synchronous script in <head>
+       from a third-party CDN blocks the whole page from drawing, and a slow or
+       stalled CDN request showed as a white dashboard until refresh. -->
+  <script src="/vendors/cdn/jquery/3.7.1/jquery.min.js"
           integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
           crossorigin="anonymous"></script>
 
