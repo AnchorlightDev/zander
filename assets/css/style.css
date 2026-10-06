@@ -3842,3 +3842,115 @@ a:focus {
   color: #223a66;
   font-weight: 600;
 }
+
+/* Contact page aside and a guest's private ticket page (views/contact.ejs, views/contactTicket.ejs) */
+.auth-page .contact-aside {
+  background: #f4f9fc;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.auth-page .contact-aside h5 {
+  color: #223a66;
+  margin-bottom: 1rem;
+}
+
+.auth-page .guest-thread {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+
+.auth-page .guest-message {
+  border-radius: 10px;
+  padding: .85rem 1rem;
+  max-width: 90%;
+}
+
+.auth-page .guest-message.is-team {
+  background: #f4f9fc;
+  border: 1px solid #e3e9ef;
+  align-self: flex-start;
+}
+
+.auth-page .guest-message.is-you {
+  background: #eaf1fb;
+  align-self: flex-end;
+}
+
+.auth-page .guest-meta {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .8rem;
+  margin-bottom: .35rem;
+  color: #6F8BA4;
+}
+
+.auth-page .guest-meta strong {
+  color: #223a66;
+}
+
+.auth-page .guest-body {
+  white-space: pre-wrap;
+  line-height: 1.55;
+  color: #34495e;
+}
+
+.auth-page .guest-status {
+  align-self: center;
+  font-size: .8rem;
+  color: #6F8BA4;
+}
+
+/* Finance Centre: this month's costs split between supporters and the organisation (views/modules/finance/index.ejs) */
+.finance-page .finance-figure {
+  color: #2f508c;
+  white-space: nowrap;
+}
+
+.finance-page .finance-split {
+  display: flex;
+  height: 32px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #e8eef5;
+  font-size: .8rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.finance-page .finance-split > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.finance-page .finance-split-supporters {
+  background: #2f8f5b;
+}
+
+.finance-page .finance-split-organisation {
+  background: #2f508c;
+}
+
+.finance-page .finance-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  margin-top: .3rem;
+  flex-shrink: 0;
+}
+
+.finance-page .finance-swatch-supporters {
+  background: #2f8f5b;
+}
+
+.finance-page .finance-swatch-organisation {
+  background: #2f508c;
+}
+
+.finance-page .finance-legend .small {
+  line-height: 1.5;
+}

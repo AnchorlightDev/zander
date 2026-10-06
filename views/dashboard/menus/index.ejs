@@ -8,6 +8,11 @@
   .menu-item { border: 1px solid var(--bs-border-color); border-radius: .375rem; background: var(--bs-body-bg); margin-bottom: .5rem; }
   .menu-item.is-child { margin-left: 2rem; }
   .menu-item-head { display: flex; align-items: center; gap: .5rem; padding: .5rem .75rem; }
+  .menu-drag { cursor: grab; color: #8c8f94; padding: .25rem .35rem; margin-left: -.35rem; border-radius: 4px; touch-action: none; }
+  .menu-drag:hover { color: #2271b3; background: #f0f6fc; }
+  .menu-item.sortable-ghost { opacity: .35; border-style: dashed; }
+  .menu-item.sortable-chosen { box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+  .menu-item.drop-indent { margin-left: 2rem; }
   .menu-item-head .menu-label { font-weight: 600; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .menu-item-head .menu-type { font-size: .75rem; }
   .menu-item-body { border-top: 1px solid var(--bs-border-color); padding: .75rem; }
@@ -155,6 +160,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script type="application/json" id="menuData"><%- JSON.stringify({
   location,
   maxDepth: spec.maxDepth,
@@ -318,6 +324,7 @@
     rows.forEach(function (row, index) {
       var item = row.item;
       var head = el('div', { class: 'menu-item-head' }, [
+        el('span', { class: 'menu-drag', title: 'Drag to move. Drag right to put it under the heading above, left to take it out.', 'aria-hidden': 'true' }, [el('i', { class: 'fa-solid fa-grip-vertical' })]),
         el('span', { class: 'menu-label', text: item.label || (item.type === 'server' ? summary(item) : '(no label)') }),
         el('span', { class: 'menu-type text-muted d-none d-md-inline', text: summary(item) }),
         el('span', { class: 'badge text-bg-light menu-type', text: TYPE_NAMES[item.type] || item.type }),
@@ -420,6 +427,71 @@
     });
     document.getElementById('itemsField').value = JSON.stringify(tree);
   });
+
+  /**
+   * Apply a drag-and-drop move. `oldIndex`/`newIndex` are positions in the
+   * list as Sortable reports them; `dx` is how far right (+) or left (-) the
+   * row was dragged, which nests it under the heading above or takes it out,
+   * like WordPress. A heading moves together with the items under it.
+   */
+  function applyDrop(oldIndex, newIndex, dx) {
+    var len = blockEnd(oldIndex) - oldIndex;
+    // Dropping a heading among its own children changes nothing.
+    if (newIndex > oldIndex && newIndex < oldIndex + len) return;
+    var block = rows.splice(oldIndex, len);
+    var insertAt = newIndex > oldIndex ? newIndex - len + 1 : newIndex;
+    rows.splice.apply(rows, [insertAt, 0].concat(block));
+
+    var head = block[0];
+    if (data.maxDepth > 1 && head.item.type !== 'heading') {
+      var next = rows[insertAt + len];
+      if (dx > 40) head.depth = 1;
+      else if (dx < -40) head.depth = 0;
+      // Dropped between two items of a group: join that group.
+      else if (next && next.depth === 1) head.depth = 1;
+    }
+    normaliseDepths();
+  }
+
+  /** Make every row's nesting valid for this menu after a move. */
+  function normaliseDepths() {
+    var parent = null;
+    rows.forEach(function (row) {
+      if (row.item.type === 'heading') { row.depth = 0; parent = row; return; }
+      if (data.maxDepth < 2) { row.depth = 0; return; }
+      // In the footer every link belongs to a column; elsewhere only a heading can hold items.
+      if (isFooter) row.depth = parent ? 1 : 0;
+      else if (row.depth === 1 && !parent) row.depth = 0;
+      if (row.depth === 0 && !isFooter) parent = null;
+    });
+  }
+
+  var dragStartX = 0;
+  if (window.Sortable) {
+    Sortable.create(document.getElementById('menuItems'), {
+      handle: '.menu-drag',
+      animation: 150,
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      onStart: function (evt) {
+        var e = evt.originalEvent;
+        dragStartX = e && (e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX)) || 0;
+      },
+      onMove: function (evt, originalEvent) {
+        var x = originalEvent && (originalEvent.clientX || (originalEvent.touches && originalEvent.touches[0] && originalEvent.touches[0].clientX));
+        if (x && data.maxDepth > 1) evt.dragged.classList.toggle('drop-indent', x - dragStartX > 40);
+      },
+      onEnd: function (evt) {
+        var e = evt.originalEvent;
+        var endX = e && (e.clientX || (e.changedTouches && e.changedTouches[0] && e.changedTouches[0].clientX)) || dragStartX;
+        applyDrop(evt.oldIndex, evt.newIndex, endX - dragStartX);
+        render();
+      },
+    });
+  }
+
+  // For tests and the browser console.
+  window.menuEditor = { rows: rows, applyDrop: applyDrop, render: render };
 
   render();
 })();

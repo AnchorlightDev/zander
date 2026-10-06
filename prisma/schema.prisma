@@ -700,7 +700,9 @@ model supportTicketCategories {
 
 model supportTickets {
   ticketId         Int                     @id @default(autoincrement())
-  userId           Int
+  userId           Int?
+  guestEmail       String?                 @db.VarChar(254)
+  guestName        String?                 @db.VarChar(100)
   categoryId       Int
   title            String                  @db.VarChar(255)
   status           supportTickets_status   @default(open)
@@ -716,7 +718,7 @@ model supportTickets {
 model supportTicketMessages {
   messageId   Int            @id @default(autoincrement())
   ticketId    Int
-  userId      Int
+  userId      Int?
   message     String         @db.Text
   attachments Json?
   isInternal  Int            @default(0) @db.TinyInt

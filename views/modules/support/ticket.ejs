@@ -43,7 +43,11 @@
                     both are granted access to the linked Discord channel automatically.
                 </p>
                 <div class="d-flex flex-wrap gap-2">
-                    <span class="rank-pill" style="--rank-pill-bg: #3b82f6; --rank-pill-text: #ffffff;">Owner: <%= ownerUser?.username || ticket.userId %></span>
+                    <% if (ticket.guestEmail) { %>
+                        <span class="rank-pill" style="--rank-pill-bg: #64748b; --rank-pill-text: #ffffff;" title="Opened from the contact form without an account. Public replies are emailed to them.">Guest: <%= ticket.guestName || "Unknown" %> &lt;<%= ticket.guestEmail %>&gt;</span>
+                    <% } else { %>
+                        <span class="rank-pill" style="--rank-pill-bg: #3b82f6; --rank-pill-text: #ffffff;">Owner: <%= ownerUser?.username || ticket.userId %></span>
+                    <% } %>
                     <% participants.users.forEach((participant) => { %>
                         <span class="rank-pill" style="--rank-pill-bg: #06b6d4; --rank-pill-text: #ffffff;">User: <%= participant.username || participant.userId %></span>
                     <% }); %>
@@ -94,8 +98,15 @@
                             </div>
                             <div class="flex-fill">
                                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                                    <% const usernameContent = message.profileUrl ? `<a href="${message.profileUrl}" class="text-decoration-none" style="color: ${topRank?.badgeColor || '#0f172a'};">${message.username}</a>` : `<span style="color: ${topRank?.badgeColor || '#0f172a'};">${message.username}</span>`; %>
-                                    <strong><%- usernameContent %></strong>
+                                    <% const nameColour = topRank?.badgeColor || '#0f172a'; %>
+                                    <strong>
+                                        <% if (message.profileUrl) { %>
+                                            <a href="<%= message.profileUrl %>" class="text-decoration-none" style="color: <%= nameColour %>;"><%= message.username %></a>
+                                        <% } else { %>
+                                            <span style="color: <%= nameColour %>;"><%= message.username %></span>
+                                        <% } %>
+                                    </strong>
+                                    <% if (message.isGuest) { %><span class="badge bg-secondary">Guest · via email</span><% } %>
                                     <% if (message.isInternal) { %>
                                         <span class="badge bg-warning text-dark">Internal note</span>
                                     <% } %>
@@ -193,6 +204,9 @@
                     <p class="mb-0 text-muted">This ticket is escalated. Only escalation staff or the ticket opener may reply.</p>
                 <% } else { %>
                     <form action="/support/ticket/<%= ticket.ticketId %>" method="POST">
+                        <% if (ticket.guestEmail) { %>
+                            <div class="alert alert-info small py-2"><i class="fas fa-envelope me-1"></i>This person has no account. Public replies are emailed to <strong><%= ticket.guestEmail %></strong> with a private link to answer; internal notes are not.</div>
+                        <% } %>
                         <% if (isStaff) { %>
                             <div class="form-group mb-3">
                                 <label class="form-label">Reply visibility</label>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= siteName %></title>
+    <style>
+      body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+      .container { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+      .header { background-color: #2f508c; color: #ffffff; padding: 24px; text-align: center; }
+      .header h1 { margin: 0; font-size: 22px; }
+      .content { padding: 24px; color: #333333; line-height: 1.5; }
+      .quote { border-left: 4px solid #2f508c; background: #f4f9fc; padding: 12px 16px; margin: 20px 0; white-space: pre-wrap; }
+      .quote .who { font-weight: bold; margin-bottom: 6px; color: #223a66; }
+      .button { display: inline-block; background: #2f508c; color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; }
+      .muted { color: #888888; font-size: 13px; }
+      .footer { padding: 16px; text-align: center; font-size: 12px; color: #888888; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header"><h1><%= siteName %></h1></div>
+      <div class="content">
+        <p>Hi <%= name %>,</p>
+
+        <% if (kind === "received") { %>
+          <p>Thanks for getting in touch. We've received your message <strong>"<%= title %>"</strong> (reference #<%= ticketId %>) and the team will reply as soon as they can.</p>
+          <p>We'll email you when they do. You can also view the conversation or add more details at any time:</p>
+        <% } else if (kind === "closed") { %>
+          <p>Your message <strong>"<%= title %>"</strong> (reference #<%= ticketId %>) has been marked as resolved.</p>
+          <p>You can still read the conversation below. If you need anything else, send us a new message from the contact page.</p>
+        <% } else { %>
+          <p>There's a new reply to your message <strong>"<%= title %>"</strong> (reference #<%= ticketId %>).</p>
+          <div class="quote">
+            <div class="who"><%= actorName %></div>
+            <%= message %>
+          </div>
+          <p>To answer, use the button below rather than replying to this email.</p>
+        <% } %>
+
+        <p style="text-align: center; margin: 28px 0;">
+          <a class="button" href="<%= ticketUrl %>"><%= kind === "closed" ? "View conversation" : "View & reply" %></a>
+        </p>
+
+        <p class="muted">This link is private to you — please don't share it. If you didn't contact <%= siteName %>, you can ignore this email.</p>
+      </div>
+      <div class="footer">&copy; <%= new Date().getFullYear() %> <%= siteName %></div>
+    </div>
+  </body>
+</html>

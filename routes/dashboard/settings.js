@@ -23,6 +23,7 @@ import {
   maskSecret,
 } from "../../lib/config/settingsRegistry.mjs";
 import { describeFlags } from "../../lib/config/featureRegistry.mjs";
+import { getBotGuilds, getGuildDirectory } from "../../services/discordDirectoryService.js";
 
 /** The settings for one module, titled with its label from the Modules page. */
 function moduleSectionFor(key, features) {
@@ -39,6 +40,18 @@ export default function dashboardSettingsRoute(app, config, db, features, lang) 
 
     const requested = String(req.query?.section || "");
     const section = (requested.startsWith("module:") ? moduleSectionFor(requested, features) : findSection(requested)) || SETTINGS_SECTIONS[0];
+
+    // Channel / category / role pickers need the server's list; skip the
+    // Discord round trip for sections without any.
+    const picks = new Set(section.fields.map((f) => f.pick).filter(Boolean));
+    let discordDirectory = null;
+    if (picks.size) {
+      const guilds = picks.has("guild") ? getBotGuilds() : null;
+      const lists = [...picks].some((p) => p !== "guild") ? await getGuildDirectory(config.discord?.guildId) : null;
+      if (guilds || lists) discordDirectory = { channels: [], categories: [], roles: [], ...(lists || {}), guilds: guilds || [] };
+      // A list that could not be loaded falls back to the ID box for that kind only.
+      if (discordDirectory) discordDirectory.loaded = { guild: Boolean(guilds), channel: Boolean(lists), category: Boolean(lists), role: Boolean(lists) };
+    }
 
     let values = {};
     let error = null;
@@ -59,6 +72,7 @@ export default function dashboardSettingsRoute(app, config, db, features, lang) 
         section,
         values,
         error,
+        discordDirectory,
         isSecretField,
         maskSecret,
         timeZoneGroups: groupedTimeZones(),

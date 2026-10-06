@@ -74,6 +74,43 @@
                     <div class="form-check form-switch mt-1">
                       <input class="form-check-input" type="checkbox" id="<%= id %>" name="<%= field.path %>" value="1" <%= current === true ? "checked" : "" %>>
                     </div>
+                  <% } else if (field.pick && discordDirectory && discordDirectory.loaded[field.pick]) {
+                       const pickList = field.pick === "role" ? discordDirectory.roles
+                         : field.pick === "category" ? discordDirectory.categories
+                         : field.pick === "guild" ? discordDirectory.guilds
+                         : discordDirectory.channels;
+                       const known = pickList.some(function (o) { return o.id === textValue; });
+                       const prefix = field.pick === "role" ? "@" : field.pick === "channel" ? "#" : "";
+                       const noun = field.pick === "role" ? "role" : field.pick === "category" ? "category" : field.pick === "guild" ? "server" : "channel";
+                  %>
+                    <select class="form-select" id="<%= id %>" name="<%= field.path %>" data-discord-picker
+                            data-placeholder="Search <%= noun %>s…">
+                      <option value="">None</option>
+                      <% if (textValue && !known) { %>
+                        <option value="<%= textValue %>" selected>Unknown <%= noun %> (<%= textValue %>)</option>
+                      <% } %>
+                      <% if (field.pick === "channel") {
+                           const groups = [];
+                           pickList.forEach(function (c) {
+                             let g = groups.find(function (x) { return x.name === c.group; });
+                             if (!g) { g = { name: c.group, items: [] }; groups.push(g); }
+                             g.items.push(c);
+                           });
+                           groups.forEach(function (g) { %>
+                        <optgroup label="<%= g.name %>">
+                          <% g.items.forEach(function (c) { %>
+                            <option value="<%= c.id %>" <%= c.id === textValue ? "selected" : "" %>><%= prefix %><%= c.name %><%= c.announcement ? " (announcements)" : "" %></option>
+                          <% }) %>
+                        </optgroup>
+                      <% }); } else { %>
+                        <% pickList.forEach(function (o) { %>
+                          <option value="<%= o.id %>" <%= o.id === textValue ? "selected" : "" %>><%= prefix %><%= o.name %></option>
+                        <% }) %>
+                      <% } %>
+                    </select>
+                    <% if (textValue && !known) { %>
+                      <div class="form-text text-warning">This <%= noun %> no longer exists or the bot can't see it.</div>
+                    <% } %>
                   <% } else if (field.type === "select") { %>
                     <select class="form-select" id="<%= id %>" name="<%= field.path %>">
                       <% field.options.forEach(function (opt) { %>
@@ -106,6 +143,9 @@
                     <input type="<%= inputType %>" class="form-control<%= field.type === 'snowflake' ? ' font-monospace' : '' %>"
                            id="<%= id %>" name="<%= field.path %>" value="<%= textValue %>"
                            <%= field.required ? "required" : "" %>>
+                    <% if (field.pick) { %>
+                      <div class="form-text">The Discord bot is offline or no server is set (General → Discord guild ID), so enter the ID by hand.</div>
+                    <% } %>
                   <% } %>
                 </div>
                 <div class="col-md-2 pt-1">
@@ -130,4 +170,16 @@
   </div>
 </div>
 
-<%- include("../../admin/_footer.ejs") %>
+<%- include("../../admin/_footer.ejs", { extraScripts: discordDirectory ? `
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+  <script>
+    document.querySelectorAll("select[data-discord-picker]").forEach(function (el) {
+      new TomSelect(el, {
+        placeholder: el.dataset.placeholder,
+        allowEmptyOption: true,
+        maxOptions: 500,
+        lockOptgroupOrder: true,
+      });
+    });
+  </script>` : "" }) %>

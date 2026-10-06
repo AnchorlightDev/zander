@@ -2,255 +2,136 @@
 <%- include("../admin/_topbar.ejs") %>
 <%- include("../admin/_sidebar.ejs") %>
 
+<%
+  const _user = req.session.user;
+  const _build = locals.buildInfo || {};
+%>
+
 <div id="wpcontent">
   <div id="wpbody-content">
-    <div class="wrap">
+    <div class="wrap dash">
 
-      <!-- ── Page header ─────────────────────────────────────────────────── -->
-      <div class="wp-admin-page-header">
-        <h1 class="wp-heading-inline">Dashboard</h1>
+      <!-- ── Greeting ───────────────────────────────────────────────────── -->
+      <div class="dash-hero">
+        <div>
+          <h1 class="dash-greeting" data-greeting><%= greetingFor(new Date().getUTCHours()) %>, <%= _user.username %></h1>
+          <p class="dash-subtitle">Here's what's happening on <%= config.siteConfiguration.siteName %>.</p>
+        </div>
+        <a class="dash-visit" href="/" target="_blank" rel="noopener"><i class="fa-solid fa-arrow-up-right-from-square me-1" aria-hidden="true"></i>View site</a>
       </div>
-      <hr class="wp-section-divider">
 
       <%- include("../admin/_notices.ejs") %>
 
-      <!-- ── Stat cards ─────────────────────────────────────────────────── -->
-      <div class="stat-card-grid">
-
-        <a class="stat-card" href="/dashboard/announcements">
-          <div class="stat-icon blue"><i class="fas fa-bullhorn" aria-hidden="true"></i></div>
-          <div class="stat-info">
-            <div class="stat-label">Announcements</div>
-            <div class="stat-value"><%= announcementsCount %></div>
+      <!-- ── Needs attention ────────────────────────────────────────────── -->
+      <% if (overview.attention.length) { %>
+        <section class="dash-section" aria-labelledby="dashAttention">
+          <div class="dash-section-head">
+            <h2 id="dashAttention">Needs attention</h2>
+            <% if (overview.allClear) { %><span class="dash-clear"><i class="fa-solid fa-circle-check me-1"></i>All clear</span><% } %>
           </div>
-        </a>
-
-        <a class="stat-card" href="/dashboard/applications">
-          <div class="stat-icon green"><i class="fas fa-file-alt" aria-hidden="true"></i></div>
-          <div class="stat-info">
-            <div class="stat-label">Applications</div>
-            <div class="stat-value"><%= applicationsCount %></div>
-          </div>
-        </a>
-
-
-        <a class="stat-card" href="/dashboard/servers">
-          <div class="stat-icon amber"><i class="fas fa-server" aria-hidden="true"></i></div>
-          <div class="stat-info">
-            <div class="stat-label">Servers</div>
-            <div class="stat-value"><%= serversCount %></div>
-          </div>
-        </a>
-
-        <% if (features.support) { %>
-          <a class="stat-card" href="/dashboard/support">
-            <div class="stat-icon purple"><i class="fas fa-ticket-alt" aria-hidden="true"></i></div>
-            <div class="stat-info">
-              <div class="stat-label">Support Tickets</div>
-              <div class="stat-value">—</div>
-            </div>
-          </a>
-        <% } %>
-
-        <% if (features.webstore) { %>
-          <a class="stat-card" href="/dashboard/webstore">
-            <div class="stat-icon green"><i class="fas fa-store" aria-hidden="true"></i></div>
-            <div class="stat-info">
-              <div class="stat-label">Webstore</div>
-              <div class="stat-value">—</div>
-            </div>
-          </a>
-        <% } %>
-
-        <% if (features.finance) { %>
-          <a class="stat-card" href="/dashboard/finance">
-            <div class="stat-icon amber"><i class="fas fa-chart-line" aria-hidden="true"></i></div>
-            <div class="stat-info">
-              <div class="stat-label">Finance</div>
-              <div class="stat-value">—</div>
-            </div>
-          </a>
-        <% } %>
-
-      </div>
-      <!-- /stat-card-grid -->
-
-      <!-- ── Widget grid ────────────────────────────────────────────────── -->
-      <div class="wp-widget-grid">
-
-        <!-- Quick actions -->
-        <div class="wp-card">
-          <div class="wp-card-header">
-            <h2 class="wp-card-title"><i class="fas fa-bolt" aria-hidden="true"></i> Quick Actions</h2>
-          </div>
-          <div class="wp-card-body">
-            <div class="quick-action-grid">
-
-              <% if (features.announcements) { %>
-                <a class="quick-action-item" href="/dashboard/announcements/create">
-                  <i class="fas fa-plus-circle" aria-hidden="true"></i>
-                  New Announcement
-                </a>
-              <% } %>
-
-              <% if (features.events) { %>
-                <a class="quick-action-item" href="/dashboard/events">
-                  <i class="fas fa-calendar-plus" aria-hidden="true"></i>
-                  Events Calendar
-                </a>
-              <% } %>
-
-
-              <% if (features.server) { %>
-                <a class="quick-action-item" href="/dashboard/servers/create">
-                  <i class="fas fa-server" aria-hidden="true"></i>
-                  Add Server
-                </a>
-              <% } %>
-
-              <% if (features.support) { %>
-                <a class="quick-action-item" href="/dashboard/support">
-                  <i class="fas fa-ticket-alt" aria-hidden="true"></i>
-                  Manage Tickets
-                </a>
-              <% } %>
-
-
-              <a class="quick-action-item" href="/dashboard/logs">
-                <i class="fas fa-terminal" aria-hidden="true"></i>
-                System Logs
+          <div class="dash-tiles">
+            <% overview.attention.forEach(function (t) { %>
+              <a class="dash-tile <%= t.value ? 'is-active' : 'is-zero' %>" href="<%= t.href %>">
+                <span class="dash-tile-icon stat-icon <%= t.tone %>"><i class="<%= t.icon %>" aria-hidden="true"></i></span>
+                <span class="dash-tile-body">
+                  <span class="dash-tile-value"><%= t.value %></span>
+                  <span class="dash-tile-label"><%= t.label %></span>
+                  <% if (t.detail) { %><span class="dash-tile-detail"><%= t.detail %></span><% } %>
+                </span>
+                <i class="fa-solid fa-chevron-right dash-tile-go" aria-hidden="true"></i>
               </a>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
 
-              <% if (features.forums) { %>
-                <a class="quick-action-item" href="/dashboard/forums/categories">
-                  <i class="fas fa-comments" aria-hidden="true"></i>
-                  Forum Categories
-                </a>
-              <% } %>
-
-              <a class="quick-action-item" href="/dashboard/bridge">
-                <i class="fas fa-bridge" aria-hidden="true"></i>
-                Bridge Status
+      <!-- ── At a glance ────────────────────────────────────────────────── -->
+      <% if (overview.stats.length) { %>
+        <section class="dash-section" aria-labelledby="dashGlance">
+          <div class="dash-section-head"><h2 id="dashGlance">At a glance</h2></div>
+          <div class="dash-stats">
+            <% overview.stats.forEach(function (t) { %>
+              <a class="dash-stat" href="<%= t.href %>">
+                <span class="dash-stat-label"><i class="<%= t.icon %> me-1" aria-hidden="true"></i><%= t.label %></span>
+                <span class="dash-stat-value"><%= typeof t.value === "number" ? t.value.toLocaleString("en-US") : t.value %></span>
+                <% if (t.detail) { %><span class="dash-stat-detail"><%= t.detail %></span><% } %>
               </a>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
 
-              <% if (features.webstore) { %>
-                <a class="quick-action-item" href="/dashboard/webstore">
-                  <i class="fas fa-store" aria-hidden="true"></i>
-                  Webstore Purchases
-                </a>
-              <% } %>
-
-              <% if (features.finance) { %>
-                <a class="quick-action-item" href="/dashboard/finance">
-                  <i class="fas fa-chart-line" aria-hidden="true"></i>
-                  Finance
-                </a>
-              <% } %>
-
+      <div class="dash-columns">
+        <!-- ── Recent announcements ─────────────────────────────────────── -->
+        <% if (features.announcements) { %>
+          <section class="wp-card dash-card">
+            <div class="wp-card-header">
+              <h2 class="wp-card-title"><i class="fa-solid fa-bullhorn" aria-hidden="true"></i> Recent announcements</h2>
+              <a class="dash-link" href="/dashboard/announcements">View all</a>
             </div>
-          </div>
-        </div>
-        <!-- /quick actions -->
-
-        <!-- Recent announcements -->
-        <div class="wp-card">
-          <div class="wp-card-header">
-            <h2 class="wp-card-title"><i class="fas fa-bullhorn" aria-hidden="true"></i> Recent Announcements</h2>
-            <% if (features.announcements) { %>
-              <a class="page-title-action outline" href="/dashboard/announcements" style="font-size:12px;padding:3px 8px;">View All</a>
-            <% } %>
-          </div>
-          <div class="wp-card-body" style="padding: 0;">
-            <% if (!recentAnnouncements || recentAnnouncements.length === 0) { %>
-              <div class="wp-empty-state">
-                <i class="fas fa-bullhorn"></i>
-                <p>No announcements found.</p>
-              </div>
+            <% if (!recentAnnouncements.length) { %>
+              <div class="wp-empty-state"><i class="fa-solid fa-bullhorn"></i><p>No announcements yet.</p></div>
             <% } else { %>
-              <ul class="wp-recent-list" style="margin: 0; padding: 0 16px;">
-                <% for (const ann of recentAnnouncements) { %>
-                  <%
-                    const _now     = new Date();
-                    const _end     = ann.endDate ? new Date(ann.endDate) : null;
-                    const _start   = ann.startDate ? new Date(ann.startDate) : null;
-                    const _expired = _end && _end < _now;
-                    const _sched   = _start && _start > _now;
-                    let _statusCls = ann.enabled ? 'active' : 'inactive';
-                    if (_expired)   _statusCls = 'inactive';
-                    if (_sched)     _statusCls = 'pending';
-                    let _statusLbl = ann.enabled ? 'Active' : 'Disabled';
-                    if (_expired)   _statusLbl = 'Expired';
-                    if (_sched)     _statusLbl = 'Scheduled';
-                  %>
+              <ul class="dash-list">
+                <% recentAnnouncements.forEach(function (ann) {
+                     const now = new Date();
+                     const ended = ann.endDate && new Date(ann.endDate) < now;
+                     const scheduled = ann.startDate && new Date(ann.startDate) > now;
+                     const status = scheduled ? ["pending", "Scheduled"] : ended ? ["inactive", "Ended"] : ann.enabled ? ["active", "Live"] : ["inactive", "Off"];
+                %>
                   <li>
-                    <span class="item-label">
-                      <span class="wp-badge info" style="margin-right:6px;"><%= ann.announcementType %></span>
-                      <%= ann.colourMessageFormat || ann.body || '(no text)' %>
-                    </span>
-                    <span class="wp-badge <%= _statusCls %>"><%= _statusLbl %></span>
+                    <span class="wp-badge info dash-type"><%= ann.announcementType %></span>
+                    <a class="dash-list-text" href="/dashboard/announcements/edit?announcementId=<%= ann.announcementId %>" title="<%= ann.preview %>"><%= ann.preview %></a>
+                    <span class="wp-badge <%= status[0] %>"><%= status[1] %></span>
                   </li>
-                <% } %>
+                <% }) %>
               </ul>
             <% } %>
-          </div>
-          <% if (features.announcements) { %>
-            <div class="wp-card-footer">
-              <a href="/dashboard/announcements/create" class="button-primary" style="font-size:12px;padding:4px 10px;">
-                <i class="fas fa-plus" aria-hidden="true"></i> New Announcement
-              </a>
-            </div>
+          </section>
+        <% } %>
+
+        <!-- ── Shortcuts + system ───────────────────────────────────────── -->
+        <div class="dash-side">
+          <% if (overview.actions.length) { %>
+            <section class="wp-card dash-card">
+              <div class="wp-card-header"><h2 class="wp-card-title"><i class="fa-solid fa-bolt" aria-hidden="true"></i> Shortcuts</h2></div>
+              <div class="dash-actions">
+                <% overview.actions.forEach(function (a) { %>
+                  <a class="dash-action" href="<%= a.href %>"><i class="<%= a.icon %>" aria-hidden="true"></i><span><%= a.label %></span></a>
+                <% }) %>
+              </div>
+            </section>
           <% } %>
-        </div>
-        <!-- /recent announcements -->
 
-        <!-- System info -->
-        <div class="wp-card">
-          <div class="wp-card-header">
-            <h2 class="wp-card-title"><i class="fas fa-info-circle" aria-hidden="true"></i> System Overview</h2>
-          </div>
-          <div class="wp-card-body">
-            <table style="width:100%;font-size:13px;border-collapse:collapse;">
-              <tr style="border-bottom:1px solid #f0f0f1;">
-                <td style="padding:7px 0;color:#646970;width:120px;">Platform</td>
-                <td style="padding:7px 0;font-weight:600;"><%= config.siteConfiguration.siteName %></td>
-              </tr>
-              <tr style="border-bottom:1px solid #f0f0f1;">
-                <td style="padding:7px 0;color:#646970;">Environment</td>
-                <td style="padding:7px 0;">
-                  <span class="wp-badge active">Online</span>
-                </td>
-              </tr>
-              <% if (features.announcements) { %>
-                <tr style="border-bottom:1px solid #f0f0f1;">
-                  <td style="padding:7px 0;color:#646970;">Announcements</td>
-                  <td style="padding:7px 0;"><%= announcementsCount %> total</td>
-                </tr>
+          <section class="wp-card dash-card">
+            <div class="wp-card-header"><h2 class="wp-card-title"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i> System</h2></div>
+            <ul class="dash-health">
+              <li><span>Website</span><span class="dash-dot ok">Online</span></li>
+              <li><span>Database</span><span class="dash-dot <%= system.databaseOnline ? 'ok' : 'bad' %>"><%= system.databaseOnline ? "Connected" : "Unreachable" %></span></li>
+              <li><span>Discord bot</span><span class="dash-dot <%= system.discordOnline ? 'ok' : 'bad' %>"><%= system.discordOnline ? "Connected" : "Offline" %></span></li>
+              <% if (_build.version || _build.shortCommit) { %>
+                <li><span>Version</span><span class="text-muted">
+                  <% if (_build.version) { %>v<%= _build.version %><% } %><% if (_build.shortCommit) { %> · <%= _build.shortCommit %><% } %>
+                </span></li>
               <% } %>
-              <% if (features.server) { %>
-                <tr style="border-bottom:1px solid #f0f0f1;">
-                  <td style="padding:7px 0;color:#646970;">Servers</td>
-                  <td style="padding:7px 0;"><%= serversCount %> registered</td>
-                </tr>
-              <% } %>
-              <tr>
-                <td style="padding:7px 0;color:#646970;">Logged in as</td>
-                <td style="padding:7px 0;">
-                  <a href="/profile/<%= req.session.user.username %>"><%= req.session.user.username %></a>
-                </td>
-              </tr>
-            </table>
-          </div>
-          <div class="wp-card-footer">
-            <a href="/dashboard/logs" style="font-size:12px;">View system logs →</a>
-          </div>
+            </ul>
+          </section>
         </div>
-        <!-- /system info -->
-
       </div>
-      <!-- /wp-widget-grid -->
 
     </div><!-- /.wrap -->
   </div><!-- /#wpbody-content -->
+
+  <script>
+    // Greet by the viewer's own clock rather than the server's.
+    (function () {
+      var el = document.querySelector("[data-greeting]");
+      if (!el) return;
+      var h = new Date().getHours();
+      var greeting = h < 5 ? "Good evening" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+      el.textContent = el.textContent.replace(/^Good (morning|afternoon|evening)/, greeting);
+    })();
+  </script>
 
   <%- include("../admin/_footer.ejs") %>
 </div><!-- /#wpcontent -->

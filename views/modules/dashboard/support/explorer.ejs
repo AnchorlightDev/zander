@@ -62,7 +62,13 @@
                                         <td>
                                             <span class="badge <%= ticket.status === 'open' ? 'bg-success' : ticket.status === 'closed' ? 'bg-secondary' : 'bg-warning text-dark' %>"><%= ticket.status %></span>
                                         </td>
-                                        <td><a href="/dashboard/users/<%= ticket.userId %>" class="text-muted text-decoration-none"><%= ticket.username %></a></td>
+                                        <td>
+                                            <% if (ticket.userId) { %>
+                                                <a href="/dashboard/users/<%= ticket.userId %>" class="text-muted text-decoration-none"><%= ticket.username %></a>
+                                            <% } else { %>
+                                                <span class="text-muted" title="<%= ticket.guestEmail || '' %>"><%= ticket.username %></span>
+                                            <% } %>
+                                        </td>
                                         <td class="text-muted"><span data-relative-time="<%= new Date(ticket.createdAt).toISOString() %>" data-relative-format="both"></span></td>
                                         <td class="text-end">
                                             <a href="/support/ticket/<%= ticket.ticketId %>" class="btn btn-sm btn-outline-primary">View ticket</a>

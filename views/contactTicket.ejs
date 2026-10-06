@@ -1,0 +1,67 @@
+<%- include("modules/header.ejs", {
+    pageTitle: pageTitle,
+    pageDescription: pageDescription,
+    // Private link: never index it.
+    pageRobots: "noindex, nofollow"
+}) %>
+
+<%- include("modules/navigationBar.ejs") %>
+
+<%- include("partials/miniHeader.ejs", {
+  headerTitle: "Your Message",
+  backgroundImage: globalImage
+}) %>
+
+<% const _closed = ticket.status === "closed"; %>
+
+<section class="section auth-page">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        <div class="auth-card">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-1">
+            <h3 class="auth-title mb-0"><%= ticket.title %></h3>
+            <span class="badge <%= _closed ? 'text-bg-secondary' : 'text-bg-success' %>"><%= _closed ? "Resolved" : "Open" %></span>
+          </div>
+          <p class="auth-subtitle">Reference #<%= ticket.ticketId %> · This page is private to you — please don't share the link.</p>
+
+          <% if (req.cookies.alertType) { %>
+            <%- include("partials/alert.ejs", {
+              alertType: req.cookies.alertType,
+              content: req.cookies.alertContent
+            }) %>
+          <% } %>
+
+          <div class="guest-thread">
+            <% messages.filter(function (m) { return !m.isInternal; }).forEach(function (m) { %>
+              <% if (m.messageType === "status") { %>
+                <div class="guest-status"><%- m.renderedMessage %></div>
+              <% } else { %>
+                <div class="guest-message <%= m.isGuest ? 'is-you' : 'is-team' %>">
+                  <div class="guest-meta">
+                    <strong><%= m.isGuest ? "You" : m.username %></strong>
+                    <% if (!m.isGuest) { %><span class="badge text-bg-light">Team</span><% } %>
+                    <time datetime="<%= new Date(m.createdAt).toISOString() %>" data-relative-time="<%= new Date(m.createdAt).toISOString() %>"><%= new Date(m.createdAt).toISOString().slice(0, 10) %></time>
+                  </div>
+                  <div class="guest-body"><%- m.renderedMessage %></div>
+                </div>
+              <% } %>
+            <% }) %>
+          </div>
+
+          <% if (_closed) { %>
+            <div class="alert alert-secondary mt-4 mb-0">This conversation has been resolved. Need anything else? <a class="auth-link" href="/contact">Send a new message</a>.</div>
+          <% } else { %>
+            <form method="post" class="mt-4">
+              <label for="message" class="form-label">Reply</label>
+              <textarea class="form-control mb-3" id="message" name="message" rows="5" maxlength="<%= limits.message %>" required></textarea>
+              <button type="submit" class="btn btn-primary w-100">Send reply</button>
+            </form>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include("modules/footer.ejs") %>

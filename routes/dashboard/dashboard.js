@@ -1,6 +1,9 @@
 import { hasPermission, internalApiHeaders} from "../../api/common.js";
 import { adminViewData } from "../../admin/adminHelpers.js";
-import { prisma } from "../../controllers/databaseController.js";
+import { prisma, isDbHealthy } from "../../controllers/databaseController.js";
+import { client } from "../../controllers/discordController.js";
+import { buildOverview, greetingFor, stripMinecraftFormatting } from "../../lib/dashboard/overview.mjs";
+import { formatPrice } from "../../controllers/webstoreController.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import moment from "moment";
 
@@ -11,17 +14,48 @@ export default function dashboardSiteRoute(app, config, features, lang) {
   app.get("/dashboard", async function (req, res) {
     if (!await hasPermission("zander.web.dashboard", req, res, features)) return;
 
-    // Fetch summary counts + recent data directly via Prisma — no self-HTTP.
+    // Each number is read on its own: one failing query drops its tile rather
+    // than the whole page. lib/dashboard/overview.mjs decides what is shown.
+    const count = (promise) => promise.catch((error) => {
+      console.error("[dashboard] overview count failed:", error.message);
+      return null;
+    });
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
     const [
-      announcementsCount,
-      applicationsCount,
-      serversCount,
+      openTickets,
+      eventsAwaitingReview,
+      formSubmissions,
+      resourceSuggestions,
+      resourcesOverdue,
+      failedCommands,
+      members,
+      newMembers,
+      forumPosts,
+      webstoreMonth,
+      servers,
       recentAnnouncements,
       announcementWeb,
     ] = await Promise.all([
-      prisma.announcements.count(),
-      prisma.applications.count(),
-      prisma.servers.count(),
+      count(prisma.supportTickets.count({ where: { status: { in: ["open", "in_progress"] } } })),
+      count(prisma.events.count({ where: { status: "pending_review" } })),
+      count(prisma.formSubmissions.count({ where: { status: "pending", form: { requiresReview: true } } })),
+      count(prisma.resources.count({ where: { status: "pending" } })),
+      count(prisma.resources.count({ where: { status: "pending", deadlineAt: { lte: now } } })),
+      count(prisma.player_command_queue.count({ where: { status: "failed" } })),
+      count(prisma.users.count()),
+      count(prisma.users.count({ where: { joined: { gte: weekAgo } } })),
+      count(prisma.forumPosts.count({ where: { createdAt: { gte: weekAgo } } })),
+      // Per currency: purchases record their own, and they must not be added together.
+      count(prisma.webstorePurchases.groupBy({
+        by: ["currency"],
+        where: { status: { in: ["paid", "fulfilled"] }, createdAt: { gte: monthStart } },
+        _sum: { amountCents: true },
+        _count: true,
+      })),
+      count(prisma.servers.count()),
       prisma.announcements.findMany({
         orderBy: { announcementId: "desc" },
         take: 5,
@@ -34,9 +68,34 @@ export default function dashboardSiteRoute(app, config, features, lang) {
           startDate: true,
           endDate: true,
         },
-      }),
+      }).catch(() => []),
       getWebAnnouncement(),
     ]);
+
+    const overview = buildOverview(
+      {
+        openTickets,
+        eventsAwaitingReview,
+        formSubmissions,
+        resourceSuggestions,
+        resourcesOverdue,
+        failedCommands,
+        members,
+        newMembers,
+        forumPosts,
+        webstoreRevenue: webstoreMonth
+          ? webstoreMonth.length
+            ? webstoreMonth
+                .sort((a, b) => (b._sum.amountCents ?? 0) - (a._sum.amountCents ?? 0))
+                .map((row) => formatPrice(row._sum.amountCents ?? 0, row.currency))
+                .join(" + ")
+            : formatPrice(0, "aud")
+          : null,
+        webstoreOrders: webstoreMonth ? webstoreMonth.reduce((n, row) => n + row._count, 0) : null,
+        servers,
+      },
+      { features, permissions: req.session.user.permissions || [] }
+    );
 
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/dashboard-index", {
@@ -45,10 +104,16 @@ export default function dashboardSiteRoute(app, config, features, lang) {
         features,
         req,
         announcementWeb,
-        announcementsCount,
-        applicationsCount,
-        serversCount,
-        recentAnnouncements,
+        overview,
+        recentAnnouncements: recentAnnouncements.map((a) => ({
+          ...a,
+          preview: stripMinecraftFormatting(a.colourMessageFormat || a.body) || "(no text)",
+        })),
+        system: {
+          discordOnline: Boolean(client?.isReady?.()),
+          databaseOnline: isDbHealthy(),
+        },
+        greetingFor,
         ...adminViewData(req, features),
       })
     );

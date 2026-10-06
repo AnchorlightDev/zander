@@ -5,6 +5,8 @@ import db, { luckpermsDb } from "./databaseController.js";
 import { ChannelType, PermissionFlagsBits, OverwriteType } from "discord.js";
 import { hashEmail } from "../api/common.js";
 import { createNotificationsForUsers } from "./notificationController.js";
+import { sendMail } from "./emailController.js";
+import { guestDisplayName, guestTicketUrl } from "../lib/guestTickets.mjs";
 
 let discordChannelColumnCheck;
 let ticketParticipantTableCheck;
@@ -375,6 +377,27 @@ export async function getCategoryDiscordParentId(categoryId) {
     });
 }
 
+export const CONTACT_CATEGORY_NAME = "Contact form";
+
+/**
+ * The category tickets from /contact are filed under. Created on first use,
+ * disabled so members never pick it when opening a ticket themselves. Its
+ * Discord category and staff roles are set like any other category.
+ */
+export async function ensureContactCategory() {
+  const rows = await new Promise((resolve, reject) =>
+    db.query("SELECT categoryId FROM supportTicketCategories WHERE name = ? LIMIT 1", [CONTACT_CATEGORY_NAME], (err, r) => (err ? reject(err) : resolve(r))),
+  );
+  if (rows.length) return rows[0].categoryId;
+  return new Promise((resolve, reject) =>
+    db.query(
+      "INSERT INTO supportTicketCategories (name, description, enabled) VALUES (?, ?, 0)",
+      [CONTACT_CATEGORY_NAME, "Messages sent from the website's contact form"],
+      (err, r) => (err ? reject(err) : resolve(r.insertId)),
+    ),
+  );
+}
+
 export async function ensureUncategorisedCategory() {
   return new Promise((resolve, reject) => {
     db.query(
@@ -549,7 +572,7 @@ export async function createSupportTicket(
     userId,
     categoryId,
     title,
-    { discordUserId = null, staffRoleIds = [], parentCategoryId = null } = {},
+    { discordUserId = null, staffRoleIds = [], parentCategoryId = null, guest = null } = {},
 ) {
     const guildId = config.discord?.guildId ?? process.env.DISCORD_GUILD_ID;
 
@@ -630,9 +653,11 @@ export async function createSupportTicket(
     // orphaned "ticket-pending" channel with no matching DB row (the bug that
     // spammed `getTicketDetailsByChannel: no ticket linked to channel ...`).
     const ticketId = await new Promise((resolve, reject) => {
+        // A guest ticket (contact form, no account) has no owner and is tied
+        // to the email given instead -- see lib/guestTickets.mjs.
         db.query(
-            "INSERT INTO supportTickets (userId, categoryId, title) VALUES (?, ?, ?)",
-            [userId, categoryId, title],
+            "INSERT INTO supportTickets (userId, categoryId, title, guestEmail, guestName) VALUES (?, ?, ?, ?, ?)",
+            [userId ?? null, categoryId, title, guest?.email ?? null, guest?.name ?? null],
             (err, results) => (err ? reject(err) : resolve(results.insertId)),
         );
     });
@@ -1635,7 +1660,7 @@ export async function createSupportTicketMessage(
 
                     const embed = {
                         author: {
-                            name: senderProfile?.username || `User ${userId}`,
+                            name: senderProfile?.username || (userId == null ? guestDisplayName(ticket) : `User ${userId}`),
                         },
                         description: message,
                         timestamp: new Date().toISOString(),
@@ -1706,10 +1731,24 @@ export async function createSupportTicketMessage(
                 try {
                     const ticket = await getTicketById(ticketId);
                     const target = buildTicketNotificationTarget(ticket);
-                    const actor = await getUserById(userId);
-                    const actorName = actor?.username || `User ${userId}`;
+                    const actor = userId == null ? null : await getUserById(userId);
+                    const actorName = actor?.username || (userId == null ? guestDisplayName(ticket) : `User ${userId}`);
+
+                    // Staff answered a contact-form ticket: email the guest a
+                    // copy and their private link. Not awaited -- a slow mail
+                    // server must not hold up the reply.
+                    if (ticket?.guestEmail && userId != null && messageType === "message" && String(message || "").trim()) {
+                        emailGuestTicketUpdate(ticket, { kind: "reply", actorName, message }).catch((error) =>
+                            console.error(`Failed to email guest about ticket #${ticketId}:`, error.message),
+                        );
+                    }
 
                     if (messageType === "status") {
+                        if (ticket?.guestEmail && ticket.status === "closed") {
+                            emailGuestTicketUpdate(ticket, { kind: "closed" }).catch((error) =>
+                                console.error(`Failed to email guest about closing ticket #${ticketId}:`, error.message),
+                            );
+                        }
                         const title = `Status updated for ${target.label}`;
                         const statusMessage = trimNotificationMessage(message || `${actorName} updated the status.`);
                         await notifyTicketParticipants({
@@ -1739,8 +1778,45 @@ export async function createSupportTicketMessage(
     });
 }
 
+/**
+ * Email the guest on a contact-form ticket: a staff reply, or the ticket
+ * being closed. The email carries their private link (lib/guestTickets.mjs).
+ */
+const recentGuestCloseEmails = new Map();
+
+export async function emailGuestTicketUpdate(ticket, { kind, actorName = "", message = "" }) {
+    if (!ticket?.guestEmail) return;
+    // Closing runs through more than one path (status message and status
+    // notification), so send the "resolved" email once per ticket per minute.
+    if (kind === "closed") {
+        const last = recentGuestCloseEmails.get(ticket.ticketId) || 0;
+        if (Date.now() - last < 60_000) return;
+        recentGuestCloseEmails.set(ticket.ticketId, Date.now());
+    }
+    const siteName = config.siteConfiguration?.siteName || "Support";
+    const siteUrl = config.siteConfiguration?.siteUrl || process.env.siteAddress || "";
+    const subject = kind === "closed"
+        ? `[${siteName}] Your message has been resolved (#${ticket.ticketId})`
+        : `[${siteName}] New reply to your message (#${ticket.ticketId})`;
+    await sendMail(ticket.guestEmail, subject, "guestTicketUpdate.ejs", {
+        siteName,
+        kind,
+        name: ticket.guestName || "there",
+        ticketId: ticket.ticketId,
+        title: ticket.title,
+        actorName,
+        message,
+        ticketUrl: guestTicketUrl(siteUrl, ticket.ticketId, ticket.guestEmail),
+    });
+}
+
 export async function notifyTicketStatusChange(ticketId, status, actor) {
     const ticket = await getTicketById(ticketId);
+    if (ticket?.guestEmail && status === "closed") {
+        emailGuestTicketUpdate(ticket, { kind: "closed" }).catch((error) =>
+            console.error(`Failed to email guest about closing ticket #${ticketId}:`, error.message),
+        );
+    }
     if (!ticket) return;
 
     const target = buildTicketNotificationTarget(ticket);
@@ -2110,7 +2186,7 @@ export async function getTicketMessages(ticketId, includeInternal = false) {
         const internalSelect = hasInternalColumn ? "" : ", 0 as isInternal";
         const typeSelect = hasMessageTypeColumn ? "" : ", 'message' as messageType";
         db.query(
-            `SELECT m.*, u.username, u.discordId, u.profilePicture_type, u.profilePicture_email, u.uuid${internalSelect}${typeSelect} FROM supportTicketMessages m JOIN users u ON m.userId = u.userId WHERE m.ticketId = ? ORDER BY m.createdAt ASC`,
+            `SELECT m.*, u.username, u.discordId, u.profilePicture_type, u.profilePicture_email, u.uuid${internalSelect}${typeSelect} FROM supportTicketMessages m LEFT JOIN users u ON m.userId = u.userId WHERE m.ticketId = ? ORDER BY m.createdAt ASC`,
             [ticketId],
             (err, results) => {
                 if (err) {
@@ -2253,6 +2329,9 @@ export async function getTicketMessages(ticketId, includeInternal = false) {
 
     const resolvedMessages = [];
 
+    // Messages from a contact-form guest have no user row; name them from the ticket.
+    const guestTicket = filteredMessages.some((m) => m.userId == null) ? await getTicketById(ticketId) : null;
+
     const escapeHtml = (value = "") =>
         value
             .replace(/&/g, "&amp;")
@@ -2275,10 +2354,13 @@ export async function getTicketMessages(ticketId, includeInternal = false) {
             return `@${discordId}`;
         });
 
+        const isGuest = message.userId == null;
         resolvedMessages.push({
             ...message,
-            avatarUrl,
-            profileUrl,
+            username: isGuest ? guestDisplayName(guestTicket) : message.username,
+            isGuest,
+            avatarUrl: isGuest ? null : avatarUrl,
+            profileUrl: isGuest ? null : profileUrl,
             ranks: userRanks[message.userId] || [],
             isInternal: Boolean(message.isInternal),
             messageType: message.messageType || "message",
@@ -2333,7 +2415,7 @@ export async function getTicketDetailsByChannel(channelId) {
 
 export async function getAllTickets() {
     return new Promise((resolve, reject) => {
-        db.query("SELECT t.*, u.username FROM supportTickets t JOIN users u ON t.userId = u.userId", (err, results) => {
+        db.query("SELECT t.*, COALESCE(u.username, CONCAT(COALESCE(t.guestName, 'Guest'), ' (guest)')) AS username FROM supportTickets t LEFT JOIN users u ON t.userId = u.userId", (err, results) => {
             if (err) {
                 reject(err);
             } else {
@@ -2345,7 +2427,7 @@ export async function getAllTickets() {
 
 export async function getTicketsByCategory(categoryId) {
     return new Promise((resolve, reject) => {
-        db.query("SELECT t.*, u.username FROM supportTickets t JOIN users u ON t.userId = u.userId WHERE t.categoryId = ?", [categoryId], (err, results) => {
+        db.query("SELECT t.*, COALESCE(u.username, CONCAT(COALESCE(t.guestName, 'Guest'), ' (guest)')) AS username FROM supportTickets t LEFT JOIN users u ON t.userId = u.userId WHERE t.categoryId = ?", [categoryId], (err, results) => {
             if (err) {
                 reject(err);
             } else {

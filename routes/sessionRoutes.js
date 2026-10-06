@@ -144,6 +144,9 @@ export default function sessionSiteRoute(
       username: userLoginData.username,
       profilePicture: await getProfilePicture(userLoginData.username),
       discordID: userLoginData.discordId,
+      // Both spellings are read across the codebase (ticket creation reads
+      // discordId); keep them in step until the readers are unified.
+      discordId: userLoginData.discordId,
       uuid: userLoginData.uuid,
       ranks: userRanks,
       permissions: userPermissionData,
