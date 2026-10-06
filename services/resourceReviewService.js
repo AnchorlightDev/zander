@@ -263,15 +263,17 @@ export async function castVote(resourceId, userId, vote) {
   return { ok: true, ...result };
 }
 
-/** Staff decision on an overdue submission. */
+/**
+ * A manager's decision. Before the deadline this overrides the vote; after it,
+ * it settles a suggestion the vote left undecided. Votes already cast are kept.
+ */
 export async function decideManually(resourceId, status, userId) {
   if (!["approved", "rejected"].includes(status)) return { ok: false, error: "Unknown decision." };
   const resource = await getResourceById(resourceId);
   if (!resource) return { ok: false, error: "That resource no longer exists." };
   if (resource.status !== "pending") return { ok: false, error: `This suggestion has already been ${resource.status}.` };
-  if (!isOverdue(resource)) return { ok: false, error: "The vote is still open. It can be decided by hand once the deadline passes." };
 
-  const decided = await markDecided(resource.resourceId, { status, method: "manual", decidedByUserId: userId });
+  const decided = await markDecided(resource.resourceId, { status, method: isOverdue(resource) ? "manual" : "override", decidedByUserId: userId });
   if (!decided) return { ok: false, error: "This suggestion was decided a moment ago." };
   await syncReviewMessage(decided, await tallyFor(decided).catch(() => tallyVotes([], new Set())));
   await notifySubmitter(decided);

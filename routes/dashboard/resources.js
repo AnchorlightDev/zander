@@ -5,7 +5,7 @@
  *
  *   GET  /dashboard/resources?tab=review|published|rejected|categories
  *   POST /dashboard/resources/:id/vote          reviewers  (approve / reject)
- *   POST /dashboard/resources/:id/decide        managers, overdue only
+ *   POST /dashboard/resources/:id/decide        managers: decide now (overrides the vote)
  *   POST /dashboard/resources                   managers: add a resource directly
  *   POST /dashboard/resources/:id/edit          managers
  *   POST /dashboard/resources/:id/delete        managers

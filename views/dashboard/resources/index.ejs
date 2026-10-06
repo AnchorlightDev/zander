@@ -42,7 +42,7 @@
           A suggestion is approved once <strong>more than half</strong> of the
           <%= reviewerCount ?? "?" %> reviewer(s) (everyone with <code>zander.web.resources.review</code>) approve it,
           or rejected once more than half reject it. If the vote window closes first, it stays here as
-          <span class="badge text-bg-warning">Overdue</span> until someone with <code>zander.web.resources</code> decides it.
+          <span class="badge text-bg-warning">Overdue</span> until someone with <code>zander.web.resources</code> decides it. Managers can also override the vote at any time.
           <% if (!reviewChannelSet) { %>
             <span class="d-block mt-2"><i class="fa-brands fa-discord me-1"></i>No Discord review channel is set, so suggestions are only voted on here.
             <a href="/dashboard/settings?section=<%= encodeURIComponent('module:resources') %>">Choose a channel</a> to post each one there with Approve/Reject buttons.</span>
@@ -104,10 +104,10 @@
                   <i class="fa-solid fa-pen me-1"></i>Edit
                 </button>
 
-                <% if (canManage && r.overdue) { %>
+                <% if (canManage) { %>
                   <form method="post" action="/dashboard/resources/<%= r.resourceId %>/decide" class="d-flex gap-2 ms-auto"
-                        onsubmit="return confirm('Decide this suggestion now, without a majority?');">
-                    <span class="small fw-semibold align-self-center">Manual decision:</span>
+                        onsubmit="return confirm(<%= r.overdue ? "'Decide this suggestion now, without a majority?'" : "'Override the vote and decide this suggestion now? Votes already cast are kept for the record.'" %>);">
+                    <span class="small fw-semibold align-self-center"><%= r.overdue ? "Decide:" : "Override vote:" %></span>
                     <button class="btn btn-sm btn-success" name="status" value="approved" type="submit">Publish</button>
                     <button class="btn btn-sm btn-danger" name="status" value="rejected" type="submit">Reject</button>
                   </form>
@@ -167,7 +167,7 @@
                           <div class="small text-muted"><%= r.description %></div>
                         </td>
                         <td><%= r.category?.name %></td>
-                        <td class="small text-muted text-nowrap"><%= fmtDate(r.decidedAt) %><br><%= { vote: "by vote", manual: "by hand", staff: "added by staff" }[r.decisionMethod] || "" %></td>
+                        <td class="small text-muted text-nowrap"><%= fmtDate(r.decidedAt) %><br><%= { vote: "by vote", manual: "by hand after the deadline", override: "vote overridden", staff: "added by staff" }[r.decisionMethod] || "" %></td>
                         <% if (canManage) { %>
                           <td class="text-end text-nowrap">
                             <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#edit<%= r.resourceId %>">Edit</button>

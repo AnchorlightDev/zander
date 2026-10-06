@@ -40,6 +40,48 @@ export default function dashboardSiteRoutes(
   lang
 ) {
   const PERMISSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+  const PERMISSION_REFRESH_DEADLINE_MS = 2500;
+
+  // A refresh that missed its deadline keeps running here, and the next
+  // request from the same person picks up the result.
+  const pendingRefreshes = new Map(); // userId -> { promise, result }
+
+  /**
+   * Fresh permissions from LuckPerms, or null when they are not ready within
+   * the deadline. LuckPerms is a separate database; a slow or stalled
+   * connection to it must never hold a page (that showed as a white page on
+   * the first dashboard load until a refresh).
+   */
+  async function refreshWithinDeadline(user) {
+    const key = user.userId;
+    let entry = pendingRefreshes.get(key);
+    if (entry?.result) {
+      pendingRefreshes.delete(key);
+      return entry.result;
+    }
+    if (!entry) {
+      entry = {};
+      entry.promise = getUserPermissions({ userId: user.userId, username: user.username, uuid: user.uuid })
+        .then((permissions) => { entry.result = permissions; return permissions; })
+        .catch((error) => {
+          pendingRefreshes.delete(key);
+          console.error("[PERMISSIONS] Background permission refresh failed:", error.message);
+          return null;
+        });
+      pendingRefreshes.set(key, entry);
+    }
+
+    let timer;
+    const deadline = new Promise((resolve) => { timer = setTimeout(() => resolve(null), PERMISSION_REFRESH_DEADLINE_MS); });
+    const permissions = await Promise.race([entry.promise, deadline]);
+    clearTimeout(timer);
+    if (permissions) {
+      pendingRefreshes.delete(key);
+      return permissions;
+    }
+    console.warn(`[PERMISSIONS] Permission refresh for user ${key} is slow; serving the page with current permissions.`);
+    return null;
+  }
 
   async function refreshSessionPermissions(req) {
     if (!req.session?.user?.userId) {
@@ -54,11 +96,8 @@ export default function dashboardSiteRoutes(
       return;
     }
 
-    const refreshedPermissions = await getUserPermissions({
-      userId: req.session.user.userId,
-      username: req.session.user.username,
-      uuid: req.session.user.uuid,
-    });
+    const refreshedPermissions = await refreshWithinDeadline(req.session.user);
+    if (!refreshedPermissions) return; // still loading: keep the current permissions for this page
     const rankSlugs = refreshedPermissions.userRanks || [];
 
     req.session.user.permissions = refreshedPermissions;

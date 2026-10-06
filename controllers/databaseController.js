@@ -146,6 +146,11 @@ const pool = mysql2.createPool({
   timezone: "Z",
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
+  // Close connections idle for a minute. A connection left unused longer can be
+  // dropped by the server or a firewall without the pool noticing, and the
+  // next query then hangs on it -- a blank page until the visitor refreshes.
+  maxIdle: 2,
+  idleTimeout: 60000,
 });
 
 // Ensure utf8mb4 on every connection and update health status.
@@ -212,6 +217,11 @@ const luckpermsPool = mysql2.createPool({
   timezone: "Z",
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
+  // Close connections idle for a minute. A connection left unused longer can be
+  // dropped by the server or a firewall without the pool noticing, and the
+  // next query then hangs on it -- a blank page until the visitor refreshes.
+  maxIdle: 2,
+  idleTimeout: 60000,
 });
 
 luckpermsPool.on("connection", function (connection) {
@@ -251,6 +261,11 @@ const quickshopPool = mysql2.createPool({
   timezone: "Z",
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
+  // Close connections idle for a minute. A connection left unused longer can be
+  // dropped by the server or a firewall without the pool noticing, and the
+  // next query then hangs on it -- a blank page until the visitor refreshes.
+  maxIdle: 2,
+  idleTimeout: 60000,
 });
 
 quickshopPool.on("connection", function (connection) {
@@ -290,6 +305,11 @@ const punishmentsPool = mysql2.createPool({
   timezone: "Z",
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
+  // Close connections idle for a minute. A connection left unused longer can be
+  // dropped by the server or a firewall without the pool noticing, and the
+  // next query then hangs on it -- a blank page until the visitor refreshes.
+  maxIdle: 2,
+  idleTimeout: 60000,
 });
 
 punishmentsPool.on("connection", function (connection) {
