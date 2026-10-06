@@ -103,59 +103,10 @@
         <div id="ref-routines" class="accordion-collapse collapse" data-bs-parent="#refAccordion">
           <div class="accordion-body ref-body">
 
-            <p class="ref-label">Monthly top-voter routine metadata</p>
-            <table class="ref-table">
-              <tr><td><code>{playerName}</code></td><td>Winner's username (comma-sep on tie)</td></tr>
-              <tr><td><code>{username}</code></td><td>Alias for <code>{playerName}</code></td></tr>
-              <tr><td><code>{playerUuid}</code></td><td>First winner's UUID</td></tr>
-              <tr><td><code>{voteCount}</code></td><td>Votes cast that month</td></tr>
-              <tr><td><code>{monthKey}</code></td><td>Month in <code>YYYY-MM</code> format</td></tr>
-            </table>
-
-            <p class="ref-label mt-3">Config key</p>
-            <div class="ref-code-block"><span class="ref-ph">"voting"</span>: {
-  "monthlyRoutineSlug": "monthly-top-voter"
-}</div>
-
-            <p class="ref-label mt-3">Example step command</p>
+            <p class="ref-label">Example step command</p>
             <div class="ref-code-block">give {username} minecraft:diamond 1
 eco give {playerName} 5000
 lp user {username} parent add vip</div>
-
-          </div>
-        </div>
-      </div>
-
-      <!-- ── Vote Rewards ───────────────────────────────────────────────── -->
-      <div class="accordion-item ref-section">
-        <h2 class="accordion-header">
-          <button class="accordion-button collapsed ref-section-btn" type="button"
-                  data-bs-toggle="collapse" data-bs-target="#ref-vote">
-            <i class="fa-solid fa-check-to-slot fa-fw me-2 text-success"></i>Vote Rewards
-          </button>
-        </h2>
-        <div id="ref-vote" class="accordion-collapse collapse" data-bs-parent="#refAccordion">
-          <div class="accordion-body ref-body">
-
-            <p class="ref-label">Per-vote command placeholders</p>
-            <table class="ref-table">
-              <tr><td><code>{player}</code></td><td>Player username</td></tr>
-              <tr><td><code>{uuid}</code></td><td>Player UUID</td></tr>
-            </table>
-
-            <p class="ref-label mt-3">Monthly top-voter command placeholders</p>
-            <table class="ref-table">
-              <tr><td><code>{player}</code></td><td>Player username</td></tr>
-              <tr><td><code>{uuid}</code></td><td>Player UUID</td></tr>
-              <tr><td><code>{month}</code></td><td>Month as <code>YYYY-MM</code></td></tr>
-              <tr><td><code>{voteCount}</code></td><td>Total votes that month</td></tr>
-            </table>
-
-            <p class="ref-label mt-3">Reward types</p>
-            <table class="ref-table">
-              <tr><td><code>vote</code></td><td>Fires on every accepted vote</td></tr>
-              <tr><td><code>monthly_top</code></td><td>Fires for monthly winner(s) on 1st at 00:05 UTC</td></tr>
-            </table>
 
           </div>
         </div>
@@ -218,13 +169,13 @@ lp user {username} parent add vip</div>
               <tr><td><span class="badge bg-danger">5</span></td><td>Webstore commands (highest)</td></tr>
             </table>
 
-            <p class="ref-label mt-3">Webhook events from Tebex</p>
-            <div class="ref-code-block">POST /api/webstore/webhook
-  payment.completed
-  payment.declined
-  payment.refunded
-  recurring-payment.started
-  recurring-payment.renewed</div>
+            <p class="ref-label mt-3">Webhook events from Stripe</p>
+            <div class="ref-code-block">POST /api/webstore/stripe/webhook
+  checkout.session.completed
+  invoice.payment_succeeded
+  invoice.payment_failed
+  customer.subscription.updated
+  customer.subscription.deleted</div>
 
           </div>
         </div>
@@ -242,15 +193,15 @@ lp user {username} parent add vip</div>
           <div class="accordion-body ref-body">
 
             <p class="ref-label">Dashboard access</p>
-            <div class="ref-code-block">zander.dashboard
-zander.dashboard.bridge
-zander.dashboard.announcements
-zander.dashboard.voting
-zander.dashboard.finance
-zander.dashboard.logs
-zander.dashboard.vault
-zander.dashboard.ranks
-zander.dashboard.scheduler</div>
+            <div class="ref-code-block">zander.web.dashboard
+zander.web.*            (every dashboard page)
+zander.web.settings
+zander.web.modules
+zander.web.pages
+zander.web.menus
+zander.web.resources
+zander.web.resources.review</div>
+            <p class="small text-muted mt-2 mb-0">Full list with descriptions: Ranks → Permissions, or the README.</p>
 
             <p class="ref-label mt-3">Discord punishments</p>
             <div class="ref-code-block">zander.discord.punish.warn
@@ -258,39 +209,6 @@ zander.discord.punish.kick
 zander.discord.punish.ban
 zander.discord.punish.mute
 zander.discord.punish.history</div>
-
-          </div>
-        </div>
-      </div>
-
-      <!-- ── Config Keys ────────────────────────────────────────────────── -->
-      <div class="accordion-item ref-section">
-        <h2 class="accordion-header">
-          <button class="accordion-button collapsed ref-section-btn" type="button"
-                  data-bs-toggle="collapse" data-bs-target="#ref-config">
-            <i class="fas fa-cog fa-fw me-2 text-secondary"></i>Config Keys
-          </button>
-        </h2>
-        <div id="ref-config" class="accordion-collapse collapse" data-bs-parent="#refAccordion">
-          <div class="accordion-body ref-body">
-
-            <p class="ref-label">voting</p>
-            <div class="ref-code-block">"announcementChannelId": "...",
-"monthlyRoutineSlug": "monthly-top-voter",
-"tieRule": "all tied players rewarded"</div>
-
-            <p class="ref-label mt-3">discord.roles</p>
-            <div class="ref-code-block">"verified": "ROLE_ID",
-"muted":    "ROLE_ID"</div>
-
-            <p class="ref-label mt-3">discord.webhooks</p>
-            <div class="ref-code-block">welcome
-networkChatLog
-adminLog
-staffChannel
-staffAuditLog
-staffPunishmentNotifications
-webstoreChannel</div>
 
           </div>
         </div>

@@ -17,10 +17,19 @@ import { describeSettings, saveSection } from "../../controllers/configSettingsC
 import { groupedTimeZones } from "../../lib/timezones.mjs";
 import {
   SETTINGS_SECTIONS,
+  findModuleSection,
   findSection,
   isSecretField,
   maskSecret,
 } from "../../lib/config/settingsRegistry.mjs";
+import { describeFlags } from "../../lib/config/featureRegistry.mjs";
+
+/** The settings for one module, titled with its label from the Modules page. */
+function moduleSectionFor(key, features) {
+  const flagPath = String(key).slice("module:".length);
+  const flag = describeFlags(features).flatMap((g) => g.flags).find((f) => f.path === flagPath);
+  return flag ? findModuleSection(flagPath, flag.label) : null;
+}
 
 const PERMISSION_NODE = "zander.web.settings";
 
@@ -28,7 +37,8 @@ export default function dashboardSettingsRoute(app, config, db, features, lang) 
   app.get("/dashboard/settings", async function (req, res) {
     if (!(await hasPermission(PERMISSION_NODE, req, res, features))) return;
 
-    const section = findSection(String(req.query?.section || "")) || SETTINGS_SECTIONS[0];
+    const requested = String(req.query?.section || "");
+    const section = (requested.startsWith("module:") ? moduleSectionFor(requested, features) : findSection(requested)) || SETTINGS_SECTIONS[0];
 
     let values = {};
     let error = null;

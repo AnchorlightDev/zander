@@ -33,14 +33,7 @@ import {
 import { sendMail } from "../controllers/emailController.js";
 import { checkRateLimit } from "../lib/rateLimiter.mjs";
 import { hasStaffFlag } from "../lib/permissions/staffFlag.mjs";
-
-/**
- * A post-login redirect target must be a path on this site. "//evil.com" and
- * "/\evil.com" both start with "/" but browsers treat them as another host.
- */
-function isSafeLocalPath(value) {
-  return typeof value === "string" && /^\/(?![\/\\])/.test(value);
-}
+import { isSafeLocalPath } from "../lib/safeLocalPath.mjs";
 
 export default function sessionSiteRoute(
   app,

@@ -1,41 +1,46 @@
 <%- include("../modules/header.ejs", {
   pageTitle: pageTitle,
-  pageDescription: "This feature has been disabled and is not accessible."
+  pageDescription: "Something went wrong.",
+  pageRobots: "noindex, follow"
 }) %>
 
-<%- include("../modules/navigationBar.ejs", {
-  features,
-  announcementWeb,
-}) %>
+<%- include("../modules/navigationBar.ejs") %>
 
 <%- include("../partials/miniHeader.ejs", {
-  headerTitle: "Feature Disabled",
+  headerTitle: "Something Went Wrong",
   backgroundImage: globalImage
 }) %>
 
-<section class="section">
-  <div class="container">
-    <div class="row">
-      <div class="col-12 col-md-6" style="min-height:500px;">
-        <div class="text-center">
-          <img class="floating" style="margin-top:10px;" src="/images/session/errorImage.png" height="300px" draggable="false">
-        </div>
-      </div>
-      <div class="col-12 col-md-6">
-          <h3>There was an error ;-;</h3>
-          <% if (error.message) { %>
-            <code><%= error.message %></code>
-          <% } %>
-
-          <% if (error) { %>
-            <code><%= error %></code>
-          <% } %>
-
-          <br><br><br>
-          <small class="text-muted">If this continues to happen, please report this by either <a style="color: rgb(75, 64, 224);" href="mailto:<%= config.siteConfiguration.email %>">e-mailing our Support Team</a> or <a style="color: rgb(75, 64, 224);" href="/discord">join our Community Discord and open a ticket</a>.</small>
-      </div>
-    </div>
-  </div>
-</section>
+<%
+  // A client error (4xx) carries a message meant for the visitor. Anything
+  // else is an internal error whose text can expose internals (SQL, paths),
+  // so only signed-in staff see it, collapsed.
+  const _status = Number(error?.statusCode) || 500;
+  const _clientMessage = _status < 500 && error?.message ? error.message : null;
+  const _isStaff = Boolean(req.session?.user?.isStaff);
+  const _details = _isStaff && !_clientMessage && error
+    ? (error.stack || error.message || String(error))
+    : null;
+  const _esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const _email = config.siteConfiguration?.email;
+  const _discord = config.siteConfiguration?.platforms?.discord;
+  const _contact = [
+    _email ? `<a class="auth-link" href="mailto:${_esc(_email)}">email the team</a>` : null,
+    _discord ? `<a class="auth-link" href="${_esc(_discord)}" target="_blank" rel="noopener noreferrer">open a ticket on Discord</a>` : null,
+  ].filter(Boolean).join(" or ");
+%>
+<%- include("../partials/session/statusPage.ejs", {
+  image: "/images/session/errorImage.png",
+  code: "Error " + _status,
+  title: _clientMessage ? "We couldn't do that" : "Something went wrong on our end",
+  message: _clientMessage || "Sorry about that. Please try again in a moment.",
+  // Retrying a failed POST would resubmit it, so only offer it for page loads.
+  actions: [
+    ...(req.method === "GET" && req.url ? [{ href: req.url, label: "Try again", icon: "fa-solid fa-rotate-right", primary: true }] : []),
+    { href: "/", label: "Back to home", primary: req.method !== "GET" },
+  ],
+  note: _contact ? "If it keeps happening, " + _contact + "." : null,
+  details: _details
+}) %>
 
 <%- include("../modules/footer.ejs") %>

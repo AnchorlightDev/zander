@@ -1,35 +1,30 @@
 <%- include("../modules/header.ejs", {
   pageTitle: pageTitle,
-  pageDescription: "Permission Denied"
+  pageDescription: "Permission Denied",
+  pageRobots: "noindex, follow"
 }) %>
 
-<%- include("../modules/navigationBar.ejs", {
-  features: features
-}) %>
+<%- include("../modules/navigationBar.ejs") %>
 
 <%- include("../partials/miniHeader.ejs", {
-  headerTitle: "Permission Denied",
+  headerTitle: "Access Denied",
   backgroundImage: globalImage
 }) %>
 
-<section class="section">
-  <div class="container">
-    <div class="row">
-      <div class="col-12 col-md-6" style="min-height:500px;">
-        <div class="text-center">
-          <img class="floating" style="margin-top:10px;" src="/images/session/errorImage.png" height="300px" draggable="false">
-        </div>
-      </div>
-      <div class="col-12 col-md-6">
-        <h3>You do not have permission.</h3>
-          <p>Permission to this page is restricted, please ensure you are logged in and have the required access.</p>
-
-          <br><br><br>
-          <a href="/login"><button type="button" class="btn btn-primary">Login</button></a>
-          <a href="/"><button type="button" class="btn btn-success">Back to Safety</button></a>
-      </div>
-    </div>
-  </div>
-</section>
+<% const _signedIn = Boolean(req.session?.user); %>
+<%- include("../partials/session/statusPage.ejs", {
+  image: "/images/session/errorImage.png",
+  code: "Error 403",
+  title: _signedIn ? "You don't have access to this page" : "Please sign in to continue",
+  message: _signedIn
+    ? "Your account doesn't have permission to view this. If you think it should, ask a staff member."
+    : "This page is restricted. Sign in, and if your account has access you'll be able to continue.",
+  actions: _signedIn
+    ? [{ href: "/", label: "Back to home", icon: "fa-solid fa-house", primary: true }]
+    : [
+        { href: "/login", label: "Sign in", icon: "fa-solid fa-right-to-bracket", primary: true },
+        { href: "/", label: "Back to home" },
+      ]
+}) %>
 
 <%- include("../modules/footer.ejs") %>

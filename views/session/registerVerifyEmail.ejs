@@ -12,70 +12,36 @@
   backgroundImage: globalImage
 }) %>
 
-<section class="section">
+<section class="section auth-page">
   <div class="container">
-    <div class="row justify-content-center">
-      <div class="col-12 col-md-6" style="margin-top: 10px;">
-        <% if (req.cookies.alertType) { %>
-          <%- include("../partials/alert.ejs", {
-            alertType: req.cookies.alertType,
-            content: req.cookies.alertContent
-          }) %>
-        <% } %>
+    <div class="row align-items-center justify-content-center g-5">
+      <div class="col-md-9 col-lg-6 col-xl-5">
+        <div class="auth-card text-center">
+          <div class="mb-3"><i class="fa-solid fa-envelope-open-text fa-2x" style="color:#2f508c;" aria-hidden="true"></i></div>
+          <h3 class="auth-title">Check your inbox</h3>
+          <p class="auth-subtitle">We sent a 6-digit code to <strong><%= email %></strong>. Enter it within <%= expiryMinutes %> minutes to continue.</p>
 
-        <p>We sent a 6 digit verification code to <strong><%= email %></strong>. Enter the code below within <%= expiryMinutes %> minutes to continue.</p>
+          <% if (req.cookies.alertType) { %>
+            <div class="text-start">
+              <%- include("../partials/alert.ejs", {
+                alertType: req.cookies.alertType,
+                content: req.cookies.alertContent
+              }) %>
+            </div>
+          <% } %>
 
-        <form method="post" action="<%= process.env.siteAddress %>/register/verify-email">
-          <div id="otp" class="inputs d-flex flex-row justify-content-center mt-2">
-            <input class="m-2 text-center form-control rounded" type="text" name="first" maxlength="1" autocomplete="off" required />
-            <input class="m-2 text-center form-control rounded" type="text" name="second" maxlength="1" autocomplete="off" required />
-            <input class="m-2 text-center form-control rounded" type="text" name="third" maxlength="1" autocomplete="off" required />
-            <input class="m-2 text-center form-control rounded" type="text" name="fourth" maxlength="1" autocomplete="off" required />
-            <input class="m-2 text-center form-control rounded" type="text" name="fifth" maxlength="1" autocomplete="off" required />
-            <input class="m-2 text-center form-control rounded" type="text" name="sixth" maxlength="1" autocomplete="off" required />
+          <form method="post" action="<%= process.env.siteAddress %>/register/verify-email">
+            <%- include("../partials/session/otpInput.ejs", { submitId: "submitButton" }) %>
+            <button type="submit" class="btn btn-primary w-100" id="submitButton" disabled>Verify email</button>
+          </form>
+
+          <div class="auth-footer">
+            Wrong address or no email? Check your spam folder, or <a href="/register">start again</a>.
           </div>
-          <div class="text-center mt-3">
-            <button type="submit" class="btn btn-primary" id="submitButton" disabled>Verify Email</button>
-          </div>
-        </form>
-
-        <script>
-          function moveToNextInput(currentInput) {
-            var maxLength = parseInt(currentInput.getAttribute('maxlength'));
-            if (currentInput.value.length >= maxLength) {
-              var nextInput = currentInput.nextElementSibling;
-              if (nextInput !== null) {
-                nextInput.focus();
-              }
-            }
-            validateInputs();
-          }
-
-          function validateInputs() {
-            var inputs = document.querySelectorAll('#otp input');
-            var isFilled = true;
-            inputs.forEach(function(input) {
-              if (input.value === '') {
-                isFilled = false;
-              }
-            });
-            document.getElementById('submitButton').disabled = !isFilled;
-          }
-
-          document.addEventListener('DOMContentLoaded', function() {
-            var inputs = document.querySelectorAll('#otp input');
-            inputs.forEach(function(input) {
-              input.addEventListener('input', function() {
-                moveToNextInput(this);
-              });
-            });
-          });
-        </script>
-      </div>
-      <div class="col-12 col-md-6" style="min-height:500px; display: flex; align-items: center;">
-        <div class="text-center">
-          <img class="floating" style="max-width: 100%; height: auto; margin-top:10px;" src="/images/session/registerImage.png" draggable="false" alt="Email verification illustration">
         </div>
+      </div>
+      <div class="col-lg-5 d-none d-lg-block text-center">
+        <img class="floating auth-illustration" src="/images/session/registerImage.png" alt="" draggable="false">
       </div>
     </div>
   </div>

@@ -43,7 +43,7 @@ import {
   parseResource,
   tallyVotes,
 } from "../../lib/resources.mjs";
-import { castVote, decideManually } from "../../services/resourceReviewService.js";
+import { castVote, decideManually, getVoterNames, refreshReviewMessage } from "../../services/resourceReviewService.js";
 
 const TABS = ["review", "published", "rejected", "categories"];
 
@@ -84,12 +84,13 @@ export default function dashboardResourcesRoute(app, config, db, features, lang)
       if (tab === "review") {
         const reviewers = await getReviewerIds();
         reviewerCount = reviewers.size;
-        resources = resources.map((r) => ({
+        resources = await Promise.all(resources.map(async (r) => ({
           ...r,
           tally: tallyVotes(r.votes, reviewers),
+          voters: await getVoterNames(r),
           myVote: r.votes.find((v) => v.userId === userId)?.vote || null,
           overdue: isOverdue(r),
-        }));
+        })));
       }
     } catch (err) {
       console.error("[dashboard/resources] failed to load:", err);
@@ -174,21 +175,31 @@ export default function dashboardResourcesRoute(app, config, db, features, lang)
     return back(res, "published");
   });
 
+  // Managers can edit anything; reviewers can tidy up a suggestion (typos, a
+  // better title, the right category) while it is still being voted on.
   app.post("/dashboard/resources/:id/edit", async function (req, res) {
-    if (!(await requirePermission(MANAGE_PERMISSION, req, res, features))) return;
+    if (!(await requireAccess(req, res))) return;
     const existing = await getResourceById(req.params.id);
     if (!existing) {
       setBannerCookie("danger", "That resource no longer exists.", res);
       return back(res, "published");
     }
+    const tab = existing.status === "approved" ? "published" : existing.status === "pending" ? "review" : "rejected";
+    if (existing.status !== "pending" && !roles(req).canManage) {
+      setBannerCookie("danger", "Only resource managers can edit a resource once it has been decided.", res);
+      return back(res, tab);
+    }
+
     const categories = await listCategories();
     const parsed = parseResource(req.body, categories.map((c) => c.categoryId));
     if (!parsed.ok) setBannerCookie("danger", `Not saved. ${parsed.errors.join(" ")}`, res);
     else {
       await updateResource(existing.resourceId, parsed.value);
+      if (existing.status === "pending") await refreshReviewMessage(existing.resourceId);
+      console.log(`[dashboard/resources] ${actor(req)} edited #${existing.resourceId} "${parsed.value.title}"`);
       setBannerCookie("success", `Saved "${parsed.value.title}".`, res);
     }
-    return back(res, existing.status === "approved" ? "published" : existing.status === "pending" ? "review" : "rejected");
+    return back(res, tab);
   });
 
   app.post("/dashboard/resources/:id/delete", async function (req, res) {

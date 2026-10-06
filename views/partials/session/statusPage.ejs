@@ -1,0 +1,46 @@
+<%#
+  Body of a status screen (404, no permission, not logged in, error, feature
+  disabled): an illustration, a headline, a short explanation and what to do
+  next.
+
+  image     -- illustration under /images/session/
+  code      -- small label above the headline, e.g. "404" (optional)
+  title     -- headline
+  message   -- explanation (plain text)
+  actions   -- [{ href, label, icon?, primary? }]
+  details   -- optional technical text, shown collapsed (staff only -- the caller decides)
+  note      -- optional HTML shown under the actions
+%>
+<section class="section status-page">
+  <div class="container">
+    <div class="row align-items-center justify-content-center g-5">
+      <div class="col-md-5 col-lg-4 text-center order-md-2">
+        <img class="floating status-image" src="<%= image %>" alt="" draggable="false">
+      </div>
+      <div class="col-md-7 col-lg-6 order-md-1">
+        <% if (typeof code !== "undefined" && code) { %><div class="status-code mb-2"><%= code %></div><% } %>
+        <h2 class="mb-3"><%= title %></h2>
+        <p class="status-message mb-4"><%= message %></p>
+
+        <div class="d-flex flex-wrap gap-2">
+          <% (actions || []).forEach(function (action) { %>
+            <a class="btn <%= action.primary ? 'btn-primary' : 'btn-outline-primary' %>" href="<%= action.href %>">
+              <% if (action.icon) { %><i class="<%= action.icon %> me-1" aria-hidden="true"></i><% } %><%= action.label %>
+            </a>
+          <% }) %>
+        </div>
+
+        <% if (typeof note !== "undefined" && note) { %>
+          <p class="small mt-4 mb-0"><%- note %></p>
+        <% } %>
+
+        <% if (typeof details !== "undefined" && details) { %>
+          <details class="status-details mt-4">
+            <summary>Technical details (visible to staff only)</summary>
+            <pre class="mt-2 mb-0"><%= details %></pre>
+          </details>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</section>

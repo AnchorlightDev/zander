@@ -1,0 +1,55 @@
+<%#
+  Six-box verification code input, used by the email, Minecraft and Discord
+  link screens. Posts the digits as first … sixth (what routes/sessionRoutes.js
+  and api/routes/user.js read). One per page.
+
+  Optional: submitId -- id of the button to enable once all six are filled.
+%>
+<% const _otpSubmitId = typeof submitId !== "undefined" && submitId ? submitId : "submitButton"; %>
+<div class="otp-group" id="otp" role="group" aria-label="6-digit code">
+  <% ["first", "second", "third", "fourth", "fifth", "sixth"].forEach(function (name, i) { %>
+    <input class="form-control otp-input" type="text" name="<%= name %>" maxlength="1"
+           inputmode="numeric" pattern="[0-9]" autocomplete="<%= i === 0 ? 'one-time-code' : 'off' %>"
+           aria-label="Digit <%= i + 1 %> of 6" required>
+  <% }) %>
+</div>
+<script>
+  (function () {
+    var inputs = Array.prototype.slice.call(document.querySelectorAll("#otp .otp-input"));
+    var submit = document.getElementById(<%- JSON.stringify(_otpSubmitId) %>);
+
+    function validate() {
+      if (submit) submit.disabled = inputs.some(function (i) { return !i.value; });
+    }
+
+    function fill(text, from) {
+      var digits = String(text || "").replace(/\D/g, "").slice(0, inputs.length - from).split("");
+      digits.forEach(function (d, k) { inputs[from + k].value = d; });
+      var next = Math.min(from + digits.length, inputs.length - 1);
+      inputs[next].focus();
+      validate();
+    }
+
+    inputs.forEach(function (input, idx) {
+      input.addEventListener("input", function () {
+        // Autofill and some keyboards put the whole code in one box.
+        if (this.value.replace(/\D/g, "").length > 1) return fill(this.value, idx);
+        this.value = this.value.replace(/\D/g, "").slice(-1);
+        if (this.value && idx < inputs.length - 1) inputs[idx + 1].focus();
+        validate();
+      });
+      input.addEventListener("keydown", function (e) {
+        if (e.key === "Backspace" && !this.value && idx > 0) inputs[idx - 1].focus();
+        if (e.key === "ArrowLeft" && idx > 0) inputs[idx - 1].focus();
+        if (e.key === "ArrowRight" && idx < inputs.length - 1) inputs[idx + 1].focus();
+      });
+      input.addEventListener("paste", function (e) {
+        e.preventDefault();
+        fill((e.clipboardData || window.clipboardData).getData("text"), 0);
+      });
+      input.addEventListener("focus", function () { this.select(); });
+    });
+
+    validate();
+  })();
+</script>

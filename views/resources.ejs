@@ -15,6 +15,8 @@
   const signedIn = Boolean(req.session?.user);
   const discordLinked = Boolean(req.session?.user?.discordID);
   const canSuggest = allCategories.length > 0;
+  const addedOn = (r) => new Date(r.decidedAt || r.createdAt);
+  const shortDate = (d) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 %>
 
 <section class="section py-5 resources-page">
@@ -77,7 +79,16 @@
                       <div class="resource-item-body">
                         <h5 class="resource-item-title"><%= resource.title %></h5>
                         <p class="resource-item-description"><%= resource.description %></p>
-                        <span class="resource-item-host"><%= hostOf(resource.url) %></span>
+                        <div class="resource-item-meta">
+                          <span class="resource-item-host"><%= hostOf(resource.url) %></span>
+                          <span class="resource-item-credit">
+                            <% if (resource.submittedByName) { %>
+                              <%= resource.source === "staff" ? "Added by" : "Suggested by" %> <strong><%= resource.submittedByName %></strong> ·
+                            <% } %>
+                            <time datetime="<%= addedOn(resource).toISOString() %>" title="<%= shortDate(addedOn(resource)) %>"
+                                  data-relative-time="<%= addedOn(resource).toISOString() %>"><%= shortDate(addedOn(resource)) %></time>
+                          </span>
+                        </div>
                       </div>
                       <i class="fa-solid fa-arrow-up-right-from-square resource-item-icon" aria-hidden="true"></i>
                       <span class="visually-hidden">(opens in a new tab)</span>

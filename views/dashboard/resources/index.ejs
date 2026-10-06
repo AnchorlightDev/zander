@@ -43,7 +43,13 @@
           <%= reviewerCount ?? "?" %> reviewer(s) (everyone with <code>zander.web.resources.review</code>) approve it,
           or rejected once more than half reject it. If the vote window closes first, it stays here as
           <span class="badge text-bg-warning">Overdue</span> until someone with <code>zander.web.resources</code> decides it.
-          <% if (!reviewChannelSet) { %>No review channel is set, so votes happen here only (Settings → Pages &amp; Resources).<% } %>
+          <% if (!reviewChannelSet) { %>
+            <span class="d-block mt-2"><i class="fa-brands fa-discord me-1"></i>No Discord review channel is set, so suggestions are only voted on here.
+            <a href="/dashboard/settings?section=<%= encodeURIComponent('module:resources') %>">Choose a channel</a> to post each one there with Approve/Reject buttons.</span>
+          <% } else { %>
+            <span class="d-block mt-2"><i class="fa-brands fa-discord me-1"></i>Suggestions are also posted to the Discord review channel with Approve/Reject buttons.
+            <a href="/dashboard/settings?section=<%= encodeURIComponent('module:resources') %>">Change channel or vote window</a>.</span>
+          <% } %>
         </p>
 
         <% if (!resources.length) { %>
@@ -76,6 +82,13 @@
                   <span class="badge text-bg-success">👍 <%= r.tally.approve %></span>
                   <span class="badge text-bg-danger">👎 <%= r.tally.reject %></span>
                   <span class="small text-muted ms-1"><%= r.tally.needed %> of <%= r.tally.eligible %> needed</span>
+                  <% if (r.voters.approve.length || r.voters.reject.length) { %>
+                    <div class="small text-muted mt-1">
+                      <% if (r.voters.approve.length) { %>Approved: <%= r.voters.approve.join(", ") %><% } %>
+                      <% if (r.voters.approve.length && r.voters.reject.length) { %> · <% } %>
+                      <% if (r.voters.reject.length) { %>Rejected: <%= r.voters.reject.join(", ") %><% } %>
+                    </div>
+                  <% } %>
                 </div>
 
                 <% if (canReview) { %>
@@ -86,6 +99,11 @@
                   </form>
                 <% } %>
 
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#editPending<%= r.resourceId %>"
+                        aria-expanded="false" aria-controls="editPending<%= r.resourceId %>">
+                  <i class="fa-solid fa-pen me-1"></i>Edit
+                </button>
+
                 <% if (canManage && r.overdue) { %>
                   <form method="post" action="/dashboard/resources/<%= r.resourceId %>/decide" class="d-flex gap-2 ms-auto"
                         onsubmit="return confirm('Decide this suggestion now, without a majority?');">
@@ -94,6 +112,19 @@
                     <button class="btn btn-sm btn-danger" name="status" value="rejected" type="submit">Reject</button>
                   </form>
                 <% } %>
+              </div>
+
+              <div class="collapse mt-3" id="editPending<%= r.resourceId %>">
+                <form method="post" action="/dashboard/resources/<%= r.resourceId %>/edit" class="row g-2 border-top pt-3">
+                  <div class="col-md-4"><label class="form-label small mb-1">Category</label><select class="form-select form-select-sm" name="categoryId" required><%- categoryOptions(r.categoryId) %></select></div>
+                  <div class="col-md-8"><label class="form-label small mb-1">Title</label><input class="form-control form-control-sm" name="title" value="<%= r.title %>" maxlength="<%= limits.title %>" required></div>
+                  <div class="col-12"><label class="form-label small mb-1">Link</label><input class="form-control form-control-sm" type="url" name="url" value="<%= r.url %>" maxlength="<%= limits.url %>" required></div>
+                  <div class="col-12"><label class="form-label small mb-1">Description</label><textarea class="form-control form-control-sm" name="description" rows="2" maxlength="<%= limits.description %>" required><%= r.description %></textarea></div>
+                  <div class="col-12 d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-primary" type="submit">Save changes</button>
+                    <span class="small text-muted">Votes already cast are kept. The Discord review message updates to match.</span>
+                  </div>
+                </form>
               </div>
             </div>
           </div>

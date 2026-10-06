@@ -3519,3 +3519,326 @@ a:focus {
 .resources-page .resources-suggest .form-text {
   line-height: 1.5;
 }
+
+/* Notification dropdown header actions (views/modules/navigationBar.ejs) */
+.notification-action {
+  border-radius: 6px;
+  color: #2f508c;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.notification-action:hover,
+.notification-action:focus-visible {
+  background: #f4f9fc;
+}
+
+/* ── Session screens (views/session/*.ejs) ────────────────────────────── */
+.auth-page .auth-card {
+  background: #fff;
+  border: 1px solid #e3e9ef;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(34, 58, 102, .08);
+  padding: 2rem;
+}
+
+@media (max-width: 575.98px) {
+  .auth-page .auth-card {
+    padding: 1.5rem 1.25rem;
+  }
+}
+
+.auth-page .auth-title {
+  color: #223a66;
+  margin-bottom: .35rem;
+}
+
+.auth-page .auth-subtitle {
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
+}
+
+.auth-page .form-label {
+  color: #223a66;
+  font-weight: 600;
+  margin-bottom: .35rem;
+}
+
+.auth-page .form-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .5rem;
+}
+
+.auth-page .form-label-row a,
+.auth-page .auth-footer a,
+.auth-page .auth-link {
+  color: #2f508c;
+  font-weight: 600;
+}
+
+.auth-page .form-control,
+.auth-page .form-select {
+  border-radius: 0;
+  font-size: 14px;
+}
+
+.auth-page input.form-control {
+  height: 45px;
+}
+
+.auth-page .form-text,
+.auth-page .small {
+  line-height: 1.5;
+}
+
+.auth-page .password-field .btn-toggle-password {
+  border: 1px solid #ced4da;
+  border-left: 0;
+  border-radius: 0;
+  color: #6F8BA4;
+  padding: 0 .9rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.auth-page .password-field .btn-toggle-password:hover,
+.auth-page .password-field .btn-toggle-password:focus-visible {
+  color: #223a66;
+  background: #f4f9fc;
+}
+
+.auth-page .password-rules {
+  list-style: none;
+  padding: 0;
+  margin: .5rem 0 0;
+  font-size: .8rem;
+  line-height: 1.6;
+}
+
+.auth-page .password-rules li::before {
+  content: "\f111";
+  font-family: "Font Awesome 6 Free";
+  font-weight: 400;
+  margin-right: .4rem;
+  font-size: .7rem;
+}
+
+.auth-page .password-rules li.met {
+  color: #198754;
+}
+
+.auth-page .password-rules li.met::before {
+  content: "\f058";
+  font-weight: 900;
+}
+
+.auth-page .auth-divider {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin: 1.25rem 0;
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.auth-page .auth-divider::before,
+.auth-page .auth-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid #e3e9ef;
+}
+
+.auth-page .btn-discord {
+  background: #5865F2;
+  border-color: #5865F2;
+  color: #fff;
+}
+
+.auth-page .btn-discord:hover,
+.auth-page .btn-discord:focus-visible {
+  background: #4752c4;
+  border-color: #4752c4;
+  color: #fff;
+}
+
+.auth-page .auth-footer {
+  border-top: 1px solid #e3e9ef;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  text-align: center;
+  font-size: .9rem;
+  line-height: 1.5;
+}
+
+.auth-page .auth-illustration {
+  max-width: 100%;
+  max-height: 360px;
+  height: auto;
+}
+
+/* Six-box verification code (views/partials/session/otpInput.ejs) */
+.otp-group {
+  display: flex;
+  justify-content: center;
+  gap: .5rem;
+  margin: .5rem 0 1.25rem;
+}
+
+.otp-group .otp-input {
+  width: 48px;
+  height: 56px;
+  padding: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  text-align: center;
+  color: #223a66;
+  border-radius: 8px;
+}
+
+@media (max-width: 400px) {
+  .otp-group { gap: .35rem; }
+  .otp-group .otp-input { width: 40px; height: 50px; font-size: 1.2rem; }
+}
+
+/* Status screens: 404, no permission, error (views/partials/session/statusPage.ejs) */
+.status-page .status-image {
+  max-width: 100%;
+  max-height: 300px;
+  height: auto;
+}
+
+.status-page .status-code {
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #2f508c;
+}
+
+.status-page h2 {
+  color: #223a66;
+}
+
+.status-page .status-message {
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.status-page .status-details {
+  font-size: .85rem;
+}
+
+.status-page .status-details pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f4f9fc;
+  padding: .75rem;
+  border-radius: 6px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+/* Numbered steps on the account-linking screens */
+.auth-page .link-steps {
+  list-style: none;
+  counter-reset: step;
+  padding: 0;
+  margin: 0;
+}
+
+.auth-page .link-steps > li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 3rem;
+  padding-bottom: 1.75rem;
+}
+
+.auth-page .link-steps > li:last-child {
+  padding-bottom: 0;
+}
+
+.auth-page .link-steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: #2f508c;
+  color: #fff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-page .link-steps > li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 1rem;
+  top: 2.25rem;
+  bottom: .25rem;
+  border-left: 2px solid #e3e9ef;
+}
+
+.auth-page .link-steps h5 {
+  color: #223a66;
+  margin-bottom: .5rem;
+  padding-top: .25rem;
+}
+
+.auth-page .link-steps summary {
+  cursor: pointer;
+}
+
+.auth-page .mc-chat {
+  background: #1d1d1d;
+  border-radius: 6px;
+  padding: .5rem .75rem;
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  margin-top: .75rem;
+}
+
+/* Session screens: less empty space under the page banner, readable step text, themed links. */
+.section.auth-page,
+.section.status-page {
+  padding-top: 60px;
+  padding-bottom: 80px;
+}
+
+.auth-page .link-steps p {
+  line-height: 1.6;
+}
+
+.status-page .auth-link,
+.status-page .status-details summary {
+  color: #2f508c;
+  font-weight: 600;
+}
+
+.status-page .status-details summary {
+  cursor: pointer;
+}
+
+.resources-page .resource-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .25rem 1rem;
+  font-size: .8rem;
+}
+
+.resources-page .resource-item-credit {
+  color: #6F8BA4;
+}
+
+.resources-page .resource-item-credit strong {
+  color: #223a66;
+  font-weight: 600;
+}

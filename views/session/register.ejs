@@ -12,42 +12,51 @@
   backgroundImage: globalImage
 }) %>
 
-<section class="section">
+<section class="section auth-page">
   <div class="container">
-    <div class="row">
-      <div class="col-12 col-md-6">
-        <% if (req.cookies.alertType) { %>
-          <%- include("../partials/alert.ejs", {
-            alertType: req.cookies.alertType,
-            content: req.cookies.alertContent
-          }) %>
-        <% } %>
+    <div class="row align-items-center justify-content-center g-5">
+      <div class="col-md-9 col-lg-6 col-xl-5">
+        <div class="auth-card">
+          <h3 class="auth-title">Join the community</h3>
+          <p class="auth-subtitle">Create your account with the Minecraft username you play with. You'll confirm your email and link the game next.</p>
 
-        <form method="post" action="<%= process.env.siteAddress %>/register">
-          <div class="mb-3">
-            <label for="username" class="form-label">Minecraft Username</label>
-            <input type="text" class="form-control" id="username" name="username" maxlength="16" required>
+          <% if (req.cookies.alertType) { %>
+            <%- include("../partials/alert.ejs", {
+              alertType: req.cookies.alertType,
+              content: req.cookies.alertContent
+            }) %>
+          <% } %>
+
+          <form method="post" action="<%= process.env.siteAddress %>/register">
+            <div class="mb-3">
+              <label for="username" class="form-label">Minecraft username</label>
+              <input type="text" class="form-control" id="username" name="username" maxlength="16"
+                     autocomplete="username" autocapitalize="none" spellcheck="false" aria-describedby="usernameHelp" required autofocus>
+              <div id="usernameHelp" class="form-text">Bedrock players: start with a dot, e.g. <code>.YourGamertag</code></div>
+            </div>
+            <div class="mb-3">
+              <label for="email" class="form-label">Email address</label>
+              <input type="email" class="form-control" id="email" name="email" autocomplete="email" required>
+            </div>
+
+            <%- include("../partials/session/passwordField.ejs", {
+              id: "password",
+              name: "password",
+              label: "Password",
+              autocomplete: "new-password",
+              showRules: true
+            }) %>
+
+            <button type="submit" class="btn btn-primary w-100 mt-2">Create account</button>
+          </form>
+
+          <div class="auth-footer">
+            Already have an account? <a href="/login">Sign in</a>
           </div>
-          <div class="mb-3">
-            <label for="email" class="form-label">Email Address</label>
-            <input type="email" class="form-control" id="email" name="email" required>
-          </div>
-          <div class="mb-3">
-            <label for="password" class="form-label">Password</label>
-            <input type="password" class="form-control" id="password" name="password" required>
-            <small class="form-text text-muted">Password must be at least 8 characters long and include an uppercase letter, lowercase letter, and a number.</small>
-          </div>
-          <div class="text-center">
-            <button type="submit" class="btn btn-primary" style="width: 100%">Create Account</button>
-          </div>
-        </form>
-        <br>
-        <small class="text-muted">Already have an account? <a href="/login">Sign in here</a>.</small>
-      </div>
-      <div class="col-12 col-md-6" style="min-height:500px;">
-        <div class="text-center">
-          <img class="floating" style="margin-top:10px; max-width:100%; height:auto;" src="/images/session/registerImage.png" draggable="false" alt="Register illustration">
         </div>
+      </div>
+      <div class="col-lg-5 d-none d-lg-block text-center">
+        <img class="floating auth-illustration" src="/images/session/registerImage.png" alt="" draggable="false">
       </div>
     </div>
   </div>

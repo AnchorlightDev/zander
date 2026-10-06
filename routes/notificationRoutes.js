@@ -1,5 +1,6 @@
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import { getGlobalImage, setBannerCookie } from "../api/common.js";
+import { isSafeLocalPath } from "../lib/safeLocalPath.mjs";
 import {
   getNotificationSummary,
   getUserNotifications,
@@ -10,6 +11,9 @@ import {
   deleteAllNotifications,
   savePushSubscription,
 } from "../controllers/notificationController.js";
+
+/** Back to the page a bulk action came from, if it is on this site. */
+const returnPath = (value) => (isSafeLocalPath(value) ? value : "/notifications");
 
 export default function notificationRoutes(app, config, features) {
   app.get("/notifications", async function (req, res) {
@@ -138,7 +142,7 @@ export default function notificationRoutes(app, config, features) {
 
     await markAllNotificationsRead(req.session.user.userId);
     setBannerCookie("success", "All notifications marked as read.", res);
-    return res.redirect("/notifications");
+    return res.redirect(returnPath(req.body?.returnTo));
   });
 
   app.post("/notifications/clear-all", async function (req, res) {
@@ -157,7 +161,7 @@ export default function notificationRoutes(app, config, features) {
 
     await deleteAllNotifications(req.session.user.userId);
     setBannerCookie("success", "All notifications cleared.", res);
-    return res.redirect("/notifications");
+    return res.redirect(returnPath(req.body?.returnTo));
   });
 
   app.post("/notifications/:id/dismiss", async function (req, res) {
