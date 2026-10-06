@@ -3388,3 +3388,134 @@ a:focus {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ── Resources page (views/resources.ejs) ─────────────────────────────── */
+.resources-page .resources-intro {
+  font-size: 1.05rem;
+  margin-bottom: 2rem;
+}
+
+.resources-page .resources-empty {
+  border: 1px dashed #d6dfe8;
+  border-radius: 8px;
+  padding: 3rem 1.5rem;
+  color: #6F8BA4;
+}
+
+.resources-page .resources-empty i {
+  color: #2f508c;
+  opacity: .6;
+}
+
+.resources-page .resources-tabs {
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+
+.resources-page .resources-tabs .nav-link {
+  border: 1px solid #d6dfe8;
+  border-radius: 20px;
+  color: #223a66;
+  font-weight: 600;
+  padding: .4rem 1rem;
+}
+
+.resources-page .resources-tabs .nav-link.active {
+  background: #2f508c;
+  border-color: #2f508c;
+  color: #fff;
+}
+
+.resources-page .resources-count {
+  font-size: .75rem;
+  font-weight: 400;
+  opacity: .75;
+  margin-left: .25rem;
+}
+
+.resources-page .resources-list {
+  display: grid;
+  gap: .75rem;
+}
+
+.resources-page .resource-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #e3e9ef;
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.resources-page .resource-item:hover,
+.resources-page .resource-item:focus-visible {
+  border-color: #2f508c;
+  box-shadow: 0 4px 14px rgba(34, 58, 102, .08);
+}
+
+.resources-page .resource-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.resources-page .resource-item-title {
+  color: #223a66;
+  margin-bottom: .25rem;
+}
+
+.resources-page .resource-item-description {
+  margin-bottom: .35rem;
+}
+
+.resources-page .resource-item-host {
+  font-size: .8rem;
+  color: #2f508c;
+  word-break: break-all;
+}
+
+.resources-page .resource-item-icon {
+  color: #2f508c;
+  margin-top: .3rem;
+  flex-shrink: 0;
+}
+
+.resources-page .resources-suggest {
+  background: #f4f9fc;
+  border-radius: 8px;
+  padding: 1.5rem;
+  position: sticky;
+  top: 1.5rem;
+}
+
+.resources-page .resources-suggest .form-label {
+  color: #223a66;
+  font-weight: 600;
+  margin-bottom: .35rem;
+}
+
+/* The theme sizes text inputs only; give the URL field and select the same height and square corners. */
+.resources-page .resources-suggest .form-control,
+.resources-page .resources-suggest .form-select {
+  background-color: #fff;
+  border-radius: 0;
+  font-size: 14px;
+}
+
+.resources-page .resources-suggest input.form-control,
+.resources-page .resources-suggest .form-select {
+  height: 45px;
+}
+
+.resources-page .resources-suggest .form-select:focus {
+  box-shadow: none;
+  border-color: #2f508c;
+}
+
+/* The theme's paragraph line-height is set for body copy; small helper text needs less. */
+.resources-page .resources-suggest .small,
+.resources-page .resources-suggest .form-text {
+  line-height: 1.5;
+}
