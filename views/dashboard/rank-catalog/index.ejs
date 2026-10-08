@@ -101,7 +101,8 @@
                           <i class="fa-solid fa-pencil fa-fw"></i>
                         </a>
                         <form method="post" action="/dashboard/rank-catalog/<%= entry.id %>/delete" class="d-inline"
-                              onsubmit="return confirm('Delete <%= entry.displayName %>?')">
+                              data-confirm="Delete <%= entry.displayName %>?"
+                              onsubmit="return confirm(this.dataset.confirm)">
                           <button type="submit" class="btn btn-sm btn-outline-danger">
                             <i class="fa-solid fa-trash fa-fw"></i>
                           </button>

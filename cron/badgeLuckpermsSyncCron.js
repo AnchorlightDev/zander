@@ -45,7 +45,8 @@ async function syncOneBadge(badge) {
   const lpRows = await new Promise((resolve, reject) => {
     luckpermsDb.query(
       `SELECT uuid FROM luckperms_user_permissions
-        WHERE permission = ? AND value = 1`,
+        WHERE permission = ? AND value = 1
+          AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
       [`group.${groupSlug}`],
       (err, rows) => {
         if (err) return reject(err);

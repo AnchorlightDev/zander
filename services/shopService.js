@@ -237,9 +237,12 @@ export async function searchShops(material, page = 1, options = {}) {
 
   try {
     const safePage = Math.max(1, parseInt(page) || 1);
+    // Escape LIKE metacharacters so "%%" cannot turn into a full-table scan
+    // of every shop, and the ESCAPE clause below makes the backslash count.
+    const escapeLike = (value) => String(value).replace(/[\\%_]/g, (m) => `\\${m}`);
     const underscored = material.toUpperCase().replace(/ /g, "_");
-    const likeTerm = `%${material}%`;
-    const likeTermUnderscored = `%${underscored}%`;
+    const likeTerm = `%${escapeLike(material)}%`;
+    const likeTermUnderscored = `%${escapeLike(underscored)}%`;
 
     // Get total count for pagination.
     // qs_data.item stores plain YAML for old shops and base64+gzip NBT for new ones
@@ -255,11 +258,11 @@ export async function searchShops(material, page = 1, options = {}) {
          JOIN qs_external_cache stock ON shops.id = stock.shop
          WHERE data.unlimited = 0
            AND (
-             (data.item LIKE 'item:%' AND (data.item LIKE ? OR data.item LIKE ?))
+             (data.item LIKE 'item:%' AND (data.item LIKE ? ESCAPE '\\\\' OR data.item LIKE ? ESCAPE '\\\\'))
              OR
              (data.item NOT LIKE 'item:%' AND (
-               JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ?
-               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ?
+               JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ? ESCAPE '\\\\'
+               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ? ESCAPE '\\\\'
              ))
            )`,
         [likeTerm, likeTermUnderscored, likeTerm, likeTermUnderscored],
@@ -348,11 +351,11 @@ export async function searchShops(material, page = 1, options = {}) {
          JOIN qs_external_cache stock ON shops.id = stock.shop
          WHERE data.unlimited = 0
            AND (
-             (data.item LIKE 'item:%' AND (data.item LIKE ? OR data.item LIKE ?))
+             (data.item LIKE 'item:%' AND (data.item LIKE ? ESCAPE '\\\\' OR data.item LIKE ? ESCAPE '\\\\'))
              OR
              (data.item NOT LIKE 'item:%' AND (
-               JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ?
-               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ?
+               JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ? ESCAPE '\\\\'
+               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ? ESCAPE '\\\\'
              ))
            )
          ORDER BY shops.id

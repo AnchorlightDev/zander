@@ -299,7 +299,7 @@ export function createInGameAnnouncement(body, durationMinutes = 120) {
   return new Promise((resolve, reject) => {
     db.query(
       `INSERT INTO announcements (enabled, announcementType, body, link, endDate) VALUES (1, 'tip', ?, ?, ?)`,
-      [body, "https://craftingforchrist.net/watch", endDateStr],
+      [body, `${String(process.env.siteAddress || "").replace(/\/$/, "")}/watch`, endDateStr],
       (error, results) => {
         if (error) return reject(error);
         resolve(results?.insertId || true);
@@ -331,7 +331,9 @@ async function hasCreatorPermission(uuid) {
   // 1. Direct user permission
   try {
     const direct = await runLpQuery(
-      `SELECT 1 FROM luckperms_user_permissions WHERE uuid=? AND permission=? AND value=1 LIMIT 1`,
+      `SELECT 1 FROM luckperms_user_permissions
+        WHERE uuid=? AND permission=? AND value=1
+          AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP()) LIMIT 1`,
       [dashedUuid, CREATOR_PERMISSION_NODE]
     );
     if (direct.length > 0) {
@@ -345,9 +347,10 @@ async function hasCreatorPermission(uuid) {
   let groups = [];
   try {
     const groupRows = await runLpQuery(
-      `SELECT SUBSTRING_INDEX(permission, '.', -1) AS grp
+      `SELECT SUBSTRING(permission, 7) AS grp
          FROM luckperms_user_permissions
-        WHERE uuid=? AND permission LIKE 'group.%' AND value=1`,
+        WHERE uuid=? AND permission LIKE 'group.%' AND value=1
+          AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
       [dashedUuid]
     );
     groups = groupRows.map((r) => r.grp);
@@ -392,7 +395,7 @@ async function hasCreatorPermission(uuid) {
   try {
     const ph = groups.map(() => "?").join(", ");
     const parentRows = await runLpQuery(
-      `SELECT SUBSTRING_INDEX(permission, '.', -1) AS parent
+      `SELECT SUBSTRING(permission, 7) AS parent
          FROM luckperms_group_permissions
         WHERE name IN (${ph}) AND permission LIKE 'group.%' AND value=1`,
       [...groups]

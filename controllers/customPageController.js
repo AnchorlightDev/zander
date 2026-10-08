@@ -29,7 +29,11 @@ export function listPublishedPages() {
 }
 
 export function getPageById(pageId) {
-  return prisma.customPages.findUnique({ where: { pageId: Number(pageId) } });
+  // "/dashboard/pages/abc/edit" should answer "no such page", not a Prisma
+  // validation error.
+  const id = Number.parseInt(pageId, 10);
+  if (!Number.isInteger(id) || id < 1) return Promise.resolve(null);
+  return prisma.customPages.findUnique({ where: { pageId: id } });
 }
 
 export function getPageBySlug(slug) {

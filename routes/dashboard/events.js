@@ -298,7 +298,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
 
     try {
     const [apiData, templatesData, selectableRanks, globalImage, announcementWeb] = await Promise.all([
-      fetchJson(fetch, `${process.env.siteAddress}/api/events/single?eventId=${eventId}`, null),
+      fetchJson(fetch, `${process.env.siteAddress}/api/events/single?eventId=${encodeURIComponent(eventId)}`, null),
       fetchJson(fetch, `${process.env.siteAddress}/api/events/templates/get`, { data: [] }),
       selectableRanksOrEmpty("edit event"),
       getGlobalImage(),
@@ -354,7 +354,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     if (!eventId) return res.redirect("/dashboard/events/list");
 
     const [apiData, globalImage, announcementWeb] = await Promise.all([
-      fetchJson(fetch, `${process.env.siteAddress}/api/events/single?eventId=${eventId}`, null),
+      fetchJson(fetch, `${process.env.siteAddress}/api/events/single?eventId=${encodeURIComponent(eventId)}`, null),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);
@@ -567,7 +567,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     if (!templateId) return res.redirect("/dashboard/events/templates");
 
     const [apiData, selectableRanks, globalImage, announcementWeb] = await Promise.all([
-      fetchJson(fetch, `${process.env.siteAddress}/api/events/templates/single?templateId=${templateId}`, null),
+      fetchJson(fetch, `${process.env.siteAddress}/api/events/templates/single?templateId=${encodeURIComponent(templateId)}`, null),
       selectableRanksOrEmpty("edit template"),
       getGlobalImage(),
       getWebAnnouncement(),

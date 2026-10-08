@@ -84,16 +84,18 @@ describe("checkRateLimit", () => {
     expect(checkRateLimit(req, makeRes(), { max: 1 })).toBe(false);
   });
 
-  it("uses the leftmost x-forwarded-for entry as the client identity", () => {
+  it("ignores a client-supplied x-forwarded-for and keys on req.ip", () => {
     const shared = { method: "POST", url: "/xff-route" };
-    const first = makeReq({ ...shared, ip: "10.9.9.9", forwardedFor: "203.0.113.5, 70.41.3.18" });
-    const same = makeReq({ ...shared, ip: "10.9.9.9", forwardedFor: "203.0.113.5, 198.51.100.7" });
-    const other = makeReq({ ...shared, ip: "10.9.9.9", forwardedFor: "203.0.113.99" });
+    const ip = nextIp();
+    const first = makeReq({ ...shared, ip, forwardedFor: "203.0.113.5" });
+    // Same req.ip, different spoofed header: must still be the same bucket,
+    // otherwise rotating the header would defeat the limit.
+    const spoofed = makeReq({ ...shared, ip, forwardedFor: "203.0.113.99" });
+    const other = makeReq({ ...shared, ip: nextIp(), forwardedFor: "203.0.113.5" });
 
     expect(checkRateLimit(first, makeRes(), { max: 1 })).toBe(true);
-    // Same client IP behind a different downstream proxy — still one bucket.
-    expect(checkRateLimit(same, makeRes(), { max: 1 })).toBe(false);
-    // A genuinely different client is unaffected.
+    expect(checkRateLimit(spoofed, makeRes(), { max: 1 })).toBe(false);
+    // A genuinely different client (different req.ip) is unaffected.
     expect(checkRateLimit(other, makeRes(), { max: 1 })).toBe(true);
   });
 

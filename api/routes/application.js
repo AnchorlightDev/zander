@@ -1,3 +1,4 @@
+import { isAllowedUrl } from "../../lib/navigation/menus.mjs";
 import {
   isFeatureEnabled,
   required,
@@ -114,6 +115,9 @@ export default function applicationApiRoute(app, config, db, features, lang) {
 
     const applicationType = optional(req.body, "applicationType") || "external";
     const redirectUrl = optional(req.body, "redirectUrl");
+    if (redirectUrl && !isAllowedUrl(redirectUrl)) {
+      return res.send({ success: false, message: "Redirect URL must start with /, https://, http:// or mailto:." });
+    }
     const rawLinkedFormId = optional(req.body, "linkedFormId");
     const linkedFormId =
       rawLinkedFormId === "" ||
@@ -216,6 +220,9 @@ export default function applicationApiRoute(app, config, db, features, lang) {
 
     const applicationType = optional(req.body, "applicationType") || "external";
     const redirectUrl = optional(req.body, "redirectUrl");
+    if (redirectUrl && !isAllowedUrl(redirectUrl)) {
+      return res.send({ success: false, message: "Redirect URL must start with /, https://, http:// or mailto:." });
+    }
     const rawLinkedFormId = optional(req.body, "linkedFormId");
     const linkedFormId =
       rawLinkedFormId === "" ||

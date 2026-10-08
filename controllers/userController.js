@@ -5,8 +5,10 @@ import { sanitizeForumHtml } from "../lib/htmlSanitize.js";
 export function UserGetter() {
   this.byUsername = function (username) {
     return new Promise((resolve, reject) => {
+      // Placeholder ("ghost") rows carry a self-chosen Discord handle as their
+      // username, so one can shadow a real player's name. Real rows win.
       db.query(
-        `SELECT * FROM users WHERE username=?;`,
+        `SELECT * FROM users WHERE username=? ORDER BY COALESCE(is_placeholder, 0) ASC LIMIT 1;`,
         [username],
         function (error, results, fields) {
           if (error) {

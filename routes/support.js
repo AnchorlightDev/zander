@@ -1,4 +1,5 @@
 import { getWebAnnouncement } from "../controllers/announcementController.js";
+import { checkRateLimit } from "../lib/rateLimiter.mjs";
 import { isFeatureWebRouteEnabled, getGlobalImage, setBannerCookie, internalApiHeaders} from "../api/common.js";
 import {
   getSupportCategories,
@@ -400,6 +401,10 @@ export default function supportRoutes(
       }
 
       const ticket = await getTicketById(req.params.id);
+      if (!ticket) {
+        setBannerCookie("warning", "That ticket could not be found.", res);
+        return res.redirect("/support");
+      }
       const participants = await getTicketParticipants(req.params.id);
       const userRankSlugs = req.session.user.ranks?.map((rank) => rank.rankSlug) || [];
       const isOwner = Number(ticket.userId) === Number(req.session.user.userId);
@@ -689,6 +694,10 @@ export default function supportRoutes(
       }
 
       const ticket = await getTicketById(req.params.id);
+      if (!ticket) {
+        setBannerCookie("warning", "That ticket could not be found.", res);
+        return res.redirect("/support");
+      }
       const isStaff = req.session.user.isStaff;
       const permissions = req.session.user.permissions || [];
 
@@ -751,6 +760,10 @@ export default function supportRoutes(
       }
 
       const ticket = await getTicketById(req.params.id);
+      if (!ticket) {
+        setBannerCookie("warning", "That ticket could not be found.", res);
+        return res.redirect("/support");
+      }
       const isStaff = req.session.user.isStaff;
       if (!isStaff) {
         setBannerCookie("danger", "You do not have permission to lock this ticket.", res);
@@ -811,6 +824,10 @@ export default function supportRoutes(
       }
 
       const ticket = await getTicketById(req.params.id);
+      if (!ticket) {
+        setBannerCookie("warning", "That ticket could not be found.", res);
+        return res.redirect("/support");
+      }
       const participants = await getTicketParticipants(req.params.id);
       const userRankSlugs = req.session.user.ranks?.map((rank) => rank.rankSlug) || [];
       const isOwner = Number(ticket.userId) === Number(req.session.user.userId);
@@ -832,7 +849,9 @@ export default function supportRoutes(
       }
 
       const userIdentifier = (req.body?.userIdentifier || "").trim();
-      const userIdFromForm = parseInt(req.body?.userId, 10);
+      // Adding by bare numeric id is a staff tool; members add by name.
+      const mayAddById = isStaff || hasMgParticipantsPermAddUser;
+      const userIdFromForm = mayAddById ? parseInt(req.body?.userId, 10) : NaN;
 
       if (!userIdentifier && !userIdFromForm) {
         setBannerCookie("warning", "Provide a username or user ID to add.", res);
@@ -902,6 +921,10 @@ export default function supportRoutes(
       }
 
       const ticket = await getTicketById(req.params.id);
+      if (!ticket) {
+        setBannerCookie("warning", "That ticket could not be found.", res);
+        return res.redirect("/support");
+      }
       const participants = await getTicketParticipants(req.params.id);
       const userRankSlugs = req.session.user.ranks?.map((rank) => rank.rankSlug) || [];
       const isOwner = Number(ticket.userId) === Number(req.session.user.userId);
@@ -988,6 +1011,10 @@ export default function supportRoutes(
       }
 
       const ticket = await getTicketById(req.params.id);
+      if (!ticket) {
+        setBannerCookie("warning", "That ticket could not be found.", res);
+        return res.redirect("/support");
+      }
       const participants = await getTicketParticipants(req.params.id);
       const userRankSlugs = req.session.user.ranks?.map((rank) => rank.rankSlug) || [];
       const isOwner = Number(ticket.userId) === Number(req.session.user.userId);
@@ -1022,6 +1049,14 @@ export default function supportRoutes(
 
       if (user.userId === ticket.userId) {
         setBannerCookie("warning", "Ticket creators cannot remove themselves.", res);
+        return res.redirect(`/support/ticket/${req.params.id}`);
+      }
+
+      // Members may remove only themselves; removing someone else (a staff
+      // member who joined, say) needs the participants node or staff status.
+      const removingSelf = Number(user.userId) === Number(req.session.user.userId);
+      if (!removingSelf && !isStaff && !hasMgParticipantsPermRemoveUser) {
+        setBannerCookie("danger", "Only staff can remove other participants from a ticket.", res);
         return res.redirect(`/support/ticket/${req.params.id}`);
       }
 
@@ -1071,6 +1106,10 @@ export default function supportRoutes(
       }
 
       const ticket = await getTicketById(req.params.id);
+      if (!ticket) {
+        setBannerCookie("warning", "That ticket could not be found.", res);
+        return res.redirect("/support");
+      }
       const participants = await getTicketParticipants(req.params.id);
       const userRankSlugs = req.session.user.ranks?.map((rank) => rank.rankSlug) || [];
       const isOwner = Number(ticket.userId) === Number(req.session.user.userId);
@@ -1201,9 +1240,31 @@ export default function supportRoutes(
         return res.redirect("/login");
       }
 
-      const { title, category, message, manualUserId } = req.body;
+      // Each ticket creates a Discord channel (guilds cap out at 500), so
+      // throttle creation and insist on a real title/message and an enabled
+      // category rather than inserting whatever arrived.
+      if (!checkRateLimit(req, res, { windowMs: 60 * 60_000, max: 5 })) return;
+
+      const { manualUserId } = req.body || {};
+      const title = String(req.body?.title ?? "").trim();
+      const message = String(req.body?.message ?? "").trim();
+      const category = req.body?.category;
       const isStaff = req.session.user.isStaff;
       const isManual = Boolean(manualUserId) && isStaff;
+
+      if (!title || title.length > 255 || !message || message.length > 4000) {
+        setBannerCookie("warning", "Please give your ticket a title (up to 255 characters) and a message (up to 4000 characters).", res);
+        return res.redirect("/support/create");
+      }
+
+      if (!isManual) {
+        const categoryId = Number.parseInt(category, 10);
+        const categoryRow = Number.isInteger(categoryId) ? await getCategoryById(categoryId) : null;
+        if (!categoryRow || categoryRow.enabled === 0 || categoryRow.enabled === false) {
+          setBannerCookie("warning", "Please choose a valid ticket category.", res);
+          return res.redirect("/support/create");
+        }
+      }
 
       let selectedCategoryId = category;
       let staffRoleIds = [];

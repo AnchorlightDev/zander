@@ -12,6 +12,7 @@ import {
   ChannelType,
   EmbedBuilder,
   OverwriteType,
+  InteractionContextType,
 } from "discord.js";
 import { startTicketFlow } from "../lib/discord/ticketFlow.mjs";
 import {
@@ -58,6 +59,7 @@ export class SupportCommand extends Command {
   registerApplicationCommands(registry) {
     const builder = new SlashCommandBuilder()
       .setName(this.name)
+        .setContexts(InteractionContextType.Guild)
       .setDescription(this.description)
       .addSubcommand((subcommand) =>
         subcommand.setName("create").setDescription("Open a new support ticket.")

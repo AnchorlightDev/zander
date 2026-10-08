@@ -34,6 +34,7 @@ import {
   isHttpsDeployment as detectHttpsDeployment,
   buildHelmetOptions,
   buildSessionCookieOptions,
+  isCrossSiteRequest,
 } from "./lib/securityConfig.js";
 import { checkRateLimit } from "./lib/rateLimiter.mjs";
 import { serveCustomPage } from "./routes/customPageRoutes.js";
@@ -139,10 +140,19 @@ const buildApp = async () => {
   // (see Procfile).  Without it req.protocol is always "http", which both
   // defeats secure-cookie issuance below and makes req.ip the proxy address
   // rather than the client's — breaking per-IP rate limiting.
+  //
+  // `true` would trust every hop, which makes req.ip the *leftmost*
+  // X-Forwarded-For entry -- a value the client writes itself -- and so lets
+  // anyone sidestep per-IP rate limits by rotating that header. Trusting an
+  // exact hop count (1 = a single proxy such as Render's; 2 if a CDN sits in
+  // front of it) makes req.ip the address the trusted proxy actually saw.
+  const trustProxyHops = Number.parseInt(process.env.TRUST_PROXY_HOPS ?? "1", 10);
   const app = fastify({
-    logger: config.debug,
+    // Without a logger the error handler's app.log.error() calls are no-ops
+    // in production; keep warnings and errors even when debug is off.
+    logger: config.debug ? true : { level: "warn" },
     pluginTimeout: 120000,
-    trustProxy: true,
+    trustProxy: Number.isInteger(trustProxyHops) && trustProxyHops >= 0 ? trustProxyHops : 1,
   });
 
   // Drives both the Secure flag on the session cookie and HSTS below, so local
@@ -232,11 +242,13 @@ const buildApp = async () => {
 
     res.status(statusCode);
 
-    // If the request is for the API, return JSON instead of a view
+    // If the request is for the API, return JSON instead of a view. A 5xx
+    // message is Prisma/mysql text (table names, SQL fragments) and stays in
+    // the logs; the HTML path below already applies the same rule.
     if (req.url.startsWith("/api/")) {
       return res.send({
         success: false,
-        message: error.message || "Internal Server Error",
+        message: statusCode < 500 ? error.message || "Request failed" : "Internal Server Error",
       });
     }
 
@@ -347,7 +359,12 @@ const buildApp = async () => {
   });
 
   await app.register(await import("@fastify/formbody"), { bodyLimit: 10485760 }); // 10 MB
-  await app.register(await import("@fastify/multipart"));
+  // Without explicit limits @fastify/multipart caps a file at the 1 MiB body
+  // limit and throws mid-stream, which the upload handlers reported as a 500.
+  // The 8 MB figure is the one the handlers advertise.
+  await app.register(await import("@fastify/multipart"), {
+    limits: { fileSize: 8 * 1024 * 1024, files: 1, fields: 10, fieldSize: 1024 },
+  });
 
   await app.register((instance, options, next) => {
     // API routes (Token authenticated)
@@ -388,60 +405,12 @@ const buildApp = async () => {
     });
   });
 
-  // Browser image upload endpoint (/api/upload/image) — session-authenticated
-  // inside its own handler, not API-token-authenticated. Registered outside the
-  // verifyToken plugin so logged-in dashboard users / form submitters can upload
-  // images without the client needing to know the machine API key.
+  // Browser image upload endpoints (/api/upload/image and
+  // /dashboard/upload/image) — session-authenticated inside their own handler,
+  // not API-token-authenticated. Registered outside the verifyToken plugin so
+  // logged-in dashboard users / form submitters can upload images without the
+  // client needing to know the machine API key.
   uploadApiRoute(app, config, db, features, lang);
-
-  // Dashboard image upload — session-authenticated, not API-token-authenticated.
-  // Kept outside the verifyToken plugin so logged-in dashboard users can upload
-  // images (e.g. popup announcement banners) without needing the machine API key.
-  app.post("/dashboard/upload/image", async function (req, res) {
-    if (!req.session?.user) {
-      return res.status(401).send({ success: false, message: "Authentication required." });
-    }
-
-    const { isCloudinaryConfigured, uploadImage } = await import("./services/cloudinaryService.js");
-
-    if (!isCloudinaryConfigured()) {
-      return res.status(503).send({ success: false, message: "Image uploads are not configured." });
-    }
-
-    const MAX_SIZE  = 8 * 1024 * 1024;
-    const ALLOWED   = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-
-    let data;
-    try { data = await req.file(); } catch {
-      return res.status(400).send({ success: false, message: "No file provided." });
-    }
-    if (!data?.file) {
-      return res.status(400).send({ success: false, message: "No file provided." });
-    }
-    if (!ALLOWED.includes(data.mimetype)) {
-      return res.status(400).send({ success: false, message: "Invalid file type. Allowed: PNG, JPG, GIF, WebP." });
-    }
-
-    const folder = data.fields?.folder?.value || "zander";
-
-    try {
-      const chunks = [];
-      let total = 0;
-      for await (const chunk of data.file) {
-        total += chunk.length;
-        if (total > MAX_SIZE) {
-          return res.status(413).send({ success: false, message: "File too large. Maximum 8 MB." });
-        }
-        chunks.push(chunk);
-      }
-      const buffer = Buffer.concat(chunks);
-      const result = await uploadImage(buffer, { folder });
-      return res.send({ success: true, data: { url: result.url, publicId: result.publicId, width: result.width, height: result.height } });
-    } catch (error) {
-      console.error("[upload] Cloudinary upload failed:", error);
-      return res.status(500).send({ success: false, message: "Upload failed. Please try again." });
-    }
-  });
 
   await app.register((instance, options, next) => {
     // Don't authenticate the Redirect routes. These are
@@ -484,6 +453,16 @@ const buildApp = async () => {
   // The sessions table is created by the baseline migration.
   const sessionStore = new FastifyPrismaSessionStore();
 
+  // The example value ships in a public repository. Running with it means
+  // anyone can mint a validly signed session cookie, so refuse to start.
+  const sessionSecret = String(process.env.sessionCookieSecret || "");
+  if (sessionSecret.length < 32 || sessionSecret === "THISISNOTVERYSECRETANDITHINKYOUSHOULDCHANGEIT") {
+    throw new Error(
+      "sessionCookieSecret must be set in .env to a random value of at least 32 characters " +
+        "(for example `openssl rand -hex 32`); the value from .env.example is not allowed."
+    );
+  }
+
   await app.register(fastifyCookie, {
     secret: process.env.sessionCookieSecret, // for cookies signature
   });
@@ -501,6 +480,26 @@ const buildApp = async () => {
     // any transient DB latency.  Sessions still expire 7 days after last
     // write (login, perm change, etc.).
     rolling: false,
+  });
+
+  // Cross-site request forgery guard for cookie-authenticated writes.
+  //
+  // The session cookie is SameSite=Lax, which already keeps it off cross-site
+  // POSTs in current browsers; this makes the rule explicit and independent of
+  // that cookie attribute. A state-changing request that arrives with a
+  // logged-in session must come from this site: either the browser says so
+  // (Sec-Fetch-Site: same-origin / none) or the Origin header matches
+  // siteAddress. Requests authenticated with an API key carry no session and
+  // are untouched, as are Stripe webhooks and plain GETs.
+  const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+  app.addHook("preHandler", async (req, res) => {
+    if (SAFE_METHODS.has(req.method) || !req.session?.user) return;
+    if (!isCrossSiteRequest(req, process.env.siteAddress)) return;
+    app.log.warn(
+      { method: req.method, url: req.url, origin: req.headers.origin, fetchSite: req.headers["sec-fetch-site"] },
+      "cross-site write rejected"
+    );
+    return res.status(403).send({ success: false, message: "Cross-site request rejected." });
   });
 
   // Must be registered before siteRoutes so it applies to all site route
@@ -541,36 +540,8 @@ const buildApp = async () => {
     console.warn("[DB] Prisma warm-up query failed (will retry on first request):", err.message);
   }
 
-  // ── Auto-migration: supportTicketMessages charset → utf8mb4 (emoji support) ──
-  if (db) {
-    try {
-      await new Promise((resolve) => {
-        db.query(
-          `SELECT CHARACTER_SET_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'supportTicketMessages' AND COLUMN_NAME = 'message'`,
-          (err, results) => {
-            if (err || !results || results.length === 0) return resolve();
-            if (results[0].CHARACTER_SET_NAME === 'utf8mb4') return resolve();
-            db.query(
-              `ALTER TABLE supportTicketMessages CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
-              (alterErr) => {
-                if (alterErr) {
-                  console.warn("[DB] supportTicketMessages charset migration skipped:", alterErr.message);
-                } else {
-                  console.log("[DB] supportTicketMessages converted to utf8mb4 for emoji support.");
-                }
-                resolve();
-              }
-            );
-          }
-        );
-      });
-    } catch (err) {
-      console.error("[DB] supportTicketMessages auto-migration error:", err.message);
-    }
-  }
-
   try {
-    const port = process.env.PORT;
+    const port = Number.parseInt(process.env.PORT, 10) || 8080;
 
     app.listen({ port: port, host: "0.0.0.0" }, (err) => {
       if (err) {
@@ -582,7 +553,7 @@ const buildApp = async () => {
     console.log(
       `\n// ${packageData.name} v.${packageData.version}\nGitHub Repository: ${packageData.homepage}\nCreated By: ${packageData.author}`
     );
-    console.log(`Site and API is listening to the port ${process.env.PORT}`);
+    console.log(`Site and API is listening to the port ${port}`);
   } catch (error) {
     app.log.error(`Unable to start the server:\n${error}`);
   }

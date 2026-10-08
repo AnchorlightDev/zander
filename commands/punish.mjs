@@ -10,6 +10,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
   WebhookClient,
+  InteractionContextType,
 } from "discord.js";
 import { createRequire } from "module";
 import fetch from "node-fetch";
@@ -512,6 +513,7 @@ export class PunishCommand extends Command {
   registerApplicationCommands(registry) {
     const builder = new SlashCommandBuilder()
       .setName("punish")
+        .setContexts(InteractionContextType.Guild)
       .setDescription("Discord punishment commands for staff.")
       .addSubcommand((sub) =>
         sub
@@ -1283,8 +1285,20 @@ export class PunishCommand extends Command {
     try {
       await interaction.guild.members.unban(targetUser.id, `[Punish] ${reason}`);
     } catch (error) {
-      // User may not actually be banned in Discord
-      console.warn("Failed to unban (may not be banned):", error.message);
+      // 10026 Unknown Ban: not banned in Discord, so the records are stale and
+      // may be lifted. Any other failure (permissions, outage) must not clear
+      // the records while the user is still banned.
+      if (error?.code !== 10026) {
+        console.warn("Failed to unban:", error.message);
+        return interaction.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle("Unban Failed")
+              .setDescription("Discord refused the unban, so the punishment record was left active. Check the bot's permissions and try again.")
+              .setColor(Colors.Red),
+          ],
+        });
+      }
     }
 
     // Lift all active ban records

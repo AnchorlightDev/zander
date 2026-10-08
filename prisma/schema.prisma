@@ -165,10 +165,13 @@ model userEmailVerifications {
   codeHash       String   @db.VarChar(255)
   expiresAt      DateTime
   consumed       Boolean  @default(false)
+  attempts       Int      @default(0)
   createdAt      DateTime @default(now())
   consumedAt     DateTime?
 
   user           users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, createdAt], map: "userEmailVerifications_userId_createdAt_idx")
 }
 
 model userPasswordResets {
@@ -177,10 +180,13 @@ model userPasswordResets {
   codeHash   String   @db.VarChar(255)
   expiresAt  DateTime
   consumed   Boolean  @default(false)
+  attempts   Int      @default(0)
   createdAt  DateTime @default(now())
   consumedAt DateTime?
 
   user       users    @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, createdAt], map: "userPasswordResets_userId_createdAt_idx")
 }
 
 model userVerifyLink {
@@ -327,6 +333,8 @@ model gameSessions {
   sessionEnd   DateTime?
   ipAddress    String?   @db.VarChar(45)
   server       String?   @db.Text
+
+  @@index([userId], map: "gameSessions_userId_idx")
 }
 
 model announcements {
@@ -357,6 +365,8 @@ model scheduledDiscordMessages {
   sentAt            DateTime?
   status            scheduledDiscordMessages_status @default(scheduled)
   lastError         String?                         @db.Text
+
+  @@index([status, scheduledFor], map: "scheduledDiscordMessages_status_scheduledFor_idx")
 }
 
 model applications {
@@ -665,6 +675,7 @@ model session {
   data      String   @db.MediumText
   expiresAt DateTime
 
+  @@index([expiresAt], map: "sessions_expiresAt_idx")
   @@map("sessions")
 }
 
@@ -745,6 +756,8 @@ model userNotifications {
   url              String   @db.VarChar(255)
   isRead           Int      @default(0) @db.TinyInt
   createdAt        DateTime @default(now())
+
+  @@index([userId, isRead], map: "userNotifications_userId_isRead_idx")
 }
 
 model pushSubscriptions {

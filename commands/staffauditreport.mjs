@@ -1,5 +1,5 @@
 import { Command } from "@sapphire/framework";
-import { Colors, EmbedBuilder, MessageFlags } from "discord.js";
+import {Colors, EmbedBuilder, MessageFlags, InteractionContextType } from "discord.js";
 import { hasPermission } from "../lib/discord/permissions.mjs";
 import {
   getUserPermissions,
@@ -20,6 +20,7 @@ export class StaffAuditReportCommand extends Command {
     registry.registerChatInputCommand((builder) =>
       builder
         .setName("staff-audit-report")
+        .setContexts(InteractionContextType.Guild)
         .setDescription("Manually trigger the staff activity audit report.")
     );
   }

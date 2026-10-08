@@ -36,8 +36,8 @@
  *   - a case-insensitive username match against one
  *
  * Usage:
- *   node scripts/mergeRegisteredGhostUsers.mjs            # apply
- *   node scripts/mergeRegisteredGhostUsers.mjs --dry-run  # report only
+ *   node scripts/mergeRegisteredGhostUsers.mjs            # report only (default)
+ *   node scripts/mergeRegisteredGhostUsers.mjs --apply    # merge
  */
 import dotenv from "dotenv";
 dotenv.config();
@@ -45,7 +45,9 @@ dotenv.config();
 import db from "../controllers/databaseController.js";
 import { mergePlaceholderUser } from "../controllers/userController.js";
 
-const DRY_RUN = process.argv.includes("--dry-run");
+// Dry-run unless --apply is given, matching the admin/ scripts: a merge
+// rewrites user rows and is not something to run by accident.
+const DRY_RUN = !process.argv.includes("--apply");
 
 function query(sql, params = []) {
   return new Promise((resolve, reject) => {

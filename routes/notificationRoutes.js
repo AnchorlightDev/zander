@@ -10,6 +10,7 @@ import {
   deleteNotification,
   deleteAllNotifications,
   savePushSubscription,
+  isValidPushSubscription,
 } from "../controllers/notificationController.js";
 
 /** Back to the page a bulk action came from, if it is on this site. */
@@ -58,7 +59,7 @@ export default function notificationRoutes(app, config, features) {
     }
 
     const { subscription } = req.body || {};
-    if (!subscription || !subscription.endpoint || !subscription.keys) {
+    if (!isValidPushSubscription(subscription)) {
       return res.status(400).send({ error: "Invalid subscription" });
     }
 
@@ -123,7 +124,7 @@ export default function notificationRoutes(app, config, features) {
 
     await markNotificationRead(notificationId, req.session.user.userId);
 
-    return res.redirect(notification.url || "/notifications");
+    return res.redirect(isSafeLocalPath(notification.url) ? notification.url : "/notifications");
   });
 
   app.post("/notifications/mark-all", async function (req, res) {

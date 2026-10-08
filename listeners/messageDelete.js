@@ -22,6 +22,7 @@ export class GuildMessageDeleteListener extends Listener {
     if (!webhookUrl) return;
 
     const webhook = new WebhookClient({ url: webhookUrl });
+    try {
 
     const embed = new EmbedBuilder()
       .setTitle("Message Delete")
@@ -44,5 +45,10 @@ export class GuildMessageDeleteListener extends Listener {
     await sendWebhookMessage(webhook, { embeds: [embed], components: [jumpButton] }, {
       context: "listeners/messageDelete",
     });
+    } finally {
+      // Each client owns a REST instance with its own timers; without this
+      // every logged message leaked one for the life of the process.
+      webhook.destroy();
+    }
   }
 }

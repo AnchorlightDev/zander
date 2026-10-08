@@ -13,10 +13,10 @@
  * Discord permission check from a script.
  *
  * Usage:
- *   node scripts/cleanupOrphanTicketChannels.mjs                 # auto-detect & delete orphans
- *   node scripts/cleanupOrphanTicketChannels.mjs --dry-run       # report only, delete nothing
- *   node scripts/cleanupOrphanTicketChannels.mjs 123 456 789     # force-delete these channel IDs
- *   node scripts/cleanupOrphanTicketChannels.mjs --dry-run 123   # report what would happen for 123
+ *   node scripts/cleanupOrphanTicketChannels.mjs                 # report orphans, delete nothing (default)
+ *   node scripts/cleanupOrphanTicketChannels.mjs --apply         # auto-detect & delete orphans
+ *   node scripts/cleanupOrphanTicketChannels.mjs --apply 123 456 # force-delete these channel IDs
+ *   node scripts/cleanupOrphanTicketChannels.mjs 123             # report what would happen for 123
  */
 import dotenv from "dotenv";
 dotenv.config();
@@ -25,7 +25,8 @@ import { Client, GatewayIntentBits } from "discord.js";
 import { cleanupOrphanTicketChannels } from "../controllers/supportTicketController.js";
 
 const args = process.argv.slice(2);
-const DRY_RUN = args.includes("--dry-run");
+// Dry-run unless --apply is given: this deletes Discord channels.
+const DRY_RUN = !args.includes("--apply");
 const explicitIds = args.filter((a) => /^\d{5,}$/.test(a));
 
 const token = process.env.discordAPIKey;

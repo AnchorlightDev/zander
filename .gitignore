@@ -1,6 +1,5 @@
 node_modules
 .env
-package-lock.json
 sslCert.cert
 sslPrivate.key
 config.json

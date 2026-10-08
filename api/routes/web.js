@@ -20,21 +20,15 @@ export default async function webApiRoute(app, config, db, features, lang) {
 
     try {
       const [mainResults, staffResults] = await Promise.all([
+        // One statement per query: the pool runs with multipleStatements off.
         new Promise((resolve, reject) => {
           db.query(
-            `
-            SELECT COUNT(DISTINCT gs.userId) AS communityMembers
-            FROM gameSessions gs
-            JOIN users u ON gs.userId = u.userId
-            WHERE gs.sessionStart >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
-              AND u.account_disabled = 0;
-
-            SELECT ROUND(SUM(TIMESTAMPDIFF(SECOND, gs.sessionStart, COALESCE(gs.sessionEnd, NOW()))) / 3600) AS timePlayed
-            FROM gameSessions gs
-            JOIN users u ON gs.userId = u.userId
-            WHERE gs.sessionStart >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
-              AND u.account_disabled = 0;
-`,
+            `SELECT COUNT(DISTINCT gs.userId) AS communityMembers,
+                    ROUND(SUM(TIMESTAMPDIFF(SECOND, gs.sessionStart, COALESCE(gs.sessionEnd, NOW()))) / 3600) AS timePlayed
+             FROM gameSessions gs
+             JOIN users u ON gs.userId = u.userId
+             WHERE gs.sessionStart >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
+               AND u.account_disabled = 0`,
             (err, results) => {
               if (err) return reject(err);
               resolve(results);
@@ -75,8 +69,8 @@ export default async function webApiRoute(app, config, db, features, lang) {
       ]);
 
       // General
-      const communityMembers = mainResults[0][0].communityMembers || 0;
-      const timePlayed = mainResults[1][0].timePlayed || 0;
+      const communityMembers = mainResults[0]?.communityMembers || 0;
+      const timePlayed = mainResults[0]?.timePlayed || 0;
       const staffMembers = staffResults[0].totalStaff || 0;
 
       return res.send({

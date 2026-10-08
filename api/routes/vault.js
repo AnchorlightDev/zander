@@ -1,3 +1,5 @@
+import { sanitizeForumHtml } from "../../lib/htmlSanitize.js";
+import { isAllowedUrl } from "../../lib/navigation/menus.mjs";
 import {
   isFeatureEnabled,
   required,
@@ -58,10 +60,15 @@ export default function vaultApiRoute(app, config, db, features, lang) {
     if (res.sent) return;
     const displayName = required(req.body, "displayName", res);
     if (res.sent) return;
-    const description = required(req.body, "description", res);
+    const rawDescription = required(req.body, "description", res);
     if (res.sent) return;
+    // Rendered unescaped on the public /vault page: strip scripts/handlers.
+    const description = sanitizeForumHtml(String(rawDescription));
     const redirectUrl = required(req.body, "redirectUrl", res);
     if (res.sent) return;
+    if (!isAllowedUrl(redirectUrl)) {
+      return res.send({ success: false, message: "Redirect URL must start with /, https://, http:// or mailto:." });
+    }
     const position = required(req.body, "position", res);
     if (res.sent) return;
 
@@ -115,10 +122,15 @@ export default function vaultApiRoute(app, config, db, features, lang) {
     if (res.sent) return;
     const displayName = required(req.body, "displayName", res);
     if (res.sent) return;
-    const description = required(req.body, "description", res);
+    const rawDescription = required(req.body, "description", res);
     if (res.sent) return;
+    // Rendered unescaped on the public /vault page: strip scripts/handlers.
+    const description = sanitizeForumHtml(String(rawDescription));
     const redirectUrl = required(req.body, "redirectUrl", res);
     if (res.sent) return;
+    if (!isAllowedUrl(redirectUrl)) {
+      return res.send({ success: false, message: "Redirect URL must start with /, https://, http:// or mailto:." });
+    }
     const position = required(req.body, "position", res);
     if (res.sent) return;
 

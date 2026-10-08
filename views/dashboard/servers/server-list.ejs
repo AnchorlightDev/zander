@@ -93,7 +93,8 @@
                         </a>
                         <form action="<%= process.env.siteAddress %>/redirect/server/delete" method="post"
                               style="display:inline;"
-                              onsubmit="return confirm('Delete server \'<%= srv.displayName %>\'?')">
+                              data-confirm="Delete server '<%= srv.displayName %>'?"
+                              onsubmit="return confirm(this.dataset.confirm)">
                           <input type="hidden" name="serverId" value="<%= srv.serverId %>">
                           <button type="submit" class="row-action-btn danger">
                             <i class="fas fa-trash" aria-hidden="true"></i> Delete

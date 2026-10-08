@@ -124,8 +124,11 @@ function normalisePermissionNode(value) {
 }
 
 function hasSpecificPermission(permissionArray, node) {
+  // An empty node is a programming error (undefined constant, typo), and the
+  // safe answer to "may this user do <nothing in particular>" is no.
   if (!node) {
-    return true;
+    console.error("[permissions] hasPermission called with an empty node");
+    return false;
   }
 
   if (!Array.isArray(permissionArray) || permissionArray.length === 0) {
@@ -134,7 +137,7 @@ function hasSpecificPermission(permissionArray, node) {
 
   const target = normalisePermissionNode(node);
   if (!target) {
-    return true;
+    return false;
   }
 
   return permissionArray.some((permission) => {
@@ -246,8 +249,6 @@ export async function postAPIRequest(
     return res.redirect(failureRedirectURL);
   }
 
-  console.log(data);
-
   if (data.alertType) {
     setBannerCookie(`${data.alertType}`, `${data.alertContent}`, res);
   }
@@ -255,8 +256,6 @@ export async function postAPIRequest(
   if (!data.success) {
     return res.redirect(failureRedirectURL);
   }
-
-  return console.log(data);
 }
 
 /*

@@ -70,6 +70,7 @@ All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard
 |---|---|
 | `zander.web.ticket` | Access the support ticket dashboard |
 | `zander.web.tickets` | Access ticket category listings |
+| `zander.web.tickets.manage` | Create, rename and delete ticket categories, manage their Discord role access and post the support panel |
 | `zander.web.tickets.{slug}` | Access a specific ticket category (dynamic, based on category slug) |
 | `zander.web.tickets.*` | Access all ticket categories |
 | `zander.web.ticket.escalate` | Escalate and de-escalate support tickets |

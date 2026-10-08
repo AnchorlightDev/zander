@@ -139,6 +139,16 @@ function getAllRanksFromLuckPerms() {
   });
 }
 
+
+// The registry documents `zander.web.ranks` as the page node and
+// `zander.web.rank` as the API-management node; the page used to check only
+// the latter. Either now opens the read-only views.
+async function canViewRanks(req, res, features) {
+  const perms = req.session?.user?.permissions;
+  if (holdsNode(perms, "zander.web.ranks") || holdsNode(perms, "zander.web.rank")) return true;
+  return hasPermission("zander.web.ranks", req, res, features);
+}
+
 export default function dashboardRanksRoute(
   app,
   fetch,
@@ -149,7 +159,7 @@ export default function dashboardRanksRoute(
 ) {
   app.get("/dashboard/ranks/export-csv", async (req, res) => {
     if (!await isFeatureWebRouteEnabled(app, features.ranks, req, res, features)) return;
-    if (!await hasPermission("zander.web.rank", req, res, features)) return;
+    if (!await canViewRanks(req, res, features)) return;
 
     const raw = (req.query.ranks || "").trim();
     if (!raw) {
@@ -188,7 +198,7 @@ export default function dashboardRanksRoute(
   // User prefix search for the username autocomplete on the rank tools form
   app.get("/dashboard/ranks/user-search", async (req, res) => {
     if (!await isFeatureWebRouteEnabled(app, features.ranks, req, res, features)) return;
-    if (!await hasPermission("zander.web.rank", req, res, features)) return;
+    if (!await canViewRanks(req, res, features)) return;
 
     const q = (req.query.q || "").trim();
     if (!q || q.length < 2) return res.send({ results: [] });
@@ -294,6 +304,15 @@ export default function dashboardRanksRoute(
         return res.redirect(`/dashboard/ranks/${encodeURIComponent(rankSlug)}/permissions`);
       }
 
+      // Granting to a group you belong to grants to yourself. Holders of this
+      // node may only ever add nodes they already have, so the one thing this
+      // closes is removing a *check* on themselves; refuse it outright.
+      const ownRanks = (req.session?.user?.ranks || []).map((r) => String(r.rankSlug || r).toLowerCase());
+      if (changes.grant.length && ownRanks.includes(String(rankSlug).toLowerCase())) {
+        setBannerCookie("danger", "You cannot grant permissions to a rank you hold yourself. Ask another administrator.", res);
+        return res.redirect(`/dashboard/ranks/${encodeURIComponent(rankSlug)}/permissions`);
+      }
+
       const queued = await applyRankPermissions(
         rankSlug,
         changes,
@@ -318,14 +337,7 @@ export default function dashboardRanksRoute(
   app.get("/dashboard/ranks", async function (req, res) {
     if (!await isFeatureWebRouteEnabled(app, features.ranks, req, res, features)) return;
 
-    const hasRankPermission = await hasPermission(
-      "zander.web.rank",
-      req,
-      res,
-      features
-    );
-
-    if (!hasRankPermission) return;
+    if (!(await canViewRanks(req, res, features))) return;
 
     let ranks = [];
     try {

@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Security
+- Public registration can no longer overwrite the credentials of an existing account that is Discord-linked, verified or registered; it only claims bare profile rows or an unfinished local registration.
+- Staff recovery actions (change email, trigger password reset) refuse accounts that hold permissions the actor lacks, a staff-set email is unverified until confirmed, and resets require a verified address.
+- Discord login carries an OAuth `state` parameter; the `discordId` cookie used during account linking is signed and the link code endpoint is throttled and reads the id from that cookie, not the form.
+- Dashboard proxies (badges, bridge) only forward integer ids, closing a path traversal that reached other internal API endpoints with the internal key.
+- Ticket category management moved behind the new `zander.web.tickets.manage` node; the view node no longer lets anyone rename or cascade-delete categories.
+- Cookie-authenticated writes are rejected when the browser reports a cross-site origin (Sec-Fetch-Site / Origin), on both site routes and session-authenticated API routes.
+- Rate limiting and audit IPs use `req.ip` behind an explicit proxy hop count (`TRUST_PROXY_HOPS`) instead of the client-controlled first X-Forwarded-For entry; emailed codes are invalidated after five wrong guesses; forgot-password, Minecraft code entry and ticket creation are throttled.
+- Password resets invalidate the account's other sessions. The app refuses to start with the example session secret.
+- Uploads: 8 MB limit actually enforced (was 1 MiB with a 500), folder restricted by permission, magic-byte and Cloudinary format checks, rate limited; duplicate dashboard handler removed.
+- Web push subscriptions must point at a known push service (blind SSRF). Profile social fields are validated (Reddit must be an https reddit.com URL). Vault descriptions are sanitised; announcement, application, vault and event links must be http(s)/mailto/site paths.
+- Rich-text sanitiser no longer allows arbitrary `class` values, protocol-relative URLs or unbounded nesting. `/api` 5xx responses no longer echo internal error text. Sentry no longer receives request bodies or cookies.
+- LuckPerms rank slugs are validated before use in LIKE patterns; QuickShop and user searches escape LIKE wildcards. `multipleStatements` is off on the main pool.
+- Privileged slash commands are guild-only. Rank-permission holders cannot grant nodes to a rank they hold. Placeholder user rows no longer shadow real players in username lookups, nickname enforcement or the birthday rank grant (which now addresses players by UUID).
+
+### Fixed
+- Rank/Discord role sync no longer strips a rank's role from every member when that one rank's lookup fails, and runs are serialised.
+- Expired Discord bans/mutes stay active and retry when the Discord call fails instead of being marked expired; `/punish unban` keeps the record if Discord refused.
+- Finance month ranges include the last day of the month; a paid webstore order whose item cannot be resolved is marked `failed`, not `fulfilled`; Stripe catalogue fetches are cached for a minute with a timeout.
+- Audit timestamp updates no longer throw `ReferenceError` on DB errors; Prisma write-timeout timers are cleared; webhook clients in message listeners are destroyed; Twitch/YouTube crons do not mark every stream offline during an API outage.
+- Unverified users can request a new email verification code (resend button, and a fresh code on login) instead of having to re-register.
+- Indexes added for sessions, notifications, game sessions, scheduled messages and code tables; the support-message charset conversion is a real migration instead of a boot-time `ALTER`.
+- Maintenance scripts under `scripts/` default to dry-run and require `--apply`. Removed the `crypto`, `path` and `querystring` npm packages that shadow Node built-ins; `package-lock.json` is no longer gitignored.
+
 ## 2.1.0
 
 ### Upgrading from 2.0.0

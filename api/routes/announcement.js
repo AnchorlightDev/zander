@@ -1,3 +1,4 @@
+import { isAllowedUrl } from "../../lib/navigation/menus.mjs";
 import {
   isFeatureEnabled,
   required,
@@ -87,6 +88,9 @@ export default function announcementApiRoute(app, config, db, features, lang) {
     const body = optional(req.body, "body", res);
     const colourMessageFormat = optional(req.body, "colourMessageFormat", res);
     const link = optional(req.body, "link", res);
+    if (link && !isAllowedUrl(link)) {
+      return res.send({ success: false, message: "Link must start with /, https://, http:// or mailto:." });
+    }
     const popupButtonText = optional(req.body, "popupButtonText", res);
     const popupImageUrl = optional(req.body, "popupImageUrl", res);
     const startDateRaw = optional(req.body, "startDate", res);
@@ -183,6 +187,9 @@ export default function announcementApiRoute(app, config, db, features, lang) {
     const body = optional(req.body, "body", res);
     const colourMessageFormat = optional(req.body, "colourMessageFormat", res);
     const link = optional(req.body, "link", res);
+    if (link && !isAllowedUrl(link)) {
+      return res.send({ success: false, message: "Link must start with /, https://, http:// or mailto:." });
+    }
     const popupButtonText = optional(req.body, "popupButtonText", res);
     const popupImageUrl = optional(req.body, "popupImageUrl", res);
     const startDateRaw = optional(req.body, "startDate", res);

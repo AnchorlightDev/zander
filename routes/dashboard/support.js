@@ -1,4 +1,5 @@
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
+import { isSafeLocalPath } from "../../lib/safeLocalPath.mjs";
 import {
   isFeatureWebRouteEnabled,
   getGlobalImage,
@@ -67,6 +68,15 @@ export default function supportDashboardRoutes(
 
   const requireTicketPermission = async (req, res) =>
     await hasPermission("zander.web.tickets", req, res, features);
+
+  // Category management (create/rename/delete, role permissions, panel
+  // posting) is a separate node from merely seeing the ticket lists: a rename
+  // changes which `zander.web.tickets.<slug>` node guards the category, and a
+  // delete cascades to every ticket in it.
+  const requireTicketManagePermission = async (req, res) =>
+    await hasPermission("zander.web.tickets.manage", req, res, features);
+
+  const safeRedirect = (value, fallback) => (isSafeLocalPath(value) ? value : fallback);
 
   const requireCategoryPermission = async (category, req, res) => {
     const slug = getCategorySlug(category);
@@ -307,7 +317,7 @@ export default function supportDashboardRoutes(
     "/dashboard/support/categories/:id/permissions",
     async function (req, res) {
       try {
-        const hasTicketsAccess = await requireTicketPermission(req, res);
+        const hasTicketsAccess = await requireTicketManagePermission(req, res);
         if (hasTicketsAccess !== true) return hasTicketsAccess;
 
         const { id } = req.params;
@@ -315,12 +325,7 @@ export default function supportDashboardRoutes(
 
         await addCategoryPermission(id, roleId);
 
-        const addRedirect =
-          typeof req.body?.redirect === "string" &&
-          req.body.redirect.startsWith("/") &&
-          !req.body.redirect.startsWith("//")
-            ? req.body.redirect
-            : "/dashboard/support/categories";
+        const addRedirect = safeRedirect(req.body?.redirect, "/dashboard/support/categories");
         return res.redirect(addRedirect);
       } catch (error) {
         console.error(error);
@@ -344,19 +349,14 @@ export default function supportDashboardRoutes(
     "/dashboard/support/categories/:id/permissions/:roleId/delete",
     async function (req, res) {
       try {
-        const hasTicketsAccess = await requireTicketPermission(req, res);
+        const hasTicketsAccess = await requireTicketManagePermission(req, res);
         if (hasTicketsAccess !== true) return hasTicketsAccess;
 
         const { id, roleId } = req.params;
 
         await removeCategoryPermission(id, roleId);
 
-        const removeRedirect =
-          typeof req.body?.redirect === "string" &&
-          req.body.redirect.startsWith("/") &&
-          !req.body.redirect.startsWith("//")
-            ? req.body.redirect
-            : "/dashboard/support/categories";
+        const removeRedirect = safeRedirect(req.body?.redirect, "/dashboard/support/categories");
         return res.redirect(removeRedirect);
       } catch (error) {
         console.error(error);
@@ -378,7 +378,7 @@ export default function supportDashboardRoutes(
 
   app.post("/dashboard/support/categories", async function (req, res) {
     try {
-      const hasTicketsAccess = await requireTicketPermission(req, res);
+      const hasTicketsAccess = await requireTicketManagePermission(req, res);
       if (hasTicketsAccess !== true) return hasTicketsAccess;
 
       const { name, description, discordCategoryId } = req.body;
@@ -406,7 +406,7 @@ export default function supportDashboardRoutes(
 
   app.get("/dashboard/support/categories/:id/edit", async function (req, res) {
     try {
-      const hasTicketsAccess = await requireTicketPermission(req, res);
+      const hasTicketsAccess = await requireTicketManagePermission(req, res);
       if (hasTicketsAccess !== true) return hasTicketsAccess;
 
       const category = await getCategoryById(req.params.id);
@@ -462,7 +462,7 @@ export default function supportDashboardRoutes(
 
   app.post("/dashboard/support/categories/:id/edit", async function (req, res) {
     try {
-      const hasTicketsAccess = await requireTicketPermission(req, res);
+      const hasTicketsAccess = await requireTicketManagePermission(req, res);
       if (hasTicketsAccess !== true) return hasTicketsAccess;
 
       const { id } = req.params;
@@ -493,7 +493,7 @@ export default function supportDashboardRoutes(
     "/dashboard/support/categories/:id/delete",
     async function (req, res) {
       try {
-        const hasTicketsAccess = await requireTicketPermission(req, res);
+        const hasTicketsAccess = await requireTicketManagePermission(req, res);
         if (hasTicketsAccess !== true) return hasTicketsAccess;
 
         const { id } = req.params;
@@ -524,7 +524,7 @@ export default function supportDashboardRoutes(
   // placeholder name from before channel naming was fixed to happen on
   // creation instead of via a rename call right after.
   app.post("/dashboard/support/repair-channel-names", async function (req, res) {
-    const hasTicketsAccess = await requireTicketPermission(req, res);
+    const hasTicketsAccess = await requireTicketManagePermission(req, res);
     if (hasTicketsAccess !== true) return hasTicketsAccess;
 
     try {
@@ -608,7 +608,7 @@ export default function supportDashboardRoutes(
 
   app.post("/dashboard/support/message", async function (req, res) {
     try {
-      const hasTicketsAccess = await requireTicketPermission(req, res);
+      const hasTicketsAccess = await requireTicketManagePermission(req, res);
       if (hasTicketsAccess !== true) return hasTicketsAccess;
 
       await postSupportMessage(client);

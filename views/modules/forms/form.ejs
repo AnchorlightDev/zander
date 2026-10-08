@@ -589,11 +589,20 @@
       list.forEach(function (image, index) {
         var wrap = document.createElement("div");
         wrap.className = "position-relative";
-        wrap.innerHTML =
-          '<img src="' + image.url + '" alt="Image ' + (index + 1) + '" ' +
-            'style="height:90px;width:auto;object-fit:cover;border-radius:4px;">' +
-          '<button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 py-0 px-1" ' +
-            'data-remove="' + index + '" aria-label="Remove image">&times;</button>';
+        // Built with DOM APIs rather than innerHTML: the url comes back from
+        // the submitted form on validation errors, so it is not trusted.
+        var img = document.createElement("img");
+        img.src = /^https:\/\//.test(String(image.url || "")) ? image.url : "";
+        img.alt = "Image " + (index + 1);
+        img.style.cssText = "height:90px;width:auto;object-fit:cover;border-radius:4px;";
+        var remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "btn btn-sm btn-danger position-absolute top-0 end-0 py-0 px-1";
+        remove.setAttribute("data-remove", String(index));
+        remove.setAttribute("aria-label", "Remove image");
+        remove.innerHTML = "&times;";
+        wrap.appendChild(img);
+        wrap.appendChild(remove);
         previews.appendChild(wrap);
       });
       input.disabled = list.length >= max;

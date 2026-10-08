@@ -15,47 +15,59 @@ const MUTED_ROLE_ID = config.discord?.roles?.muted;
 
 /**
  * Lift an expired punishment in Discord.
+ *
+ * Returns true when Discord now reflects the lifted state (either the call
+ * succeeded or Discord reported it was already lifted), false when it could
+ * not be applied. The row is only marked EXPIRED on true, so a Discord
+ * outage or missing-permission error is retried on the next tick instead of
+ * leaving someone banned or muted forever with no record of it.
  */
 async function liftInDiscord(punishment) {
-  if (!client?.isReady?.() || !GUILD_ID) return;
+  if (!client?.isReady?.() || !GUILD_ID) return false;
 
+  let guild;
   try {
-    const guild = await client.guilds.fetch(GUILD_ID);
-    if (!guild) return;
-
-    if (punishment.type === "TEMP_BAN") {
-      try {
-        await guild.members.unban(
-          punishment.target_discord_user_id,
-          "[Auto] Temporary ban expired"
-        );
-      } catch (error) {
-        // User may already be unbanned
-        if (error.code !== 10026) {
-          console.warn("punishmentExpiryCron: failed to unban", punishment.id, error.message);
-        }
-      }
-    }
-
-    if (punishment.type === "TEMP_MUTE" && MUTED_ROLE_ID) {
-      try {
-        const member = await guild.members.fetch(punishment.target_discord_user_id);
-        if (member) {
-          await member.roles.remove(MUTED_ROLE_ID, "[Auto] Temporary mute expired");
-        }
-      } catch (error) {
-        // Member may have left the guild
-        if (error.code !== 10007) {
-          console.warn("punishmentExpiryCron: failed to unmute", punishment.id, error.message);
-        }
-      }
-    }
+    guild = await client.guilds.fetch(GUILD_ID);
   } catch (error) {
     console.error("punishmentExpiryCron: guild fetch failed", error);
+    return false;
   }
+  if (!guild) return false;
+
+  if (punishment.type === "TEMP_BAN") {
+    try {
+      await guild.members.unban(
+        punishment.target_discord_user_id,
+        "[Auto] Temporary ban expired"
+      );
+    } catch (error) {
+      // 10026 Unknown Ban: already unbanned, which is the state we want.
+      if (error.code !== 10026) {
+        console.warn("punishmentExpiryCron: failed to unban", punishment.id, error.message);
+        return false;
+      }
+    }
+  }
+
+  if (punishment.type === "TEMP_MUTE" && MUTED_ROLE_ID) {
+    try {
+      const member = await guild.members.fetch(punishment.target_discord_user_id);
+      if (member) {
+        await member.roles.remove(MUTED_ROLE_ID, "[Auto] Temporary mute expired");
+      }
+    } catch (error) {
+      // 10007 Unknown Member: they left; nothing to remove.
+      if (error.code !== 10007) {
+        console.warn("punishmentExpiryCron: failed to unmute", punishment.id, error.message);
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
-// Run every 30 seconds to check for expired punishments
+// Run every minute to check for expired punishments
 const punishmentExpiryTask = cron.schedule("*/1 * * * *", async () => {
   if (!client?.isReady?.()) return;
 
@@ -64,7 +76,7 @@ const punishmentExpiryTask = cron.schedule("*/1 * * * *", async () => {
 
     for (const punishment of expired) {
       try {
-        await liftInDiscord(punishment);
+        if (!(await liftInDiscord(punishment))) continue; // retry next tick
         await expirePunishment(punishment.id);
       } catch (error) {
         console.error(
@@ -97,8 +109,7 @@ export async function reconcileActivePunishments() {
     const now = new Date();
     for (const p of activePunishments) {
       if (p.expires_at && new Date(p.expires_at) <= now) {
-        await liftInDiscord(p);
-        await expirePunishment(p.id);
+        if (await liftInDiscord(p)) await expirePunishment(p.id);
         continue;
       }
 

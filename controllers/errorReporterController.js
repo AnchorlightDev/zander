@@ -84,13 +84,13 @@ function rollWindowIfNeeded() {
   suppressedThisWindow = 0;
   if (droppedByCap > 0) {
     // Announce the gap so silence is never mistaken for calm.
-    void deliver(
+    deliver(
       `[zander ${APP_ENV}] ${droppedByCap} further error(s) suppressed by hourly cap`,
       `<p>${droppedByCap} error/warning event(s) in the last hour were not emailed ` +
         `because the hourly cap of ${HOURLY_CAP} was reached. Check the server logs on ` +
         `<code>${escapeHtml(HOSTNAME)}</code> for the full picture.</p>`,
       `${droppedByCap} error(s) suppressed by hourly cap on ${HOSTNAME}. See server logs.`
-    );
+    ).catch(() => {});
   }
 }
 
@@ -140,7 +140,11 @@ async function deliver(subject, bodyHtml, bodyText) {
  */
 export function reportError({ level = "error", source = "app", message, error, meta } = {}) {
   try {
-    if (!isEnabled() || reporting) return;
+    // `reporting` only guards the mailer's own console noise (see the console
+    // patch below); an unrelated error raised while an email is in flight is
+    // still worth queueing.
+    if (!isEnabled()) return;
+    if (reporting && String(source).startsWith("console.")) return;
 
     const normalizedLevel = String(level).toLowerCase();
     if (!LEVELS.includes(normalizedLevel)) return;

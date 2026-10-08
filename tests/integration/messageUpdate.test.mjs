@@ -22,7 +22,7 @@ vi.mock("discord.js", async (importOriginal) => {
       setURL() { return this; }
     },
     ButtonStyle: { Link: 5 },
-    WebhookClient: class { constructor() {} },
+    WebhookClient: class { constructor() {} destroy() {} },
   };
 });
 

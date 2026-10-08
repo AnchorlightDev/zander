@@ -5,6 +5,7 @@ import {
   EmbedBuilder,
   MessageFlags,
   SlashCommandBuilder,
+  InteractionContextType,
 } from "discord.js";
 import { hasPermission } from "../lib/discord/permissions.mjs";
 import {
@@ -122,6 +123,7 @@ export class LpAuditCommand extends Command {
   registerApplicationCommands(registry) {
     const builder = new SlashCommandBuilder()
       .setName("lp-audit")
+        .setContexts(InteractionContextType.Guild)
       .setDescription(
         "Audit LuckPerms ↔ Discord role sync. Read-only — no changes are made."
       )

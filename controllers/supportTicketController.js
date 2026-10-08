@@ -2031,10 +2031,14 @@ export async function searchUsersByUsername(query) {
     const term = query?.trim();
     if (!term || term.length < 2) return [];
 
+    // Escape LIKE metacharacters so "%" is a literal, not "everyone"; the
+    // ESCAPE clause names the backslash explicitly.
+    const likeTerm = term.replace(/[\\%_]/g, (m) => "\\" + m) + "%";
+
     return new Promise((resolve) => {
         db.query(
-            "SELECT userId, username, profilePicture_type, profilePicture_email, uuid FROM users WHERE username LIKE ? ORDER BY username ASC LIMIT 8",
-            [`${term}%`],
+            "SELECT userId, username, profilePicture_type, profilePicture_email, uuid FROM users WHERE username LIKE ? ESCAPE '\\\\' AND COALESCE(is_placeholder, 0) = 0 ORDER BY username ASC LIMIT 8",
+            [likeTerm],
             async (err, results) => {
                 if (err) {
                     console.error("searchUsersByUsername: failed to run query", err);

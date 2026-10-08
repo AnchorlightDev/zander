@@ -178,9 +178,19 @@
   }
 
   function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    // Used inside quoted attributes too, so quotes must be escaped as well as
+    // angle brackets (textContent/innerHTML alone leaves them untouched).
+    return String(text ?? '').replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function safeImageUrl(value) {
+    try {
+      const url = new URL(String(value), window.location.origin);
+      return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : '';
+    } catch (e) {
+      return '';
+    }
   }
 
   function renderLoading() {
@@ -223,8 +233,9 @@
         <tbody>`;
 
     data.forEach(function(shop) {
-      const itemImg = (shop.itemData && shop.itemData.image)
-        ? `<img src="${escapeHtml(shop.itemData.image)}" alt="" class="shop-item-img" onerror="this.style.display='none'">`
+      const itemImgUrl = shop.itemData ? safeImageUrl(shop.itemData.image) : '';
+      const itemImg = itemImgUrl
+        ? `<img src="${escapeHtml(itemImgUrl)}" alt="" class="shop-item-img" onerror="this.style.display='none'">`
         : '';
       const displayName = (shop.itemData && shop.itemData.displayName)
         ? escapeHtml(shop.itemData.displayName)

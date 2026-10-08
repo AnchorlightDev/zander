@@ -35,6 +35,10 @@
             <button type="submit" class="btn btn-primary w-100" id="submitButton" disabled>Verify email</button>
           </form>
 
+          <form method="post" action="<%= process.env.siteAddress %>/register/verify-email/resend" class="mt-3">
+            <button type="submit" class="btn btn-link w-100">Didn't get it? Send a new code</button>
+          </form>
+
           <div class="auth-footer">
             Wrong address or no email? Check your spam folder, or <a href="/register">start again</a>.
           </div>

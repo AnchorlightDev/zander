@@ -41,7 +41,41 @@ async function ensurePushSubscriptionTable() {
   return pushSubscriptionTableCheck;
 }
 
+// Browsers only ever hand out endpoints on these services. Anything else is
+// a request to make this server POST to an arbitrary URL on every
+// notification -- a blind SSRF into whatever network the app runs in.
+const PUSH_ENDPOINT_HOSTS = [
+  /(^|\.)push\.apple\.com$/i,
+  /^fcm\.googleapis\.com$/i,
+  /^android\.googleapis\.com$/i,
+  /^updates\.push\.services\.mozilla\.com$/i,
+  /(^|\.)notify\.windows\.com$/i,
+  /(^|\.)push\.services\.mozilla\.com$/i,
+];
+const BASE64URL = /^[A-Za-z0-9_-]+=*$/;
+
+export function isValidPushSubscription(subscription) {
+  if (!subscription || typeof subscription !== "object") return false;
+  const { endpoint, keys } = subscription;
+  if (typeof endpoint !== "string" || endpoint.length > 1024) return false;
+  let url;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  if (!PUSH_ENDPOINT_HOSTS.some((re) => re.test(url.hostname))) return false;
+  if (!keys || typeof keys.p256dh !== "string" || typeof keys.auth !== "string") return false;
+  if (!BASE64URL.test(keys.p256dh) || keys.p256dh.length < 80 || keys.p256dh.length > 120) return false;
+  if (!BASE64URL.test(keys.auth) || keys.auth.length < 16 || keys.auth.length > 32) return false;
+  return true;
+}
+
 export async function savePushSubscription(userId, subscription) {
+  if (!isValidPushSubscription(subscription)) {
+    throw new Error("Invalid push subscription");
+  }
   const hasTable = await ensurePushSubscriptionTable();
   if (!hasTable) return false;
 
