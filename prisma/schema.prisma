@@ -1603,3 +1603,43 @@ model resourceVotes {
 
   @@id([resourceId, userId])
 }
+
+// ---------------------------------------------------------------------------
+// Compass SSO (migration 0072_compass_oidc)
+// Zander as an OpenID Connect provider for the Compass staff portal.
+// ---------------------------------------------------------------------------
+
+model oauthClients {
+  clientId                Int      @id @default(autoincrement())
+  clientKey               String   @unique @db.VarChar(64)
+  name                    String   @db.VarChar(100)
+  clientSecret            String?  @db.VarChar(255)
+  tokenEndpointAuthMethod String   @default("client_secret_basic") @db.VarChar(40)
+  redirectUris            String   @db.Text
+  postLogoutRedirectUris  String?  @db.Text
+  grantTypes              String   @db.Text
+  responseTypes           String   @db.Text
+  scopes                  String   @db.Text
+  firstParty              Boolean  @default(false)
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now()) @db.DateTime(0)
+  updatedAt               DateTime @default(now()) @updatedAt @db.DateTime(0)
+}
+
+model oidcPayloads {
+  type       Int
+  id         String    @db.VarChar(255)
+  payload    String?   @db.Text
+  grantId    String?   @db.VarChar(255)
+  userCode   String?   @db.VarChar(255)
+  uid        String?   @db.VarChar(255)
+  expiresAt  DateTime? @db.DateTime(0)
+  consumedAt DateTime? @db.DateTime(0)
+  createdAt  DateTime  @default(now()) @db.DateTime(0)
+
+  @@id([type, id])
+  @@index([grantId])
+  @@index([userCode])
+  @@index([uid])
+  @@index([expiresAt])
+}

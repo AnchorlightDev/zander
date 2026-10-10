@@ -346,6 +346,17 @@ const buildApp = async () => {
     },
   });
 
+  // Compass SSO — the OpenID Connect provider's own endpoints (/oidc/auth,
+  // /oidc/token, /oidc/me, /oidc/jwks, /oidc/.well-known/...). Registered BEFORE
+  // @fastify/formbody so the token endpoint's form body reaches oidc-provider
+  // unconsumed; the plugin uses a no-op body parser in its own scope.
+  {
+    const { mountOidcProvider } = await import("./routes/oidcRoutes.js");
+    await app.register(async (instance) => {
+      await mountOidcProvider(instance);
+    });
+  }
+
   await app.register(await import("@fastify/formbody"), { bodyLimit: 10485760 }); // 10 MB
   await app.register(await import("@fastify/multipart"));
 
@@ -520,6 +531,16 @@ const buildApp = async () => {
       }
     }
   });
+
+  // Compass SSO — our own interaction page (/oidc/interaction/:uid). Registered
+  // after the session plugin because it reads req.session.user (the Zander
+  // login) to decide who is signing in and whether they are staff.
+  {
+    const { registerOidcInteractions } = await import("./routes/oidcRoutes.js");
+    await app.register(async (instance) => {
+      registerOidcInteractions(instance);
+    });
+  }
 
   await app.register((instance, options, next) => {
     // Routes
