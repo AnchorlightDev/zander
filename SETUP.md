@@ -20,7 +20,8 @@ Schema changes are made by adding a new migration under `prisma/migrations/` —
 1. Create a `.env` file in the root of the project.
 2. Copy the contents of `.env.example` to the `.env` file.
 3. Fill in the required environment variables:
-    - `sessionCookieSecret`: A random string of at least 32 characters.
+    - `sessionCookieSecret`: A random string of at least 32 characters (`openssl rand -hex 32`). The app will not start with the placeholder from `.env.example`.
+    - `TRUST_PROXY_HOPS`: Number of reverse proxies in front of the app (default `1`). Set to `2` if a CDN sits in front of the host's own proxy.
     - `siteAddress`: The URL of the website (e.g., `http://localhost:3000`).
     - `discordAPIKey`: Your Discord bot token.
     - `discordGuildID`: The ID of your Discord server.

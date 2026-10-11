@@ -36,6 +36,13 @@ describe("sanitizeForumHtml", () => {
     expect(sanitizeForumHtml('<iframe src="https://www.youtube.com/embed/abc"></iframe>')).toContain("youtube.com/embed/abc");
   });
 
+  it("drops layout classes and protocol-relative URLs", () => {
+    const overlay = sanitizeForumHtml('<div class="position-fixed top-0 start-0 w-100 h-100 text-center">x</div>');
+    expect(overlay).not.toContain("position-fixed");
+    expect(overlay).toContain("text-center");
+    expect(sanitizeForumHtml('<a href="//evil.example.com/x">x</a>')).not.toContain("evil.example.com");
+  });
+
   it("returns empty string for non-string/empty input", () => {
     expect(sanitizeForumHtml(null)).toBe("");
     expect(sanitizeForumHtml(undefined)).toBe("");

@@ -102,6 +102,13 @@ export default function rankApiRoute(app, config, db, features, lang) {
     });
   };
 
+
+  // Group names are interpolated into LIKE patterns against LuckPerms and
+  // into `group.<slug>` nodes. A slug of "%" would match (and delete) every
+  // title meta node a player holds, so only plain group tokens may pass.
+  const RANK_SLUG_PATTERN = /^[A-Za-z0-9_.-]{1,36}$/;
+  const isValidRankSlug = (value) => typeof value === "string" && RANK_SLUG_PATTERN.test(value);
+
   async function normalizeUserPermissionContexts(uuid, rankSlug = null) {
     if (!uuid) return;
 
@@ -360,6 +367,9 @@ export default function rankApiRoute(app, config, db, features, lang) {
     if (!isFeatureEnabled(features.ranks, res, lang)) return;
     const username = optional(req.query, "username");
     const rankSlug = optional(req.query, "rank");
+    if (rankSlug && !isValidRankSlug(rankSlug)) {
+      return res.send({ success: false, message: "Invalid rank." });
+    }
 
     try {
       if (username) {
@@ -499,6 +509,9 @@ export default function rankApiRoute(app, config, db, features, lang) {
     if (!isFeatureEnabled(features.ranks, res, lang)) return;
 
     const rankSlug = req.params.rankSlug;
+    if (!isValidRankSlug(rankSlug)) {
+      return res.send({ success: false, message: "Invalid rank." });
+    }
     const {
       displayName,
       rankBadgeColour,
@@ -652,6 +665,9 @@ export default function rankApiRoute(app, config, db, features, lang) {
         message: "Username and rankSlug are required.",
       });
     }
+    if (!isValidRankSlug(rankSlug)) {
+      return res.send({ success: false, message: "Invalid rank." });
+    }
 
     let expirySeconds = 0;
     if (expiresAt) {
@@ -770,6 +786,9 @@ export default function rankApiRoute(app, config, db, features, lang) {
         success: false,
         message: "Username and rankSlug are required.",
       });
+    }
+    if (!isValidRankSlug(rankSlug)) {
+      return res.send({ success: false, message: "Invalid rank." });
     }
 
     if (rankSlug === "default") {

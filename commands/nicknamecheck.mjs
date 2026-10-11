@@ -1,5 +1,5 @@
 import { Command } from "@sapphire/framework";
-import { Colors, EmbedBuilder, MessageFlags } from "discord.js";
+import {Colors, EmbedBuilder, MessageFlags, InteractionContextType } from "discord.js";
 import {
   getUserPermissions,
   UserGetter,
@@ -23,6 +23,7 @@ export class NicknameCheckCommand extends Command {
     registry.registerChatInputCommand((builder) =>
       builder
         .setName("nicknamecheck")
+        .setContexts(InteractionContextType.Guild)
         .setDescription(
           "Manually scan all linked users and report nickname mismatches."
         )

@@ -61,7 +61,16 @@ export async function getPublishedByCategory() {
       resources: {
         where: { status: "approved" },
         orderBy: { title: "asc" },
-        select: { resourceId: true, title: true, description: true, url: true },
+        select: {
+          resourceId: true,
+          title: true,
+          description: true,
+          url: true,
+          source: true,
+          submittedByName: true,
+          decidedAt: true,
+          createdAt: true,
+        },
       },
     },
   });

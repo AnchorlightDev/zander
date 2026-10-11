@@ -1,36 +1,22 @@
 <%- include("../modules/header.ejs", {
   pageTitle: pageTitle,
-  pageDescription: "This feature has been disabled and is not accessible."
+  pageDescription: "This feature has been disabled and is not accessible.",
+  pageRobots: "noindex, follow"
 }) %>
 
-<%- include("../modules/navigationBar.ejs", {
-  features: features
-}) %>
+<%- include("../modules/navigationBar.ejs") %>
 
 <%- include("../partials/miniHeader.ejs", {
-  headerTitle: "Feature Disabled",
+  headerTitle: "Unavailable",
   backgroundImage: globalImage
 }) %>
 
-<section class="section">
-  <div class="container">
-    <div class="row">
-      <div class="col-12 col-md-6" style="min-height:500px;">
-        <div class="text-center">
-          <img class="floating" style="margin-top:10px;" src="/images/session/errorImage.png" height="300px" draggable="false">
-        </div>
-      </div>
-      <div class="col-12 col-md-6">
-        <h3>This feature is disabled</h3>
-        <p>This feature has been disabled by the System Administrator.</p>
-
-        <br><br><br>
-        <div class="text-center">
-          <a href="/"><button type="button" class="btn btn-success">Back to Safety</button></a>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
+<%- include("../partials/session/statusPage.ejs", {
+  image: "/images/session/errorImage.png",
+  code: "Unavailable",
+  title: "This part of the site is switched off",
+  message: "The team has turned this feature off for now. Please check back later.",
+  actions: [{ href: "/", label: "Back to home", icon: "fa-solid fa-house", primary: true }]
+}) %>
 
 <%- include("../modules/footer.ejs") %>

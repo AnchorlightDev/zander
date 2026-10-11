@@ -10,52 +10,73 @@
   backgroundImage: globalImage
 }) %>
 
-<section class="section">
-  <div class="container">
-    <% if (req.cookies.alertType) { %>
-      <%- include("partials/alert.ejs", {
-        alertType: req.cookies.alertType,
-        content: req.cookies.alertContent
-      }) %>
-    <% } %>
+<% const _user = req.session?.user; %>
 
-    <div class="row g-5">
-      <div class="col-md-5">
-        <h3>Contact information</h3>
-        <% if (config.siteConfiguration.email) { %>
-          <p><strong>Email:</strong> <a href="mailto:<%= config.siteConfiguration.email %>"><%= config.siteConfiguration.email %></a></p>
-        <% } %>
-        <% if (config.siteConfiguration.platforms?.discord) { %>
-          <p><strong>Discord:</strong> <a href="<%= config.siteConfiguration.platforms.discord %>" target="_blank" rel="noopener noreferrer">Join our Discord</a></p>
-        <% } %>
-        <% if (features.report) { %>
-          <p class="text-muted">Reporting a player? Use the <a href="/report">report form</a> instead so staff can act on it quickly.</p>
-        <% } %>
+<section class="section auth-page">
+  <div class="container">
+    <div class="row g-5 justify-content-center">
+      <div class="col-lg-7">
+        <div class="auth-card">
+          <h3 class="auth-title">Send us a message</h3>
+          <p class="auth-subtitle">
+            <% if (_user) { %>
+              You're signed in as <strong><%= _user.username %></strong>, so your message becomes a ticket on your account and you can follow it under Support.
+            <% } else { %>
+              We'll email you when the team replies, with a private link to continue the conversation. No account needed.
+            <% } %>
+          </p>
+
+          <% if (req.cookies.alertType) { %>
+            <%- include("partials/alert.ejs", {
+              alertType: req.cookies.alertType,
+              content: req.cookies.alertContent
+            }) %>
+          <% } %>
+
+          <form action="/contact" method="post">
+            <% if (!_user) { %>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label for="name" class="form-label">Your name or username</label>
+                  <input type="text" class="form-control" id="name" name="name" maxlength="<%= limits.name %>" autocomplete="name" required>
+                </div>
+                <div class="col-md-6">
+                  <label for="email" class="form-label">Email</label>
+                  <input type="email" class="form-control" id="email" name="email" maxlength="<%= limits.email %>" autocomplete="email" required>
+                </div>
+              </div>
+            <% } %>
+            <div class="my-3">
+              <label for="subject" class="form-label">Subject</label>
+              <input type="text" class="form-control" id="subject" name="subject" maxlength="<%= limits.subject %>" required>
+            </div>
+            <div class="mb-3">
+              <label for="message" class="form-label">Message</label>
+              <textarea class="form-control" id="message" name="message" rows="7" maxlength="<%= limits.message %>" required></textarea>
+            </div>
+            <%# Honeypot: hidden from people, filled by bots. Checked in routes/pagesRoutes.js. %>
+            <div aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden;">
+              <label for="website">Leave this empty</label>
+              <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Send message</button>
+          </form>
+        </div>
       </div>
 
-      <div class="col-md-7">
-        <h3>Get in touch</h3>
-        <form action="/contact" method="post">
-          <div class="mb-3">
-            <label for="name" class="form-label">Name and/or username</label>
-            <input type="text" class="form-control" id="name" name="name" maxlength="<%= limits.name %>" required>
-          </div>
-          <div class="mb-3">
-            <label for="email" class="form-label">Email</label>
-            <input type="email" class="form-control" id="email" name="email" maxlength="<%= limits.email %>" required>
-          </div>
-          <div class="mb-3">
-            <label for="message" class="form-label">Message</label>
-            <textarea class="form-control" id="message" name="message" rows="6" maxlength="<%= limits.message %>" required></textarea>
-            <div class="form-text">Up to <%= limits.message %> characters.</div>
-          </div>
-          <%# Honeypot: hidden from people, filled by bots. Checked in routes/pagesRoutes.js. %>
-          <div aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden;">
-            <label for="website">Leave this empty</label>
-            <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
-          </div>
-          <button type="submit" class="btn btn-primary">Send message</button>
-        </form>
+      <div class="col-lg-4">
+        <div class="contact-aside">
+          <h5>Other ways to reach us</h5>
+          <% if (config.siteConfiguration.email) { %>
+            <p><i class="fa-solid fa-envelope me-2" aria-hidden="true"></i><a class="auth-link" href="mailto:<%= config.siteConfiguration.email %>"><%= config.siteConfiguration.email %></a></p>
+          <% } %>
+          <% if (config.siteConfiguration.platforms?.discord) { %>
+            <p><i class="fab fa-discord me-2" aria-hidden="true"></i><a class="auth-link" href="<%= config.siteConfiguration.platforms.discord %>" target="_blank" rel="noopener noreferrer">Join our Discord</a></p>
+          <% } %>
+          <% if (features.report) { %>
+            <p class="small mb-0">Reporting a player? Use the <a class="auth-link" href="/report">report form</a> so staff can act on it quickly.</p>
+          <% } %>
+        </div>
       </div>
     </div>
   </div>

@@ -6,6 +6,7 @@
 import fetch from "node-fetch";
 
 import { internalApiHeaders } from "../common.js";
+import { hasPermission } from "../../lib/discord/permissions.mjs";
 function ensureRankPermission(req, res) {
   const permissions = req.session?.user?.permissions;
 
@@ -17,7 +18,7 @@ function ensureRankPermission(req, res) {
     return false;
   }
 
-  if (!permissions.includes("zander.web.rank")) {
+  if (!hasPermission(permissions, "zander.web.rank")) {
     res.code(403).send({
       success: false,
       message: "You do not have permission to manage ranks.",

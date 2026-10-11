@@ -299,7 +299,8 @@ describe("verifyToken — dashboard session fallback", () => {
   it("does not let an edit-only user reach a review-only endpoint", async () => {
     const editor = { permissions: ["zander.web.events.edit"] };
 
-    for (const url of ["/api/events/approve", "/api/events/reject"]) {
+    // Publishing puts an event live, so it is a reviewer decision too.
+    for (const url of ["/api/events/approve", "/api/events/reject", "/api/events/publish"]) {
       const out = await run(makeReq({ method: "POST", url, user: editor }));
       expect(out.allowed).toBe(false);
       expect(out.status).toBe(403);
@@ -307,7 +308,7 @@ describe("verifyToken — dashboard session fallback", () => {
 
     // ...but may still perform edit-scoped actions
     const ok = await run(
-      makeReq({ method: "POST", url: "/api/events/publish", user: editor })
+      makeReq({ method: "POST", url: "/api/events/update", user: editor })
     );
     expect(ok.allowed).toBe(true);
   });

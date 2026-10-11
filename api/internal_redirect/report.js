@@ -9,6 +9,10 @@ export default function reportRedirectRoute(app, config, lang, features) {
   const baseEndpoint = "/redirect/report";
 
   app.post(baseEndpoint + "/create", async function (req, res) {
+    if (!req.session?.user?.username) {
+      return res.redirect(`${process.env.siteAddress}/login`);
+    }
+    req.body = req.body || {};
     req.body.reporterUser = req.session.user.username;
 
     await postAPIRequest(

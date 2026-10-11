@@ -59,11 +59,13 @@ async function reconcileRankDiscordRoles() {
     const ranks = rankRows.filter((r) => r.discordRoleId);
     if (ranks.length === 0) return;
 
-    const trackedRoleIds = ranks.map((r) => String(r.discordRoleId));
-
     // Map: linked website userId -> Set of discordRoleIds they should have.
     const shouldHaveByUserId = new Map();
     let anyRankHadMembers = false;
+    // A rank whose lookup failed must not take part in the removal sweep:
+    // with no "should have" entries for it, every holder of its role would
+    // otherwise be stripped until the next successful run.
+    const failedRoleIds = new Set();
 
     for (const rank of ranks) {
       try {
@@ -103,9 +105,18 @@ async function reconcileRankDiscordRoles() {
           shouldHaveByUserId.get(user.userId).roleIds.add(String(rank.discordRoleId));
         }
       } catch (err) {
+        failedRoleIds.add(String(rank.discordRoleId));
         console.error(`[rankRoleSync-cron] Error resolving members for rank ${rank.rankSlug}:`, err.message);
       }
     }
+
+    const trackedRoleIds = ranks
+      .map((r) => String(r.discordRoleId))
+      .filter((id) => !failedRoleIds.has(id));
+    if (failedRoleIds.size) {
+      console.warn(`[rankRoleSync-cron] ${failedRoleIds.size} rank(s) failed to resolve; their roles are left untouched this run.`);
+    }
+    if (trackedRoleIds.length === 0) return;
 
     // Circuit breaker: if every rank had LuckPerms members but NONE resolved to a
     // linked website account, something is wrong with the uuid mapping (not "nobody
@@ -171,15 +182,31 @@ async function reconcileRankDiscordRoles() {
   }
 }
 
+// A slow guild member fetch can outlast the interval; never let two
+// reconciliations interleave.
+let running = false;
+async function reconcileRankDiscordRolesGuarded() {
+  if (running) {
+    console.warn("[rankRoleSync-cron] Previous reconciliation still running; skipping this tick.");
+    return;
+  }
+  running = true;
+  try {
+    await reconcileRankDiscordRoles();
+  } finally {
+    running = false;
+  }
+}
+
 // Run every 15 minutes
 cron.schedule("*/15 * * * *", () => {
-  reconcileRankDiscordRoles();
+  reconcileRankDiscordRolesGuarded();
 });
 
 // Also run once on startup (after a short delay to let the DB pool and
 // Discord client settle).
 setTimeout(() => {
-  reconcileRankDiscordRoles();
+  reconcileRankDiscordRolesGuarded();
 }, 15_000);
 
 export { reconcileRankDiscordRoles };

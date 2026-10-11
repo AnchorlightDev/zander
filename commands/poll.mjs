@@ -1,5 +1,5 @@
 import { Command, RegisterBehavior } from "@sapphire/framework";
-import { Colors, EmbedBuilder } from "discord.js";
+import {Colors, EmbedBuilder, InteractionContextType } from "discord.js";
 
 export class PollCommand extends Command {
   constructor(context, options) {
@@ -10,6 +10,7 @@ export class PollCommand extends Command {
     registry.registerChatInputCommand((builder) =>
       builder
         .setName("poll")
+        .setContexts(InteractionContextType.Guild)
         .setDescription("Ask everyone a question or something to vote on!")
         .addStringOption((option) =>
           option //

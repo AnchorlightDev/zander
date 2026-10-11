@@ -56,9 +56,26 @@
                                 <% } %>
                             </a>
                             <div class="dropdown-menu dropdown-menu-end p-0" aria-labelledby="notificationDropdown" style="min-width: 280px;">
-                                <div class="px-3 py-2 border-bottom">
-                                    <div class="fw-semibold">Notifications</div>
-                                    <div class="text-muted small"><%= req.notifications?.unreadCount || 0 %> unread</div>
+                                <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-start gap-2">
+                                    <div>
+                                        <div class="fw-semibold">Notifications</div>
+                                        <div class="text-muted small"><%= req.notifications?.unreadCount || 0 %> unread</div>
+                                    </div>
+                                    <% if (req.notifications?.items?.length) { %>
+                                        <div class="d-flex gap-1 flex-shrink-0">
+                                            <% if (req.notifications.unreadCount) { %>
+                                                <form action="/notifications/mark-all" method="POST" class="m-0">
+                                                    <input type="hidden" name="returnTo" value="<%= req.url %>">
+                                                    <button type="submit" class="btn btn-link btn-sm p-1 notification-action" title="Mark all as read" aria-label="Mark all as read"><i class="fa-solid fa-check-double"></i></button>
+                                                </form>
+                                            <% } %>
+                                            <form action="/notifications/clear-all" method="POST" class="m-0"
+                                                  onsubmit="return confirm('Clear all notifications? This cannot be undone.');">
+                                                <input type="hidden" name="returnTo" value="<%= req.url %>">
+                                                <button type="submit" class="btn btn-link btn-sm p-1 notification-action text-danger" title="Clear all" aria-label="Clear all notifications"><i class="fa-solid fa-trash-can"></i></button>
+                                            </form>
+                                        </div>
+                                    <% } %>
                                 </div>
                                 <% if (req.notifications?.items?.length) { %>
                                     <% req.notifications.items.forEach((notification) => { %>

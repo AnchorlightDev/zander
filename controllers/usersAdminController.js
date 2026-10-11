@@ -198,8 +198,10 @@ export async function getUserEmailById(userId) {
  * normal verification flow, not be auto-marked verified.
  */
 export async function updateUserEmail(userId, newEmail) {
+  // A new address is unverified until the account holder confirms it, so a
+  // staff-set address cannot be used to receive a password reset.
   return new Promise((resolve, reject) => {
-    db.query(`UPDATE users SET email = ? WHERE userId = ?`, [newEmail, userId], (error) => {
+    db.query(`UPDATE users SET email = ?, email_verified = 0, email_verified_at = NULL WHERE userId = ?`, [newEmail, userId], (error) => {
       if (error) return reject(error);
       resolve(true);
     });

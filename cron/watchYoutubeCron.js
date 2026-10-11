@@ -369,12 +369,20 @@ const youtubeSyncTask = cron.schedule("*/15 * * * *", async () => {
     if (creators.length === 0) return;
 
     const allLiveIds = [];
+    let anyFetchFailed = false;
     for (const creator of creators) {
-      const liveIds = await syncYoutubeCreator(creator, apiKey, fetch);
-      allLiveIds.push(...liveIds);
+      try {
+        const liveIds = await syncYoutubeCreator(creator, apiKey, fetch);
+        allLiveIds.push(...liveIds);
+      } catch (err) {
+        anyFetchFailed = true;
+        console.error(`[WatchYouTube] Error during creator sync (${creator.user_id}):`, err);
+      }
     }
 
-    await markStreamsOffline("youtube", allLiveIds);
+    // An API outage is not "everyone went offline": only sweep when every
+    // creator was actually checked.
+    if (!anyFetchFailed) await markStreamsOffline("youtube", allLiveIds);
   } catch (err) {
     console.error("[WatchYouTube] Cron error:", err);
   } finally {

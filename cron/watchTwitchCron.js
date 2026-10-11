@@ -242,6 +242,8 @@ const twitchSyncTask = cron.schedule("*/5 * * * *", async () => {
     if (creators.length === 0) return;
 
     const liveStreamIds = [];
+
+    let anyFetchFailed = false;
     for (const creator of creators) {
       const broadcasterId = creator.platform_account_id;
       try {
@@ -258,6 +260,7 @@ const twitchSyncTask = cron.schedule("*/5 * * * *", async () => {
         if (!streamRes.ok) {
           const body = await streamRes.text();
           console.error(`[WatchTwitch] Stream fetch failed for userId=${creator.user_id} (HTTP ${streamRes.status}):`, body);
+          anyFetchFailed = true;
           continue;
         }
 
@@ -268,11 +271,14 @@ const twitchSyncTask = cron.schedule("*/5 * * * *", async () => {
 
         await syncTwitchCreator(creator, stream);
       } catch (err) {
+        anyFetchFailed = true;
         console.error(`[WatchTwitch] Error during creator sync (${creator.user_id}):`, err);
       }
     }
 
-    await markStreamsOffline("twitch", liveStreamIds);
+    // An API outage is not "everyone went offline": only sweep when every
+    // creator was actually checked.
+    if (!anyFetchFailed) await markStreamsOffline("twitch", liveStreamIds);
   } catch (err) {
     console.error("[WatchTwitch] Cron error:", err);
   } finally {

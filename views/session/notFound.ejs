@@ -1,35 +1,25 @@
 <%- include("../modules/header.ejs", {
   pageTitle: pageTitle,
-  pageDescription: "404: Content Not Found"
+  pageDescription: "404: Content Not Found",
+  pageRobots: "noindex, follow"
 }) %>
 
-<%- include("../modules/navigationBar.ejs", {
-  features: features
-}) %>
+<%- include("../modules/navigationBar.ejs") %>
 
 <%- include("../partials/miniHeader.ejs", {
-  headerTitle: "404: Not Found",
+  headerTitle: "Page Not Found",
   backgroundImage: globalImage
 }) %>
 
-<section class="section">
-  <div class="container">
-    <div class="row">
-      <div class="col-12 col-md-6" style="min-height:500px;">
-        <div class="text-center">
-          <img class="floating" style="margin-top:10px;" src="/images/session/notFoundImage.png" height="300px" draggable="false">
-        </div>
-      </div>
-      <div class="col-12 col-md-6">
-        <h3>Page cannot be found</h3>
-          <p>Looks like you've been greeted by the <b>404 Horse</b>. It's okay, he won't bite, but he will guide you back to safety. Press the big green button...</p>
-          <small>Sorry, the page you are looking for no longer exists or has been moved to another location.</small>
-
-          <br><br><br>
-          <a href="/"><button type="button" class="btn btn-success">Back to Safety</button></a>
-      </div>
-    </div>
-  </div>
-</section>
+<%- include("../partials/session/statusPage.ejs", {
+  image: "/images/session/notFoundImage.png",
+  code: "Error 404",
+  title: "We couldn't find that page",
+  message: "It may have moved, or the link may be wrong. The 404 Horse won't bite — he'll point you back home.",
+  actions: [
+    { href: "/", label: "Back to home", icon: "fa-solid fa-house", primary: true },
+    ...(features.support ? [{ href: "/support", label: "Get support" }] : []),
+  ]
+}) %>
 
 <%- include("../modules/footer.ejs") %>

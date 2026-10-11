@@ -2,6 +2,9 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import db from "./databaseController.js";
 
+/** Failed guesses allowed before an emailed code is invalidated. */
+const MAX_CODE_ATTEMPTS = 5;
+
 /**
  * Generate a 6-digit code for email verification and password resets.
  *
@@ -75,6 +78,20 @@ export async function verifyEmailCode(userId, code) {
         const match = await bcrypt.compare(code, verification.codeHash);
 
         if (!match) {
+          // A 6-digit code is only safe while guesses are bounded. Count the
+          // miss and burn the code after MAX_CODE_ATTEMPTS so a per-IP rate
+          // limit is not the only thing standing between a guesser and the
+          // account.
+          db.query(
+            `UPDATE userEmailVerifications
+                SET attempts = attempts + 1,
+                    consumed = IF(attempts + 1 >= ?, 1, consumed)
+              WHERE verificationId = ?`,
+            [MAX_CODE_ATTEMPTS, verification.verificationId],
+            (attemptError) => {
+              if (attemptError) console.error("[session] failed to record code attempt:", attemptError);
+            }
+          );
           return resolve({ valid: false, reason: "mismatch" });
         }
 
@@ -150,6 +167,20 @@ export async function verifyPasswordResetCode(userId, code) {
         const match = await bcrypt.compare(code, resetRequest.codeHash);
 
         if (!match) {
+          // A 6-digit code is only safe while guesses are bounded. Count the
+          // miss and burn the code after MAX_CODE_ATTEMPTS so a per-IP rate
+          // limit is not the only thing standing between a guesser and the
+          // account.
+          db.query(
+            `UPDATE userPasswordResets
+                SET attempts = attempts + 1,
+                    consumed = IF(attempts + 1 >= ?, 1, consumed)
+              WHERE resetId = ?`,
+            [MAX_CODE_ATTEMPTS, resetRequest.resetId],
+            (attemptError) => {
+              if (attemptError) console.error("[session] failed to record code attempt:", attemptError);
+            }
+          );
           return resolve({ valid: false, reason: "mismatch" });
         }
 

@@ -12,6 +12,7 @@
  */
 
 import { hasPermission, setBannerCookie } from "../../api/common.js";
+import { hasPermission as holdsNode } from "../../lib/discord/permissions.mjs";
 import { adminViewData } from "../../admin/adminHelpers.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { parseYearMonth } from "../../lib/finance/budgetPeriod.mjs";
@@ -64,11 +65,9 @@ import {
 // ---------------------------------------------------------------------------
 
 function canManageFinance(req) {
-  const perms = req.session?.user?.permissions ?? [];
-  return perms.some((p) => {
-    const c = String(p).trim().toLowerCase();
-    return c === "*" || c === "zander.web.finance.manage" || c === "zander.web.finance.*";
-  });
+  // Shared matcher so `zander.web.*` and future wildcard shapes behave the
+  // same here as on every other dashboard page.
+  return holdsNode(req.session?.user?.permissions ?? [], "zander.web.finance.manage");
 }
 
 // ---------------------------------------------------------------------------
@@ -644,6 +643,10 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
       return res.redirect("/dashboard/finance/settings");
     }
     const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) {
+      setBannerCookie("danger", "That category does not exist.", res);
+      return res.redirect("/dashboard/finance/settings");
+    }
     try {
       const {
         parentId,
@@ -682,6 +685,10 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
       return res.redirect("/dashboard/finance/settings");
     }
     const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) {
+      setBannerCookie("danger", "That category does not exist.", res);
+      return res.redirect("/dashboard/finance/settings");
+    }
     try {
       await deleteCategory(id);
       setBannerCookie("success", "Category deleted.", res);

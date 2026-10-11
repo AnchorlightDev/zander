@@ -95,7 +95,7 @@ export default function dashboardApplicationsSiteRoute(
     if (!await hasPermission("zander.web.application", req, res, features)) return;
 
     const applicationId = req.query.applicationId;
-    const fetchURL = `${process.env.siteAddress}/api/application/get?id=${applicationId}`;
+    const fetchURL = `${process.env.siteAddress}/api/application/get?id=${encodeURIComponent(applicationId ?? "")}`;
 
     const [response, globalImage, announcementWeb, availableForms] = await Promise.all([
       fetch(fetchURL, {

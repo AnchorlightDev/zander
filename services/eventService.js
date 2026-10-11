@@ -1,3 +1,4 @@
+import { isAllowedUrl } from "../lib/navigation/menus.mjs";
 /**
  * Event Service
  * Core CRUD operations and lifecycle management for the Events Calendar module.
@@ -466,7 +467,7 @@ export async function createEvent(data, actorId, actorName) {
       locationDiscordChannelId: data.locationDiscordChannelId || null,
       serverName: data.serverName || null,
       serverIp: data.serverIp || null,
-      externalLinks: data.externalLinks || undefined,
+      externalLinks: sanitiseExternalLinks(data.externalLinks),
       bannerUrl: data.bannerUrl || null,
       logoUrl: data.logoUrl || null,
       tags: data.tags || undefined,
@@ -550,7 +551,7 @@ export async function updateEvent(eventId, data, actorId, actorName) {
   if (data.locationDiscordChannelId !== undefined) updateData.locationDiscordChannelId = data.locationDiscordChannelId || null;
   if (data.serverName !== undefined) updateData.serverName = data.serverName;
   if (data.serverIp !== undefined) updateData.serverIp = data.serverIp;
-  if (data.externalLinks !== undefined) updateData.externalLinks = data.externalLinks;
+  if (data.externalLinks !== undefined) updateData.externalLinks = sanitiseExternalLinks(data.externalLinks) ?? [];
   if (data.bannerUrl !== undefined) updateData.bannerUrl = data.bannerUrl;
   if (data.logoUrl !== undefined) updateData.logoUrl = data.logoUrl;
   if (data.tags !== undefined) updateData.tags = data.tags;
@@ -763,6 +764,24 @@ export async function revertEventToDraft(eventId, reviewerId, reviewerName) {
  * Publish an event (transitions approved → published).
  * Triggers downstream sync actions.
  */
+
+/**
+ * External links are rendered as plain hrefs on the public event page, so a
+ * `javascript:` URL entered by an editor would run for every visitor. Keep
+ * only entries whose url is a site path, http(s) or mailto.
+ */
+function sanitiseExternalLinks(links) {
+  if (links === undefined || links === null) return undefined;
+  let list = links;
+  if (typeof list === "string") {
+    try { list = JSON.parse(list); } catch { return []; }
+  }
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((l) => l && typeof l === "object" && isAllowedUrl(l.url))
+    .map((l) => ({ ...l, url: String(l.url).trim() }));
+}
+
 export async function publishEvent(eventId, actorId, actorName) {
   const event = await getEventById(eventId);
   if (!event) throw new Error("Event not found");

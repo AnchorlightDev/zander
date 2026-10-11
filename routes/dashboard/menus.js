@@ -28,7 +28,7 @@ export default function dashboardMenusRoute(app, config, db, features, lang) {
   app.get("/dashboard/menus", async function (req, res) {
     if (!(await hasPermission(PERMISSION_NODE, req, res, features))) return;
 
-    const location = MENU_LOCATIONS[req.query?.location] ? req.query.location : "header";
+    const location = Object.hasOwn(MENU_LOCATIONS, String(req.query?.location ?? "")) ? req.query.location : "header";
 
     let pages = [];
     try {
@@ -96,7 +96,7 @@ export default function dashboardMenusRoute(app, config, db, features, lang) {
     if (!(await hasPermission(PERMISSION_NODE, req, res, features))) return;
 
     const location = String(req.params.location || "");
-    if (!MENU_LOCATIONS[location]) return res.redirect("/dashboard/menus");
+    if (!Object.hasOwn(MENU_LOCATIONS, location)) return res.redirect("/dashboard/menus");
 
     try {
       await resetMenu(location);

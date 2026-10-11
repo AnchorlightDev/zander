@@ -526,6 +526,7 @@ export default function userApiRoute(app, config, db, features, lang) {
   });
 
   app.post(baseEndpoint + "/link", async function (req, res) {
+    if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 10 })) return;
     const discordId = required(req.body, "discordId", res);
     if (res.sent) return;
     const first = required(req.body, "first", res);
@@ -541,7 +542,15 @@ export default function userApiRoute(app, config, db, features, lang) {
     const sixth = required(req.body, "sixth", res);
     if (res.sent) return;
 
-    const verifyCode = first + second + third + fourth + fifth + sixth;
+    const digits = [first, second, third, fourth, fifth, sixth].map((d) => String(d ?? ""));
+    if (!digits.every((d) => /^\d$/.test(d)) || !/^\d{15,22}$/.test(String(discordId))) {
+      return res.send({
+        success: false,
+        alertType: "warning",
+        alertContent: `Please enter the six digits from the code you were given in-game.`,
+      });
+    }
+    const verifyCode = digits.join("");
 
     try {
       const userLinkData = new UserLinkGetter();
@@ -616,7 +625,7 @@ export default function userApiRoute(app, config, db, features, lang) {
     if (res.sent) return;
     const profilePicture_email = optional(req.body, "profilePicture_email");
 
-    if (await hasActiveWebBan(req.session?.user?.userId)) {
+    if (await hasActiveWebBan(req.session?.user?.userId ?? userId)) {
       return res.send({ success: false, message: "You are currently banned from editing your profile." });
     }
 
@@ -649,7 +658,7 @@ export default function userApiRoute(app, config, db, features, lang) {
     const userId = required(req.body, "userId", res);
     if (res.sent) return;
 
-    if (await hasActiveWebBan(req.session?.user?.userId)) {
+    if (await hasActiveWebBan(req.session?.user?.userId ?? userId)) {
       return res.send({ success: false, message: "You are currently banned from editing your profile." });
     }
 
@@ -692,7 +701,7 @@ export default function userApiRoute(app, config, db, features, lang) {
     const social_interests = required(req.body, "social_interests", res);
     if (res.sent) return;
 
-    if (await hasActiveWebBan(req.session?.user?.userId)) {
+    if (await hasActiveWebBan(req.session?.user?.userId ?? userId)) {
       return res.send({ success: false, message: "You are currently banned from editing your profile." });
     }
 
@@ -745,7 +754,7 @@ export default function userApiRoute(app, config, db, features, lang) {
     const social_aboutMe = required(req.body, "social_aboutMe", res);
     if (res.sent) return;
 
-    if (await hasActiveWebBan(req.session?.user?.userId)) {
+    if (await hasActiveWebBan(req.session?.user?.userId ?? userId)) {
       return res.send({ success: false, message: "You are currently banned from editing your profile." });
     }
 
@@ -796,8 +805,36 @@ export default function userApiRoute(app, config, db, features, lang) {
     const social_reddit = optional(req.body, "social_reddit");
     const social_spotify = optional(req.body, "social_spotify");
 
-    if (await hasActiveWebBan(req.session?.user?.userId)) {
+    if (await hasActiveWebBan(req.session?.user?.userId ?? userId)) {
       return res.send({ success: false, message: "You are currently banned from editing your profile." });
+    }
+
+    // Steam/Twitter/Instagram/Spotify are rendered inside a fixed https://
+    // prefix, so they must be a bare handle. Reddit is rendered as the whole
+    // href, so it must be an https reddit.com URL -- otherwise a
+    // "javascript:" value would run for anyone who clicked it.
+    const HANDLE = /^[A-Za-z0-9_.-]{1,64}$/;
+    for (const [name, value] of [
+      ["social_steam", social_steam],
+      ["social_twitter_x", social_twitter_x],
+      ["social_instagram", social_instagram],
+      ["social_spotify", social_spotify],
+    ]) {
+      if (value && !HANDLE.test(String(value))) {
+        return res.send({ success: false, message: `${name.replace("social_", "")} must be a username, not a link.` });
+      }
+    }
+    if (social_reddit) {
+      let ok = false;
+      try {
+        const parsed = new URL(String(social_reddit));
+        ok = parsed.protocol === "https:" && /(^|\.)reddit\.com$/i.test(parsed.hostname);
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        return res.send({ success: false, message: "Reddit must be a full https://reddit.com profile URL." });
+      }
     }
 
     try {

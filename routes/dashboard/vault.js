@@ -87,7 +87,7 @@ export default function dashboardVaultSiteRoute(
     const vaultId = req.query.vaultId;
 
     const [vaultApiData, globalImage, announcementWeb] = await Promise.all([
-      fetchJson(`${process.env.siteAddress}/api/vault/get?id=${vaultId}`, { data: [{}] }),
+      fetchJson(`${process.env.siteAddress}/api/vault/get?id=${encodeURIComponent(vaultId ?? "")}`, { data: [{}] }),
       getGlobalImage(),
       getWebAnnouncement(),
     ]);

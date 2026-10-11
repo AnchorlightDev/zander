@@ -19,6 +19,7 @@
 import { createRequire } from "module";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Colors, EmbedBuilder } from "discord.js";
 import { client } from "../controllers/discordController.js";
+import { prisma } from "../controllers/databaseController.js";
 import {
   createResource,
   findDuplicate,
@@ -54,7 +55,30 @@ const STATUS_STYLE = {
   rejected: { color: Colors.Red, label: "Rejected" },
 };
 
-function buildReviewMessage(resource, tally) {
+/**
+ * Who has voted each way, by username -- counting only current reviewers,
+ * as the tally does.
+ */
+export async function getVoterNames(resource) {
+  const reviewers = await getReviewerIds().catch(() => null);
+  const counted = (resource.votes || []).filter((v) => !reviewers || reviewers.has(Number(v.userId)));
+  if (!counted.length) return { approve: [], reject: [] };
+  const users = await prisma.users.findMany({
+    where: { userId: { in: counted.map((v) => Number(v.userId)) } },
+    select: { userId: true, username: true },
+  });
+  const nameOf = new Map(users.map((u) => [u.userId, u.username]));
+  const names = (vote) => counted.filter((v) => v.vote === vote).map((v) => nameOf.get(Number(v.userId)) || `#${v.userId}`).sort((a, b) => a.localeCompare(b));
+  return { approve: names("approve"), reject: names("reject") };
+}
+
+const listNames = (names) => {
+  if (!names.length) return "—";
+  const text = names.join(", ");
+  return text.length > 1000 ? `${text.slice(0, 990)}…` : text;
+};
+
+function buildReviewMessage(resource, tally, voters = { approve: [], reject: [] }) {
   const state = resource.status === "pending" && isOverdue(resource) ? "overdue" : resource.status;
   const style = STATUS_STYLE[state];
 
@@ -69,9 +93,11 @@ function buildReviewMessage(resource, tally) {
       { name: "Status", value: style.label, inline: true },
       {
         name: "Votes",
-        value: `👍 ${tally.approve} · 👎 ${tally.reject} — ${tally.needed} of ${tally.eligible} reviewer(s) needed`,
+        value: `${tally.needed} of ${tally.eligible} reviewer(s) needed either way`,
         inline: false,
       },
+      { name: `✅ Approved (${tally.approve})`, value: listNames(voters.approve), inline: true },
+      { name: `❌ Rejected (${tally.reject})`, value: listNames(voters.reject), inline: true },
       { name: "Link", value: resource.url.slice(0, 1024), inline: false }
     )
     .setFooter({ text: `Resource #${resource.resourceId}` });
@@ -110,7 +136,7 @@ async function fetchReviewChannel(channelId) {
 /** Post (first time) or refresh the review message. Never throws. */
 async function syncReviewMessage(resource, tally) {
   try {
-    const payload = buildReviewMessage(resource, tally);
+    const payload = buildReviewMessage(resource, tally, await getVoterNames(resource));
     if (resource.reviewChannelId && resource.reviewMessageId) {
       const channel = await fetchReviewChannel(resource.reviewChannelId);
       const message = await channel?.messages.fetch(resource.reviewMessageId).catch(() => null);
@@ -237,19 +263,31 @@ export async function castVote(resourceId, userId, vote) {
   return { ok: true, ...result };
 }
 
-/** Staff decision on an overdue submission. */
+/**
+ * A manager's decision. Before the deadline this overrides the vote; after it,
+ * it settles a suggestion the vote left undecided. Votes already cast are kept.
+ */
 export async function decideManually(resourceId, status, userId) {
   if (!["approved", "rejected"].includes(status)) return { ok: false, error: "Unknown decision." };
   const resource = await getResourceById(resourceId);
   if (!resource) return { ok: false, error: "That resource no longer exists." };
   if (resource.status !== "pending") return { ok: false, error: `This suggestion has already been ${resource.status}.` };
-  if (!isOverdue(resource)) return { ok: false, error: "The vote is still open. It can be decided by hand once the deadline passes." };
 
-  const decided = await markDecided(resource.resourceId, { status, method: "manual", decidedByUserId: userId });
+  const decided = await markDecided(resource.resourceId, { status, method: isOverdue(resource) ? "manual" : "override", decidedByUserId: userId });
   if (!decided) return { ok: false, error: "This suggestion was decided a moment ago." };
   await syncReviewMessage(decided, await tallyFor(decided).catch(() => tallyVotes([], new Set())));
   await notifySubmitter(decided);
   return { ok: true, resource: decided };
+}
+
+/** Update the Discord review message after staff edit a pending suggestion. Never throws. */
+export async function refreshReviewMessage(resourceId) {
+  try {
+    const resource = await getResourceById(resourceId);
+    if (resource) await syncReviewMessage(resource, await tallyFor(resource));
+  } catch (error) {
+    console.error(`[resources] Could not refresh the review message for #${resourceId}:`, error.message);
+  }
 }
 
 /** Re-count every pending submission and flag newly overdue ones once. */

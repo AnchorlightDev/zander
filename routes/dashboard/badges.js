@@ -211,21 +211,39 @@ export default function dashboardBadgesRoute(app, fetch, config, db, features, l
     return;
   });
 
+  // The id goes into a URL that is fetched with the internal API key. Only a
+  // plain integer may pass, or "..%2Fusers%2F7%2Freset-password" would reach
+  // another internal endpoint with that key.
+  const badgeIdParam = (req, res) => {
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id < 1) {
+      res.status(400).send({ success: false, message: "Invalid badge id." });
+      return null;
+    }
+    return id;
+  };
+
   app.put("/dashboard/badges/:id", async (req, res) => {
     if (!await hasPermission("zander.web.badges", req, res, features)) return;
-    res.send(await proxyToApi(fetch, "PUT", `/admin/badges/${req.params.id}`, req.body));
+    const id = badgeIdParam(req, res);
+    if (id === null) return;
+    res.send(await proxyToApi(fetch, "PUT", `/admin/badges/${id}`, req.body));
     return;
   });
 
   app.delete("/dashboard/badges/:id", async (req, res) => {
     if (!await hasPermission("zander.web.badges", req, res, features)) return;
-    res.send(await proxyToApi(fetch, "DELETE", `/admin/badges/${req.params.id}`));
+    const id = badgeIdParam(req, res);
+    if (id === null) return;
+    res.send(await proxyToApi(fetch, "DELETE", `/admin/badges/${id}`));
     return;
   });
 
   app.post("/dashboard/badges/:id/duplicate", async (req, res) => {
     if (!await hasPermission("zander.web.badges", req, res, features)) return;
-    res.send(await proxyToApi(fetch, "POST", `/admin/badges/${req.params.id}/duplicate`));
+    const id = badgeIdParam(req, res);
+    if (id === null) return;
+    res.send(await proxyToApi(fetch, "POST", `/admin/badges/${id}/duplicate`));
     return;
   });
 

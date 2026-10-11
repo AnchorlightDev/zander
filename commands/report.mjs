@@ -58,8 +58,8 @@ export class ReportCommand extends Command {
     // Resolve the reporter user to a User ID in database.
     const reporterUserData = new UserGetter();
     const userData = await reporterUserData.byDiscordId(reporterUser);
-    
-    if (!userData.discordId) {
+
+    if (!userData?.discordId) {
       const errorEmbed = new EmbedBuilder()
         .setTitle("User not Linked")
         .setDescription(
