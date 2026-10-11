@@ -25,6 +25,8 @@ import {
   hasNotificationBeenSent,
   recordNotification,
   createInGameAnnouncement,
+  getContentItemByExternal,
+  setContentItemAnnouncementId,
 } from "../controllers/watchController.js";
 
 // ---------------------------------------------------------------------------
@@ -317,19 +319,38 @@ async function syncYoutubeCreator(creator, apiKey, fetchFn) {
         }
       }
 
-      // In-game tip announcement (deduplicated independently of Discord)
-      const ingameNotifType = `ingame_${notifType}`;
-      const ingameAlreadySent = await hasNotificationBeenSent("youtube", video.id, ingameNotifType);
-      if (!ingameAlreadySent) {
-        const creatorName = creator.platform_display_name || creator.username;
-        const announcementBody = isCurrentlyLive
-          ? `Creator ${creatorName} is now live — watch now at craftingforchrist.net/watch`
-          : `Creator ${creatorName} has released a new video — watch now at craftingforchrist.net/watch`;
+      if (isCurrentlyLive) {
+        // In-game "creator is live" broadcast — lifecycle-managed so it only
+        // shows while live. Keep exactly one active tip per live stream; the
+        // Velocity proxy re-broadcasts active tips on its own interval
+        // (announcementTipInterval) and markStreamsOffline retracts this tip
+        // when the stream ends. See watchTwitchCron.js for the full rationale.
         try {
-          await createInGameAnnouncement(announcementBody);
-          await recordNotification("youtube", video.id, ingameNotifType, null);
+          const saved = await getContentItemByExternal("youtube", video.id);
+          if (saved && !saved.ingame_announcement_id) {
+            const creatorName = creator.platform_display_name || creator.username;
+            const announcementBody = `Creator ${creatorName} is now live — watch now at craftingforchrist.net/watch`;
+            const announcementId = await createInGameAnnouncement(announcementBody, 1440);
+            if (announcementId) await setContentItemAnnouncementId(saved.id, announcementId);
+          }
         } catch (err) {
-          console.error(`[WatchYouTube] userId=${creator.user_id}: failed to create in-game announcement for "${video.id}":`, err);
+          console.error(`[WatchYouTube] userId=${creator.user_id}: failed to manage in-game live announcement for "${video.id}":`, err);
+        }
+      } else {
+        // One-shot "new video released" tip (deduplicated independently of
+        // Discord). Not lifecycle-managed — a new upload is a point-in-time
+        // event, not an ongoing "is live" state.
+        const ingameNotifType = `ingame_${notifType}`;
+        const ingameAlreadySent = await hasNotificationBeenSent("youtube", video.id, ingameNotifType);
+        if (!ingameAlreadySent) {
+          const creatorName = creator.platform_display_name || creator.username;
+          const announcementBody = `Creator ${creatorName} has released a new video — watch now at craftingforchrist.net/watch`;
+          try {
+            await createInGameAnnouncement(announcementBody);
+            await recordNotification("youtube", video.id, ingameNotifType, null);
+          } catch (err) {
+            console.error(`[WatchYouTube] userId=${creator.user_id}: failed to create in-game announcement for "${video.id}":`, err);
+          }
         }
       }
     }

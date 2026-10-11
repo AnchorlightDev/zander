@@ -193,25 +193,44 @@ export function upsertContentItem(data) {
   });
 }
 
-export function markStreamsOffline(platform, excludeContentIds = []) {
+export async function markStreamsOffline(platform, excludeContentIds = []) {
+  // First, retract the in-game "creator is live" tip announcements for any
+  // streams that are about to be flipped offline, so the broadcast stops the
+  // moment a creator stops streaming.
+  let offlineFilter = `platform=? AND is_live=1 AND ingame_announcement_id IS NOT NULL`;
+  let offlineParams = [platform];
+  if (excludeContentIds.length > 0) {
+    const placeholders = excludeContentIds.map(() => "?").join(",");
+    offlineFilter += ` AND external_content_id NOT IN (${placeholders})`;
+    offlineParams = [platform, ...excludeContentIds];
+  }
+
+  const goingOffline = await runQuery(
+    `SELECT ingame_announcement_id FROM creator_content_items WHERE ${offlineFilter}`,
+    offlineParams
+  );
+  for (const row of goingOffline) {
+    if (!row.ingame_announcement_id) continue;
+    try {
+      await deleteAnnouncementById(row.ingame_announcement_id);
+    } catch (err) {
+      console.error(`[Watch] Failed to delete in-game live announcement ${row.ingame_announcement_id}:`, err.message);
+    }
+  }
+
+  // Then flip them offline and clear the announcement link.
   if (excludeContentIds.length === 0) {
-    return new Promise((resolve, reject) => {
-      db.query(
-        `UPDATE creator_content_items SET is_live=0, ended_at=CURRENT_TIMESTAMP, is_publicly_visible=0, updated_at=CURRENT_TIMESTAMP WHERE platform=? AND is_live=1`,
-        [platform],
-        (error) => { if (error) return reject(error); resolve(true); }
-      );
-    });
+    return runQuery(
+      `UPDATE creator_content_items SET is_live=0, ended_at=CURRENT_TIMESTAMP, is_publicly_visible=0, ingame_announcement_id=NULL, updated_at=CURRENT_TIMESTAMP WHERE platform=? AND is_live=1`,
+      [platform]
+    );
   }
 
   const placeholders = excludeContentIds.map(() => "?").join(",");
-  return new Promise((resolve, reject) => {
-    db.query(
-      `UPDATE creator_content_items SET is_live=0, ended_at=CURRENT_TIMESTAMP, is_publicly_visible=0, updated_at=CURRENT_TIMESTAMP WHERE platform=? AND is_live=1 AND external_content_id NOT IN (${placeholders})`,
-      [platform, ...excludeContentIds],
-      (error) => { if (error) return reject(error); resolve(true); }
-    );
-  });
+  return runQuery(
+    `UPDATE creator_content_items SET is_live=0, ended_at=CURRENT_TIMESTAMP, is_publicly_visible=0, ingame_announcement_id=NULL, updated_at=CURRENT_TIMESTAMP WHERE platform=? AND is_live=1 AND external_content_id NOT IN (${placeholders})`,
+    [platform, ...excludeContentIds]
+  );
 }
 
 export function getPublicLiveContent() {
@@ -290,20 +309,62 @@ export function recordNotification(platform, externalContentId, notificationType
 }
 
 /**
- * Creates a temporary in-game tip announcement for a creator event.
- * The announcement expires after `durationMinutes` (default 2 hours).
+ * Creates a temporary in-game tip announcement for a creator event and returns
+ * its announcementId.  The announcement expires after `durationMinutes`
+ * (default 2 hours).
+ *
+ * IMPORTANT: the Velocity proxy's TipChatter broadcasts the
+ * `colourMessageFormat` column (prefixed by `announcementTipPrefix`) and skips
+ * any tip row where that column is NULL — it does NOT read `body`.  So we must
+ * always populate `colourMessageFormat`, otherwise the tip never appears in
+ * game.  `&a` is the legacy colour code for green; TipChatter deserialises with
+ * `&` as the translate char.
  */
 export function createInGameAnnouncement(body, durationMinutes = 120) {
   const endDate = new Date(Date.now() + durationMinutes * 60 * 1000);
   const endDateStr = endDate.toISOString().slice(0, 19).replace("T", " ");
+  const link = `${String(process.env.siteAddress || "").replace(/\/$/, "")}/watch`;
   return new Promise((resolve, reject) => {
     db.query(
-      `INSERT INTO announcements (enabled, announcementType, body, link, endDate) VALUES (1, 'tip', ?, ?, ?)`,
-      [body, `${String(process.env.siteAddress || "").replace(/\/$/, "")}/watch`, endDateStr],
+      `INSERT INTO announcements (enabled, announcementType, body, colourMessageFormat, link, endDate) VALUES (1, 'tip', ?, ?, ?, ?)`,
+      [body, `&a${body}`, link, endDateStr],
       (error, results) => {
         if (error) return reject(error);
-        resolve(results?.insertId || true);
+        resolve(results?.insertId || null);
       }
+    );
+  });
+}
+
+/** Deletes a single announcement row (used to retract a "creator is live" tip). */
+export function deleteAnnouncementById(announcementId) {
+  return new Promise((resolve, reject) => {
+    db.query(
+      `DELETE FROM announcements WHERE announcementId=?`,
+      [announcementId],
+      (error) => { if (error) return reject(error); resolve(true); }
+    );
+  });
+}
+
+/** Fetch a single content item by its platform + external id. */
+export function getContentItemByExternal(platform, externalContentId) {
+  return new Promise((resolve, reject) => {
+    db.query(
+      `SELECT * FROM creator_content_items WHERE platform=? AND external_content_id=? LIMIT 1`,
+      [platform, externalContentId],
+      (error, results) => { if (error) return reject(error); resolve(results?.[0] || null); }
+    );
+  });
+}
+
+/** Link (or clear) the in-game tip announcement that advertises a live stream. */
+export function setContentItemAnnouncementId(contentItemId, announcementId) {
+  return new Promise((resolve, reject) => {
+    db.query(
+      `UPDATE creator_content_items SET ingame_announcement_id=? WHERE id=?`,
+      [announcementId, contentItemId],
+      (error) => { if (error) return reject(error); resolve(true); }
     );
   });
 }

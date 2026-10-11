@@ -650,6 +650,8 @@ model creator_content_items {
   matched_rule         String?  @db.VarChar(128)
   is_cfc_related       Int      @default(0) @db.TinyInt
   is_publicly_visible  Int      @default(0) @db.TinyInt
+  /// announcementId of the in-game "creator is live" tip, while live; NULL otherwise.
+  ingame_announcement_id Int?
   last_seen_at         DateTime @default(now())
   created_at           DateTime @default(now())
   updated_at           DateTime @updatedAt
