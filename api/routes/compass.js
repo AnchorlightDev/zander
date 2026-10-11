@@ -13,6 +13,7 @@
  */
 
 import { UserGetter } from "../../controllers/userController.js";
+import { luckpermsDb } from "../../controllers/databaseController.js";
 import { getEffectiveGroups, isStaff } from "../../lib/permissions/effectiveGroups.mjs";
 import { staffGroups } from "../../lib/oidc/accounts.mjs";
 
@@ -55,6 +56,24 @@ export default function compassApiRoute(app, config, db, features, lang) {
       if (!res.sent) {
         return res.status(500).send({ success: false, message: "Lookup failed." });
       }
+    }
+  });
+
+  // GET /api/compass/groups
+  // → { groups: [slug, ...] } — every LuckPerms group, so Compass can offer a
+  //   rank picker when assigning access to Spaces. Read-only.
+  app.get(baseEndpoint + "/groups", async function (req, res) {
+    try {
+      const rows = await new Promise((resolve, reject) => {
+        luckpermsDb.query("SELECT name FROM luckperms_groups ORDER BY name ASC", [], (err, results) => {
+          if (err) return reject(err);
+          resolve(results || []);
+        });
+      });
+      return res.send({ success: true, data: { groups: rows.map((r) => r.name).filter(Boolean) } });
+    } catch (error) {
+      console.error("[compass] groups list failed:", error);
+      if (!res.sent) return res.status(500).send({ success: false, message: "Lookup failed." });
     }
   });
 }
