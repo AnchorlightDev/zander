@@ -54,7 +54,7 @@ async function build() {
     claims: {
       openid: ["sub"],
       // discord_id is only emitted by the account when the user is linked.
-      profile: ["preferred_username", "discord_id"],
+      profile: ["preferred_username", "discord_id", "picture"],
       groups: ["groups"],
     },
 
