@@ -10,8 +10,10 @@ import {
 const require = createRequire(import.meta.url);
 const config = require("../lib/config/config.cjs");
 
-const GUILD_ID = config.discord?.guildId;
-const MUTED_ROLE_ID = config.discord?.roles?.muted;
+// Read at use time rather than copying at import: these settings live in the
+// database and a dashboard change should take effect without a bot restart.
+const getGuildId = () => config.discord?.guildId;
+const getMutedRoleId = () => config.discord?.roles?.muted;
 
 /**
  * Lift an expired punishment in Discord.
@@ -23,6 +25,8 @@ const MUTED_ROLE_ID = config.discord?.roles?.muted;
  * leaving someone banned or muted forever with no record of it.
  */
 async function liftInDiscord(punishment) {
+  const GUILD_ID = getGuildId();
+  const MUTED_ROLE_ID = getMutedRoleId();
   if (!client?.isReady?.() || !GUILD_ID) return false;
 
   let guild;
@@ -97,6 +101,8 @@ punishmentExpiryTask.start();
  * Called once when the bot becomes ready.
  */
 export async function reconcileActivePunishments() {
+  const GUILD_ID = getGuildId();
+  const MUTED_ROLE_ID = getMutedRoleId();
   if (!client?.isReady?.() || !GUILD_ID) return;
 
   try {

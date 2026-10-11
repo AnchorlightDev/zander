@@ -64,11 +64,16 @@ const SUBCOMMAND_PERMISSION_MAP = {
   history: PERMISSION_NODES.can_view_history,
 };
 
-const APPEAL_URL = `${process.env.siteAddress}${config.discord?.punishments?.appealBaseUrl || "/appeal"}`;
-const LOG_CHANNEL_ID = config.discord?.punishments?.logChannelId;
-const MUTED_ROLE_ID = config.discord?.roles?.muted;
-const GUILD_ID = config.discord?.guildId;
-const PUNISHMENT_WEBHOOK_URL = config.discord?.webhooks?.staffPunishmentNotifications;
+// These settings live in the database (/dashboard/settings) and are written
+// into the shared config object at boot, after this command module is imported.
+// Read them at use time rather than copying into module constants, so a value
+// saved in the dashboard takes effect without needing a bot restart — and an
+// empty value never silently disables logging just because it was blank at import.
+const getAppealUrl = () =>
+  `${process.env.siteAddress}${config.discord?.punishments?.appealBaseUrl || "/appeal"}`;
+const getLogChannelId = () => config.discord?.punishments?.logChannelId;
+const getMutedRoleId = () => config.discord?.roles?.muted;
+const getPunishmentWebhookUrl = () => config.discord?.webhooks?.staffPunishmentNotifications;
 
 const MAX_HISTORY_PUNISHMENTS = 50;
 const HISTORY_PER_PAGE = 5;
@@ -274,6 +279,7 @@ export async function sendPunishmentWebhook({
   platform = "Discord",
   punishmentLink,
 }) {
+  const PUNISHMENT_WEBHOOK_URL = getPunishmentWebhookUrl();
   if (!PUNISHMENT_WEBHOOK_URL) return;
 
   try {
@@ -418,7 +424,7 @@ async function sendPunishmentDm(user, { type, reason, guildName, expiresAt }) {
       );
     }
 
-    lines.push(`\nYou may appeal this punishment at: ${APPEAL_URL}`);
+    lines.push(`\nYou may appeal this punishment at: ${getAppealUrl()}`);
 
     embed.setDescription(lines.join("\n"));
 
@@ -461,6 +467,7 @@ async function sendLogEmbed(client, {
   dmStatus,
   silent,
 }) {
+  const LOG_CHANNEL_ID = getLogChannelId();
   if (!LOG_CHANNEL_ID) return;
 
   try {
@@ -1101,6 +1108,7 @@ export class PunishCommand extends Command {
       });
     }
 
+    const MUTED_ROLE_ID = getMutedRoleId();
     if (!MUTED_ROLE_ID) {
       return interaction.editReply({
         content: "Muted role is not configured. Please set `discord.roles.muted` in config.",
@@ -1197,6 +1205,7 @@ export class PunishCommand extends Command {
       });
     }
 
+    const MUTED_ROLE_ID = getMutedRoleId();
     if (!MUTED_ROLE_ID) {
       return interaction.editReply({
         content: "Muted role is not configured. Please set `discord.roles.muted` in config.",
@@ -1306,6 +1315,7 @@ export class PunishCommand extends Command {
       await liftPunishment(ban.id);
     }
 
+    const LOG_CHANNEL_ID = getLogChannelId();
     if (LOG_CHANNEL_ID) {
       try {
         const channel = await interaction.client.channels.fetch(LOG_CHANNEL_ID);
@@ -1355,6 +1365,7 @@ export class PunishCommand extends Command {
 
     const targetMember = await this.fetchGuildMember(interaction, targetUser.id);
 
+    const MUTED_ROLE_ID = getMutedRoleId();
     if (targetMember && MUTED_ROLE_ID) {
       try {
         await targetMember.roles.remove(MUTED_ROLE_ID, `[Punish] ${reason}`);
@@ -1372,6 +1383,7 @@ export class PunishCommand extends Command {
       await liftPunishment(mute.id);
     }
 
+    const LOG_CHANNEL_ID = getLogChannelId();
     if (LOG_CHANNEL_ID) {
       try {
         const channel = await interaction.client.channels.fetch(LOG_CHANNEL_ID);
