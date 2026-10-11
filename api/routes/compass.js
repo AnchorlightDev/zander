@@ -13,7 +13,7 @@
  */
 
 import { UserGetter } from "../../controllers/userController.js";
-import { luckpermsDb } from "../../controllers/databaseController.js";
+import db, { luckpermsDb } from "../../controllers/databaseController.js";
 import { getEffectiveGroups, isStaff } from "../../lib/permissions/effectiveGroups.mjs";
 import { staffGroups } from "../../lib/oidc/accounts.mjs";
 
@@ -95,6 +95,46 @@ export default function compassApiRoute(app, config, db, features, lang) {
       return res.send({ success: true, data: { groups } });
     } catch (error) {
       console.error("[compass] groups list failed:", error);
+      if (!res.sent) return res.status(500).send({ success: false, message: "Lookup failed." });
+    }
+  });
+
+  // GET /api/compass/members?groups=mod,admin
+  // → { members: [{ sub, username, uuid }] } — CFC users who directly hold any of
+  //   the given LuckPerms groups (global, non-expiring). For assignee pickers.
+  app.get(baseEndpoint + "/members", async function (req, res) {
+    const groups = String(req.query?.groups || "")
+      .split(",").map((g) => g.trim().toLowerCase()).filter(Boolean);
+    if (!groups.length) return res.send({ success: true, data: { members: [] } });
+
+    try {
+      const nodes = groups.map((g) => `group.${g}`);
+      const placeholders = nodes.map(() => "?").join(", ");
+      const uuidRows = await new Promise((resolve, reject) => {
+        luckpermsDb.query(
+          `SELECT DISTINCT uuid FROM luckperms_user_permissions
+            WHERE permission IN (${placeholders})
+              AND value = 1 AND server = 'global' AND world = 'global'
+              AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
+          nodes,
+          (err, rows) => (err ? reject(err) : resolve(rows || []))
+        );
+      });
+      const uuids = uuidRows.map((r) => r.uuid).filter(Boolean);
+      if (!uuids.length) return res.send({ success: true, data: { members: [] } });
+
+      const ph = uuids.map(() => "?").join(", ");
+      const users = await new Promise((resolve, reject) => {
+        db.query(
+          `SELECT userId, uuid, username FROM users WHERE uuid IN (${ph}) AND account_disabled = 0`,
+          uuids,
+          (err, rows) => (err ? reject(err) : resolve(rows || []))
+        );
+      });
+      const members = users.map((u) => ({ sub: String(u.userId), username: u.username, uuid: u.uuid }));
+      return res.send({ success: true, data: { members } });
+    } catch (error) {
+      console.error("[compass] members list failed:", error);
       if (!res.sent) return res.status(500).send({ success: false, message: "Lookup failed." });
     }
   });
