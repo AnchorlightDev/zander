@@ -60,17 +60,39 @@ export default function compassApiRoute(app, config, db, features, lang) {
   });
 
   // GET /api/compass/groups
-  // → { groups: [slug, ...] } — every LuckPerms group, so Compass can offer a
-  //   rank picker when assigning access to Spaces. Read-only.
+  // → { groups: [{ name, displayName, weight }, ...] } — every LuckPerms group
+  //   with its display name (the `displayname.<value>` node) and weight, so
+  //   Compass can offer a rank picker using friendly names. Read-only.
   app.get(baseEndpoint + "/groups", async function (req, res) {
     try {
       const rows = await new Promise((resolve, reject) => {
-        luckpermsDb.query("SELECT name FROM luckperms_groups ORDER BY name ASC", [], (err, results) => {
-          if (err) return reject(err);
-          resolve(results || []);
-        });
+        luckpermsDb.query(
+          `SELECT g.name AS name,
+                  (SELECT SUBSTRING(gp.permission, 13)
+                     FROM luckperms_group_permissions gp
+                    WHERE gp.name = g.name AND gp.permission LIKE 'displayname.%'
+                    LIMIT 1) AS displayName,
+                  (SELECT SUBSTRING(gp.permission, 8)
+                     FROM luckperms_group_permissions gp
+                    WHERE gp.name = g.name AND gp.permission LIKE 'weight.%'
+                    LIMIT 1) AS weight
+             FROM luckperms_groups g
+            ORDER BY g.name ASC`,
+          [],
+          (err, results) => {
+            if (err) return reject(err);
+            resolve(results || []);
+          }
+        );
       });
-      return res.send({ success: true, data: { groups: rows.map((r) => r.name).filter(Boolean) } });
+      const groups = rows
+        .filter((r) => r.name)
+        .map((r) => ({
+          name: r.name,
+          displayName: r.displayName || null,
+          weight: r.weight ? Number(r.weight) || null : null,
+        }));
+      return res.send({ success: true, data: { groups } });
     } catch (error) {
       console.error("[compass] groups list failed:", error);
       if (!res.sent) return res.status(500).send({ success: false, message: "Lookup failed." });
