@@ -16,6 +16,7 @@ import { UserGetter } from "../../controllers/userController.js";
 import db, { luckpermsDb } from "../../controllers/databaseController.js";
 import { getEffectiveGroups, isStaff } from "../../lib/permissions/effectiveGroups.mjs";
 import { staffGroups } from "../../lib/oidc/accounts.mjs";
+import { resolveAvatarUrl } from "../../lib/avatarHelpers.js";
 
 export default function compassApiRoute(app, config, db, features, lang) {
   const baseEndpoint = "/api/compass";
@@ -100,8 +101,11 @@ export default function compassApiRoute(app, config, db, features, lang) {
   });
 
   // GET /api/compass/members?groups=mod,admin
-  // → { members: [{ sub, username, uuid }] } — CFC users who directly hold any of
-  //   the given LuckPerms groups (global, non-expiring). For assignee pickers.
+  // → { members: [{ sub, username, uuid, avatarUrl }] } — CFC users who directly
+  //   hold any of the given LuckPerms groups (global, non-expiring). avatarUrl is
+  //   each user's resolved profile picture (Gravatar or Minecraft head), so
+  //   Compass's assignee/member avatars match the rest of the CFC site. For
+  //   assignee pickers.
   app.get(baseEndpoint + "/members", async function (req, res) {
     const groups = String(req.query?.groups || "")
       .split(",").map((g) => g.trim().toLowerCase()).filter(Boolean);
@@ -126,12 +130,20 @@ export default function compassApiRoute(app, config, db, features, lang) {
       const ph = uuids.map(() => "?").join(", ");
       const users = await new Promise((resolve, reject) => {
         db.query(
-          `SELECT userId, uuid, username FROM users WHERE uuid IN (${ph}) AND account_disabled = 0`,
+          `SELECT userId, uuid, username, profilePicture_type, profilePicture_email
+             FROM users WHERE uuid IN (${ph}) AND account_disabled = 0`,
           uuids,
           (err, rows) => (err ? reject(err) : resolve(rows || []))
         );
       });
-      const members = users.map((u) => ({ sub: String(u.userId), username: u.username, uuid: u.uuid }));
+      const members = await Promise.all(
+        users.map(async (u) => ({
+          sub: String(u.userId),
+          username: u.username,
+          uuid: u.uuid,
+          avatarUrl: await resolveAvatarUrl(u).catch(() => null),
+        }))
+      );
       return res.send({ success: true, data: { members } });
     } catch (error) {
       console.error("[compass] members list failed:", error);

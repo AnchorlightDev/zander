@@ -225,10 +225,12 @@ export default function sessionSiteRoute(
     if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
-    const discordAuthorizeUrl = buildDiscordAuthorizeUrl();
-
+    // Always start the Discord flow via /login/discord so the OAuth state is
+    // generated and stored in the session. Linking straight to Discord's
+    // authorize URL from here would skip that step: the callback would find no
+    // expected state, reject every sign-in as "expired", and loop back to /login.
     if (req.query.provider === "discord") {
-      return res.redirect(discordAuthorizeUrl);
+      return res.redirect("/login/discord");
     }
 
     res.header("content-type", "text/html; charset=utf-8").send(
@@ -239,7 +241,7 @@ export default function sessionSiteRoute(
       features: features,
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
-      discordAuthorizeUrl,
+      discordAuthorizeUrl: "/login/discord",
     }));
     return;
   });
