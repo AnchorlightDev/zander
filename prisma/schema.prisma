@@ -670,6 +670,20 @@ model creator_content_notifications {
   @@unique([platform, external_content_id, notification_type])
 }
 
+/// Dashboard-managed frames for the in-game rotating holograms (zander-hub).
+model hologram_messages {
+  id              Int      @id @default(autoincrement())
+  hologram_group  String   @default("default") @db.VarChar(64)
+  message         String   @db.Text
+  link            String?  @db.VarChar(512)
+  sort_order      Int      @default(0)
+  enabled         Int      @default(1) @db.TinyInt
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@index([hologram_group, enabled, sort_order], map: "hologram_messages_group_idx")
+}
+
 /// Session store table used by @quixo3/prisma-session-store
 model session {
   id        String   @id @db.VarChar(128)

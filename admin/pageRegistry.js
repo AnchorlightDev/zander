@@ -245,6 +245,17 @@ export const adminPages = [
     group: "System",
     sortOrder: 74,
   },
+  {
+    slug: "holograms",
+    title: "Holograms",
+    menuTitle: "Holograms",
+    icon: "fa-solid fa-signs-post",
+    capability: "zander.web.holograms",
+    path: "/dashboard/holograms",
+    featureFlag: "holograms",
+    group: "System",
+    sortOrder: 74.5,
+  },
 
   // ── Webstore group ─────────────────────────────────────────────────────────
   {
@@ -505,6 +516,20 @@ export const adminSubPages = [
     parent: "users",
     path: "/dashboard/users/",
     capability: "zander.web.users",
+  },
+  {
+    slug: "holograms-create",
+    title: "Create Hologram Frame",
+    parent: "holograms",
+    path: "/dashboard/holograms/create",
+    capability: "zander.web.holograms",
+  },
+  {
+    slug: "holograms-edit",
+    title: "Edit Hologram Frame",
+    parent: "holograms",
+    path: "/dashboard/holograms/edit",
+    capability: "zander.web.holograms",
   },
 
   // Finance sub-pages
