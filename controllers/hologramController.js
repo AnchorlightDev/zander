@@ -35,11 +35,23 @@ export function normaliseGroup(group) {
  */
 export function getActiveMessages() {
   return runQuery(
-    `SELECT id, hologram_group, message, link, sort_order
+    `SELECT id, hologram_group, message, link, countdown_to, countdown_finished_text, sort_order
        FROM hologram_messages
       WHERE enabled = 1
       ORDER BY hologram_group ASC, sort_order ASC, id ASC`
   );
+}
+
+/**
+ * Normalise a countdown target into a Date (UTC) or null. Accepts an ISO string
+ * (what the dashboard form submits) or a Date; anything unparseable becomes null,
+ * which clears the countdown. The mysql2 pool runs with timezone "Z", so a Date is
+ * stored and read back as UTC.
+ */
+export function normaliseCountdownTo(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 /** Every frame (enabled or not), for the dashboard list. */
@@ -63,20 +75,37 @@ export function getGroups() {
   ).then((rows) => rows.map((r) => r.hologram_group));
 }
 
-export function createMessage({ hologram_group, message, link = null, sort_order = 0, enabled = 1 }) {
+export function createMessage({ hologram_group, message, link = null, countdown_to = null, countdown_finished_text = null, sort_order = 0, enabled = 1 }) {
   return runQuery(
-    `INSERT INTO hologram_messages (hologram_group, message, link, sort_order, enabled)
-     VALUES (?, ?, ?, ?, ?)`,
-    [normaliseGroup(hologram_group), String(message ?? ""), link || null, Number(sort_order) || 0, enabled ? 1 : 0]
+    `INSERT INTO hologram_messages (hologram_group, message, link, countdown_to, countdown_finished_text, sort_order, enabled)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      normaliseGroup(hologram_group),
+      String(message ?? ""),
+      link || null,
+      normaliseCountdownTo(countdown_to),
+      countdown_finished_text || null,
+      Number(sort_order) || 0,
+      enabled ? 1 : 0,
+    ]
   );
 }
 
-export function updateMessage(id, { hologram_group, message, link = null, sort_order = 0, enabled = 1 }) {
+export function updateMessage(id, { hologram_group, message, link = null, countdown_to = null, countdown_finished_text = null, sort_order = 0, enabled = 1 }) {
   return runQuery(
     `UPDATE hologram_messages
-        SET hologram_group = ?, message = ?, link = ?, sort_order = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP(3)
+        SET hologram_group = ?, message = ?, link = ?, countdown_to = ?, countdown_finished_text = ?, sort_order = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP(3)
       WHERE id = ?`,
-    [normaliseGroup(hologram_group), String(message ?? ""), link || null, Number(sort_order) || 0, enabled ? 1 : 0, id]
+    [
+      normaliseGroup(hologram_group),
+      String(message ?? ""),
+      link || null,
+      normaliseCountdownTo(countdown_to),
+      countdown_finished_text || null,
+      Number(sort_order) || 0,
+      enabled ? 1 : 0,
+      id,
+    ]
   );
 }
 

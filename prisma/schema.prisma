@@ -676,6 +676,8 @@ model hologram_messages {
   hologram_group  String   @default("default") @db.VarChar(64)
   message         String   @db.Text
   link            String?  @db.VarChar(512)
+  countdown_to            DateTime? @db.DateTime(3)
+  countdown_finished_text String?   @db.VarChar(512)
   sort_order      Int      @default(0)
   enabled         Int      @default(1) @db.TinyInt
   created_at      DateTime @default(now())

@@ -10,6 +10,14 @@ import { getActiveMessages } from "../../controllers/hologramController.js";
  * frames. Token-authenticated (scope `hologram`, see lib/apiKeys.js); there is
  * no dashboard-session fallback because only the plugin reads it.
  *
+ * Countdown frames: when `countdownTo` is non-null (an ISO 8601 UTC instant), the
+ * plugin substitutes these placeholders in `message` and re-renders every second:
+ *   {countdown}  -> "2d 5h 30m 10s"
+ *   {days} {hours} {minutes} {seconds}  -> the individual parts ("2", "5", "30", "10")
+ * Once the instant has passed, `countdownFinishedText` (when non-null) replaces the
+ * countdown; otherwise the plugin shows zeroes ("0d 0h 0m 0s"). A null `countdownTo`
+ * means the message is static.
+ *
  * Dashboard writes (create/edit/delete/reorder) are handled in-process by
  * routes/dashboard/holograms.js — they do not round-trip through the API.
  */
@@ -25,6 +33,8 @@ export default function hologramApiRoute(app, config, db, features, lang) {
           group: r.hologram_group,
           message: r.message,
           link: r.link || null,
+          countdownTo: r.countdown_to ? new Date(r.countdown_to).toISOString() : null,
+          countdownFinishedText: r.countdown_finished_text || null,
         })),
       });
     } catch (error) {

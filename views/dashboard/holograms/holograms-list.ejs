@@ -88,6 +88,18 @@
                       </td>
                       <td data-label="Message" style="max-width:340px;">
                         <code style="white-space:pre-wrap;word-break:break-word;"><%= f.message %></code>
+                        <% if (f.countdown_to) {
+                             const cd = new Date(f.countdown_to);
+                             const cdLabel = Number.isNaN(cd.getTime()) ? null : cd.toISOString();
+                        %>
+                          <% if (cdLabel) { %>
+                            <div class="mt-1">
+                              <span class="wp-badge info" title="Counts down to <%= cdLabel %> (UTC)">
+                                <i class="fa-regular fa-clock"></i> Countdown
+                              </span>
+                            </div>
+                          <% } %>
+                        <% } %>
                       </td>
                       <td data-label="Link">
                         <% if (f.link) { %>

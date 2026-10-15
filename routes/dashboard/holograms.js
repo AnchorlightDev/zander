@@ -106,10 +106,21 @@ export default function dashboardHologramsRoute(app, config, db, features, lang)
 
   // ── Writes ──────────────────────────────────────────────────────────────────
   function parseBody(body) {
+    // countdown_to arrives as a UTC ISO string (the editor converts the local
+    // datetime-local value before submit) or empty when there is no countdown.
+    const countdownTo = typeof body?.countdown_to === "string" && body.countdown_to.trim()
+      ? body.countdown_to.trim()
+      : null;
+    const finishedText = typeof body?.countdown_finished_text === "string" && body.countdown_finished_text.trim()
+      ? body.countdown_finished_text.trim().slice(0, 512)
+      : null;
     return {
       hologram_group: body?.hologram_group ?? "default",
       message: body?.message ?? "",
       link: body?.link?.trim() ? body.link.trim() : null,
+      countdown_to: countdownTo,
+      // A finished text only makes sense alongside a countdown target.
+      countdown_finished_text: countdownTo ? finishedText : null,
       sort_order: Number.parseInt(body?.sort_order, 10) || 0,
       enabled: String(body?.enabled) === "1" ? 1 : 0,
     };
