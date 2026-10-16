@@ -109,6 +109,8 @@
                             <includes>
                                 <include>dev/anchorlight/stonelib/http/Request*</include>
                                 <include>dev/anchorlight/stonelib/http/Response*</include>
+                                <include>dev/anchorlight/stonelib/http/ApiClient*</include>
+                                <include>dev/anchorlight/stonelib/http/ConnectionHealth*</include>
                             </includes>
                         </filter>
                         <filter>

@@ -161,7 +161,7 @@ One scope per API surface, with **no wildcard** — granting broad access has to
 be a deliberate act of selecting every box:
 
 `announcement`, `application`, `badges`, `bridge`, `config`, `discord`,
-`events`, `filter`, `finance`, `punishments`, `ranks`, `report`, `scheduler`,
+`events`, `filter`, `finance`, `hologram`, `punishments`, `ranks`, `report`, `scheduler`,
 `server`, `session`, `shopdirectory`, `user`, `vault`, `web`, `adminUsers`,
 `internal`
 

@@ -32,3 +32,30 @@ missing its bundled dependencies and fails at runtime with
 
 `mvn clean package` therefore does **not** populate `target/plugins/`; use
 `verify` or `install` (or bare `mvn`, which is already `clean install`).
+
+## Dashboard holograms
+
+The `zander-addon` plugin fetches enabled message frames from the web dashboard
+using the `hologram` API-key scope. Set `api-url` in each server's addon
+`config.yml`. For least privilege, set `holograms.api-key` to a dedicated key
+with the `hologram` scope; if it is blank, holograms reuse the shared `api-key`.
+That shared key also needs the `bridge` scope while the addon's bridge features
+are enabled. The plugin
+polls `/api/hologram/messages` and renders matching frames in named groups, so
+the same addon jar can be installed on any game server.
+
+In the web dashboard, add one or more enabled frames under a group (for example
+`default`). On the server where you want the hologram, stand at the desired
+position and run
+`/hologram create <name> <group>` (for example `/hologram create spawn default`).
+The text appears above the player's position. Use `/hologram move <name>` to
+move it to where you are standing, `/hologram list` to inspect placements, and
+`/hologram delete <name>` to remove one. `/hologram reload` requests fresh web
+content. Each server keeps its own placements in
+`plugins/zander-addon/holograms.yml`. Existing placements are copied from the
+local `zander-hub/holograms.yml` on first startup when present. Message content
+stays in the dashboard. Right-clicking a hologram with a link
+frame showing offers that URL in chat.
+
+Hologram placement commands require `zanderaddon.hologram.admin` (operators by
+default). Group names are case-insensitive and should match the dashboard group.

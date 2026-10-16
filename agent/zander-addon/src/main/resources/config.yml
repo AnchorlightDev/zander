@@ -9,6 +9,14 @@ api-url: "https://craftingforchrist.net"
 # Must match the `apiKey` value in the web app's .env.
 api-key: "changeme"
 
+# The hologram reader needs the `hologram` API-key scope.
+holograms:
+  enabled: true
+  # Optional dedicated read-only key. Blank reuses the shared api-key above.
+  api-key: ""
+  poll-interval-seconds: 30
+  rotation-interval-seconds: 5
+
 # This server's identifier, used to target queued commands at this server.
 # Matches the serverName / slug used when commands are queued on the web side.
 server-name: "survival"

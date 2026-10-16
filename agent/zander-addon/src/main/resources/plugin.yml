@@ -15,3 +15,11 @@ commands:
     description: Freeze a player.
     usage: /freeze <player>
     permission: zander.command.freeze
+  hologram:
+    description: Manage dashboard-connected holograms.
+    usage: /hologram <create|delete|list|move|reload> [name] [group]
+    aliases: [holo]
+
+permissions:
+  zanderaddon.hologram.admin:
+    default: op
