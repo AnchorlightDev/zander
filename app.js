@@ -576,6 +576,20 @@ const buildApp = async () => {
     console.warn("[DB] Prisma warm-up query failed (will retry on first request):", err.message);
   }
 
+  // Keep the pool warm. The boot warm-up above only covers the first request;
+  // once the app sits idle the DB connection goes cold again, and the next
+  // visitor pays the reconnect cost inside the onSend session-save phase — the
+  // "white page that a refresh fixes" symptom. A cheap periodic ping keeps a
+  // live connection in the pool so no request has to cold-start it. (This does
+  // NOT help if the host suspends the whole process on idle — see deploy notes;
+  // that needs an always-on tier or an external uptime ping.)
+  const dbKeepAlive = setInterval(() => {
+    prisma.$queryRaw`SELECT 1`.catch((err) =>
+      console.warn("[DB] keep-alive ping failed:", err.message)
+    );
+  }, 4 * 60 * 1000);
+  if (dbKeepAlive.unref) dbKeepAlive.unref();
+
   try {
     const port = Number.parseInt(process.env.PORT, 10) || 8080;
 
