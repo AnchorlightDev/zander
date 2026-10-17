@@ -1,1 +1,1 @@
-web: node --experimental-modules --experimental-json-modules --experimental-specifier-resolution=node app.js
+web: node app.js
