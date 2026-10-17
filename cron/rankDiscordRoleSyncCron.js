@@ -21,6 +21,7 @@ import cron from "node-cron";
 import { client } from "../controllers/discordController.js";
 import db, { luckpermsDb } from "../controllers/databaseController.js";
 import { diffTrackedRoles } from "../lib/discord/rankRoleSync.mjs";
+import { ensureGuildMembers } from "../lib/discord/guildMembers.mjs";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
@@ -133,7 +134,10 @@ async function reconcileRankDiscordRoles() {
       return;
     }
     try {
-      await guild.members.fetch({ time: 120_000 });
+      // Shared throttled fetch: coalesces with the other crons' member fetches
+      // so they don't collide on Discord's opcode-8 rate limit, and falls back
+      // to the (event-maintained) cache on a transient rate limit.
+      await ensureGuildMembers(guild);
     } catch (err) {
       // "Members didn't arrive in time" — almost always the GuildMembers
       // privileged intent being disabled, or a slow chunk on a large guild.

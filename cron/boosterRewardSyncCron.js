@@ -15,6 +15,7 @@ import cron from "node-cron";
 import { createRequire } from "module";
 import { client } from "../controllers/discordController.js";
 import { syncBoosterRewards } from "../controllers/boosterRewardController.js";
+import { ensureGuildMembers } from "../lib/discord/guildMembers.mjs";
 
 const require = createRequire(import.meta.url);
 const config = require("../lib/config/config.cjs");
@@ -31,23 +32,17 @@ async function sweep() {
     const guild = client.guilds.cache.get(guildId) || (await client.guilds.fetch(guildId).catch(() => null));
     if (!guild) return;
 
-    // rankDiscordRoleSyncCron fetches the full member list every 15 minutes
-    // (:00/:15/:30/:45) and the live boost listeners keep premiumSince current,
-    // so the member cache is almost always warm by the time this sweep runs
-    // (:07/:37). Reuse it instead of issuing our own gateway member fetch — a
-    // second opcode-8 request is exactly what Discord was rate-limiting
-    // ("Request with opcode 8 was rate limited ... skipping this sweep"). Only
-    // pay for a full fetch when the cache is genuinely cold (e.g. fresh boot,
-    // where only the bot itself is cached).
-    if (guild.members.cache.size <= 1) {
-      try {
-        await guild.members.fetch({ time: 120_000 });
-      } catch (error) {
-        // Without the full member list, "not boosting" cannot be told apart
-        // from "not fetched" -- skip rather than revoke.
-        console.warn(`[boosterRewards] Could not fetch guild members (${error?.message || error}); skipping this sweep.`);
-        return;
-      }
+    // Shared throttled fetch: reuses the member list the other crons already
+    // fetched (and the live boost listeners keep current) rather than issuing a
+    // second opcode-8 request, which is exactly what Discord was rate-limiting
+    // ("Request with opcode 8 was rate limited ... skipping this sweep").
+    try {
+      await ensureGuildMembers(guild);
+    } catch (error) {
+      // Without any member list, "not boosting" cannot be told apart from "not
+      // fetched" -- skip rather than revoke.
+      console.warn(`[boosterRewards] Could not fetch guild members (${error?.message || error}); skipping this sweep.`);
+      return;
     }
 
     const boosters = new Set();

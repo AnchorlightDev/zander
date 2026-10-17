@@ -17,6 +17,7 @@ import cron from "node-cron";
 import { client } from "../controllers/discordController.js";
 import db from "../controllers/databaseController.js";
 import { needsVerificationReminder } from "../lib/discord/unverifiedReminder.mjs";
+import { ensureGuildMembers } from "../lib/discord/guildMembers.mjs";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
@@ -57,8 +58,12 @@ export async function sendUnverifiedReminders() {
   );
   const linkedDiscordIds = new Set(linkedRows.map((r) => String(r.discordId)));
 
-  // Fetch all members to ensure the cache is populated.
-  await guild.members.fetch();
+  // Ensure the member cache is populated (shared, throttled across crons so we
+  // don't collide on Discord's opcode-8 rate limit). Falls back to the cache on
+  // a transient rate limit rather than throwing.
+  await ensureGuildMembers(guild).catch((err) =>
+    console.warn(`[UnverifiedReminderCron] Member fetch failed (${err?.message || err}); using cached members.`)
+  );
 
   const unverified = guild.members.cache.filter((member) =>
     needsVerificationReminder(member, linkedDiscordIds, verifiedRoleId)
