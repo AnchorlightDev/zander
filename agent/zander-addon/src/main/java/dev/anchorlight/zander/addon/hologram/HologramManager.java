@@ -138,8 +138,13 @@ public final class HologramManager implements Listener, CommandExecutor, TabComp
             TextDisplay display = ensureDisplay(hologram);
             if (display == null) continue;
             HologramFrame frame = currentFrame(hologram.group());
-            String message = frame == null ? "&7No active messages for &f" + hologram.group() : format(frame);
-            display.text(LEGACY.deserialize(message));
+            // Nothing assigned to this hologram's group (no enabled, unexpired frames):
+            // render it blank rather than advertising the empty group to players.
+            if (frame == null) {
+                display.text(Component.empty());
+                continue;
+            }
+            display.text(LEGACY.deserialize(format(frame)));
         }
     }
 

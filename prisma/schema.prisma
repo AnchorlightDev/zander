@@ -678,6 +678,7 @@ model hologram_messages {
   link            String?  @db.VarChar(512)
   countdown_to            DateTime? @db.DateTime(3)
   countdown_finished_text String?   @db.VarChar(512)
+  expires_at              DateTime? @db.DateTime(3)
   sort_order      Int      @default(0)
   enabled         Int      @default(1) @db.TinyInt
   created_at      DateTime @default(now())

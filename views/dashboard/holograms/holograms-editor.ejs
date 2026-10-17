@@ -13,6 +13,13 @@
     const d = new Date(f.countdown_to);
     if (!Number.isNaN(d.getTime())) countdownIso = d.toISOString();
   }
+  // expires_at is stored the same way (UTC Date from mysql2); render as an ISO
+  // instant for the client script to show in the viewer's local timezone.
+  let expiresIso = "";
+  if (f.expires_at) {
+    const e = new Date(f.expires_at);
+    if (!Number.isNaN(e.getTime())) expiresIso = e.toISOString();
+  }
 %>
 
 <div id="wpcontent">
@@ -137,6 +144,29 @@
             </div>
           </div>
 
+          <!-- Expiry -->
+          <div class="card mb-3">
+            <div class="card-body">
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="expires_enabled" <%= expiresIso ? "checked" : "" %>>
+                <label class="form-check-label fw-semibold" for="expires_enabled">Expire this frame at a date &amp; time</label>
+              </div>
+
+              <!-- UTC instant actually submitted; populated by the script from the local picker. -->
+              <input type="hidden" name="expires_at" id="expires_at" value="<%= expiresIso %>">
+
+              <div id="expires-fields" class="<%= expiresIso ? "" : "d-none" %>">
+                <div class="row">
+                  <div class="mb-2 col-md-6">
+                    <label for="expires_local" class="form-label">Expires at</label>
+                    <input type="datetime-local" class="form-control" id="expires_local" data-utc="<%= expiresIso %>">
+                    <small class="text-muted">Shown in your local timezone; stored as UTC. After this time the frame drops out of its hologram's rotation automatically.</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="row">
             <!-- Link -->
             <div class="mb-3 col-md-8">
@@ -252,8 +282,36 @@
   }
   if (cdLocal) cdLocal.addEventListener("input", syncUtc);
 
-  // Ensure the hidden field is consistent before submit (e.g. toggled on, no edits).
+  // ── Expiry: same local-picker <-> submitted UTC field conversion as the countdown ──
+  const exEnabled = document.getElementById("expires_enabled");
+  const exFields = document.getElementById("expires-fields");
+  const exLocal = document.getElementById("expires_local");
+  const exUtc = document.getElementById("expires_at");
+
+  if (exLocal && exLocal.dataset.utc) {
+    exLocal.value = utcToLocalInput(exLocal.dataset.utc);
+  }
+
+  function syncExpires() {
+    if (!exUtc) return;
+    if (exEnabled && exEnabled.checked && exLocal && exLocal.value) {
+      const d = new Date(exLocal.value);
+      exUtc.value = Number.isNaN(d.getTime()) ? "" : d.toISOString();
+    } else {
+      exUtc.value = "";
+    }
+  }
+
+  if (exEnabled && exFields) {
+    exEnabled.addEventListener("change", () => {
+      exFields.classList.toggle("d-none", !exEnabled.checked);
+      syncExpires();
+    });
+  }
+  if (exLocal) exLocal.addEventListener("input", syncExpires);
+
+  // Ensure the hidden fields are consistent before submit (e.g. toggled on, no edits).
   const form = message ? message.closest("form") : null;
-  if (form) form.addEventListener("submit", syncUtc);
+  if (form) form.addEventListener("submit", () => { syncUtc(); syncExpires(); });
 })();
 </script>

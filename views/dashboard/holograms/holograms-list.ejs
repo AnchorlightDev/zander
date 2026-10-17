@@ -100,6 +100,19 @@
                             </div>
                           <% } %>
                         <% } %>
+                        <% if (f.expires_at) {
+                             const ex = new Date(f.expires_at);
+                             const exLabel = Number.isNaN(ex.getTime()) ? null : ex.toISOString();
+                             const expired = exLabel && ex.getTime() <= Date.now();
+                        %>
+                          <% if (exLabel) { %>
+                            <div class="mt-1">
+                              <span class="wp-badge <%= expired ? 'inactive' : 'info' %>" title="<%= expired ? 'Expired at' : 'Expires at' %> <%= exLabel %> (UTC)">
+                                <i class="fa-regular fa-calendar-xmark"></i> <%= expired ? 'Expired' : 'Expires' %>
+                              </span>
+                            </div>
+                          <% } %>
+                        <% } %>
                       </td>
                       <td data-label="Link">
                         <% if (f.link) { %>

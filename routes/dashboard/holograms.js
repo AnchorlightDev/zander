@@ -114,6 +114,11 @@ export default function dashboardHologramsRoute(app, config, db, features, lang)
     const finishedText = typeof body?.countdown_finished_text === "string" && body.countdown_finished_text.trim()
       ? body.countdown_finished_text.trim().slice(0, 512)
       : null;
+    // expires_at arrives as a UTC ISO string (the editor converts the local
+    // datetime-local value before submit) or empty when the frame never expires.
+    const expiresAt = typeof body?.expires_at === "string" && body.expires_at.trim()
+      ? body.expires_at.trim()
+      : null;
     return {
       hologram_group: body?.hologram_group ?? "default",
       message: body?.message ?? "",
@@ -121,6 +126,7 @@ export default function dashboardHologramsRoute(app, config, db, features, lang)
       countdown_to: countdownTo,
       // A finished text only makes sense alongside a countdown target.
       countdown_finished_text: countdownTo ? finishedText : null,
+      expires_at: expiresAt,
       sort_order: Number.parseInt(body?.sort_order, 10) || 0,
       enabled: String(body?.enabled) === "1" ? 1 : 0,
     };
