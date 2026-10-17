@@ -366,6 +366,21 @@ export default function sessionSiteRoute(
     const state = crypto.randomBytes(16).toString("hex");
     req.session.discordLoginState = state;
 
+    // [login-debug] If req.protocol is "http" here, @fastify/session will NOT
+    // write the Secure session cookie, so this state never reaches the browser
+    // and the callback below rejects every sign-in as "expired". Compare this
+    // line with the callback's on one sign-in attempt to localise the fault.
+    app.log.warn(
+      {
+        where: "login/discord",
+        protocol: req.protocol,
+        xForwardedProto: req.headers["x-forwarded-proto"] || null,
+        cookieSecure: req.session?.cookie?.secure,
+        hadSessionCookie: Boolean(req.cookies?.sessionId),
+      },
+      "[login-debug] discord oauth start — stored state in session"
+    );
+
     return res.redirect(buildDiscordAuthorizeUrl(state));
   });
 
@@ -389,6 +404,24 @@ export default function sessionSiteRoute(
     }
 
     if (!expectedState || typeof state !== "string" || state !== expectedState) {
+      // [login-debug] Localises the "expired" loop:
+      //  • hadSessionCookie=false → the browser sent no session cookie: it was
+      //    never written at /login/discord (almost always protocol!="https" +
+      //    Secure cookie) — fix trustProxy / TRUST_PROXY_HOPS.
+      //  • hadSessionCookie=true but hadExpectedState=false → the cookie came
+      //    back but the session had no stored state: a session-store problem
+      //    (e.g. multiple instances without shared/sticky sessions).
+      app.log.warn(
+        {
+          where: "login/callback",
+          protocol: req.protocol,
+          xForwardedProto: req.headers["x-forwarded-proto"] || null,
+          hadSessionCookie: Boolean(req.cookies?.sessionId),
+          hadExpectedState: Boolean(expectedState),
+          stateParamPresent: typeof state === "string",
+        },
+        "[login-debug] discord state mismatch — rejecting as expired"
+      );
       setBannerCookie("danger", "Discord sign-in expired, please try again.", res);
       return res.redirect("/login");
     }

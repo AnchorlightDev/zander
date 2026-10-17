@@ -146,18 +146,33 @@ const buildApp = async () => {
   // anyone sidestep per-IP rate limits by rotating that header. Trusting an
   // exact hop count (1 = a single proxy such as Render's; 2 if a CDN sits in
   // front of it) makes req.ip the address the trusted proxy actually saw.
-  const trustProxyHops = Number.parseInt(process.env.TRUST_PROXY_HOPS ?? "1", 10);
+  // Drives both the Secure flag on the session cookie and HSTS below, so local
+  // http development still works while any https deployment is hardened.
+  const isHttpsDeployment = detectHttpsDeployment(process.env.siteAddress);
+
+  const parsedTrustProxyHops = Number.parseInt(process.env.TRUST_PROXY_HOPS ?? "1", 10);
+  let trustProxyHops = Number.isInteger(parsedTrustProxyHops) && parsedTrustProxyHops >= 0 ? parsedTrustProxyHops : 1;
+  // An https deployment always sits behind at least one TLS-terminating proxy
+  // (Render's). With trustProxy: 0 there, req.protocol is "http", which makes
+  // @fastify/session treat the connection as insecure and silently refuse to
+  // issue the Secure session cookie — so NOBODY can log in (every session, local
+  // or Discord OAuth, is dropped). Never trust fewer than one hop on https.
+  if (isHttpsDeployment && trustProxyHops < 1) trustProxyHops = 1;
+
   const app = fastify({
     // Without a logger the error handler's app.log.error() calls are no-ops
     // in production; keep warnings and errors even when debug is off.
     logger: config.debug ? true : { level: "warn" },
     pluginTimeout: 120000,
-    trustProxy: Number.isInteger(trustProxyHops) && trustProxyHops >= 0 ? trustProxyHops : 1,
+    trustProxy: trustProxyHops,
   });
 
-  // Drives both the Secure flag on the session cookie and HSTS below, so local
-  // http development still works while any https deployment is hardened.
-  const isHttpsDeployment = detectHttpsDeployment(process.env.siteAddress);
+  // Surface the resolved proxy/scheme at boot so a protocol/cookie mismatch is
+  // diagnosable from the logs rather than only as mysterious "login expired".
+  app.log.warn(
+    { trustProxyHops, httpsDeployment: isHttpsDeployment, siteAddress: process.env.siteAddress },
+    "[boot] session cookie security: secure=" + isHttpsDeployment + ", trustProxyHops=" + trustProxyHops
+  );
 
   if (process.env.SENTRY_DSN) {
     Sentry.setupFastifyErrorHandler(app, {
