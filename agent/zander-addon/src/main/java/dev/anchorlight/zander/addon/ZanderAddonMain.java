@@ -50,7 +50,10 @@ public class ZanderAddonMain extends JavaPlugin {
         getServer().getPluginManager().registerEvents(hologramManager, this);
         hologramManager.start();
 
-        if (getConfig().getBoolean("command-bridge.enabled", true)) {
+        // Defaults OFF: the web app has no /api/command-bridge/* endpoints, so
+        // enabling this only floods the server logs with 404s. Reward/webstore
+        // commands are delivered via the Bridge Processor (executorTasks) instead.
+        if (getConfig().getBoolean("command-bridge.enabled", false)) {
             storeCommandService.start();
             getServer().getPluginManager().registerEvents(new StoreCommandEvents(storeCommandService), this);
             getLogger().info("Command bridge enabled for server: " + getConfig().getString("server-name", "survival"));
