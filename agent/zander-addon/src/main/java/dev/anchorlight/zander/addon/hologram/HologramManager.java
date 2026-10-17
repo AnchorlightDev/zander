@@ -20,11 +20,12 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Interaction;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerInteractAtEntityEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.persistence.PersistentDataType;
 
@@ -50,6 +51,7 @@ public final class HologramManager implements Listener, CommandExecutor, TabComp
     private final NamespacedKey entityKey;
     private final Map<String, PlacedHologram> placed = new LinkedHashMap<>();
     private final Map<String, TextDisplay> displays = new LinkedHashMap<>();
+    private final Map<String, Interaction> hitboxes = new LinkedHashMap<>();
     private Map<String, List<HologramFrame>> frames = Map.of();
     private ApiClient api;
     private long rotationIntervalMs;
@@ -181,26 +183,48 @@ public final class HologramManager implements Listener, CommandExecutor, TabComp
         if (world == null || !world.isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) return null;
         String key = hologram.name().toLowerCase(Locale.ROOT);
         TextDisplay current = displays.get(key);
-        if (current != null && current.isValid()) return current;
-        TextDisplay created = world.spawn(location, TextDisplay.class, display -> {
-            display.setPersistent(false);
-            display.setBillboard(Display.Billboard.CENTER);
-            display.setDisplayWidth(1.5f);
-            display.setDisplayHeight(0.5f);
-            display.setShadowed(true);
-            display.setSeeThrough(true);
-            display.setDefaultBackground(false);
-            display.setAlignment(TextDisplay.TextAlignment.CENTER);
-            display.setLineWidth(320);
-            display.getPersistentDataContainer().set(entityKey, PersistentDataType.STRING, key);
+        if (current != null && current.isValid()) {
+            ensureHitbox(key, location, world);
+            return current;
+        }
+        TextDisplay display = current;
+        if (display == null || !display.isValid()) {
+            display = world.spawn(location, TextDisplay.class, text -> {
+                text.setPersistent(false);
+                text.setBillboard(Display.Billboard.CENTER);
+                text.setDisplayWidth(1.5f);
+                text.setDisplayHeight(0.5f);
+                text.setShadowed(true);
+                text.setSeeThrough(true);
+                text.setDefaultBackground(false);
+                text.setAlignment(TextDisplay.TextAlignment.CENTER);
+                text.setLineWidth(320);
+            });
+            displays.put(key, display);
+        }
+        ensureHitbox(key, location, world);
+        return display;
+    }
+
+    private void ensureHitbox(String key, Location location, World world) {
+        Interaction current = hitboxes.get(key);
+        if (current != null && current.isValid()) return;
+        Interaction hitbox = world.spawn(location.clone().subtract(0, 0.35, 0), Interaction.class, entity -> {
+            entity.setPersistent(false);
+            entity.setInteractionWidth(1.6f);
+            entity.setInteractionHeight(0.8f);
+            entity.setResponsive(true);
+            entity.getPersistentDataContainer().set(entityKey, PersistentDataType.STRING, key);
         });
-        displays.put(key, created);
-        return created;
+        hitboxes.put(key, hitbox);
     }
 
     private void removeDisplay(String name) {
-        TextDisplay display = displays.remove(name.toLowerCase(Locale.ROOT));
+        String key = name.toLowerCase(Locale.ROOT);
+        TextDisplay display = displays.remove(key);
         if (display != null && display.isValid()) display.remove();
+        Interaction hitbox = hitboxes.remove(key);
+        if (hitbox != null && hitbox.isValid()) hitbox.remove();
     }
 
     private void persist() {
@@ -322,10 +346,9 @@ public final class HologramManager implements Listener, CommandExecutor, TabComp
     }
 
     @EventHandler
-    public void onDisplayInteract(PlayerInteractAtEntityEvent event) {
+    public void onDisplayInteract(PlayerInteractEntityEvent event) {
         Entity entity = event.getRightClicked();
-        if (!(entity instanceof TextDisplay display)) return;
-        String name = display.getPersistentDataContainer().get(entityKey, PersistentDataType.STRING);
+        String name = entity.getPersistentDataContainer().get(entityKey, PersistentDataType.STRING);
         if (name == null) return;
         PlacedHologram hologram = placed.get(name.toLowerCase(Locale.ROOT));
         HologramFrame frame = hologram == null ? null : currentFrame(hologram.group());
