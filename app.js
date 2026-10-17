@@ -141,37 +141,46 @@ const buildApp = async () => {
   // defeats secure-cookie issuance below and makes req.ip the proxy address
   // rather than the client's — breaking per-IP rate limiting.
   //
-  // `true` would trust every hop, which makes req.ip the *leftmost*
-  // X-Forwarded-For entry -- a value the client writes itself -- and so lets
-  // anyone sidestep per-IP rate limits by rotating that header. Trusting an
-  // exact hop count (1 = a single proxy such as Render's; 2 if a CDN sits in
-  // front of it) makes req.ip the address the trusted proxy actually saw.
   // Drives both the Secure flag on the session cookie and HSTS below, so local
   // http development still works while any https deployment is hardened.
   const isHttpsDeployment = detectHttpsDeployment(process.env.siteAddress);
 
-  const parsedTrustProxyHops = Number.parseInt(process.env.TRUST_PROXY_HOPS ?? "1", 10);
-  let trustProxyHops = Number.isInteger(parsedTrustProxyHops) && parsedTrustProxyHops >= 0 ? parsedTrustProxyHops : 1;
-  // An https deployment always sits behind at least one TLS-terminating proxy
-  // (Render's). With trustProxy: 0 there, req.protocol is "http", which makes
-  // @fastify/session treat the connection as insecure and silently refuse to
-  // issue the Secure session cookie — so NOBODY can log in (every session, local
-  // or Discord OAuth, is dropped). Never trust fewer than one hop on https.
-  if (isHttpsDeployment && trustProxyHops < 1) trustProxyHops = 1;
+  // How much of the X-Forwarded-* chain to trust.
+  //
+  // Render terminates TLS at its own proxy and forwards `X-Forwarded-Proto:
+  // https`. A numeric hop count (trustProxy: 1) proved UNRELIABLE here: Fastify
+  // still reported `req.protocol === "http"` despite the header, so
+  // @fastify/session saw an "insecure" connection and refused to write the
+  // Secure session cookie — which broke ALL login. This was confirmed in
+  // production via [login-debug]: xForwardedProto=https, protocol=http,
+  // hadSessionCookie=false.
+  //
+  // So on an https deployment we trust the platform proxy outright: req.protocol
+  // then follows X-Forwarded-Proto (→ https, cookie is written) and req.ip
+  // becomes the real client instead of the proxy address (per-IP rate limiting
+  // was already broken — every request looked like it came from the proxy).
+  // Set TRUST_PROXY_HOPS to an exact integer to override this with a fixed hop
+  // count (only if your proxy chain is static and you've verified it yields
+  // protocol=https); otherwise leave it UNSET.
+  const parsedTrustProxyHops = Number.parseInt(process.env.TRUST_PROXY_HOPS ?? "", 10);
+  const trustProxy =
+    Number.isInteger(parsedTrustProxyHops) && parsedTrustProxyHops >= 0
+      ? parsedTrustProxyHops
+      : isHttpsDeployment;
 
   const app = fastify({
     // Without a logger the error handler's app.log.error() calls are no-ops
     // in production; keep warnings and errors even when debug is off.
     logger: config.debug ? true : { level: "warn" },
     pluginTimeout: 120000,
-    trustProxy: trustProxyHops,
+    trustProxy,
   });
 
   // Surface the resolved proxy/scheme at boot so a protocol/cookie mismatch is
   // diagnosable from the logs rather than only as mysterious "login expired".
   app.log.warn(
-    { trustProxyHops, httpsDeployment: isHttpsDeployment, siteAddress: process.env.siteAddress },
-    "[boot] session cookie security: secure=" + isHttpsDeployment + ", trustProxyHops=" + trustProxyHops
+    { trustProxy, httpsDeployment: isHttpsDeployment, siteAddress: process.env.siteAddress },
+    "[boot] session cookie security: secure=" + isHttpsDeployment + ", trustProxy=" + trustProxy
   );
 
   if (process.env.SENTRY_DSN) {
