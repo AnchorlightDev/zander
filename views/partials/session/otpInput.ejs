@@ -16,9 +16,12 @@
 <script>
   (function () {
     var inputs = Array.prototype.slice.call(document.querySelectorAll("#otp .otp-input"));
-    var submit = document.getElementById(<%- JSON.stringify(_otpSubmitId) %>);
+    // Look the button up lazily: this script runs inline, before the submit
+    // button (which the including template renders after this partial) exists.
+    var submitId = <%- JSON.stringify(_otpSubmitId) %>;
 
     function validate() {
+      var submit = document.getElementById(submitId);
       if (submit) submit.disabled = inputs.some(function (i) { return !i.value; });
     }
 
