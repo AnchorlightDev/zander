@@ -15,6 +15,9 @@ if (process.env.SENTRY_DSN) {
       // messages; never ship them to a third party. Headers and the URL are
       // enough to reproduce an error.
       Sentry.requestDataIntegration({ include: { data: false, cookies: false, ip: false } }),
+      // Forward console.error / console.warn to Sentry Logs so warnings that
+      // never throw (failed mail sends, upstream 403s) are still searchable.
+      Sentry.consoleLoggingIntegration({ levels: ["error", "warn"] }),
     ],
 
     // Send structured logs to Sentry
