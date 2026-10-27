@@ -1,6 +1,6 @@
 {
   "name": "modularsoft-zander-web",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "The web component of the Zander project that contains database, API and website.",
   "main": "app.js",
   "scripts": {
