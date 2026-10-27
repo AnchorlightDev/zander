@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+
+- **All documentation now lives at [anchorlight.dev/docs/products/zander](https://anchorlight.dev/docs/products/zander).** The guides that were in `docs/`, `SETUP.md` and the plugin READMEs have moved there and been brought up to date for 2.2.0. The README, `SETUP.md` and the plugin READMEs now point to the site.
+- **Dashboard "Documentation" links** go to the matching pages on the docs site. Several pointed at old page names that no longer existed.
+- **The permission reference is generated from the registry.** `node scripts/permissionsTable.mjs` prints the tables for the docs site's permissions page, so the published list matches the ranks dashboard checklist.
+
+### Fixed
+
+- **`.env.example` no longer sets `TRUST_PROXY_HOPS=1`.** On Render that value stops the session cookie being set and breaks every login; leave the variable unset. `SETUP.md` and the 2.2.0 upgrade notes said to set it and have been corrected.
+
 ## 2.2.0
 
 ### Upgrading from 2.1.0

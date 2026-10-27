@@ -5,8 +5,8 @@
 **One platform for your whole Minecraft community: website, staff dashboard, Discord bot and server plugins, all on one account system and one database.**
 
 [![Version](https://img.shields.io/badge/version-2.2.0-2563eb)](CHANGELOG.md)
-[![Node.js](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=nodedotjs&logoColor=white)](SETUP.md)
-[![Java](https://img.shields.io/badge/java-21-ea580c?logo=openjdk&logoColor=white)](agent/README.md)
+[![Node.js](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=nodedotjs&logoColor=white)](https://anchorlight.dev/docs/products/zander/installation)
+[![Java](https://img.shields.io/badge/java-21-ea580c?logo=openjdk&logoColor=white)](https://anchorlight.dev/docs/products/zander/features/minecraft-plugins)
 [![Paper & Velocity](https://img.shields.io/badge/Paper%20%26%20Velocity-plugins-0ea5e9)](agent/)
 [![Discord.js](https://img.shields.io/badge/discord.js-bot-5865F2?logo=discord&logoColor=white)](commands/)
 
@@ -143,23 +143,23 @@ cd agent
 mvn                       # jars land in agent/target/plugins/
 ```
 
-Then sign in, open **Dashboard → API Keys** to issue a key for each server, and switch on the modules you want under **Dashboard → Modules**. The full walkthrough is in **[SETUP.md](SETUP.md)**.
+Then sign in, open **Dashboard → API Keys** to issue a key for each server, and switch on the modules you want under **Dashboard → Modules**. The full walkthrough is in the **[installation guide](https://anchorlight.dev/docs/products/zander/installation)**.
 
 ## Documentation
 
+Full documentation is at **[anchorlight.dev/docs/products/zander](https://anchorlight.dev/docs/products/zander)**.
+
 | Guide | |
 |---|---|
-| [Local setup](SETUP.md) | Environment variables, database and first run |
-| [Permission reference](docs/permissions.md) | Every `zander.*` LuckPerms node |
-| [API client credentials](docs/api-keys.md) | Issuing keys, scopes and revocation |
-| [Webstore](docs/webstore.md) | Stripe setup, products, command templates and subscriptions |
-| [Creator content](docs/creator-content.md) | Twitch and YouTube integration |
-| [Forms and applications](docs/forms.md) | Gating, Discord threads and uploads |
-| [Discord booster rewards](docs/discord-booster-rewards.md) | Ranks for server boosters |
-| [Directory listings](docs/directory-listings.md) | Ready-to-paste copy for server-list websites |
-| [Minecraft plugins](agent/README.md) | Building, installing and holograms |
-| [Changelog](CHANGELOG.md) | What changed, and how to upgrade |
-| [Product docs](https://modularsoft.org/docs/products/zander) | The hosted documentation site |
+| [Installation](https://anchorlight.dev/docs/products/zander/installation) | Prerequisites, `.env`, database and first run |
+| [Upgrading to 2.2.0](https://anchorlight.dev/docs/products/zander/upgrading) | What changed and the steps to upgrade |
+| [Configuration](https://anchorlight.dev/docs/products/zander/configuration) | Environment variables, site settings and modules |
+| [Permissions](https://anchorlight.dev/docs/products/zander/permissions) | Every `zander.*` LuckPerms node, web and in-game |
+| [API authentication](https://anchorlight.dev/docs/products/zander/api/authentication) | Per-server API keys, scopes and revocation |
+| [Features](https://anchorlight.dev/docs/products/zander/features/) | Every module, from events and forums to holograms and the webstore |
+| [Minecraft plugins](https://anchorlight.dev/docs/products/zander/features/minecraft-plugins) | What each plugin does, and how to configure it |
+| [Administration](https://anchorlight.dev/docs/products/zander/admin/setup) | Deployment, database and troubleshooting |
+| [Changelog](CHANGELOG.md) | What changed in each release |
 
 ## Built with
 
@@ -170,7 +170,7 @@ Node.js · Fastify · EJS · Prisma (migrations) · MySQL · Discord.js / Sapphi
 1. Branch from `staging`; `master` is the released code.
 2. Run `npm test` before opening a pull request.
 3. Database changes go in a new numbered folder under `prisma/migrations/`.
-4. New dashboard permission nodes go in both `lib/permissions/zanderNodes.mjs` and [docs/permissions.md](docs/permissions.md); a test fails if they drift apart.
+4. New dashboard permission nodes go in `lib/permissions/zanderNodes.mjs`. Run `node scripts/permissionsTable.mjs` and paste the output into the [permissions page](https://anchorlight.dev/docs/products/zander/permissions) on the docs site.
 5. Add a line to the `CHANGELOG.md` section for the next release.
 
 ## License

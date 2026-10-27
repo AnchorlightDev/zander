@@ -1,18 +1,12 @@
 /**
  * tests/unit/zanderNodes.test.mjs
  *
- * The permission registry, and the invariant that keeps it honest: it must
- * match the table in docs/permissions.md.
- *
- * Without this the checklist quietly goes stale -- a node added to the code
- * and documented in docs/permissions.md would simply never appear as a tick box, and
- * nobody would notice because nothing breaks.
+ * The permission registry behind the ranks dashboard checklist. The registry is
+ * the source of truth; the public permissions page on the docs site is
+ * generated from it with `node scripts/permissionsTable.mjs`.
  */
 
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import {
   PERMISSION_GROUPS,
   grantableGroups,
@@ -21,34 +15,38 @@ import {
   listGrantableNodes,
   partitionHeldNodes,
 } from "../../lib/permissions/zanderNodes.mjs";
+import { renderPermissionTables } from "../../scripts/permissionsTable.mjs";
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const readme = readFileSync(join(repoRoot, "docs", "permissions.md"), "utf8");
-
-/** Every `| \`zander.x.y\` |` row in docs/permissions.md's tables. */
-function documentedNodes() {
-  return [...readme.matchAll(/^\|\s*`(zander\.[^`]+)`\s*\|/gm)].map((m) => m[1]);
-}
-
-describe("the registry matches docs/permissions.md", () => {
-  it("documents every node the registry knows", () => {
-    const documented = new Set(documentedNodes());
-    const missing = listAllNodes().filter((node) => !documented.has(node));
-
-    expect(missing, `in the registry but not documented in docs/permissions.md: ${missing.join(", ")}`)
-      .toEqual([]);
+describe("the registry is well-formed", () => {
+  it("lists every node once", () => {
+    const nodes = listAllNodes();
+    const dupes = nodes.filter((node, i) => nodes.indexOf(node) !== i);
+    expect(dupes, `listed more than once: ${dupes.join(", ")}`).toEqual([]);
   });
 
-  it("registers every node docs/permissions.md documents", () => {
-    const registered = new Set(listAllNodes());
-    const missing = documentedNodes().filter((node) => !registered.has(node));
-
-    expect(missing, `documented in docs/permissions.md but missing from the registry: ${missing.join(", ")}`)
-      .toEqual([]);
+  it("only holds zander.* nodes, each with a description", () => {
+    for (const group of PERMISSION_GROUPS) {
+      expect(group.group, "group name").toBeTruthy();
+      for (const entry of group.nodes) {
+        expect(entry.node, entry.node).toMatch(/^zander\./);
+        expect(entry.description, entry.node).toBeTruthy();
+      }
+    }
   });
 
-  it("covers a meaningful number of nodes, so a broken parse cannot pass quietly", () => {
-    expect(documentedNodes().length).toBeGreaterThan(40);
+  it("covers a meaningful number of nodes", () => {
+    expect(listAllNodes().length).toBeGreaterThan(40);
+  });
+});
+
+describe("the docs table generator", () => {
+  it("renders one row per node under each group heading", () => {
+    const md = renderPermissionTables();
+    for (const group of PERMISSION_GROUPS) {
+      expect(md).toContain(`## ${group.group}`);
+    }
+    const rows = [...md.matchAll(/^\|\s*`(zander\.[^`]+)`\s*\|/gm)].map((m) => m[1]);
+    expect(rows).toEqual(listAllNodes());
   });
 });
 
