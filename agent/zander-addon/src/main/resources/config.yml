@@ -6,7 +6,8 @@
 api-url: "https://craftingforchrist.net"
 
 # API key sent as the x-access-token header on authenticated bridge calls.
-# Must match the `apiKey` value in the web app's .env.
+# Create a key for this server at Dashboard → API Keys with the `bridge`
+# scope (and `hologram`, unless holograms.api-key below is set).
 api-key: "changeme"
 
 # The hologram reader needs the `hologram` API-key scope.

@@ -31,7 +31,7 @@ WEBSTORE_MONTHLY_GOAL_CENTS=5000
 
 ## Stripe webhook setup
 
-1. In the [Stripe dashboard](https://dashboard.stripe.com/webhooks), create a new webhook endpoint pointing to `https://<your-domain>/api/internal/stripe-webhook`.
+1. In the [Stripe dashboard](https://dashboard.stripe.com/webhooks), create a new webhook endpoint pointing to `https://<your-domain>/api/webstore/stripe/webhook`.
 2. Enable the following events:
    - `checkout.session.completed`
    - `invoice.payment_succeeded`

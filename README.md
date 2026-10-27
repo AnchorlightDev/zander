@@ -63,7 +63,7 @@ Zander powers the **[Crafting For Christ](https://craftingforchrist.net)** Minec
 
 ### Discord bot
 
-Slash commands for players and staff: `/apply`, `/support`, `/report` (plus right-click **Report Message**), `/profile`, `/ranks`, `/shopdirectory`, `/poll`, `/watch`, `/vault`, `/resources`, `/play`, `/rules`, `/website`, `/punish`, `/audit`, `/lpaudit`, `/forcelink`, `/staffhelp` and more.
+Slash commands for players and staff: `/apply`, `/ticket`, `/report` (plus right-click **Report Message**), `/profile`, `/ranks`, `/shopdirectory`, `/poll`, `/watch`, `/vault`, `/resources`, `/play`, `/rules`, `/website`, `/punish`, `/audit`, `/lpaudit`, `/forcelink`, `/staffhelp` and more.
 
 It also handles the background work:
 

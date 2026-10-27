@@ -21,21 +21,14 @@ Schema changes are made by adding a new migration under `prisma/migrations/` —
 2. Copy the contents of `.env.example` to the `.env` file.
 3. Fill in the required environment variables:
     - `sessionCookieSecret`: A random string of at least 32 characters (`openssl rand -hex 32`). The app will not start with the placeholder from `.env.example`.
-    - `TRUST_PROXY_HOPS`: Number of reverse proxies in front of the app (default `1`). Set to `2` if a CDN sits in front of the host's own proxy.
+    - `TRUST_PROXY_HOPS`: Leave unset. On an https deployment the app trusts the platform proxy automatically; a numeric value can break logins (see `.env.example`).
     - `siteAddress`: The URL of the website (e.g., `http://localhost:3000`).
-    - `discordAPIKey`: Your Discord bot token.
-    - `discordGuildID`: The ID of your Discord server.
-    - `tebexSecretKey`: Your Tebex secret key (optional).
-    - `mailtrapUsername`: Your Mailtrap username (optional).
-    - `mailtrapPassword`: Your Mailtrap password (optional).
-    - `mailtrapEndpoint`: Your Mailtrap endpoint (optional).
-    - `IMGUR_CLIENT_ID`: Your Imgur client ID.
-    - `IMGUR_CLIENT_SECRET`: Your Imgur client secret.
-    - `IMGUR_REFRESH_TOKEN`: Your Imgur refresh token.
-    - `SUPPORT_CHANNEL_ID`: The ID of the Discord channel where the support message will be posted.
-    - `SUPPORT_NOTIFICATION_CHANNEL_ID`: The ID of the Discord channel where new ticket notifications will be sent.
-    - `SUPPORT_CATEGORY_ID`: The ID of the Discord category where new ticket channels will be created.
-    - `DISCORD_GUILD_ID`: The ID of your Discord server.
+    - `DATABASE_URL`: The Zander database. `LUCKPERMS_URL`, `QUICKSHOP_URL` and `PUNISHMENTS_URL` point at the LuckPerms, QuickShop and LiteBans databases.
+    - `discordAPIKey`, `discordClientId`, `discordClientSecret`: Your Discord bot token and OAuth application.
+    - `INTERNAL_API_KEY`: This app's own API key. Create it at **Dashboard → API Keys** after first sign-in, then restart.
+    - Optional integrations: SMTP (`smtp*`) for email, Stripe (`STRIPE_*`) for the webstore, Twitch/YouTube (`twitch*`, `google*`, `youtubeApiKey`) for creator content, Cloudinary for uploads, web push (`VAPID_*`), Sentry (`SENTRY_DSN`), MineMonitor (`MINEMONITOR_*`) for content filtering, and `OIDC_*` for Compass sign-in. `.env.example` describes each one.
+
+    Discord channel IDs, the guild ID and other site settings are no longer environment variables: set them at **Dashboard → Settings** once you can sign in.
 
 ## Running the Application
 

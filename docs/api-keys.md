@@ -26,8 +26,8 @@ One scope per API surface, with **no wildcard** — granting broad access has to
 be a deliberate act of selecting every box:
 
 `announcement`, `application`, `badges`, `bridge`, `config`, `discord`,
-`events`, `filter`, `finance`, `hologram`, `punishments`, `ranks`, `report`, `scheduler`,
-`server`, `session`, `shopdirectory`, `user`, `vault`, `web`, `adminUsers`,
+`compass`, `events`, `filter`, `finance`, `hologram`, `punishments`, `ranks`, `report`,
+`scheduler`, `server`, `session`, `shopdirectory`, `user`, `vault`, `web`, `adminUsers`,
 `internal`
 
 A request to a path with no scope mapping is rejected, so a newly added route
