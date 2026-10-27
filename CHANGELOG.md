@@ -65,6 +65,12 @@ Read these before deploying.
 - Maintenance scripts under `scripts/` default to dry-run and require `--apply`. Removed the `crypto`, `path` and `querystring` npm packages that shadow Node built-ins; `package-lock.json` is no longer gitignored.
 - The addon's command bridge no longer gets 404s from the website: the missing API route was added.
 - The verify button on code-entry pages (email verification, password reset) could stay unresponsive because the script looked it up before it existed.
+- `zander.web.holograms` was checked by the hologram dashboard but missing from the permission registry, so it couldn't be granted from the ranks permission checklist. It now appears there.
+
+### Documentation
+
+- **New README** — a project overview with a feature tour, architecture diagram, quick start and documentation index.
+- **Reference docs moved to `docs/`** — the permission reference, API keys, webstore, creator content, forms and booster rewards guides now live in [`docs/`](docs/). The permission reference is [`docs/permissions.md`](docs/permissions.md).
 
 ### Removed
 
