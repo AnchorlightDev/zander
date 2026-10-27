@@ -6,6 +6,7 @@ import {
   Colors,
   EmbedBuilder,
   MessageFlags,
+  InteractionContextType,
 } from "discord.js";
 import fetch from "node-fetch";
 import {
@@ -17,6 +18,7 @@ const require = createRequire(import.meta.url);
 const features = require("../lib/config/features.cjs");
 
 import { internalApiHeaders } from "../api/common.js";
+import { hasPermission as holdsNode } from "../lib/discord/permissions.mjs";
 export class BridgeCommand extends Command {
   constructor(context, options) {
     super(context, { ...options });
@@ -26,6 +28,7 @@ export class BridgeCommand extends Command {
     registry.registerChatInputCommand((builder) =>
       builder
         .setName("bridge")
+        .setContexts(InteractionContextType.Guild)
         .setDescription("Manage and view bridge status.")
         .addSubcommand((subcommand) =>
           subcommand
@@ -228,7 +231,7 @@ export class BridgeCommand extends Command {
     }
 
     const userPermissions = await getUserPermissions(userGetData);
-    const hasPermission = userPermissions.includes("zander.web.bridge");
+    const hasPermission = holdsNode(userPermissions, "zander.web.bridge");
 
     if (!hasPermission) {
       const errorEmbed = new EmbedBuilder()

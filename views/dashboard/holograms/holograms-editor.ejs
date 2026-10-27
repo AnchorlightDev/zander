@@ -1,0 +1,317 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<%
+  // `frame` is null on create, or the row from getMessageById on edit.
+  const f = frame || {};
+  const isEnabled = f.enabled === 1 || f.enabled === true || type === "create";
+  // countdown_to comes back from mysql2 (timezone "Z") as a UTC Date; render it as
+  // an ISO instant for the client script to convert into the viewer's local time.
+  let countdownIso = "";
+  if (f.countdown_to) {
+    const d = new Date(f.countdown_to);
+    if (!Number.isNaN(d.getTime())) countdownIso = d.toISOString();
+  }
+  // expires_at is stored the same way (UTC Date from mysql2); render as an ISO
+  // instant for the client script to show in the viewer's local timezone.
+  let expiresIso = "";
+  if (f.expires_at) {
+    const e = new Date(f.expires_at);
+    if (!Number.isNaN(e.getTime())) expiresIso = e.toISOString();
+  }
+%>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><%= type === "create" ? "Create" : "Edit" %> Hologram Frame</h1>
+        <a href="/dashboard/holograms" class="btn btn-outline-secondary btn-sm">
+          <i class="fas fa-arrow-left"></i> Back to frames
+        </a>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <div class="basic-form" style="max-width:820px;">
+        <form method="post" action="/dashboard/holograms/<%= type === "create" ? "create" : "edit" %>">
+          <% if (type === "edit") { %>
+            <input type="hidden" name="id" value="<%= f.id %>">
+          <% } %>
+
+          <div class="row">
+            <!-- Group -->
+            <div class="mb-3 col-md-8">
+              <label for="hologram_group" class="form-label">Group</label>
+              <input type="text" class="form-control" id="hologram_group" name="hologram_group"
+                     list="hologram-groups" maxlength="64"
+                     value="<%= f.hologram_group || 'default' %>"
+                     placeholder="default">
+              <datalist id="hologram-groups">
+                <% (groups || []).forEach(function (g) { %>
+                  <option value="<%= g %>"></option>
+                <% }); %>
+              </datalist>
+              <small class="text-muted">Holograms placed with <code>/hologram create &lt;name&gt; &lt;group&gt;</code> cycle through their group's frames. <strong>default</strong> is the shared rotation.</small>
+            </div>
+
+            <!-- Sort order -->
+            <div class="mb-3 col-md-4">
+              <label for="sort_order" class="form-label">Sort order</label>
+              <input type="number" class="form-control" id="sort_order" name="sort_order"
+                     value="<%= Number.isInteger(f.sort_order) ? f.sort_order : 0 %>" step="1">
+              <small class="text-muted">Lower shows first. You can also reorder from the list.</small>
+            </div>
+          </div>
+
+          <!-- Message -->
+          <div class="mb-3">
+            <label for="message" class="form-label">Message</label>
+
+            <!-- Minecraft colour/format toolbar -->
+            <div class="mc-toolbar mb-1" role="toolbar" aria-label="Minecraft colour codes">
+              <button type="button" class="mc-code-btn" data-code="&0" title="Black (&0)"        style="background:#000000;color:#fff;border-color:#444;">&amp;0</button>
+              <button type="button" class="mc-code-btn" data-code="&1" title="Dark Blue (&1)"    style="background:#0000AA;color:#fff;border-color:#000066;">&amp;1</button>
+              <button type="button" class="mc-code-btn" data-code="&2" title="Dark Green (&2)"   style="background:#00AA00;color:#fff;border-color:#006600;">&amp;2</button>
+              <button type="button" class="mc-code-btn" data-code="&3" title="Dark Aqua (&3)"    style="background:#00AAAA;color:#fff;border-color:#006666;">&amp;3</button>
+              <button type="button" class="mc-code-btn" data-code="&4" title="Dark Red (&4)"     style="background:#AA0000;color:#fff;border-color:#660000;">&amp;4</button>
+              <button type="button" class="mc-code-btn" data-code="&5" title="Dark Purple (&5)"  style="background:#AA00AA;color:#fff;border-color:#660066;">&amp;5</button>
+              <button type="button" class="mc-code-btn" data-code="&6" title="Gold (&6)"         style="background:#FFAA00;color:#000;border-color:#aa7000;">&amp;6</button>
+              <button type="button" class="mc-code-btn" data-code="&7" title="Gray (&7)"         style="background:#AAAAAA;color:#000;border-color:#777;">&amp;7</button>
+              <button type="button" class="mc-code-btn" data-code="&8" title="Dark Gray (&8)"    style="background:#555555;color:#fff;border-color:#222;">&amp;8</button>
+              <button type="button" class="mc-code-btn" data-code="&9" title="Blue (&9)"         style="background:#5555FF;color:#fff;border-color:#2222cc;">&amp;9</button>
+              <button type="button" class="mc-code-btn" data-code="&a" title="Green (&a)"        style="background:#55FF55;color:#000;border-color:#22bb22;">&amp;a</button>
+              <button type="button" class="mc-code-btn" data-code="&b" title="Aqua (&b)"         style="background:#55FFFF;color:#000;border-color:#22bbbb;">&amp;b</button>
+              <button type="button" class="mc-code-btn" data-code="&c" title="Red (&c)"          style="background:#FF5555;color:#fff;border-color:#cc2222;">&amp;c</button>
+              <button type="button" class="mc-code-btn" data-code="&d" title="Light Purple (&d)" style="background:#FF55FF;color:#000;border-color:#cc22cc;">&amp;d</button>
+              <button type="button" class="mc-code-btn" data-code="&e" title="Yellow (&e)"       style="background:#FFFF55;color:#000;border-color:#cccc22;">&amp;e</button>
+              <button type="button" class="mc-code-btn" data-code="&f" title="White (&f)"        style="background:#FFFFFF;color:#000;border-color:#ccc;">&amp;f</button>
+              <span class="mc-toolbar-sep mx-1" aria-hidden="true"></span>
+              <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&l" title="Bold (&l)"><b>&amp;l</b></button>
+              <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&o" title="Italic (&o)"><i>&amp;o</i></button>
+              <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&n" title="Underline (&n)" style="text-decoration:underline;">&amp;n</button>
+              <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&m" title="Strikethrough (&m)" style="text-decoration:line-through;">&amp;m</button>
+              <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&k" title="Obfuscated (&k)">&amp;k</button>
+              <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&r" title="Reset (&r)">&amp;r</button>
+            </div>
+
+            <textarea id="message" name="message" class="form-control" rows="3"
+                      style="font-family:monospace;" required placeholder="&eEvent starts in &a{countdown}&e!"><%= f.message || "" %></textarea>
+            <small class="text-muted">Use <code>&amp;X</code> colour codes. Add a countdown below, then drop a placeholder into the text.</small>
+          </div>
+
+          <!-- Countdown -->
+          <div class="card mb-3">
+            <div class="card-body">
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="countdown_enabled" <%= countdownIso ? "checked" : "" %>>
+                <label class="form-check-label fw-semibold" for="countdown_enabled">Count down to a date &amp; time</label>
+              </div>
+
+              <!-- UTC instant actually submitted; populated by the script from the local picker. -->
+              <input type="hidden" name="countdown_to" id="countdown_to" value="<%= countdownIso %>">
+
+              <div id="countdown-fields" class="<%= countdownIso ? "" : "d-none" %>">
+                <div class="row">
+                  <div class="mb-2 col-md-6">
+                    <label for="countdown_local" class="form-label">Target date &amp; time</label>
+                    <input type="datetime-local" class="form-control" id="countdown_local" data-utc="<%= countdownIso %>">
+                    <small class="text-muted">Shown in your local timezone; stored as UTC.</small>
+                  </div>
+                  <div class="mb-2 col-md-6">
+                    <label for="countdown_finished_text" class="form-label">Finished text <span class="text-muted">(optional)</span></label>
+                    <input type="text" class="form-control" id="countdown_finished_text" name="countdown_finished_text"
+                           maxlength="512" value="<%= f.countdown_finished_text || "" %>"
+                           placeholder="&aLIVE NOW!">
+                    <small class="text-muted">Replaces the countdown once the target passes. Blank shows <code>0d 0h 0m 0s</code>.</small>
+                  </div>
+                </div>
+
+                <div class="mt-1">
+                  <span class="text-muted small me-1">Insert placeholder:</span>
+                  <button type="button" class="btn btn-sm btn-outline-secondary ph-insert" data-token="{countdown}"><code>{countdown}</code></button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary ph-insert" data-token="{days}"><code>{days}</code></button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary ph-insert" data-token="{hours}"><code>{hours}</code></button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary ph-insert" data-token="{minutes}"><code>{minutes}</code></button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary ph-insert" data-token="{seconds}"><code>{seconds}</code></button>
+                  <div class="form-text mt-1">
+                    <code>{countdown}</code> &rarr; <em>2d 5h 30m 10s</em>. The parts <code>{days}</code>/<code>{hours}</code>/<code>{minutes}</code>/<code>{seconds}</code> let you build a custom layout. The in-game hologram re-renders every second.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Expiry -->
+          <div class="card mb-3">
+            <div class="card-body">
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="expires_enabled" <%= expiresIso ? "checked" : "" %>>
+                <label class="form-check-label fw-semibold" for="expires_enabled">Expire this frame at a date &amp; time</label>
+              </div>
+
+              <!-- UTC instant actually submitted; populated by the script from the local picker. -->
+              <input type="hidden" name="expires_at" id="expires_at" value="<%= expiresIso %>">
+
+              <div id="expires-fields" class="<%= expiresIso ? "" : "d-none" %>">
+                <div class="row">
+                  <div class="mb-2 col-md-6">
+                    <label for="expires_local" class="form-label">Expires at</label>
+                    <input type="datetime-local" class="form-control" id="expires_local" data-utc="<%= expiresIso %>">
+                    <small class="text-muted">Shown in your local timezone; stored as UTC. After this time the frame drops out of its hologram's rotation automatically.</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <!-- Link -->
+            <div class="mb-3 col-md-8">
+              <label for="link" class="form-label">Link <span class="text-muted">(optional)</span></label>
+              <input type="url" class="form-control" id="link" name="link"
+                     maxlength="512" value="<%= f.link || "" %>" placeholder="https://...">
+              <small class="text-muted">Offered when a player right-clicks the hologram while this frame shows.</small>
+            </div>
+
+            <!-- Enabled -->
+            <div class="mb-3 col-md-4">
+              <label class="form-label d-block">Status</label>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="enabled_toggle" <%= isEnabled ? "checked" : "" %>>
+                <input type="hidden" name="enabled" id="enabled" value="<%= isEnabled ? "1" : "0" %>">
+                <label class="form-check-label" for="enabled_toggle">Enabled</label>
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-<%= type === "create" ? "primary" : "warning" %>">
+            <i class="fas fa-save"></i> <%= type === "create" ? "Create Frame" : "Save Changes" %>
+          </button>
+        </form>
+      </div>
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->
+
+<style>
+.mc-toolbar { display:flex; flex-wrap:wrap; gap:3px; align-items:center; }
+.mc-code-btn {
+  min-width:26px; height:24px; padding:0 5px;
+  border:1px solid #ccc; border-radius:3px;
+  cursor:pointer; font-size:11px; font-family:monospace; line-height:22px;
+  background:#eee; color:#000; transition:opacity .1s;
+}
+.mc-code-btn:hover { opacity:.75; }
+.mc-fmt-btn { background:#555; color:#eee; border-color:#333; }
+.mc-toolbar-sep { display:inline-block; width:1px; background:#ccc; height:20px; align-self:center; }
+</style>
+
+<script>
+(function () {
+  const message = document.getElementById("message");
+
+  // ── Insert text at the message cursor (colour codes + countdown placeholders) ──
+  function insertAtCursor(text) {
+    if (!message || !text) return;
+    const start = message.selectionStart ?? message.value.length;
+    const end = message.selectionEnd ?? message.value.length;
+    message.value = message.value.slice(0, start) + text + message.value.slice(end);
+    const pos = start + text.length;
+    message.setSelectionRange(pos, pos);
+    message.focus();
+  }
+
+  document.querySelectorAll(".mc-code-btn").forEach((btn) =>
+    btn.addEventListener("click", () => insertAtCursor(btn.dataset.code))
+  );
+  document.querySelectorAll(".ph-insert").forEach((btn) =>
+    btn.addEventListener("click", () => insertAtCursor(btn.dataset.token))
+  );
+
+  // ── Enabled toggle mirrors into the hidden field ──
+  const enabledToggle = document.getElementById("enabled_toggle");
+  const enabledHidden = document.getElementById("enabled");
+  if (enabledToggle && enabledHidden) {
+    enabledToggle.addEventListener("change", () => {
+      enabledHidden.value = enabledToggle.checked ? "1" : "0";
+    });
+  }
+
+  // ── Countdown: convert between the local picker and the submitted UTC field ──
+  const cdEnabled = document.getElementById("countdown_enabled");
+  const cdFields = document.getElementById("countdown-fields");
+  const cdLocal = document.getElementById("countdown_local");
+  const cdUtc = document.getElementById("countdown_to");
+
+  // ISO (UTC) -> value for a datetime-local input, in the viewer's local time.
+  function utcToLocalInput(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  }
+
+  // Populate the local picker from the stored UTC instant on load.
+  if (cdLocal && cdLocal.dataset.utc) {
+    cdLocal.value = utcToLocalInput(cdLocal.dataset.utc);
+  }
+
+  function syncUtc() {
+    if (!cdUtc) return;
+    if (cdEnabled && cdEnabled.checked && cdLocal && cdLocal.value) {
+      // datetime-local has no zone; new Date() reads it in the viewer's local
+      // time, so toISOString() yields the correct UTC instant.
+      const d = new Date(cdLocal.value);
+      cdUtc.value = Number.isNaN(d.getTime()) ? "" : d.toISOString();
+    } else {
+      cdUtc.value = "";
+    }
+  }
+
+  if (cdEnabled && cdFields) {
+    cdEnabled.addEventListener("change", () => {
+      cdFields.classList.toggle("d-none", !cdEnabled.checked);
+      syncUtc();
+    });
+  }
+  if (cdLocal) cdLocal.addEventListener("input", syncUtc);
+
+  // ── Expiry: same local-picker <-> submitted UTC field conversion as the countdown ──
+  const exEnabled = document.getElementById("expires_enabled");
+  const exFields = document.getElementById("expires-fields");
+  const exLocal = document.getElementById("expires_local");
+  const exUtc = document.getElementById("expires_at");
+
+  if (exLocal && exLocal.dataset.utc) {
+    exLocal.value = utcToLocalInput(exLocal.dataset.utc);
+  }
+
+  function syncExpires() {
+    if (!exUtc) return;
+    if (exEnabled && exEnabled.checked && exLocal && exLocal.value) {
+      const d = new Date(exLocal.value);
+      exUtc.value = Number.isNaN(d.getTime()) ? "" : d.toISOString();
+    } else {
+      exUtc.value = "";
+    }
+  }
+
+  if (exEnabled && exFields) {
+    exEnabled.addEventListener("change", () => {
+      exFields.classList.toggle("d-none", !exEnabled.checked);
+      syncExpires();
+    });
+  }
+  if (exLocal) exLocal.addEventListener("input", syncExpires);
+
+  // Ensure the hidden fields are consistent before submit (e.g. toggled on, no edits).
+  const form = message ? message.closest("form") : null;
+  if (form) form.addEventListener("submit", () => { syncUtc(); syncExpires(); });
+})();
+</script>

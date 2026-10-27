@@ -15,6 +15,7 @@ import cron from "node-cron";
 import { createRequire } from "module";
 import { client } from "../controllers/discordController.js";
 import { syncBoosterRewards } from "../controllers/boosterRewardController.js";
+import { ensureGuildMembers } from "../lib/discord/guildMembers.mjs";
 
 const require = createRequire(import.meta.url);
 const config = require("../lib/config/config.cjs");
@@ -31,11 +32,15 @@ async function sweep() {
     const guild = client.guilds.cache.get(guildId) || (await client.guilds.fetch(guildId).catch(() => null));
     if (!guild) return;
 
+    // Shared throttled fetch: reuses the member list the other crons already
+    // fetched (and the live boost listeners keep current) rather than issuing a
+    // second opcode-8 request, which is exactly what Discord was rate-limiting
+    // ("Request with opcode 8 was rate limited ... skipping this sweep").
     try {
-      await guild.members.fetch({ time: 120_000 });
+      await ensureGuildMembers(guild);
     } catch (error) {
-      // Without the full member list, "not boosting" cannot be told apart
-      // from "not fetched" -- skip rather than revoke.
+      // Without any member list, "not boosting" cannot be told apart from "not
+      // fetched" -- skip rather than revoke.
       console.warn(`[boosterRewards] Could not fetch guild members (${error?.message || error}); skipping this sweep.`);
       return;
     }

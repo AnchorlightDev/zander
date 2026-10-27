@@ -138,6 +138,7 @@ describe("adminUsersRoute — POST /admin/users/:userId/reset-password", () => {
       userId: 1,
       username: "Cerealraptor300",
       email: "player@example.com",
+      email_verified: true,
       password_hash: "hash",
       account_disabled: false,
     });

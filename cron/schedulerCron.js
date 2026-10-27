@@ -3,6 +3,7 @@ import { EmbedBuilder } from "discord.js";
 import db from "../controllers/databaseController.js";
 import { client } from "../controllers/discordController.js";
 import { hashEmail } from "../api/common.js";
+import { htmlToDiscordMarkdown } from "../lib/discord/htmlToDiscordMarkdown.mjs";
 
 const executeQuery = (query, params = []) =>
   new Promise((resolve, reject) => {
@@ -61,7 +62,10 @@ const schedulerTask = cron.schedule("*/1 * * * *", async () => {
         }
 
         if (message.embedDescription) {
-          embed.setDescription(message.embedDescription);
+          // The dashboard editor stores rich-text HTML, but Discord renders
+          // Markdown — convert so tags don't show up literally in the embed.
+          const description = htmlToDiscordMarkdown(message.embedDescription);
+          if (description) embed.setDescription(description);
         }
 
         if (message.embedColor) {

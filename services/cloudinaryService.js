@@ -22,7 +22,9 @@ export async function uploadImage(buffer, { folder = "zander", resourceType = "i
 
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder, resource_type: resourceType },
+      // allowed_formats makes Cloudinary reject anything that is not one of
+      // these after its own sniffing, so a disguised SVG cannot be stored.
+      { folder, resource_type: resourceType, allowed_formats: ["png", "jpg", "jpeg", "gif", "webp"] },
       (error, result) => {
         if (error) return reject(error);
         resolve({

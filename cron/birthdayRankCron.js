@@ -64,9 +64,11 @@ async function findBirthdayUsers(now) {
   const params = dates.flat();
 
   const rows = await query(
-    `SELECT userId, username, timezone, birthdayDay, birthdayMonth, birthdayLastGrantedYear
+    `SELECT userId, username, uuid, timezone, birthdayDay, birthdayMonth, birthdayLastGrantedYear
        FROM users
       WHERE account_disabled = 0
+        AND COALESCE(is_placeholder, 0) = 0
+        AND uuid IS NOT NULL
         AND birthdayDay IS NOT NULL
         AND birthdayMonth IS NOT NULL
         AND (${where})`,
@@ -85,9 +87,21 @@ async function findBirthdayUsers(now) {
  * happen, but might after a manual database edit -- extends rather than
  * stacking a second membership.
  */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const RANK_GROUP_PATTERN = /^[A-Za-z0-9_.-]{1,36}$/;
+
 async function grantRank(user) {
   const hours = Number(settings.durationHours) > 0 ? Math.round(Number(settings.durationHours)) : 24;
-  const command = `lp user ${user.username} parent addtemp ${RANK_GROUP} ${hours}h accumulate`;
+  // The command is run on a server console. Address the player by UUID and
+  // only after both tokens have been shape-checked, so no row value can
+  // change what the command does.
+  if (!UUID_PATTERN.test(String(user.uuid || ""))) {
+    throw new Error(`birthday grant skipped for user ${user.userId}: no valid uuid`);
+  }
+  if (!RANK_GROUP_PATTERN.test(RANK_GROUP)) {
+    throw new Error(`birthday grant skipped: rank group "${RANK_GROUP}" is not a valid group name`);
+  }
+  const command = `lp user ${user.uuid} parent addtemp ${RANK_GROUP} ${hours}h accumulate`;
 
   await query(
     `INSERT INTO executorTasks (slug, command, status, priority, metadata, createdAt, updatedAt)

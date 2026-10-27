@@ -1,6 +1,7 @@
 import { createRequire } from "module";
 import { hasPermission } from "../../lib/discord/permissions.mjs";
 import { parseKey, resolveScope, verifyKeyHash } from "../../lib/apiKeys.js";
+import { isCrossSiteRequest } from "../../lib/securityConfig.js";
 import {
   getClientByPrefixCached,
   touchLastUsed,
@@ -57,7 +58,7 @@ export const SESSION_ALLOWED_ROUTES = new Map([
   ["POST /api/events/cancel", EVENTS_WRITE],
   ["POST /api/events/revert-to-draft", EVENTS_REVIEW],
   ["POST /api/events/submit-review", EVENTS_WRITE],
-  ["POST /api/events/publish", EVENTS_WRITE],
+  ["POST /api/events/publish", EVENTS_REVIEW],
   ["POST /api/events/actions/update", EVENTS_WRITE],
   ["POST /api/events/announcements/update", EVENTS_WRITE],
   ["POST /api/events/delete", EVENTS_WRITE],
@@ -79,11 +80,13 @@ export const SESSION_ALLOWED_ROUTES = new Map([
   ["POST /api/events/default-announcements/apply", EVENTS_REVIEW],
 ]);
 
-/** Client address for audit lines, preferring the proxied original. */
+/**
+ * Client address for audit lines. req.ip already reflects the trusted proxy
+ * hop count configured in app.js; reading X-Forwarded-For directly would let
+ * a caller forge the address recorded against their key.
+ */
 function clientIp(req) {
-  const forwarded = req.headers?.["x-forwarded-for"];
-  const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(",")[0]?.trim();
-  return first || req.ip || "unknown";
+  return req.ip || "unknown";
 }
 
 /**
@@ -120,6 +123,12 @@ export default async function verifyToken(req, res) {
       const requiredNodes = SESSION_ALLOWED_ROUTES.get(routeKey);
 
       if (requiredNodes) {
+        // A session cookie is sent by the browser automatically; make sure the
+        // page that triggered this write is one of ours.
+        if (req.method !== "GET" && isCrossSiteRequest(req, process.env.siteAddress)) {
+          logDenial("cross-site session request", { req });
+          return deny(res, 403, "Cross-site request rejected.");
+        }
         const permissions = Array.isArray(user.permissions) ? user.permissions : [];
         if (requiredNodes.some((node) => hasPermission(permissions, node))) return;
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { announcementKey, announcementSendTime, missingDefaults } from "../../lib/eventAnnouncements.js";
 
 const prismaMock = {
@@ -24,8 +24,17 @@ const reminder24h = { platform: "discord", triggerType: "before_event", offsetMi
 const motdAtStart = { platform: "motd", triggerType: "event_start", body: "On now!" };
 const onPublish = { platform: "discord", triggerType: "on_publish", channelId: "111" };
 
+// The services read the real clock, so pin it to NOW. Without this the fixtures
+// (an event on 2026-10-10) slide into the past and published-event scheduling
+// clamps or skips them. Only Date is faked so async mocks still resolve.
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
   for (const model of Object.values(prismaMock)) for (const fn of Object.values(model)) fn.mockReset();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("announcementKey", () => {

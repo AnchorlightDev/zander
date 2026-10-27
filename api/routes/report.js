@@ -46,7 +46,7 @@ export default function reportApiRoute(app, config, db, features, lang) {
 
   // TODO: Update docs
   app.get(baseEndpoint + "/get", async function (req, res) {
-    isFeatureEnabled(features.report, res, lang);
+    if (!isFeatureEnabled(features.report, res, lang)) return;
     const reportedId = optional(req.query, "reportedId");
 
     try {
@@ -88,11 +88,14 @@ export default function reportApiRoute(app, config, db, features, lang) {
   });
 
   app.post(baseEndpoint + "/create", async function (req, res) {
-    isFeatureEnabled(features.report, res, lang);
+    if (!isFeatureEnabled(features.report, res, lang)) return;
 
     const reporterUser = required(req.body, "reporterUser", res);
+    if (res.sent) return;
     const reportedUser = required(req.body, "reportedUser", res);
+    if (res.sent) return;
     const rawReportReason = required(req.body, "reportReason", res);
+    if (res.sent) return;
     const rawReportReasonEvidence = optional(
       req.body,
       "reportReasonEvidence",
@@ -107,6 +110,7 @@ export default function reportApiRoute(app, config, db, features, lang) {
     );
 
     const reportPlatform = required(req.body, "reportPlatform", res);
+    if (res.sent) return;
 
     try {
       await new Promise((resolve, reject) => {

@@ -16,12 +16,16 @@ export class GuildMessageUpdateListener extends Listener {
 
   async run(oldMessage, newMessage) {
     // Check if the author is a bot and stop if true.
-    if (newMessage.author.bot) return;
+    if (newMessage.author?.bot) return;
+    // Discord also fires messageUpdate when an embed resolves; only a real
+    // content change is an edit worth logging.
+    if ((oldMessage.content || "") === (newMessage.content || "")) return;
 
     const webhookUrl = config.discord.webhooks.adminLog;
     if (!webhookUrl) return;
 
     const webhook = new WebhookClient({ url: webhookUrl });
+    try {
 
     const embed = new EmbedBuilder()
       .setTitle("Message Edit")
@@ -44,5 +48,10 @@ export class GuildMessageUpdateListener extends Listener {
     await sendWebhookMessage(webhook, { embeds: [embed], components: [jumpButton] }, {
       context: "listeners/messageUpdate",
     });
+    } finally {
+      // Each client owns a REST instance with its own timers; without this
+      // every logged message leaked one for the life of the process.
+      webhook.destroy();
+    }
   }
 }

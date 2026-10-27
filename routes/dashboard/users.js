@@ -23,6 +23,26 @@ import {
 } from "../../api/common.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { maskEmail, hasPermissionSilent } from "../../controllers/userAccountState.js";
+import { UserGetter, getUserPermissions } from "../../controllers/userController.js";
+import { hasPermission as holdsNode } from "../../lib/discord/permissions.mjs";
+
+/**
+ * Whether the acting staff member may take over-style recovery actions on a
+ * target account. Changing an email and then triggering a reset is, in
+ * effect, a login as that user, so it is refused when the target holds any
+ * permission the actor does not (e.g. an admin, or the site owner holding
+ * `*`). The actor may never do it to themselves either -- their own account
+ * has a normal self-service flow.
+ */
+async function mayRecoverAccount(req, targetUserId) {
+  const actor = req.session?.user;
+  if (!actor || Number(actor.userId) === Number(targetUserId)) return false;
+  const target = await new UserGetter().byUserId(targetUserId);
+  if (!target) return true; // the API will answer "User not found"
+  const targetPermissions = await getUserPermissions(target);
+  const actorPermissions = Array.isArray(actor.permissions) ? actor.permissions : [];
+  return (targetPermissions || []).every((node) => holdsNode(actorPermissions, node));
+}
 
 const VIEW_PERMISSION = "zander.web.users";
 const EMAIL_PERMISSION = "zander.web.users.email";
@@ -206,6 +226,9 @@ export default function dashboardUsersRoute(app, fetch, config, db, features, la
     if (!userId) return res.send({ success: false, message: "Invalid userId." });
 
     try {
+      if (!(await mayRecoverAccount(req, userId))) {
+        return res.status(403).send({ success: false, message: "You cannot reset the password of an account that holds permissions you do not." });
+      }
       const data = await proxyToApi(fetch, "POST", `/admin/users/${userId}/reset-password`);
       if (data.success) {
         const actorId = req.session.user.userId;
@@ -269,6 +292,9 @@ export default function dashboardUsersRoute(app, fetch, config, db, features, la
     }
 
     try {
+      if (!(await mayRecoverAccount(req, userId))) {
+        return res.status(403).send({ success: false, message: "You cannot change the email of an account that holds permissions you do not." });
+      }
       // Fetch old (masked) email first for the audit trail.
       let oldMaskedEmail = "none";
       const before = await proxyToApi(fetch, "GET", `/admin/users/${userId}`);

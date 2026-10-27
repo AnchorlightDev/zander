@@ -1,5 +1,5 @@
 import { Command } from "@sapphire/framework";
-import { Colors, EmbedBuilder, MessageFlags } from "discord.js";
+import {Colors, EmbedBuilder, MessageFlags, InteractionContextType } from "discord.js";
 import fetch from "node-fetch";
 import { resolveDiscordUserId } from "../lib/discord/resolveDiscordMember.mjs";
 import { hasPermission } from "../lib/discord/permissions.mjs";
@@ -25,6 +25,7 @@ export class AuditCommand extends Command {
     registry.registerChatInputCommand((builder) =>
       builder
         .setName("audit")
+        .setContexts(InteractionContextType.Guild)
         .setDescription("Audit activity for a linked user across all platforms.")
         .addStringOption((option) =>
           option

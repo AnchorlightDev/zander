@@ -2,10 +2,10 @@
  * tests/unit/zanderNodes.test.mjs
  *
  * The permission registry, and the invariant that keeps it honest: it must
- * match the table in README.md.
+ * match the table in docs/permissions.md.
  *
  * Without this the checklist quietly goes stale -- a node added to the code
- * and documented in the README would simply never appear as a tick box, and
+ * and documented in docs/permissions.md would simply never appear as a tick box, and
  * nobody would notice because nothing breaks.
  */
 
@@ -23,27 +23,27 @@ import {
 } from "../../lib/permissions/zanderNodes.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const readme = readFileSync(join(repoRoot, "README.md"), "utf8");
+const readme = readFileSync(join(repoRoot, "docs", "permissions.md"), "utf8");
 
-/** Every `| \`zander.x.y\` |` row in the README's permission tables. */
+/** Every `| \`zander.x.y\` |` row in docs/permissions.md's tables. */
 function documentedNodes() {
   return [...readme.matchAll(/^\|\s*`(zander\.[^`]+)`\s*\|/gm)].map((m) => m[1]);
 }
 
-describe("the registry matches the README", () => {
+describe("the registry matches docs/permissions.md", () => {
   it("documents every node the registry knows", () => {
     const documented = new Set(documentedNodes());
     const missing = listAllNodes().filter((node) => !documented.has(node));
 
-    expect(missing, `in the registry but not documented in README.md: ${missing.join(", ")}`)
+    expect(missing, `in the registry but not documented in docs/permissions.md: ${missing.join(", ")}`)
       .toEqual([]);
   });
 
-  it("registers every node the README documents", () => {
+  it("registers every node docs/permissions.md documents", () => {
     const registered = new Set(listAllNodes());
     const missing = documentedNodes().filter((node) => !registered.has(node));
 
-    expect(missing, `documented in README.md but missing from the registry: ${missing.join(", ")}`)
+    expect(missing, `documented in docs/permissions.md but missing from the registry: ${missing.join(", ")}`)
       .toEqual([]);
   });
 
@@ -113,7 +113,7 @@ describe("grantableGroups", () => {
     }
   });
 
-  it("keeps the README's grouping", () => {
+  it("keeps the documented grouping", () => {
     expect(grantableGroups().map((g) => g.group)).toEqual(
       PERMISSION_GROUPS.map((g) => g.group)
     );

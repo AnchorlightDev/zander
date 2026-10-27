@@ -143,7 +143,7 @@ export default function adminUsersRoute(app, config, db, features, lang) {
       const user = await getter.byUserId(userId);
       if (!user) return res.send({ success: false, message: "User not found." });
 
-      if (!isPasswordResetEligible(user)) {
+      if (!isPasswordResetEligible(user) || !user.email_verified) {
         let reason = "This account does not have a configured website email and password.";
         if (user.account_disabled) {
           reason = "This account is disabled.";
@@ -151,6 +151,11 @@ export default function adminUsersRoute(app, config, db, features, lang) {
           reason = "This account has no email address configured.";
         } else if (!user.password_hash) {
           reason = "This account has no website password configured.";
+        } else if (!user.email_verified) {
+          // A staff-changed address has not been proven to belong to the
+          // account holder; mailing a reset code there would hand the account
+          // to whoever controls it.
+          reason = "This account's email address has not been verified by its owner.";
         }
         return res.send({
           success: false,

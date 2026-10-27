@@ -14,12 +14,6 @@ process.on("uncaughtException", (error) => {
   console.error("[UNCAUGHT EXCEPTION]", error);
 });
 
-// Fan every console.error / console.warn (and the two handlers above) out to a
-// throttled email to the system admin. No-op unless adminErrorEmail + smtpHost
-// are set in .env. Installed early so nothing logged during boot is missed.
-import { installGlobalErrorReporting, reportError } from "./controllers/errorReporterController.js";
-installGlobalErrorReporting();
-
 const packageData = require("./package.json");
 import moment from "moment";
 import fetch from "node-fetch";
@@ -34,8 +28,10 @@ import {
   isHttpsDeployment as detectHttpsDeployment,
   buildHelmetOptions,
   buildSessionCookieOptions,
+  isCrossSiteRequest,
 } from "./lib/securityConfig.js";
 import { checkRateLimit } from "./lib/rateLimiter.mjs";
+import { serveCustomPage } from "./routes/customPageRoutes.js";
 import { getRegion } from "./lib/region.mjs";
 import {
   createCspOnSendHook,
@@ -61,6 +57,7 @@ import db, { isDbHealthy, prisma } from "./controllers/databaseController.js";
 import { getWebAnnouncement } from "./controllers/announcementController.js";
 import { getNotificationSummary } from "./controllers/notificationController.js";
 import { applyConfigOverrides, startConfigSync } from "./controllers/configSettingsController.js";
+import { siteMenu, startNavigationSync } from "./controllers/navigationController.js";
 import { buildInfo } from "./lib/buildInfo.js";
 
 // Paths
@@ -76,6 +73,7 @@ const __dirname = path.dirname(__filename);
 // features.json on disk, once.
 await applyConfigOverrides();
 startConfigSync();
+startNavigationSync();
 
 import("./controllers/discordController.js");
 import("./cron/userCodeExpiryCron.js");
@@ -136,15 +134,48 @@ const buildApp = async () => {
   // (see Procfile).  Without it req.protocol is always "http", which both
   // defeats secure-cookie issuance below and makes req.ip the proxy address
   // rather than the client's — breaking per-IP rate limiting.
-  const app = fastify({
-    logger: config.debug,
-    pluginTimeout: 120000,
-    trustProxy: true,
-  });
-
+  //
   // Drives both the Secure flag on the session cookie and HSTS below, so local
   // http development still works while any https deployment is hardened.
   const isHttpsDeployment = detectHttpsDeployment(process.env.siteAddress);
+
+  // How much of the X-Forwarded-* chain to trust.
+  //
+  // Render terminates TLS at its own proxy and forwards `X-Forwarded-Proto:
+  // https`. A numeric hop count (trustProxy: 1) proved UNRELIABLE here: Fastify
+  // still reported `req.protocol === "http"` despite the header, so
+  // @fastify/session saw an "insecure" connection and refused to write the
+  // Secure session cookie — which broke ALL login. This was confirmed in
+  // production via [login-debug]: xForwardedProto=https, protocol=http,
+  // hadSessionCookie=false.
+  //
+  // So on an https deployment we trust the platform proxy outright: req.protocol
+  // then follows X-Forwarded-Proto (→ https, cookie is written) and req.ip
+  // becomes the real client instead of the proxy address (per-IP rate limiting
+  // was already broken — every request looked like it came from the proxy).
+  // Set TRUST_PROXY_HOPS to an exact integer to override this with a fixed hop
+  // count (only if your proxy chain is static and you've verified it yields
+  // protocol=https); otherwise leave it UNSET.
+  const parsedTrustProxyHops = Number.parseInt(process.env.TRUST_PROXY_HOPS ?? "", 10);
+  const trustProxy =
+    Number.isInteger(parsedTrustProxyHops) && parsedTrustProxyHops >= 0
+      ? parsedTrustProxyHops
+      : isHttpsDeployment;
+
+  const app = fastify({
+    // Without a logger the error handler's app.log.error() calls are no-ops
+    // in production; keep warnings and errors even when debug is off.
+    logger: config.debug ? true : { level: "warn" },
+    pluginTimeout: 120000,
+    trustProxy,
+  });
+
+  // Surface the resolved proxy/scheme at boot so a protocol/cookie mismatch is
+  // diagnosable from the logs rather than only as mysterious "login expired".
+  app.log.warn(
+    { trustProxy, httpsDeployment: isHttpsDeployment, siteAddress: process.env.siteAddress },
+    "[boot] session cookie security: secure=" + isHttpsDeployment + ", trustProxy=" + trustProxy
+  );
 
   if (process.env.SENTRY_DSN) {
     Sentry.setupFastifyErrorHandler(app, {
@@ -162,6 +193,9 @@ const buildApp = async () => {
 
   // When app errors, render the error on a page, do not provide JSON
   app.setNotFoundHandler(async function (req, res) {
+    // Staff-written pages answer only paths no route claimed.
+    if (await serveCustomPage(app, req, res, config, features)) return;
+
     res.status(404);
 
     try {
@@ -213,24 +247,19 @@ const buildApp = async () => {
         "request rejected"
       );
     } else {
+      // 5xx errors reach Sentry through Sentry.setupFastifyErrorHandler above.
       app.log.error(error);
-      // pino's app.log.error bypasses the console patch, so mail 5xx explicitly.
-      if (statusCode >= 500) {
-        reportError({
-          source: "fastify",
-          error,
-          meta: { method: req.method, url: req.url, statusCode },
-        });
-      }
     }
 
     res.status(statusCode);
 
-    // If the request is for the API, return JSON instead of a view
+    // If the request is for the API, return JSON instead of a view. A 5xx
+    // message is Prisma/mysql text (table names, SQL fragments) and stays in
+    // the logs; the HTML path below already applies the same rule.
     if (req.url.startsWith("/api/")) {
       return res.send({
         success: false,
-        message: error.message || "Internal Server Error",
+        message: statusCode < 500 ? error.message || "Request failed" : "Internal Server Error",
       });
     }
 
@@ -320,8 +349,9 @@ const buildApp = async () => {
       ejs: await import("ejs"),
     },
     root: path.join(__dirname, "views"),
-    // Merged into every render, app.view() included -- the footers read it
-    defaultContext: { buildInfo },
+    // Merged into every render, app.view() included -- the footers read
+    // buildInfo, and the header/footer menus come from siteMenu()
+    defaultContext: { buildInfo, siteMenu },
   });
 
   await app.register(await import("@fastify/static"), {
@@ -339,8 +369,24 @@ const buildApp = async () => {
     },
   });
 
+  // Compass SSO — the OpenID Connect provider's own endpoints (/oidc/auth,
+  // /oidc/token, /oidc/me, /oidc/jwks, /oidc/.well-known/...). Registered BEFORE
+  // @fastify/formbody so the token endpoint's form body reaches oidc-provider
+  // unconsumed; the plugin uses a no-op body parser in its own scope.
+  {
+    const { mountOidcProvider } = await import("./routes/oidcRoutes.js");
+    await app.register(async (instance) => {
+      await mountOidcProvider(instance);
+    });
+  }
+
   await app.register(await import("@fastify/formbody"), { bodyLimit: 10485760 }); // 10 MB
-  await app.register(await import("@fastify/multipart"));
+  // Without explicit limits @fastify/multipart caps a file at the 1 MiB body
+  // limit and throws mid-stream, which the upload handlers reported as a 500.
+  // The 8 MB figure is the one the handlers advertise.
+  await app.register(await import("@fastify/multipart"), {
+    limits: { fileSize: 8 * 1024 * 1024, files: 1, fields: 10, fieldSize: 1024 },
+  });
 
   await app.register((instance, options, next) => {
     // API routes (Token authenticated)
@@ -381,60 +427,12 @@ const buildApp = async () => {
     });
   });
 
-  // Browser image upload endpoint (/api/upload/image) — session-authenticated
-  // inside its own handler, not API-token-authenticated. Registered outside the
-  // verifyToken plugin so logged-in dashboard users / form submitters can upload
-  // images without the client needing to know the machine API key.
+  // Browser image upload endpoints (/api/upload/image and
+  // /dashboard/upload/image) — session-authenticated inside their own handler,
+  // not API-token-authenticated. Registered outside the verifyToken plugin so
+  // logged-in dashboard users / form submitters can upload images without the
+  // client needing to know the machine API key.
   uploadApiRoute(app, config, db, features, lang);
-
-  // Dashboard image upload — session-authenticated, not API-token-authenticated.
-  // Kept outside the verifyToken plugin so logged-in dashboard users can upload
-  // images (e.g. popup announcement banners) without needing the machine API key.
-  app.post("/dashboard/upload/image", async function (req, res) {
-    if (!req.session?.user) {
-      return res.status(401).send({ success: false, message: "Authentication required." });
-    }
-
-    const { isCloudinaryConfigured, uploadImage } = await import("./services/cloudinaryService.js");
-
-    if (!isCloudinaryConfigured()) {
-      return res.status(503).send({ success: false, message: "Image uploads are not configured." });
-    }
-
-    const MAX_SIZE  = 8 * 1024 * 1024;
-    const ALLOWED   = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-
-    let data;
-    try { data = await req.file(); } catch {
-      return res.status(400).send({ success: false, message: "No file provided." });
-    }
-    if (!data?.file) {
-      return res.status(400).send({ success: false, message: "No file provided." });
-    }
-    if (!ALLOWED.includes(data.mimetype)) {
-      return res.status(400).send({ success: false, message: "Invalid file type. Allowed: PNG, JPG, GIF, WebP." });
-    }
-
-    const folder = data.fields?.folder?.value || "zander";
-
-    try {
-      const chunks = [];
-      let total = 0;
-      for await (const chunk of data.file) {
-        total += chunk.length;
-        if (total > MAX_SIZE) {
-          return res.status(413).send({ success: false, message: "File too large. Maximum 8 MB." });
-        }
-        chunks.push(chunk);
-      }
-      const buffer = Buffer.concat(chunks);
-      const result = await uploadImage(buffer, { folder });
-      return res.send({ success: true, data: { url: result.url, publicId: result.publicId, width: result.width, height: result.height } });
-    } catch (error) {
-      console.error("[upload] Cloudinary upload failed:", error);
-      return res.status(500).send({ success: false, message: "Upload failed. Please try again." });
-    }
-  });
 
   await app.register((instance, options, next) => {
     // Don't authenticate the Redirect routes. These are
@@ -477,6 +475,16 @@ const buildApp = async () => {
   // The sessions table is created by the baseline migration.
   const sessionStore = new FastifyPrismaSessionStore();
 
+  // The example value ships in a public repository. Running with it means
+  // anyone can mint a validly signed session cookie, so refuse to start.
+  const sessionSecret = String(process.env.sessionCookieSecret || "");
+  if (sessionSecret.length < 32 || sessionSecret === "THISISNOTVERYSECRETANDITHINKYOUSHOULDCHANGEIT") {
+    throw new Error(
+      "sessionCookieSecret must be set in .env to a random value of at least 32 characters " +
+        "(for example `openssl rand -hex 32`); the value from .env.example is not allowed."
+    );
+  }
+
   await app.register(fastifyCookie, {
     secret: process.env.sessionCookieSecret, // for cookies signature
   });
@@ -496,6 +504,26 @@ const buildApp = async () => {
     rolling: false,
   });
 
+  // Cross-site request forgery guard for cookie-authenticated writes.
+  //
+  // The session cookie is SameSite=Lax, which already keeps it off cross-site
+  // POSTs in current browsers; this makes the rule explicit and independent of
+  // that cookie attribute. A state-changing request that arrives with a
+  // logged-in session must come from this site: either the browser says so
+  // (Sec-Fetch-Site: same-origin / none) or the Origin header matches
+  // siteAddress. Requests authenticated with an API key carry no session and
+  // are untouched, as are Stripe webhooks and plain GETs.
+  const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+  app.addHook("preHandler", async (req, res) => {
+    if (SAFE_METHODS.has(req.method) || !req.session?.user) return;
+    if (!isCrossSiteRequest(req, process.env.siteAddress)) return;
+    app.log.warn(
+      { method: req.method, url: req.url, origin: req.headers.origin, fetchSite: req.headers["sec-fetch-site"] },
+      "cross-site write rejected"
+    );
+    return res.status(403).send({ success: false, message: "Cross-site request rejected." });
+  });
+
   // Must be registered before siteRoutes so it applies to all site route
   // handlers. Setting req.session.authenticated (which was never read anywhere)
   // has been removed — it caused @fastify/session to treat every request as a
@@ -513,6 +541,16 @@ const buildApp = async () => {
       }
     }
   });
+
+  // Compass SSO — our own interaction page (/oidc/interaction/:uid). Registered
+  // after the session plugin because it reads req.session.user (the Zander
+  // login) to decide who is signing in and whether they are staff.
+  {
+    const { registerOidcInteractions } = await import("./routes/oidcRoutes.js");
+    await app.register(async (instance) => {
+      registerOidcInteractions(instance);
+    });
+  }
 
   await app.register((instance, options, next) => {
     // Routes
@@ -534,36 +572,22 @@ const buildApp = async () => {
     console.warn("[DB] Prisma warm-up query failed (will retry on first request):", err.message);
   }
 
-  // ── Auto-migration: supportTicketMessages charset → utf8mb4 (emoji support) ──
-  if (db) {
-    try {
-      await new Promise((resolve) => {
-        db.query(
-          `SELECT CHARACTER_SET_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'supportTicketMessages' AND COLUMN_NAME = 'message'`,
-          (err, results) => {
-            if (err || !results || results.length === 0) return resolve();
-            if (results[0].CHARACTER_SET_NAME === 'utf8mb4') return resolve();
-            db.query(
-              `ALTER TABLE supportTicketMessages CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
-              (alterErr) => {
-                if (alterErr) {
-                  console.warn("[DB] supportTicketMessages charset migration skipped:", alterErr.message);
-                } else {
-                  console.log("[DB] supportTicketMessages converted to utf8mb4 for emoji support.");
-                }
-                resolve();
-              }
-            );
-          }
-        );
-      });
-    } catch (err) {
-      console.error("[DB] supportTicketMessages auto-migration error:", err.message);
-    }
-  }
+  // Keep the pool warm. The boot warm-up above only covers the first request;
+  // once the app sits idle the DB connection goes cold again, and the next
+  // visitor pays the reconnect cost inside the onSend session-save phase — the
+  // "white page that a refresh fixes" symptom. A cheap periodic ping keeps a
+  // live connection in the pool so no request has to cold-start it. (This does
+  // NOT help if the host suspends the whole process on idle — see deploy notes;
+  // that needs an always-on tier or an external uptime ping.)
+  const dbKeepAlive = setInterval(() => {
+    prisma.$queryRaw`SELECT 1`.catch((err) =>
+      console.warn("[DB] keep-alive ping failed:", err.message)
+    );
+  }, 4 * 60 * 1000);
+  if (dbKeepAlive.unref) dbKeepAlive.unref();
 
   try {
-    const port = process.env.PORT;
+    const port = Number.parseInt(process.env.PORT, 10) || 8080;
 
     app.listen({ port: port, host: "0.0.0.0" }, (err) => {
       if (err) {
@@ -575,7 +599,7 @@ const buildApp = async () => {
     console.log(
       `\n// ${packageData.name} v.${packageData.version}\nGitHub Repository: ${packageData.homepage}\nCreated By: ${packageData.author}`
     );
-    console.log(`Site and API is listening to the port ${process.env.PORT}`);
+    console.log(`Site and API is listening to the port ${port}`);
   } catch (error) {
     app.log.error(`Unable to start the server:\n${error}`);
   }

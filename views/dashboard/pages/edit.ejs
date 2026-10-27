@@ -1,0 +1,108 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<% const isNew = !page || !page.pageId; %>
+<% const p = page || {}; %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-file-lines me-2"></i><%= isNew ? "New page" : "Edit page" %></h1>
+        <a class="btn btn-outline-secondary" href="/dashboard/pages"><i class="fa-solid fa-arrow-left me-1"></i>All pages</a>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (errors && errors.length) { %>
+        <div class="alert alert-danger">
+          <strong>The page was not saved.</strong>
+          <ul class="mb-0"><% errors.forEach(function (e) { %><li><%= e %></li><% }) %></ul>
+        </div>
+      <% } %>
+
+      <form method="post" action="<%= isNew ? '/dashboard/pages' : '/dashboard/pages/' + p.pageId %>" id="pageForm">
+        <div class="row g-4">
+          <div class="col-lg-8">
+            <div class="card shadow-sm">
+              <div class="card-body">
+                <div class="mb-3">
+                  <label class="form-label fw-semibold" for="title">Title</label>
+                  <input type="text" class="form-control form-control-lg" id="title" name="title"
+                         maxlength="<%= limits.title %>" value="<%= p.title || '' %>" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold" for="slug">Address</label>
+                  <div class="input-group">
+                    <span class="input-group-text"><%= (config.siteConfiguration.siteUrl || '') %>/</span>
+                    <input type="text" class="form-control font-monospace" id="slug" name="slug"
+                           maxlength="<%= limits.slug %>" pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                           value="<%= p.slug || '' %>" placeholder="worked out from the title">
+                  </div>
+                  <div class="form-text">Lowercase letters, numbers and hyphens. Changing it breaks old links to the page.</div>
+                </div>
+                <label class="form-label fw-semibold">Content</label>
+                <%- include("../../partials/summerNoteEditor.ejs", {
+                  editorElementName: "pageContentEditor",
+                  editorPOSTElementName: "content",
+                  editorElementText: p.content || ''
+                }) %>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-lg-4">
+            <div class="card shadow-sm mb-4">
+              <div class="card-header fw-semibold">Publish</div>
+              <div class="card-body">
+                <div class="mb-3">
+                  <label class="form-label" for="status">Status</label>
+                  <select class="form-select" id="status" name="status">
+                    <option value="draft" <%= p.status !== 'published' ? 'selected' : '' %>>Draft — only staff can preview it</option>
+                    <option value="published" <%= p.status === 'published' ? 'selected' : '' %>>Published — visible to everyone</option>
+                  </select>
+                </div>
+                <div class="d-flex gap-2">
+                  <button type="submit" class="btn btn-primary flex-grow-1"><%= isNew ? "Create page" : "Save changes" %></button>
+                  <% if (!isNew) { %>
+                    <a class="btn btn-outline-secondary" href="/<%= p.slug %>" target="_blank" rel="noopener"><%= p.status === 'published' ? 'View' : 'Preview' %></a>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+
+            <div class="card shadow-sm">
+              <div class="card-header fw-semibold">Search engines</div>
+              <div class="card-body">
+                <label class="form-label" for="metaDescription">Description</label>
+                <textarea class="form-control" id="metaDescription" name="metaDescription" rows="3"
+                          maxlength="<%= limits.metaDescription %>"><%= p.metaDescription || '' %></textarea>
+                <div class="form-text">Shown under the page title in search results. Optional.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // Suggest a slug from the title until the slug is edited by hand.
+  (function () {
+    var title = document.getElementById('title');
+    var slug = document.getElementById('slug');
+    var touched = slug.value !== '';
+    slug.addEventListener('input', function () { touched = slug.value !== ''; });
+    title.addEventListener('input', function () {
+      if (touched) return;
+      slug.placeholder = title.value.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'worked out from the title';
+    });
+  })();
+</script>
+
+<%- include("../../admin/_footer.ejs") %>

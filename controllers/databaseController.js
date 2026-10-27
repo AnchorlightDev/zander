@@ -10,10 +10,9 @@
  *                  Keeps existing callback-style controller code working without
  *                  modification.  Import as: import db from "./databaseController.js"
  *
- * Cross-database views (luckPermsPlayers, ranks, userRanks, userPermissions,
- * rankRanks, rankPermissions, shoppingDirectory) cannot be modelled in Prisma
- * because they span external databases.  Use prisma.$queryRawUnsafe() for those.
- * Punishments are queried directly via punishmentsDb (LiteBans DB instance).
+ * LuckPerms, QuickShop and LiteBans live in external databases and are queried
+ * directly through luckpermsDb, quickshopDb and punishmentsDb -- there are no
+ * cross-database views.
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -60,16 +59,22 @@ export const prisma = prismaBase.$extends({
     $allModels: {
       async $allOperations({ operation, model, args, query }) {
         if (!WRITE_OPS.has(operation)) return query(args);
-        const timeout = new Promise((_, reject) =>
-          setTimeout(
+        let timer;
+        const timeout = new Promise((_, reject) => {
+          timer = setTimeout(
             () => reject(new Error(
               `Database ${operation} on ${model} timed out after 30 s — ` +
               "the database may be under heavy load. Please try again."
             )),
             WRITE_TIMEOUT_MS
-          )
-        );
-        return Promise.race([query(args), timeout]);
+          );
+        });
+        try {
+          return await Promise.race([query(args), timeout]);
+        } finally {
+          // Without this every successful write leaves a live 30 s timer behind.
+          clearTimeout(timer);
+        }
       },
     },
   },
@@ -141,12 +146,19 @@ const pool = mysql2.createPool({
   password: decodeURIComponent(dbUrl.password),
   database: dbUrl.pathname.slice(1),
   charset: "utf8mb4",
-  multipleStatements: true,
+  // Stacked statements are never used by this app. Leaving them enabled would
+  // turn any future string-built query into a stacked-statement injection.
+  multipleStatements: false,
   connectTimeout: 10000,
   waitForConnections: true,
   timezone: "Z",
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
+  // Close connections idle for a minute. A connection left unused longer can be
+  // dropped by the server or a firewall without the pool noticing, and the
+  // next query then hangs on it -- a blank page until the visitor refreshes.
+  maxIdle: 2,
+  idleTimeout: 60000,
 });
 
 // Ensure utf8mb4 on every connection and update health status.
@@ -213,6 +225,11 @@ const luckpermsPool = mysql2.createPool({
   timezone: "Z",
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
+  // Close connections idle for a minute. A connection left unused longer can be
+  // dropped by the server or a firewall without the pool noticing, and the
+  // next query then hangs on it -- a blank page until the visitor refreshes.
+  maxIdle: 2,
+  idleTimeout: 60000,
 });
 
 luckpermsPool.on("connection", function (connection) {
@@ -252,6 +269,11 @@ const quickshopPool = mysql2.createPool({
   timezone: "Z",
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
+  // Close connections idle for a minute. A connection left unused longer can be
+  // dropped by the server or a firewall without the pool noticing, and the
+  // next query then hangs on it -- a blank page until the visitor refreshes.
+  maxIdle: 2,
+  idleTimeout: 60000,
 });
 
 quickshopPool.on("connection", function (connection) {
@@ -291,6 +313,11 @@ const punishmentsPool = mysql2.createPool({
   timezone: "Z",
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
+  // Close connections idle for a minute. A connection left unused longer can be
+  // dropped by the server or a firewall without the pool noticing, and the
+  // next query then hangs on it -- a blank page until the visitor refreshes.
+  maxIdle: 2,
+  idleTimeout: 60000,
 });
 
 punishmentsPool.on("connection", function (connection) {

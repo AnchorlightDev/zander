@@ -48,7 +48,32 @@ function query(sql, params = []) {
  * Fetch all active Stripe prices with expanded product data.
  * Uses cursor pagination to handle large catalogs.
  */
+const STRIPE_CATALOG_TTL_MS = 60_000;
+const STRIPE_FETCH_TIMEOUT_MS = 10_000;
+let stripeCatalogCache = { expiresAt: 0, promise: null };
+
+/** Drop the cached catalogue, e.g. after a dashboard save. */
+export function invalidateStripeCatalogCache() {
+  stripeCatalogCache = { expiresAt: 0, promise: null };
+}
+
 export async function fetchStripePrices() {
+  // Every public /webstore and /ranks view used to crawl the whole Stripe
+  // price list live; one slow Stripe response stalled the page and a burst of
+  // visitors hit Stripe's rate limit, which then broke webhook fulfilment too.
+  const now = Date.now();
+  if (stripeCatalogCache.promise && now < stripeCatalogCache.expiresAt) {
+    return stripeCatalogCache.promise;
+  }
+  const promise = fetchStripePricesUncached().catch((error) => {
+    invalidateStripeCatalogCache();
+    throw error;
+  });
+  stripeCatalogCache = { expiresAt: now + STRIPE_CATALOG_TTL_MS, promise };
+  return promise;
+}
+
+async function fetchStripePricesUncached() {
   const apiKey = process.env.STRIPE_SECRET_KEY;
   if (!apiKey) throw new Error("STRIPE_SECRET_KEY is not configured");
 
@@ -61,9 +86,17 @@ export async function fetchStripePrices() {
     params.append("expand[]", "data.product");
     if (startingAfter) params.append("starting_after", startingAfter);
 
-    const response = await fetch(`https://api.stripe.com/v1/prices?${params}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), STRIPE_FETCH_TIMEOUT_MS);
+    let response;
+    try {
+      response = await fetch(`https://api.stripe.com/v1/prices?${params}`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
 
     if (!response.ok) {
       const text = await response.text();
@@ -845,7 +878,15 @@ export async function retryDeferredDiscordRoles({ userId, discordClient, guildId
  * @param {{ discordClient, guildId }} [discord]
  */
 export async function fulfillPurchase(purchase, item, discord = {}) {
-  if (!item || !Array.isArray(item.grantCommands) || !item.grantCommands.length) {
+  if (!item) {
+    // The customer has paid but the Stripe price/product can no longer be
+    // resolved (deactivated between checkout and webhook, say). Marking this
+    // "fulfilled" would hide a paid-for order that granted nothing.
+    console.error(`[webstore] purchase ${purchase.purchaseId} paid but its item could not be resolved; marking failed`);
+    await updatePurchaseStatus(purchase.purchaseId, "failed");
+    return;
+  }
+  if (!Array.isArray(item.grantCommands) || !item.grantCommands.length) {
     await updatePurchaseStatus(purchase.purchaseId, "fulfilled");
     return;
   }
@@ -1017,7 +1058,7 @@ export async function getMonthlyPurchaseTotals(startDate, endDate) {
     `SELECT COALESCE(SUM(amountCents), 0) AS totalCents
      FROM webstorePurchases
      WHERE status IN ('paid', 'fulfilled')
-       AND createdAt BETWEEN ? AND ?`,
+       AND createdAt >= ? AND createdAt < ?`,
     [startDate, endDate]
   );
   return Number(results[0]?.totalCents || 0);

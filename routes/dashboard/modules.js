@@ -14,6 +14,8 @@
 import { getGlobalImage, hasPermission, setBannerCookie } from "../../api/common.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { describeFeatureFlags, saveFeatureFlags } from "../../controllers/configSettingsController.js";
+import { hasModuleSettings } from "../../lib/config/settingsRegistry.mjs";
+import { hasPermission as holdsNode } from "../../lib/discord/permissions.mjs";
 
 const PERMISSION_NODE = "zander.web.modules";
 
@@ -38,6 +40,8 @@ export default function dashboardModulesRoute(app, config, db, features, lang) {
         features,
         groups,
         error,
+        hasModuleSettings,
+        canEditSettings: holdsNode(req.session?.user?.permissions, "zander.web.settings"),
         globalImage: await getGlobalImage(),
         announcementWeb: await getWebAnnouncement(),
       })

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { discordScheduledFor, parseOffsetMinutes, siteAnnouncementWindow } from "../../lib/eventAnnouncements.js";
 
 const prismaMock = {
@@ -26,13 +26,22 @@ const END = new Date("2026-10-10T12:00:00Z");
 const NOW = new Date("2026-10-03T00:00:00Z");
 
 let nextId;
+// The services read the real clock, so pin it to NOW. Without this the fixtures
+// (an event on 2026-10-10) slide into the past and published-event scheduling
+// clamps or skips them. Only Date is faked so async mocks still resolve.
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
   for (const model of Object.values(prismaMock)) for (const fn of Object.values(model)) fn.mockReset();
   nextId = 100;
   prismaMock.event_announcements.create.mockImplementation(async ({ data }) => ({ id: nextId++, ...data }));
   prismaMock.announcements.create.mockImplementation(async () => ({ announcementId: 900 }));
   prismaMock.event_announcements.findMany.mockResolvedValue([]);
   prismaMock.announcements.findFirst.mockResolvedValue(null);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("timing helpers", () => {

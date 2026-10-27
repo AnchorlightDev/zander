@@ -1,0 +1,163 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <!-- ── Page header ─────────────────────────────────────────────────── -->
+      <div class="wp-admin-page-header">
+        <h1 class="wp-heading-inline">Holograms</h1>
+        <a href="/dashboard/holograms/create" class="page-title-action">
+          <i class="fas fa-plus" aria-hidden="true"></i> Add Frame
+        </a>
+      </div>
+      <hr class="wp-section-divider">
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <p class="text-muted" style="max-width:720px;">
+        Each row is one message in a hologram's rotation. Frames are grouped — a hologram placed
+        in-game with <code>/hologram create &lt;name&gt; &lt;group&gt;</code> cycles through the
+        frames of its group. The <strong>default</strong> group is the shared rotation. A frame's
+        optional link is offered when a player right-clicks the hologram while that frame shows.
+      </p>
+
+      <!-- ── Frames by group ──────────────────────────────────────────────── -->
+      <div class="wp-list-wrap">
+
+        <% if (!apiData || apiData.success === false) { %>
+          <div class="wp-notice wp-notice-error" style="margin:0;">
+            <span class="wp-notice-icon"><i class="fas fa-times-circle"></i></span>
+            <p>Failed to load hologram frames.</p>
+          </div>
+
+        <% } else if (!apiData.data || apiData.data.length === 0) { %>
+          <div class="wp-empty-state">
+            <i class="fa-solid fa-signs-post"></i>
+            <p>No hologram frames yet. <a href="/dashboard/holograms/create">Create the first one.</a></p>
+          </div>
+
+        <% } else {
+             // Group the flat list by hologram_group, preserving query order.
+             const grouped = {};
+             for (const f of apiData.data) {
+               (grouped[f.hologram_group] = grouped[f.hologram_group] || []).push(f);
+             }
+        %>
+          <% for (const group of Object.keys(grouped)) { %>
+            <h2 class="h5 mt-4 mb-2">
+              <i class="fa-solid fa-layer-group text-muted"></i>
+              <%= group %>
+              <span class="wp-badge info"><%= grouped[group].length %></span>
+            </h2>
+            <div class="table-responsive">
+              <table class="wp-list-table wp-list-table-responsive" aria-label="Frames in <%= group %>">
+                <thead>
+                  <tr>
+                    <th scope="col" style="width:70px;">Order</th>
+                    <th scope="col">Message</th>
+                    <th scope="col">Link</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% grouped[group].forEach(function (f, idx) {
+                       const isEnabled = f.enabled === 1 || f.enabled === true;
+                  %>
+                    <tr>
+                      <td data-label="Order">
+                        <div class="d-flex align-items-center gap-1">
+                          <form action="/dashboard/holograms/move" method="post" style="display:inline;">
+                            <input type="hidden" name="id" value="<%= f.id %>">
+                            <input type="hidden" name="direction" value="up">
+                            <button type="submit" class="row-action-btn" title="Move up" <%= idx === 0 ? 'disabled' : '' %>>
+                              <i class="fas fa-arrow-up"></i>
+                            </button>
+                          </form>
+                          <form action="/dashboard/holograms/move" method="post" style="display:inline;">
+                            <input type="hidden" name="id" value="<%= f.id %>">
+                            <input type="hidden" name="direction" value="down">
+                            <button type="submit" class="row-action-btn" title="Move down" <%= idx === grouped[group].length - 1 ? 'disabled' : '' %>>
+                              <i class="fas fa-arrow-down"></i>
+                            </button>
+                          </form>
+                        </div>
+                      </td>
+                      <td data-label="Message" style="max-width:340px;">
+                        <code style="white-space:pre-wrap;word-break:break-word;"><%= f.message %></code>
+                        <% if (f.countdown_to) {
+                             const cd = new Date(f.countdown_to);
+                             const cdLabel = Number.isNaN(cd.getTime()) ? null : cd.toISOString();
+                        %>
+                          <% if (cdLabel) { %>
+                            <div class="mt-1">
+                              <span class="wp-badge info" title="Counts down to <%= cdLabel %> (UTC)">
+                                <i class="fa-regular fa-clock"></i> Countdown
+                              </span>
+                            </div>
+                          <% } %>
+                        <% } %>
+                        <% if (f.expires_at) {
+                             const ex = new Date(f.expires_at);
+                             const exLabel = Number.isNaN(ex.getTime()) ? null : ex.toISOString();
+                             const expired = exLabel && ex.getTime() <= Date.now();
+                        %>
+                          <% if (exLabel) { %>
+                            <div class="mt-1">
+                              <span class="wp-badge <%= expired ? 'inactive' : 'info' %>" title="<%= expired ? 'Expired at' : 'Expires at' %> <%= exLabel %> (UTC)">
+                                <i class="fa-regular fa-calendar-xmark"></i> <%= expired ? 'Expired' : 'Expires' %>
+                              </span>
+                            </div>
+                          <% } %>
+                        <% } %>
+                      </td>
+                      <td data-label="Link">
+                        <% if (f.link) { %>
+                          <a href="<%= f.link %>" target="_blank" rel="noopener" class="text-truncate d-inline-block" style="max-width:180px;"><%= f.link %></a>
+                        <% } else { %>
+                          <span class="text-muted-sm">—</span>
+                        <% } %>
+                      </td>
+                      <td data-label="Status">
+                        <span class="wp-badge <%= isEnabled ? 'active' : 'inactive' %>"><%= isEnabled ? 'Enabled' : 'Disabled' %></span>
+                      </td>
+                      <td data-label="Actions">
+                        <div class="row-actions">
+                          <a class="row-action-btn edit" href="/dashboard/holograms/edit?id=<%= f.id %>">
+                            <i class="fas fa-pen" aria-hidden="true"></i> Edit
+                          </a>
+                          <form action="/dashboard/holograms/toggle" method="post" style="display:inline;">
+                            <input type="hidden" name="id" value="<%= f.id %>">
+                            <input type="hidden" name="enabled" value="<%= isEnabled ? '0' : '1' %>">
+                            <button type="submit" class="row-action-btn">
+                              <i class="fas <%= isEnabled ? 'fa-eye-slash' : 'fa-eye' %>" aria-hidden="true"></i>
+                              <%= isEnabled ? 'Disable' : 'Enable' %>
+                            </button>
+                          </form>
+                          <form action="/dashboard/holograms/delete" method="post" style="display:inline;"
+                                onsubmit="return confirm('Delete this hologram frame?')">
+                            <input type="hidden" name="id" value="<%= f.id %>">
+                            <button type="submit" class="row-action-btn danger">
+                              <i class="fas fa-trash" aria-hidden="true"></i> Delete
+                            </button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        <% } %>
+
+      </div>
+      <!-- /wp-list-wrap -->
+
+    </div><!-- /.wrap -->
+  </div><!-- /#wpbody-content -->
+  <%- include("../../admin/_footer.ejs") %>
+</div><!-- /#wpcontent -->

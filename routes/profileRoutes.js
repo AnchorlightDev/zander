@@ -1,9 +1,9 @@
 import crypto from "crypto";
 import { MONTHS } from "../lib/birthday.mjs";
 import { groupedTimeZones } from "../lib/timezones.mjs";
-import qs from "querystring";
 import { getGlobalImage, isLoggedIn, setBannerCookie } from "../api/common.js";
 import { checkRateLimit } from "../lib/rateLimiter.mjs";
+import { isSafeLocalPath } from "../lib/safeLocalPath.mjs";
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import {
   UserGetter,
@@ -61,7 +61,7 @@ export default function profileSiteRoutes(
       state,
     };
 
-    return `https://discord.com/api/oauth2/authorize?${qs.stringify(params)}`;
+    return `https://discord.com/api/oauth2/authorize?${new URLSearchParams(params)}`;
   };
 
   const buildTwitchAuthorizeUrl = (state) => {
@@ -72,7 +72,7 @@ export default function profileSiteRoutes(
       scope: "user:read:email",
       state,
     };
-    return `https://id.twitch.tv/oauth2/authorize?${qs.stringify(params)}`;
+    return `https://id.twitch.tv/oauth2/authorize?${new URLSearchParams(params)}`;
   };
 
   const buildYoutubeAuthorizeUrl = (state) => {
@@ -85,7 +85,7 @@ export default function profileSiteRoutes(
       prompt: "consent",
       state,
     };
-    return `https://accounts.google.com/o/oauth2/v2/auth?${qs.stringify(params)}`;
+    return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams(params)}`;
   };
 
   const getProfileEditorRedirect = (req) => {
@@ -407,7 +407,7 @@ export default function profileSiteRoutes(
 
     const state = crypto.randomBytes(16).toString("hex");
     const requestedRedirect =
-      typeof req.query.redirect === "string" && req.query.redirect.startsWith("/")
+      isSafeLocalPath(req.query.redirect)
         ? req.query.redirect
         : getProfileEditorRedirect(req);
 
@@ -466,7 +466,7 @@ export default function profileSiteRoutes(
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: qs.stringify(tokenParams),
+        body: new URLSearchParams(tokenParams).toString(),
       });
 
       if (!tokenResponse.ok) {
@@ -667,7 +667,7 @@ export default function profileSiteRoutes(
 
     const state = crypto.randomBytes(16).toString("hex");
     const requestedRedirect =
-      typeof req.query.redirect === "string" && req.query.redirect.startsWith("/")
+      isSafeLocalPath(req.query.redirect)
         ? req.query.redirect
         : getProfileEditorRedirect(req);
 
@@ -701,7 +701,7 @@ export default function profileSiteRoutes(
       const tokenResponse = await fetch("https://id.twitch.tv/oauth2/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: qs.stringify({
+        body: new URLSearchParams({
           client_id: process.env.twitchClientId,
           client_secret: process.env.twitchClientSecret,
           grant_type: "authorization_code",
@@ -790,7 +790,7 @@ export default function profileSiteRoutes(
 
     const state = crypto.randomBytes(16).toString("hex");
     const requestedRedirect =
-      typeof req.query.redirect === "string" && req.query.redirect.startsWith("/")
+      isSafeLocalPath(req.query.redirect)
         ? req.query.redirect
         : getProfileEditorRedirect(req);
 
@@ -829,7 +829,7 @@ export default function profileSiteRoutes(
       const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: qs.stringify({
+        body: new URLSearchParams({
           client_id: process.env.googleClientId,
           client_secret: process.env.googleClientSecret,
           grant_type: "authorization_code",

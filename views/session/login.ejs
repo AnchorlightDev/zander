@@ -12,10 +12,14 @@
   backgroundImage: globalImage
 }) %>
 
-<section class="section">
-    <div class="container">
-      <div class="row">
-        <div class="col-12 col-sm-6">    
+<section class="section auth-page">
+  <div class="container">
+    <div class="row align-items-center justify-content-center g-5">
+      <div class="col-md-9 col-lg-6 col-xl-5">
+        <div class="auth-card">
+          <h3 class="auth-title">Welcome back</h3>
+          <p class="auth-subtitle">Sign in to your <%= config.siteConfiguration.siteName %> account.</p>
+
           <% if (req.cookies.alertType) { %>
             <%- include("../partials/alert.ejs", {
               alertType: req.cookies.alertType,
@@ -25,42 +29,45 @@
 
           <form method="post" action="<%= process.env.siteAddress %>/login">
             <div class="mb-3">
-              <label for="identifier">Username or Email</label>
-              <input type="text" class="form-control" name="identifier" required>
+              <label for="identifier" class="form-label">Username or email</label>
+              <input type="text" class="form-control" id="identifier" name="identifier" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
             </div>
-            <div class="mb-3">
-              <label for="password">Password</label>
-              <input type="password" class="form-control" name="password" required>
-            </div>
-            <div class="mb-3 form-check">
+
+            <%- include("../partials/session/passwordField.ejs", {
+              id: "password",
+              name: "password",
+              label: "Password",
+              autocomplete: "current-password",
+              labelExtra: '<a href="/forgot-password">Forgot password?</a>'
+            }) %>
+
+            <div class="mb-4 form-check">
               <input type="checkbox" class="form-check-input" name="rememberMe" id="rememberMe" value="1">
               <label class="form-check-label" for="rememberMe">Remember me</label>
             </div>
-          <div class="text-center">
-            <button type="submit" class="btn btn-primary" style="width: 100%">Sign In</button>
-          </div>
-        </form>
-        <br>
-        <small class="text-muted">Forgot your password? <a href="/forgot-password">Reset it here</a>.</small>
-        <br>
-        <div class="mb-3 text-center">
-          <span class="text-muted">or</span>
-        </div>
-          <div class="d-grid">
-            <a href="<%= discordAuthorizeUrl %>" class="btn" style="background-color:#5865F2; color:#fff;">
-              <i class="fab fa-discord"></i> Sign in with Discord
+
+            <button type="submit" class="btn btn-primary w-100">Sign in</button>
+          </form>
+
+          <% if (discordAuthorizeUrl) { %>
+            <div class="auth-divider">or</div>
+            <a href="<%= discordAuthorizeUrl %>" class="btn btn-discord w-100">
+              <i class="fab fa-discord me-1" aria-hidden="true"></i> Sign in with Discord
             </a>
-          </div>
-          <br>
-          <small class="text-muted">Don't have an account? You can <a href="/register">register here</a>.</small>
-        </div>
-        <div class="col-12 col-sm-6" style="min-height:500px;">
-          <div class="text-center">
-            <img class="floating" style="margin-top:10px;" src="/images/session/loginImage.png" height="300px" draggable="false">
-          </div>
+          <% } %>
+
+          <% if (features.web?.register !== false) { %>
+            <div class="auth-footer">
+              New here? <a href="/register">Create an account</a>
+            </div>
+          <% } %>
         </div>
       </div>
+      <div class="col-lg-5 d-none d-lg-block text-center">
+        <img class="floating auth-illustration" src="/images/session/loginImage.png" alt="" draggable="false">
+      </div>
     </div>
+  </div>
 </section>
 
 <%- include("../modules/footer.ejs") %>

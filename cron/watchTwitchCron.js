@@ -25,6 +25,8 @@ import {
   hasNotificationBeenSent,
   recordNotification,
   createInGameAnnouncement,
+  getContentItemByExternal,
+  setContentItemAnnouncementId,
 } from "../controllers/watchController.js";
 
 // ---------------------------------------------------------------------------
@@ -190,17 +192,25 @@ async function syncTwitchCreator(creator, stream) {
         }
       }
 
-      // In-game tip announcement (deduplicated independently of Discord)
-      const ingameAlreadySent = await hasNotificationBeenSent("twitch", stream.id, "ingame_live");
-      if (!ingameAlreadySent) {
-        const creatorName = creator.platform_display_name || creator.username;
-        const announcementBody = `Creator ${creatorName} is now live — watch now at craftingforchrist.net/watch`;
-        try {
-          await createInGameAnnouncement(announcementBody);
-          await recordNotification("twitch", stream.id, "ingame_live", null);
-        } catch (err) {
-          console.error(`[WatchTwitch] userId=${creator.user_id}: failed to create in-game announcement for stream "${stream.id}":`, err);
+      // In-game "creator is live" broadcast. Keep exactly one active tip
+      // announcement per live stream: the Velocity proxy re-broadcasts active
+      // tips to every online player on its own interval
+      // (announcementTipInterval — set this to 10 minutes), and
+      // markStreamsOffline deletes this announcement the moment the stream
+      // ends. So the message shows "only while live" and repeats on the proxy's
+      // interval without a dedicated cron here.
+      try {
+        const saved = await getContentItemByExternal("twitch", stream.id);
+        if (saved && !saved.ingame_announcement_id) {
+          const creatorName = creator.platform_display_name || creator.username;
+          const announcementBody = `Creator ${creatorName} is now live — watch now at craftingforchrist.net/watch`;
+          // 24h expiry is only a safety net; the offline sweep normally retracts
+          // the tip first, well before this.
+          const announcementId = await createInGameAnnouncement(announcementBody, 1440);
+          if (announcementId) await setContentItemAnnouncementId(saved.id, announcementId);
         }
+      } catch (err) {
+        console.error(`[WatchTwitch] userId=${creator.user_id}: failed to manage in-game live announcement for stream "${stream.id}":`, err);
       }
     }
 
@@ -242,6 +252,8 @@ const twitchSyncTask = cron.schedule("*/5 * * * *", async () => {
     if (creators.length === 0) return;
 
     const liveStreamIds = [];
+
+    let anyFetchFailed = false;
     for (const creator of creators) {
       const broadcasterId = creator.platform_account_id;
       try {
@@ -258,6 +270,7 @@ const twitchSyncTask = cron.schedule("*/5 * * * *", async () => {
         if (!streamRes.ok) {
           const body = await streamRes.text();
           console.error(`[WatchTwitch] Stream fetch failed for userId=${creator.user_id} (HTTP ${streamRes.status}):`, body);
+          anyFetchFailed = true;
           continue;
         }
 
@@ -268,11 +281,14 @@ const twitchSyncTask = cron.schedule("*/5 * * * *", async () => {
 
         await syncTwitchCreator(creator, stream);
       } catch (err) {
+        anyFetchFailed = true;
         console.error(`[WatchTwitch] Error during creator sync (${creator.user_id}):`, err);
       }
     }
 
-    await markStreamsOffline("twitch", liveStreamIds);
+    // An API outage is not "everyone went offline": only sweep when every
+    // creator was actually checked.
+    if (!anyFetchFailed) await markStreamsOffline("twitch", liveStreamIds);
   } catch (err) {
     console.error("[WatchTwitch] Cron error:", err);
   } finally {

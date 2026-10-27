@@ -1,3 +1,4 @@
+import { listPublishedPages } from "../controllers/customPageController.js";
 import {
   getCategoriesForUser,
   getRecentDiscussions,
@@ -94,6 +95,8 @@ export function staticSitemapPages(features = {}) {
     features.discord?.punishments && { url: "/punishments", priority: "0.4", changefreq: "daily" },
     { url: "/appeal", priority: "0.5", changefreq: "monthly" },
     features.report && { url: "/report", priority: "0.5", changefreq: "monthly" },
+    features.resources && { url: "/resources", priority: "0.5", changefreq: "weekly" },
+    features.contact && { url: "/contact", priority: "0.4", changefreq: "yearly" },
     { url: "/rules", priority: "0.6", changefreq: "monthly" },
     { url: "/terms", priority: "0.3", changefreq: "monthly" },
     { url: "/privacy", priority: "0.3", changefreq: "monthly" },
@@ -130,7 +133,7 @@ export default function sitemapRoutes(app, config, features) {
   // llms.txt — https://llmstxt.org/ — a curated, model-friendly map of the
   // site's canonical pages, so generative engines can ground answers on the
   // right URLs instead of guessing.
-  app.get("/llms.txt", function (req, res) {
+  app.get("/llms.txt", async function (req, res) {
     const L = [];
     L.push(`# ${sc.siteName || "Website"}`);
     L.push("");
@@ -154,7 +157,15 @@ export default function sitemapRoutes(app, config, features) {
     L.push(`- [Staff](${baseUrl}/staff): the volunteer team that runs the community`);
     if (features.report) L.push(`- [Report a player](${baseUrl}/report): report rule-breaking for staff review`);
     L.push(`- [Appeal a punishment](${baseUrl}/appeal): submit a ban or mute appeal`);
+    if (features.contact) L.push(`- [Contact](${baseUrl}/contact): get in touch with the team`);
     L.push("");
+
+    const customPages = await listPublishedPages().catch(() => []);
+    if (customPages.length) {
+      L.push("## Pages");
+      for (const page of customPages) L.push(`- [${page.title}](${baseUrl}/${page.slug})`);
+      L.push("");
+    }
 
     L.push("## Community");
     if (features.forums) L.push(`- [Forums](${baseUrl}/forums): community discussion boards`);
@@ -163,6 +174,7 @@ export default function sitemapRoutes(app, config, features) {
     if (features.events) L.push(`- [Events](${baseUrl}/events): upcoming and past community events`);
     if (features.watch) L.push(`- [Watch](${baseUrl}/watch): community creator content and streams`);
     if (features.shopdirectory) L.push(`- [Player shop directory](${baseUrl}/shopdirectory): in-game player-run stores, items and prices`);
+    if (features.resources) L.push(`- [Resources](${baseUrl}/resources): helpful links, apps and tools shared by the community`);
     if (features.discord?.punishments) L.push(`- [Punishment log](${baseUrl}/punishments): the public moderation log`);
     L.push("");
 
@@ -252,7 +264,20 @@ export default function sitemapRoutes(app, config, features) {
       }
     }
 
-    const urlEntries = [...staticPages, ...forumUrls, ...eventUrls]
+    // Staff-written pages (routes/customPageRoutes.js); drafts are never listed.
+    let pageUrls = [];
+    try {
+      pageUrls = (await listPublishedPages()).map((page) => ({
+        url: `/${page.slug}`,
+        priority: "0.6",
+        changefreq: "monthly",
+        lastmod: new Date(page.updatedAt).toISOString().slice(0, 10),
+      }));
+    } catch (err) {
+      console.error("[SITEMAP] Failed to fetch custom pages:", err.message);
+    }
+
+    const urlEntries = [...staticPages, ...pageUrls, ...forumUrls, ...eventUrls]
       .map(
         ({ url, priority, changefreq, lastmod }) =>
           `  <url>\n    <loc>${escapeXml(baseUrl + url)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`

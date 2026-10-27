@@ -1,469 +1,178 @@
-# zander-web
-The web component of the Zander project that contains database, API and website.
+<div align="center">
 
-Documentation: [https://modularsoft.org/docs/products/zander](https://modularsoft.org/docs/products/zander)
+# Zander
 
-This repo is a monorepo with two projects:
+**One platform for your whole Minecraft community: website, staff dashboard, Discord bot and server plugins, all on one account system and one database.**
 
-- **/** (root) — the Node.js web dashboard, API, and database (this document covers it)
-- **[agent/](agent/)** — the Java/Maven Minecraft plugins (`zander-addon`, `zander-auth`, `zander-hub`, `zander-velocity`) (see [agent/README.md](agent/README.md))
+[![Version](https://img.shields.io/badge/version-2.2.0-2563eb)](CHANGELOG.md)
+[![Node.js](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=nodedotjs&logoColor=white)](SETUP.md)
+[![Java](https://img.shields.io/badge/java-21-ea580c?logo=openjdk&logoColor=white)](agent/README.md)
+[![Paper & Velocity](https://img.shields.io/badge/Paper%20%26%20Velocity-plugins-0ea5e9)](agent/)
+[![Discord.js](https://img.shields.io/badge/discord.js-bot-5865F2?logo=discord&logoColor=white)](commands/)
 
-## Permissions
+[Features](#features) · [How it fits together](#how-it-fits-together) · [Quick start](#quick-start) · [Documentation](#documentation) · [Changelog](CHANGELOG.md)
 
-All permission nodes follow dot-notation and are managed via LuckPerms. Wildcard support is available (e.g. `zander.web.*` grants all `zander.web.X` nodes). The special `*` node grants full access.
-
-### Web Dashboard
-
-| Permission Node | Description |
-|---|---|
-| `zander.web.dashboard` | Access the main dashboard |
-| `zander.web.logs` | View system logs and audit trails |
-| `zander.web.announcements` | Create, edit, and view announcements |
-| `zander.web.application` | Manage player applications |
-| `zander.web.forms` | Build forms and review their submissions |
-| `zander.web.server` | Manage game servers |
-| `zander.web.rank` | Manage individual player ranks via the API |
-| `zander.web.ranks` | Access the ranks dashboard page |
-| `zander.web.ranks.permissions` | Grant and revoke Zander permissions on a rank |
-| `zander.web.scheduler` | Schedule announcements/messages |
-| `zander.web.vault` | Access vault management |
-| `zander.web.bridge` | Manage bridge/integrations |
-| `zander.web.badges` | Access the badge management dashboard (create, edit, assign, delete badges) |
-| `zander.web.apikeys` | Issue, scope and revoke API client credentials |
-| `zander.web.settings` | Edit site settings (site info, links, Discord IDs and webhooks, automation) |
-| `zander.web.modules` | Switch modules (feature flags) on and off |
-| `zander.web.users` | Access the user administration dashboard (view only; email addresses are masked) |
-| `zander.web.users.email` | Reveal unmasked email addresses on the user administration pages |
-| `zander.web.users.manage` | Edit user records from the user administration dashboard |
-
-### Events
-
-| Permission Node | Description |
-|---|---|
-| `zander.web.events` | Access the events dashboard (view only) |
-| `zander.web.events.edit` | Create and edit events |
-| `zander.web.events.review` | Review and publish events (implies edit access), and edit the default announcements new events start with |
-
-### Webstore
-
-| Permission Node | Description |
-|---|---|
-| `zander.web.webstore` | Access the webstore admin dashboard (purchases, command configuration) |
-| `zander.web.webstore.manage` | Edit webstore products and command configuration |
-| `zander.web.webstore.*` | Equivalent to both `zander.web.webstore` and `zander.web.webstore.manage` |
-
-### Finance
-
-| Permission Node | Description |
-|---|---|
-| `zander.web.finance` | View the finance dashboard (accounts, transactions, categories) |
-| `zander.web.finance.manage` | Create, edit, and delete finance records |
-| `zander.web.finance.*` | Equivalent to both `zander.web.finance` and `zander.web.finance.manage` |
-
-### Support Tickets
-
-| Permission Node | Description |
-|---|---|
-| `zander.web.ticket` | Access the support ticket dashboard |
-| `zander.web.tickets` | Access ticket category listings |
-| `zander.web.tickets.{slug}` | Access a specific ticket category (dynamic, based on category slug) |
-| `zander.web.tickets.*` | Access all ticket categories |
-| `zander.web.ticket.escalate` | Escalate and de-escalate support tickets |
-| `zander.web.tickets.manageparticipants` | Add and remove participants on support tickets |
-
-### Punishments & Moderation
-
-| Permission Node | Description |
-|---|---|
-| `zander.web.punishment.view` | View the global punishments list |
-| `zander.web.punishment.manage` | Manage (edit/delete) punishments |
-| `zander.web.punishments` | View punishments on user profiles |
-| `zander.web.web-punishments` | Access the web-based punishment dashboard |
-| `zander.web.audit` | View user audit entries on profiles |
-| `zander.web.reports` | View player reports on profiles |
-
-### Voting
-
-| Permission Node | Description |
-|---|---|
-| `zander.web.voting` | Access the voting site management dashboard |
-
-### Forums
-
-| Permission Node | Description |
-|---|---|
-| `zander.web.forums` | Access the forums management dashboard |
-| `zander.web.forums.{node}` | Free-form node set as a category's **view permission**; only holders see that category. The suffix is chosen by you when creating the category (e.g. `zander.web.forums.staff`, `zander.web.forums.supporter`) — it is not a fixed list |
-| `zander.forums.moderate` | General forum moderation rights |
-| `zander.forums.view` | View forum content |
-| `zander.forums.post.delete` | Delete forum posts |
-| `zander.forums.viewArchived` | View archived forum discussions |
-| `zander.forums.discussion.sticky` | Sticky forum discussions |
-| `zander.forums.discussion.lock` | Lock forum discussions |
-| `zander.forums.discussion.archive` | Archive forum discussions |
-| `zander.forums.category.manage` | Manage forum categories (admin dashboard) |
-
-### Discord Punishments
-
-| Permission Node | Description |
-|---|---|
-| `zander.discord.punish.warn` | Issue warnings to users via Discord |
-| `zander.discord.punish.kick` | Kick users from the Discord server |
-| `zander.discord.punish.ban` | Ban/unban users from the Discord server |
-| `zander.discord.punish.mute` | Mute/unmute users in Discord |
-| `zander.discord.punish.history` | View punishment history for users |
-
-### Discord Commands
-
-| Permission Node | Description |
-|---|---|
-| `zander.web.nicknamecheck` | Run the `/nicknamecheck` slash command (bulk-scans linked users for nickname mismatches) |
-
-### Watch / Creator Content
-
-| Permission Node | Description |
-|---|---|
-| `zander.watch.creator` | Marks the user as an eligible creator — their linked Twitch/YouTube content is synced to the `/watch` page |
+</div>
 
 ---
 
+Running a Minecraft network usually means stitching together a website, a forum, a ticket bot, a donation store, a ban list and a dozen plugins that don't know about each other. **Zander replaces that patchwork.** A player links their Minecraft and Discord accounts once, and from then on the website, the Discord server and every game server agree on who they are, what rank they hold and what they're allowed to do.
 
-## API client credentials
+Staff run everything from the browser. Settings, modules, menus, pages, events, holograms and permissions are all edited in the dashboard and take effect without touching a config file or restarting a server.
 
-Every caller of the JSON API — each Minecraft server plugin, the uptime monitor,
-and this app's own internal self-calls — authenticates with its own credential
-rather than a single shared secret. A compromised or retired caller is revoked
-on its own, without touching any other.
+Zander powers the **[Crafting For Christ](https://craftingforchrist.net)** Minecraft network.
 
-### Issuing a key
+## Why Zander
 
-1. Go to **Dashboard → System → API Keys** (`/dashboard/apikeys`, requires
-   `zander.web.apikeys`).
-2. Give the client a name that identifies the caller, e.g. `survival-server`
-   or `uptime-monitor`.
-3. Tick only the scopes that caller needs.
-4. Copy the key it shows you. **It is displayed once.** Only a SHA-256 hash is
-   stored, so a lost key cannot be recovered — revoke the client and issue a
-   new one.
+- **One identity everywhere.** Minecraft, Discord and website accounts are linked, and ranks come straight from LuckPerms, so a promotion in-game is a promotion on the site and in Discord.
+- **Run it from the browser.** Site settings, feature modules, navigation menus, custom pages and API keys all live in the dashboard. Turn a whole module on or off with one switch.
+- **Built for real staff teams.** Fine-grained permissions (each tick box is a LuckPerms node), review workflows for events and resources, and an audit trail of who changed what.
+- **Secure by default.** Per-server API keys with scoped access, CSRF and cross-site protection, rate limiting, sanitised rich text and a hardened session setup. See the [security notes](CHANGELOG.md#security).
+- **Modular.** Every major feature is a self-contained module you can switch off, so a small server can start lean and grow into the rest.
 
-Keys look like `zdr_<8-char prefix>_<40-char secret>`. The prefix is a
-non-secret lookup handle and is safe to quote in logs and support tickets; the
-secret is not.
+## Features
 
-### Scopes
+### Community website
 
-One scope per API surface, with **no wildcard** — granting broad access has to
-be a deliberate act of selecting every box:
-
-`announcement`, `application`, `badges`, `bridge`, `config`, `discord`,
-`events`, `filter`, `finance`, `punishments`, `ranks`, `report`, `scheduler`,
-`server`, `session`, `shopdirectory`, `user`, `vault`, `web`, `adminUsers`,
-`internal`
-
-A request to a path with no scope mapping is rejected, so a newly added route
-is unreachable until it is deliberately given a scope.
-
-### Responses
-
-| Situation | Status |
+| | |
 |---|---|
-| Missing or malformed key | `401` |
-| Unknown prefix, wrong secret, or revoked client | `401` |
-| Valid key without the required scope | `403` |
-| Client lookup failed (database unreachable) | `503` |
-
-The body keeps the usual `{ success, message }` shape.
-
-### This app's own calls
-
-The app calls its own API in a number of places (`api/internal_redirect/*`,
-several dashboard routes and Discord commands). It uses a dedicated client —
-conventionally named `zander-web-internal` — supplied via `INTERNAL_API_KEY`
-and applied through `internalApiHeaders()` in `api/common.js`. Never reintroduce
-a shared key that the app both presents and validates.
-
-### Revocation
-
-Revoking is a soft delete: the row is kept for audit with `isRevoked` and
-`revokedAt` set, and the auth cache entry is evicted immediately so the key
-stops working straight away.
-
-## Creator Content Integration (Twitch & YouTube)
-
-The `/watch` page displays live streams and recent videos from community members who have linked their Twitch or YouTube accounts and hold the `zander.watch.creator` permission node. Content is only surfaced if it contains a CFC marker (e.g. `#cfc` in a stream title/tag or video tag/description).
-
-### How it works
-
-1. A user connects their Twitch and/or YouTube account via **Profile → Connected Accounts**.
-2. A server admin grants the user the `zander.watch.creator` LuckPerms node.
-3. The cron jobs sync the creator's content every 5 minutes (Twitch) or 15 minutes (YouTube).
-4. Matching content is cached in the database and shown on `/watch`.
-5. A one-time Discord notification is posted to the configured webhook when a creator goes live or uploads an eligible video.
-
-### Setting up Twitch OAuth
-
-1. Go to [https://dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) and create a new application.
-2. Set the **OAuth Redirect URL** to `https://<your-domain>/profile/social/twitch/callback`.
-3. Copy the **Client ID** and generate a **Client Secret**.
-4. Add the following to your `.env`:
-
-```env
-twitchClientId=YOUR_CLIENT_ID
-twitchClientSecret=YOUR_CLIENT_SECRET
-```
-
-### Setting up YouTube OAuth & API Key
-
-1. Go to [https://console.cloud.google.com](https://console.cloud.google.com) and create (or select) a project.
-2. Enable the **YouTube Data API v3** under *APIs & Services → Library*.
-3. Create an **OAuth 2.0 Client ID** (*APIs & Services → Credentials → Create Credentials*):
-   - Application type: **Web application**
-   - Authorised redirect URI: `https://<your-domain>/profile/social/youtube/callback`
-   - When the OAuth consent screen asks for scopes, add **`https://www.googleapis.com/auth/youtube.readonly`** — this grants read-only access to the user's YouTube channel identity and is the only scope requested during the account-linking flow.
-4. Create an **API Key** (*Create Credentials → API Key*) and restrict it to the YouTube Data API v3. This key is used server-side by the sync cron job to read public channel content without requiring a user token.
-5. Add the following to your `.env`:
-
-```env
-googleClientId=YOUR_OAUTH_CLIENT_ID
-googleClientSecret=YOUR_OAUTH_CLIENT_SECRET
-youtubeApiKey=YOUR_API_KEY
-```
-
-> **Scope note:** The OAuth flow requests `https://www.googleapis.com/auth/youtube.readonly` with `access_type=offline` so that a refresh token is issued. The server only uses this token to identify the user's channel (channel ID, display name, avatar). All subsequent content syncing is done using the server-side API key against public channel data, so no ongoing access to the user's account is required after the initial link.
-
-### Configuring CFC content filters
-
-The filters that determine whether content is CFC-related are set in **Dashboard → Settings → Watch & Events** (stored as `watch.filters`):
-
-```json
-"watch": {
-  "contentChannelWebhook": "https://discord.com/api/webhooks/...",
-  "contentPingRoleId": null,
-  "filters": {
-    "twitch": {
-      "titleMarkers": ["#cfc", "[cfc]"],
-      "tags": ["cfc"]
-    },
-    "youtube": {
-      "tags": ["cfc"],
-      "descriptionMarkers": ["#cfc"]
-    }
-  }
-}
-```
-
-| Field | Description |
-|---|---|
-| `contentChannelWebhook` | Discord webhook URL to post live/upload notifications to |
-| `contentPingRoleId` | Role ID to ping in notifications, or `null` to disable pinging |
-| `filters.twitch.titleMarkers` | Stream title substrings that qualify content (case-insensitive) |
-| `filters.twitch.tags` | Twitch stream tags that qualify content (exact match, case-insensitive) |
-| `filters.youtube.tags` | YouTube video tags that qualify content (exact match, case-insensitive) |
-| `filters.youtube.descriptionMarkers` | Video description substrings that qualify content (case-insensitive) |
-
-### Feature flag
-
-The `/watch` route is controlled by the **Watch** switch in **Dashboard → Modules** (`features.watch`). Turn it off to disable the page entirely:
-
-```json
-{
-  "watch": false
-}
-```
-
-### Database migration
-
-Run `migration/v1.11.0_v1.12.0.sql` against your database to create the four tables required by this feature:
-
-| Table | Purpose |
-|---|---|
-| `user_platform_connections` | Stores OAuth tokens and channel identity for each linked Twitch/YouTube account |
-| `creator_watch_settings` | Per-user toggles controlling listing visibility and Discord notification preferences |
-| `creator_content_items` | Cached CFC-eligible content items fetched by the cron jobs |
-| `creator_content_notifications` | Deduplication log preventing repeat Discord notifications for the same content |
-
----
-
-## Webstore
-
-The `/webstore` module is a Stripe-powered store for selling in-game ranks and perks. It supports one-time purchases, recurring subscriptions, and gifting to other players. Rank grants are delivered as console commands via the `executorTasks` table (picked up by zander-addon), so the recipient does not need to be online.
-
-### Feature flag
-
-The webstore is controlled by the **Webstore** switch in **Dashboard → Modules** (`features.webstore`). Turn it off to disable the storefront and all checkout routes:
-
-```json
-{
-  "webstore": true
-}
-```
-
-The `/give` (support the server) page is always available — it does not check the webstore feature flag.
-
-### Environment variables
-
-Add the following to your `.env`:
-
-```env
-# Stripe secret key — obtain from https://dashboard.stripe.com/apikeys
-STRIPE_SECRET_KEY=sk_live_...
-
-# Stripe webhook signing secret — from the webhook endpoint settings in your Stripe dashboard
-STRIPE_WEBHOOK_SECRET=whsec_...
-
-# Monthly server cost goal in cents (e.g. 5000 = $50.00) — shown on the /give page
-WEBSTORE_MONTHLY_GOAL_CENTS=5000
-```
-
-### Stripe webhook setup
-
-1. In the [Stripe dashboard](https://dashboard.stripe.com/webhooks), create a new webhook endpoint pointing to `https://<your-domain>/api/internal/stripe-webhook`.
-2. Enable the following events:
-   - `checkout.session.completed`
-   - `invoice.payment_succeeded`
-   - `invoice.payment_failed`
-   - `customer.subscription.updated`
-   - `customer.subscription.deleted`
-3. Copy the **Signing secret** and set it as `STRIPE_WEBHOOK_SECRET` in your `.env`.
-
-### Adding products
-
-Products are pulled directly from Stripe. For each rank or perk:
-
-1. Create a **Product** and one or more **Prices** in the Stripe dashboard.
-   - Use a recurring price for subscription ranks; a one-time price for permanent ranks.
-2. Set the following **metadata** on the Stripe **Product**:
-   - `slug` — a short identifier used internally (e.g. `vip`, `mvp`). Must be unique.
-   - `description` *(optional)* — short description shown on the store card.
-3. Insert a row into `webstoreStripeCommands` for each command that should run when the price is purchased:
-
-```sql
-INSERT INTO webstoreStripeCommands (stripePriceId, action, commandTemplate, sortOrder)
-VALUES
-  ('price_xxx', 'grant', 'lp user {{ username }} parent add vip', 1),
-  ('price_xxx', 'grant', 'lp user {{ username }} meta set prefix "&6[VIP]"', 2);
-```
-
-For subscription ranks, also add a matching `revoke` command that fires when the subscription is cancelled:
-
-```sql
-INSERT INTO webstoreStripeCommands (stripePriceId, action, commandTemplate, sortOrder)
-VALUES
-  ('price_xxx', 'revoke', 'lp user {{ username }} parent remove vip', 1);
-```
-
-#### Command template placeholders
-
-| Placeholder | Replaced with |
-|---|---|
-| `{{ username }}` | Recipient's Minecraft username |
-| `{{ purchaserUsername }}` | Purchaser's Minecraft username (differs from `username` when gifted) |
-| `{{ purchaseId }}` | Internal purchase ID |
-| `{{ itemSlug }}` | Stripe product slug metadata value |
-| `{{ purchaseType }}` | `one_time` or `subscription` |
-| `{{ isGift }}` | `true` or `false` |
-
-### Subscription lifecycle
-
-| Stripe event | Action taken |
-|---|---|
-| `checkout.session.completed` | Purchase record created and fulfilled; subscription record created; `grant` commands enqueued |
-| `invoice.payment_succeeded` (renewal) | Subscription period updated; `grant` commands re-enqueued for the new period |
-| `invoice.payment_failed` | Subscription marked `past_due`; no rank change (Stripe retries) |
-| `customer.subscription.updated` | Local subscription status synced to Stripe status |
-| `customer.subscription.deleted` | Subscription marked `cancelled`; `revoke` commands enqueued |
-
-### Discord notifications
-
-The webstore posts to a Discord webhook on key events. Set the webhook in **Dashboard → Settings → Discord** (*Webstore webhook*).
-
-### Database migration
-
-Run `prisma/migrations/0017_webstore/migration.sql` against your database (or run `prisma migrate deploy` if using Prisma Migrate):
-
-| Table | Purpose |
-|---|---|
-| `webstorePurchases` | One row per Stripe checkout session; tracks status from `pending` through `fulfilled` |
-| `webstoreSubscriptions` | Tracks the full lifecycle of every active subscription (period, status, cancellation) |
-| `webstoreWebhookEvents` | Idempotency log — prevents duplicate processing if Stripe delivers the same event twice |
-| `webstoreStripeCommands` | Maps Stripe price IDs to in-game command templates, with `grant`/`revoke` action distinction |
-| `webstoreCommandRuns` | Tracks each individual command dispatched to `executorTasks` and its completion status |
-| `webstoreTransactions` | Audit ledger recording the financial side of every completed payment |
-
-
----
-
-## Discord Booster Rewards
-
-Linked members who are **boosting your Discord server** can be given one or more LuckPerms ranks automatically. The ranks are removed when the boost ends.
-
-Set it up in **Dashboard → Settings → Discord**:
-
-- **Booster rewards**: the on/off switch. Turning it off removes the ranks it gave.
-- **Booster reward ranks**: LuckPerms group names, one per line.
-
-How it behaves:
-
-- A boost starting or ending is picked up live, and a sweep every 30 minutes (`cron/boosterRewardSyncCron.js`) catches anything missed, such as members who left the server or boosts that ended while the bot was offline. Linking or unlinking Discord on the website takes effect straight away.
-- Only real linked accounts qualify; placeholder accounts created by the support bot do not.
-- Ranks are granted by queueing `lp user <uuid> parent add <group>` for the game servers, so the player does not need to be online. Using the Minecraft UUID means a later name change does not break removal.
-- Each grant is recorded in `boosterRewardGrants`, so ending a boost removes only ranks this feature added. A player who already had one of the ranks, for example one they bought, keeps it.
-- Discord does not let bots see Nitro itself, so this is based on boosting, which the bot can see.
-
-## Forms & Applications
-
-Forms are built at `/dashboard/forms` (permission `zander.web.forms`) and served at `/forms/<slug>`. An `applications` row with a `linkedFormId` is a tile that points at one, so everything below applies to applications too.
-
-### Gating
-
-Two checks run before the questions render, and again on submit — posting straight to `/forms/<slug>` does not skip them.
-
-| Gate | Stored on `forms` | Behaviour |
+| **Events** | A public calendar with event pages, rank-locked events with teaser descriptions, and automatic announcements to Discord, MOTD, in-game tips and the site. |
+| **Forums** | Categories with access rules, discussions, replies, polls and revision history, with the latest posts shown on the homepage. |
+| **Player profiles** | Linked accounts, badges, birthdays, time zones and social links. |
+| **Custom pages and menus** | Publish your own pages and edit the top bar, header and footer menus without a deploy. |
+| **Resources** | A curated resource library where members suggest links and staff vote on them. |
+| **Shop directory** | Search every player shop on the server, including enchantments, potions and shulker contents. Also available as `/shopdirectory` in Discord. |
+| **Webstore and donations** | A Stripe-powered store with subscriptions and in-game delivery of purchases, plus a donation page with a monthly server-cost goal. |
+| **Finance transparency** | An optional public report showing where community money goes. |
+| **Watch** | Live Twitch and YouTube streams from your creators, with in-game "now live" announcements. |
+| **Support** | Tickets from the website, Discord or a contact form. Guests without an account can follow their ticket through a private emailed link. |
+| **Applications and forms** | Staff applications and surveys with eligibility rules, drafts, cooldowns and review. Submissions can open a ticket or a Discord thread. |
+| **Bedrock and play pages** | Connection details for Java and Bedrock players. |
+| **Punishments and appeals** | A public punishment list from LiteBans and an appeal form. |
+
+### Staff dashboard
+
+- **Settings and modules:** every site setting and feature switch, editable live.
+- **Users and ranks:** user administration with masked emails, and rank permissions granted from a checklist of documented nodes.
+- **Events:** draft → review → publish, templates, and default announcements applied across events.
+- **Holograms:** design in-game holograms with countdowns and expiry dates, then place them with `/hologram create`.
+- **Scheduler and announcements:** scheduled Discord embeds, site banners and announcements.
+- **Webstore and finance:** products, categories, purchases, budgets, transactions and reports.
+- **API keys:** a separate key for each server and service, each limited to the API areas it needs.
+- **Logs:** audit trails for staff actions.
+
+### Discord bot
+
+Slash commands for players and staff: `/apply`, `/support`, `/report` (plus right-click **Report Message**), `/profile`, `/ranks`, `/shopdirectory`, `/poll`, `/watch`, `/vault`, `/resources`, `/play`, `/rules`, `/website`, `/punish`, `/audit`, `/lpaudit`, `/forcelink`, `/staffhelp` and more.
+
+It also handles the background work:
+
+- **Rank role sync:** Discord roles follow LuckPerms ranks.
+- **Booster rewards:** server boosters get a rank, which is removed when the boost ends.
+- **Verification reminders** for members who haven't linked their account.
+- **Nickname enforcement** and **birthday ranks**.
+- **Content filtering** of links and phrases through MineMonitor.
+- **Discord punishments** synced with the moderation system.
+- **Staff audit reports** and activity tracking.
+
+### Minecraft plugins
+
+| Plugin | Runs on | What it does |
 |---|---|---|
-| Access code | `accessCode` | One shared code per form. Wrong codes are rejected plainly, with no lockout or attempt counter — it is a code to paste into an announcement, not a password. Accepted codes are remembered per session so a validation error does not force re-entry. |
-| Requirements | `requirements` (JSON) | Playtime, clean record, and in-game/Discord consistency. Failure is a hard block and the message quotes the exact numbers on both sides. |
-| Reapply cooldown | `reapplyCooldownDays` | After a **denial** only, counted from `reviewedAt`. Approved and pending submissions stay governed by `allowMultiple`. |
+| **zander-velocity** | Velocity proxy | Account linking and verification, private messages with ignore and toggle, reports, network chat moderation (`/alert`, `/clearchat`, `/freezechat`), session tracking and rotating tips. |
+| **zander-hub** | Hub server | Portals and server navigation, a navigation compass, hub protection, `/connect` and `/fly`. |
+| **zander-addon** | Each game server | Dashboard holograms, `/policy`, `/social`, `/freeze`, and delivery of webstore purchases. |
+| **zander-auth** | Each game server | Checks each joining player against their website account. |
 
-Rules live in `lib/formRequirements.mjs` (pure, unit-tested); the querying is in `services/formRequirementsService.js`. If a source is unreachable the gate **opens** rather than blocking everyone.
+### Integrations
 
-**Punishments count bans and mutes only.** Kicks and warnings are excluded — both are routinely automated or a first-line "please stop", and counting them would block a large share of ordinary players. Change `PUNISHMENT_TABLES` in `services/formRequirementsService.js` to include `litebans_kicks` / `litebans_warnings`.
+LuckPerms · LiteBans · QuickShop-Hikari · Geyser/Floodgate (Bedrock) · Stripe · Twitch · YouTube · MineMonitor / Purify · Cloudinary · Web Push · Sentry · OpenID Connect (Zander can sign staff in to other tools, such as the Compass staff portal)
 
-### Discord activity tracking
+## How it fits together
 
-The Discord consistency checks read `discordActivityDaily`, filled by `listeners/discordActivity.js`.
+```mermaid
+flowchart LR
+    subgraph Players
+        W[Web browser]
+        D[Discord]
+        J[Java & Bedrock clients]
+    end
 
-This is a **daily rollup, not a message log**: one row per user per day holding a count. No message content, no channel and no per-message timestamps are stored. Please do not extend it into a message log. Bots, DMs and other guilds are ignored, and counts are buffered in memory and flushed periodically rather than written per message.
+    subgraph Zander["Zander (one Node.js process)"]
+        Site[Website & dashboard<br/>Fastify + EJS]
+        Bot[Discord bot<br/>Sapphire]
+        API[JSON API<br/>per-client keys]
+        Cron[Scheduled jobs]
+    end
 
-```json
-{
-  "discord": {
-    "activityTracking": true
-  }
-}
+    DB[(MySQL<br/>Zander schema)]
+    Ext[(LuckPerms · LiteBans · QuickShop)]
+
+    subgraph Network["Minecraft network"]
+        V[zander-velocity]
+        H[zander-hub]
+        A[zander-addon / zander-auth]
+    end
+
+    W --> Site
+    D <--> Bot
+    J --> V --> H & A
+    V & H & A <-->|HTTPS| API
+    Site & Bot & API & Cron --> DB
+    Site & Bot & API --> Ext
 ```
 
-Absent means **on**: it is deliberately not gated on `features.forms`, because activity has to accumulate before anyone first enables a requirement that reads it.
+The website, dashboard, API and Discord bot run in a **single Node.js process** and share the same controllers, so a slash command and a web page call exactly the same code. Game servers talk to Zander over HTTPS with their own scoped API key, and Zander reads ranks, punishments and shops directly from the LuckPerms, LiteBans and QuickShop databases.
 
-Because of that, the table only has data from the day the listener was deployed. A 30-day Discord window is meaningless until 30 days after that, so while the rollup is younger than the window those two checks report as *skipped* rather than failing everyone. Turn that off with `skipUnmeasurableDiscord: false` in `evaluateRequirements`.
+## Quick start
 
-### Image uploads
+**You'll need** Node.js 20 or newer (22 recommended), MySQL, a Discord bot token, and for the plugins Java 21 with Maven.
 
-The `images` field type uploads through the existing `POST /api/upload/image` and stores the returned metadata (`url`, `publicId`, `width`, `height`). The per-field maximum is hard-capped at 10 and re-enforced server-side, and every URL is checked against `CLOUDINARY_CLOUD_NAME` — a submitter cannot hand-craft an answer pointing somewhere else. **Image fields return 503 unless `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` are set.**
+```bash
+git clone https://github.com/AnchorlightDev/zander.git
+cd zander
+cp .env.example .env      # fill in DATABASE_URL, sessionCookieSecret, Discord keys…
+npm run build             # installs, runs every migration, generates the client
+npm run dev               # http://localhost:3000
+```
 
-### Ticket status thread
+Build the Minecraft plugins:
 
-Where `createTicket` is on, the submission's ticket carries the decision. Each form supplies its own wording (`ticketPendingMessage`, `ticketApprovedMessage`, `ticketDeniedMessage`); blanks fall back to `lib/formTicketMessages.mjs`. `{form}`, `{submissionId}` and `{reviewer}` are substituted.
+```bash
+cd agent
+mvn                       # jars land in agent/target/plugins/
+```
 
-The reviewer's comment (`formSubmissions.reviewNotes`) is **shown to the applicant** from this release onwards. It was previously labelled and treated as internal, so `commentIsPublic` guards it: existing rows are `false` and stay withheld, and only decisions saved after this shipped set it `true`.
+Then sign in, open **Dashboard → API Keys** to issue a key for each server, and switch on the modules you want under **Dashboard → Modules**. The full walkthrough is in **[SETUP.md](SETUP.md)**.
 
-### Migrations
+## Documentation
 
-| Migration | Adds |
+| Guide | |
 |---|---|
-| `0047_form_field_config` | `formFields.config` — per-field settings (`maxImages`, scale bounds, `showIf`) |
-| `0048_form_access_code` | `forms.accessCode` |
-| `0049_form_requirements` | `forms.requirements` |
-| `0050_discord_activity_daily` | `discordActivityDaily` |
-| `0051_form_drafts` | `formDrafts` — autosaved answers, deleted on submission |
-| `0052_form_reapply_cooldown` | `forms.reapplyCooldownDays` |
-| `0053_form_ticket_messages` | The three ticket message columns, and `formSubmissions.commentIsPublic` |
+| [Local setup](SETUP.md) | Environment variables, database and first run |
+| [Permission reference](docs/permissions.md) | Every `zander.*` LuckPerms node |
+| [API client credentials](docs/api-keys.md) | Issuing keys, scopes and revocation |
+| [Webstore](docs/webstore.md) | Stripe setup, products, command templates and subscriptions |
+| [Creator content](docs/creator-content.md) | Twitch and YouTube integration |
+| [Forms and applications](docs/forms.md) | Gating, Discord threads and uploads |
+| [Discord booster rewards](docs/discord-booster-rewards.md) | Ranks for server boosters |
+| [Directory listings](docs/directory-listings.md) | Ready-to-paste copy for server-list websites |
+| [Minecraft plugins](agent/README.md) | Building, installing and holograms |
+| [Changelog](CHANGELOG.md) | What changed, and how to upgrade |
+| [Product docs](https://modularsoft.org/docs/products/zander) | The hosted documentation site |
+
+## Built with
+
+Node.js · Fastify · EJS · Prisma (migrations) · MySQL · Discord.js / Sapphire · Stripe · Vitest, and Java 21 · Paper · Velocity · Maven for the plugins.
+
+## Contributing
+
+1. Branch from `staging`; `master` is the released code.
+2. Run `npm test` before opening a pull request.
+3. Database changes go in a new numbered folder under `prisma/migrations/`.
+4. New dashboard permission nodes go in both `lib/permissions/zanderNodes.mjs` and [docs/permissions.md](docs/permissions.md); a test fails if they drift apart.
+5. Add a line to the `CHANGELOG.md` section for the next release.
+
+## License
+
+ISC, as declared in [`package.json`](package.json).

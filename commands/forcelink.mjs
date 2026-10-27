@@ -1,5 +1,5 @@
 import { Command } from "@sapphire/framework";
-import { Colors, EmbedBuilder, MessageFlags, SlashCommandBuilder } from "discord.js";
+import {Colors, EmbedBuilder, MessageFlags, SlashCommandBuilder, InteractionContextType } from "discord.js";
 import { hasPermission } from "../lib/discord/permissions.mjs";
 import { describeRankRoleSync, syncMemberRankRoles, stripAllTrackedRankRoles } from "../lib/discord/rankRoleSync.mjs";
 import { UserGetter, getUserPermissions, linkDiscordAccount, mergePlaceholderUser, resolveDiscordLinkConflict, unlinkDiscordAccount } from "../controllers/userController.js";
@@ -17,6 +17,7 @@ export class ForceLinkCommand extends Command {
     registry.registerChatInputCommand((builder) =>
       builder
         .setName("forcelink")
+        .setContexts(InteractionContextType.Guild)
         .setDescription("Force-link a Discord user to a Minecraft player account.")
         .addUserOption((option) =>
           option
@@ -68,7 +69,7 @@ export class ForceLinkCommand extends Command {
 
     // Look up the Minecraft user
     const mcUser = await userGetter.byUsername(minecraftUsername);
-    if (!mcUser) {
+    if (!mcUser || Number(mcUser.is_placeholder) === 1) {
       return interaction.editReply({
         embeds: [
           new EmbedBuilder()

@@ -1,0 +1,75 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="fa-solid fa-file-lines me-2"></i>Pages</h1>
+        <a class="btn btn-primary" href="/dashboard/pages/create"><i class="fa-solid fa-plus me-1"></i>Add page</a>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (error) { %>
+        <div class="alert alert-danger"><%= error %></div>
+      <% } %>
+
+      <p class="text-muted">
+        Pages you write here are served at their own address, e.g. <code>/about</code>.
+        Add them to the site's menus under <a href="/dashboard/menus">Menus</a>.
+      </p>
+
+      <div class="card shadow-sm">
+        <div class="card-body p-0">
+          <% if (!pages.length) { %>
+            <div class="p-3 text-muted">No pages yet. <a href="/dashboard/pages/create">Write your first page</a>.</div>
+          <% } else { %>
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Address</th>
+                    <th>Status</th>
+                    <th>Last updated</th>
+                    <th class="text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% pages.forEach(function (p) { %>
+                    <tr>
+                      <td><a class="fw-semibold" href="/dashboard/pages/<%= p.pageId %>/edit"><%= p.title %></a></td>
+                      <td><code>/<%= p.slug %></code></td>
+                      <td>
+                        <% if (p.status === "published") { %>
+                          <span class="badge text-bg-success">Published</span>
+                        <% } else { %>
+                          <span class="badge text-bg-secondary">Draft</span>
+                        <% } %>
+                      </td>
+                      <td class="text-muted small"><span data-relative-time="<%= new Date(p.updatedAt).toISOString() %>"><%= new Date(p.updatedAt).toISOString().slice(0, 10) %></span></td>
+                      <td class="text-end text-nowrap">
+                        <a class="btn btn-sm btn-outline-secondary" href="/<%= p.slug %>" target="_blank" rel="noopener"><%= p.status === "published" ? "View" : "Preview" %></a>
+                        <a class="btn btn-sm btn-outline-primary" href="/dashboard/pages/<%= p.pageId %>/edit">Edit</a>
+                        <form class="d-inline" method="post" action="/dashboard/pages/<%= p.pageId %>/delete"
+                              onsubmit="return confirm('Delete /<%= p.slug %>? This cannot be undone.');">
+                          <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<%- include("../../admin/_footer.ejs") %>

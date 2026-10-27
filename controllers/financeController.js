@@ -23,10 +23,27 @@ function queryDb(sql, params = []) {
   });
 }
 
+/**
+ * [startDate, endDate) for a calendar month. The upper bound is the first
+ * instant of the *next* month and consumers compare with `<`: the old
+ * inclusive bound was midnight at the start of the last day, which dropped
+ * everything dated on that day (and, with the pool's UTC timezone, the whole
+ * last day for DATE columns).
+ */
 function getMonthRange(year, month) {
   const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0);
+  const endDate = new Date(year, month, 1);
   return { startDate, endDate };
+}
+
+/** A ledger amount: whole cents, never negative, never NaN. */
+function parseAmountCents(value) {
+  if (value === undefined || value === null || value === "") return 0;
+  const cents = Number.parseInt(value, 10);
+  if (!Number.isInteger(cents) || cents < 0) {
+    throw new Error("Amount must be a whole, non-negative number of cents.");
+  }
+  return cents;
 }
 
 const BUDGET_ICON_NAMES = new Set([
@@ -403,7 +420,7 @@ export async function createTransaction({
   return prisma.financeTransactions.create({
     data: {
       type,
-      amountCents: amountCents ? parseInt(amountCents, 10) : 0,
+      amountCents: parseAmountCents(amountCents),
       currency: (currency || "USD").toUpperCase().trim(),
       accountId: accountId ? parseInt(accountId, 10) : null,
       categoryId: categoryId ? parseInt(categoryId, 10) : null,
@@ -422,7 +439,7 @@ export async function updateTransaction(id, data) {
 
   const update = {};
   if (data.type !== undefined) update.type = data.type;
-  if (data.amountCents !== undefined) update.amountCents = parseInt(data.amountCents, 10);
+  if (data.amountCents !== undefined) update.amountCents = parseAmountCents(data.amountCents);
   if (data.currency !== undefined) update.currency = data.currency.toUpperCase().trim();
   if (data.categoryId !== undefined) update.categoryId = data.categoryId ? parseInt(data.categoryId, 10) : null;
   if (data.description !== undefined) update.description = data.description.trim();
@@ -622,7 +639,7 @@ async function buildActualCentsLookup(startDate, endDate) {
   const rows = await queryDb(
     `SELECT categoryId, COALESCE(SUM(amountCents), 0) AS actualCents
        FROM financeTransactions
-      WHERE type = 'expense' AND transactionDate >= ? AND transactionDate <= ?
+      WHERE type = 'expense' AND transactionDate >= ? AND transactionDate < ?
       GROUP BY categoryId`,
     [startDate, endDate]
   );
@@ -654,8 +671,7 @@ export async function getBudgetVsActual(year, month) {
     else oneOffRows.push(row);
   }
 
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0);
+  const { startDate, endDate } = getMonthRange(year, month);
   const actualCentsFor = await buildActualCentsLookup(startDate, endDate);
 
   const templateResults = templateEntries
@@ -754,7 +770,7 @@ export async function getPublicExpenseCategoryBreakdown(year, month) {
       categoryId: { in: categoryIds },
       transactionDate: {
         gte: startDate,
-        lte: endDate,
+        lt: endDate,
       },
     },
     _sum: {

@@ -96,8 +96,15 @@ export default function bridgeRedirectRoute(app, config, lang, features) {
 
     req.body.actioningUser = req.session.user.userId;
 
+    // The id is interpolated into a URL fetched with the internal key, so it
+    // must be a plain integer: "../../rank/user/assign" must never get through.
+    const resetTaskId = Number.parseInt(req.body.taskId, 10);
+    if (!Number.isInteger(resetTaskId) || resetTaskId <= 0) {
+      return res.code(400).send({ success: false, message: "Invalid task id." });
+    }
+
     return forwardRequest(
-      `/api/bridge/processor/task/${req.body.taskId}/reset`,
+      `/api/bridge/processor/task/${resetTaskId}/reset`,
       req,
       res
     );
@@ -109,7 +116,10 @@ export default function bridgeRedirectRoute(app, config, lang, features) {
     req.body.actioningUser = req.session.user.userId;
 
     const metadataPayload = parseJsonPayload(req.body, "metadataJSON", res);
-    const taskId = req.body.taskId;
+    const taskId = Number.parseInt(req.body.taskId, 10);
+    if (!Number.isInteger(taskId) || taskId <= 0) {
+      return res.code(400).send({ success: false, message: "Invalid task id." });
+    }
 
     delete req.body.taskId;
 

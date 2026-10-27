@@ -1,4 +1,5 @@
 import { hasPermission, setBannerCookie } from "../../api/common.js";
+import { hasPermission as holdsNode } from "../../lib/discord/permissions.mjs";
 import { adminViewData } from "../../admin/adminHelpers.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { client as discordClient } from "../../controllers/discordController.js";
@@ -21,11 +22,9 @@ import {
 // ---------------------------------------------------------------------------
 
 function canManageWebstore(req) {
-  const perms = req.session?.user?.permissions ?? [];
-  return perms.some((p) => {
-    const c = String(p).trim().toLowerCase();
-    return c === "*" || c === "zander.web.webstore.manage" || c === "zander.web.webstore.*";
-  });
+  // Shared matcher so `zander.web.*` and future wildcard shapes behave the
+  // same here as on every other dashboard page.
+  return holdsNode(req.session?.user?.permissions ?? [], "zander.web.webstore.manage");
 }
 
 function getDiscordRoles(config) {

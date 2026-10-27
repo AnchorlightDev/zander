@@ -54,15 +54,3 @@ client.on("shardError", (error) => {
 
 client.login(process.env.discordAPIKey);
 
-/*
-    It
-
-    @param username The username of the user.
-*/
-export async function isBot() {
-  const user = client.users.cache.get(userId);
-  if (user) {
-    return user.bot;
-  }
-  return false;
-}

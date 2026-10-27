@@ -10,6 +10,7 @@ import dev.anchorlight.zander.addon.events.PlayerEvents;
 import dev.anchorlight.zander.addon.events.StoreCommandEvents;
 import dev.anchorlight.zander.addon.gui.PolicyGUI;
 import dev.anchorlight.zander.addon.gui.SocialGUI;
+import dev.anchorlight.zander.addon.hologram.HologramManager;
 import dev.anchorlight.zander.addon.service.BridgeService;
 import dev.anchorlight.zander.addon.service.FreezeService;
 import dev.anchorlight.zander.addon.service.PolicyService;
@@ -26,6 +27,7 @@ public class ZanderAddonMain extends JavaPlugin {
     private StoreCommandService storeCommandService;
     @Getter
     private BridgeService bridgeService;
+    private HologramManager hologramManager;
 
     @Override
     public void onEnable() {
@@ -37,6 +39,7 @@ public class ZanderAddonMain extends JavaPlugin {
         this.freezeService = new FreezeService();
         this.storeCommandService = new StoreCommandService(this);
         this.bridgeService = new BridgeService(this);
+        this.hologramManager = new HologramManager(this);
 
         PolicyGUI policyGUI = new PolicyGUI();
         SocialGUI socialGUI = new SocialGUI(this);
@@ -44,8 +47,13 @@ public class ZanderAddonMain extends JavaPlugin {
         getServer().getPluginManager().registerEvents(socialGUI, this);
         getServer().getPluginManager().registerEvents(new PlayerEvents(this, policyGUI, socialGUI), this);
         getServer().getPluginManager().registerEvents(new FreezeEvents(freezeService), this);
+        getServer().getPluginManager().registerEvents(hologramManager, this);
+        hologramManager.start();
 
-        if (getConfig().getBoolean("command-bridge.enabled", true)) {
+        // Defaults OFF: the web app has no /api/command-bridge/* endpoints, so
+        // enabling this only floods the server logs with 404s. Reward/webstore
+        // commands are delivered via the Bridge Processor (executorTasks) instead.
+        if (getConfig().getBoolean("command-bridge.enabled", false)) {
             storeCommandService.start();
             getServer().getPluginManager().registerEvents(new StoreCommandEvents(storeCommandService), this);
             getLogger().info("Command bridge enabled for server: " + getConfig().getString("server-name", "survival"));
@@ -59,12 +67,15 @@ public class ZanderAddonMain extends JavaPlugin {
         getCommand("policy").setExecutor(new PolicyCommand(this, policyService));
         getCommand("social").setExecutor(new SocialCommand(socialGUI));
         getCommand("freeze").setExecutor(new FreezeCommand(freezeService));
+        getCommand("hologram").setExecutor(hologramManager);
+        getCommand("hologram").setTabCompleter(hologramManager);
 
         getLogger().info("Zander Addon has been enabled.");
     }
 
     @Override
     public void onDisable() {
+        if (hologramManager != null) hologramManager.stop();
         getLogger().info("Zander Addon has been disabled.");
     }
 }

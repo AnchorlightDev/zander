@@ -19,6 +19,9 @@ import eventsApiRoute from "./events.js";
 import badgeApiRoute from "./badges.js";
 import financeApiRoute from "./finance.js";
 import adminUsersRoute from "./adminUsers.js";
+import compassApiRoute from "./compass.js";
+import hologramApiRoute from "./hologram.js";
+import commandBridgeApiRoute from "./commandBridge.js";
 
 export default (app, client, moment, config, db, features, lang) => {
   announcementApiRoute(app, config, db, features, lang);
@@ -42,5 +45,8 @@ export default (app, client, moment, config, db, features, lang) => {
   badgeApiRoute(app, config, db, features, lang);
   financeApiRoute(app, config, db, features, lang);
   adminUsersRoute(app, config, db, features, lang);
+  compassApiRoute(app, config, db, features, lang);
+  hologramApiRoute(app, config, db, features, lang);
+  commandBridgeApiRoute(app);
 
 };

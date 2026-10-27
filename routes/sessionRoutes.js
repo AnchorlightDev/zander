@@ -1,6 +1,5 @@
 import dotenv from "dotenv";
 dotenv.config();
-import qs from "querystring";
 import bcrypt from "bcrypt";
 import {
   isFeatureWebRouteEnabled,
@@ -33,14 +32,9 @@ import {
 import { sendMail } from "../controllers/emailController.js";
 import { checkRateLimit } from "../lib/rateLimiter.mjs";
 import { hasStaffFlag } from "../lib/permissions/staffFlag.mjs";
-
-/**
- * A post-login redirect target must be a path on this site. "//evil.com" and
- * "/\evil.com" both start with "/" but browsers treat them as another host.
- */
-function isSafeLocalPath(value) {
-  return typeof value === "string" && /^\/(?![\/\\])/.test(value);
-}
+import { isSafeLocalPath } from "../lib/safeLocalPath.mjs";
+import crypto from "crypto";
+import { destroySessionsForUser } from "../lib/fastifyPrismaSessionStore.js";
 
 export default function sessionSiteRoute(
   app,
@@ -67,15 +61,16 @@ export default function sessionSiteRoute(
   const passwordResetExpiryMinutes = 10;
   const passwordRequirements = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,}$/;
 
-  const buildDiscordAuthorizeUrl = () => {
+  const buildDiscordAuthorizeUrl = (state) => {
     const params = {
       client_id: process.env.discordClientId,
       redirect_uri: `${process.env.siteAddress}/login/callback`,
       response_type: "code",
       scope: "identify",
+      state,
     };
 
-    return `https://discord.com/api/oauth2/authorize?${qs.stringify(params)}`;
+    return `https://discord.com/api/oauth2/authorize?${new URLSearchParams(params)}`;
   };
 
   const normaliseEmail = (email) => (email || "").trim().toLowerCase();
@@ -151,6 +146,9 @@ export default function sessionSiteRoute(
       username: userLoginData.username,
       profilePicture: await getProfilePicture(userLoginData.username),
       discordID: userLoginData.discordId,
+      // Both spellings are read across the codebase (ticket creation reads
+      // discordId); keep them in step until the readers are unified.
+      discordId: userLoginData.discordId,
       uuid: userLoginData.uuid,
       ranks: userRanks,
       permissions: userPermissionData,
@@ -159,6 +157,32 @@ export default function sessionSiteRoute(
     };
 
     await updateAudit_lastWebsiteLogin(new Date(), userLoginData.username);
+  }
+
+  /** The Discord id set by the OAuth callback, or null if missing/tampered. */
+  function readSignedDiscordId(req) {
+    const raw = req.cookies?.discordId;
+    if (!raw) return null;
+    const unsigned = req.unsignCookie(raw);
+    return unsigned.valid && /^\d{15,22}$/.test(unsigned.value) ? unsigned.value : null;
+  }
+
+  async function sendRegistrationVerificationCode(userId, username, email) {
+    const verificationCode = await generateVerificationCode();
+    const expiresAt = new Date(Date.now() + emailVerificationExpiryMinutes * 60000);
+    await createEmailVerification(userId, verificationCode, expiresAt);
+
+    await sendMail(
+      email,
+      `${config.siteConfiguration.siteName} Email Verification`,
+      "verificationCode.ejs",
+      {
+        username,
+        code: verificationCode,
+        expiryMinutes: emailVerificationExpiryMinutes,
+        siteName: config.siteConfiguration.siteName,
+      }
+    );
   }
 
   app.get("/login", async function (req, res) {
@@ -201,10 +225,12 @@ export default function sessionSiteRoute(
     if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
-    const discordAuthorizeUrl = buildDiscordAuthorizeUrl();
-
+    // Always start the Discord flow via /login/discord so the OAuth state is
+    // generated and stored in the session. Linking straight to Discord's
+    // authorize URL from here would skip that step: the callback would find no
+    // expected state, reject every sign-in as "expired", and loop back to /login.
     if (req.query.provider === "discord") {
-      return res.redirect(discordAuthorizeUrl);
+      return res.redirect("/login/discord");
     }
 
     res.header("content-type", "text/html; charset=utf-8").send(
@@ -215,7 +241,7 @@ export default function sessionSiteRoute(
       features: features,
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
-      discordAuthorizeUrl,
+      discordAuthorizeUrl: "/login/discord",
     }));
     return;
   });
@@ -247,19 +273,21 @@ export default function sessionSiteRoute(
         return res.redirect(`/login`);
       }
 
+      const passwordMatch = await bcrypt.compare(password, user.password_hash);
+
+      if (!passwordMatch) {
+        setBannerCookie("danger", "Invalid credentials.", res);
+        return res.redirect(`/login`);
+      }
+
+      // Only after the password matched: telling an anonymous caller that an
+      // account is disabled would confirm the account exists.
       if (user.account_disabled) {
         setBannerCookie(
           "danger",
           "Your account is disabled. Please contact the team for assistance.",
           res
         );
-        return res.redirect(`/login`);
-      }
-
-      const passwordMatch = await bcrypt.compare(password, user.password_hash);
-
-      if (!passwordMatch) {
-        setBannerCookie("danger", "Invalid credentials.", res);
         return res.redirect(`/login`);
       }
 
@@ -270,7 +298,15 @@ export default function sessionSiteRoute(
           email: user.email,
           stage: "EMAIL",
         };
-        setBannerCookie("warning", "Please verify your email to continue.", res);
+        // The original code may well have expired by now and there was no way
+        // to get a new one short of re-registering, so issue a fresh code.
+        try {
+          await sendRegistrationVerificationCode(user.userId, user.username, user.email);
+          setBannerCookie("warning", "Please verify your email to continue. We sent you a new code.", res);
+        } catch (mailError) {
+          logRouteError("resend verification code on login", mailError);
+          setBannerCookie("warning", "Please verify your email to continue.", res);
+        }
         return res.redirect(`/register/verify-email`);
       }
 
@@ -324,11 +360,34 @@ export default function sessionSiteRoute(
       }
     }
 
-    return res.redirect(buildDiscordAuthorizeUrl());
+    // OAuth state: ties the callback to the browser that started the flow so
+    // an attacker cannot log a victim into the attacker's Discord account by
+    // sending them a crafted /login/callback?code=... link.
+    const state = crypto.randomBytes(16).toString("hex");
+    req.session.discordLoginState = state;
+
+    // [login-debug] If req.protocol is "http" here, @fastify/session will NOT
+    // write the Secure session cookie, so this state never reaches the browser
+    // and the callback below rejects every sign-in as "expired". Compare this
+    // line with the callback's on one sign-in attempt to localise the fault.
+    app.log.warn(
+      {
+        where: "login/discord",
+        protocol: req.protocol,
+        xForwardedProto: req.headers["x-forwarded-proto"] || null,
+        cookieSecure: req.session?.cookie?.secure,
+        hadSessionCookie: Boolean(req.cookies?.sessionId),
+      },
+      "[login-debug] discord oauth start — stored state in session"
+    );
+
+    return res.redirect(buildDiscordAuthorizeUrl(state));
   });
 
   app.get("/login/callback", async (req, res) => {
-    const { code, error: oauthError } = req.query;
+    const { code, error: oauthError, state } = req.query;
+    const expectedState = req.session?.discordLoginState;
+    if (req.session) delete req.session.discordLoginState;
 
     // Discord sends us back with ?error=access_denied (and no code) when the
     // user declines the consent screen. That is a normal outcome, not a
@@ -341,6 +400,29 @@ export default function sessionSiteRoute(
     // No code and no error means the callback was hit directly — a bot
     // probing the URL, or a stale bookmark. Nothing to report.
     if (!code) {
+      return res.redirect("/login");
+    }
+
+    if (!expectedState || typeof state !== "string" || state !== expectedState) {
+      // [login-debug] Localises the "expired" loop:
+      //  • hadSessionCookie=false → the browser sent no session cookie: it was
+      //    never written at /login/discord (almost always protocol!="https" +
+      //    Secure cookie) — fix trustProxy / TRUST_PROXY_HOPS.
+      //  • hadSessionCookie=true but hadExpectedState=false → the cookie came
+      //    back but the session had no stored state: a session-store problem
+      //    (e.g. multiple instances without shared/sticky sessions).
+      app.log.warn(
+        {
+          where: "login/callback",
+          protocol: req.protocol,
+          xForwardedProto: req.headers["x-forwarded-proto"] || null,
+          hadSessionCookie: Boolean(req.cookies?.sessionId),
+          hadExpectedState: Boolean(expectedState),
+          stateParamPresent: typeof state === "string",
+        },
+        "[login-debug] discord state mismatch — rejecting as expired"
+      );
+      setBannerCookie("danger", "Discord sign-in expired, please try again.", res);
       return res.redirect("/login");
     }
 
@@ -359,7 +441,7 @@ export default function sessionSiteRoute(
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: qs.stringify(tokenParams),
+        body: new URLSearchParams(tokenParams).toString(),
       });
 
       if (!tokenResponse.ok) {
@@ -386,10 +468,15 @@ export default function sessionSiteRoute(
       const userIsRegistered = await userGetData.isRegistered(userData.id);
 
       if (!userIsRegistered) {
-        res.cookie("discordId", userData.id, {
+        // Signed: this value decides which Discord account gets linked to
+        // the Minecraft code the visitor enters next, so the browser must not
+        // be able to edit it.
+        res.setCookie("discordId", String(userData.id), {
           path: "/",
           httpOnly: true,
-          maxAge: 10 * 60 * 1000,
+          sameSite: "lax",
+          signed: true,
+          maxAge: 10 * 60,
         });
 
         return res.redirect(`/unregistered`);
@@ -433,6 +520,9 @@ export default function sessionSiteRoute(
   });
 
   app.post("/forgot-password", async function (req, res) {
+    // Each hit may send an email; throttle so one client cannot mail-bomb a
+    // user or probe the timing difference between known and unknown accounts.
+    if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 5 })) return;
     if (!await isFeatureWebRouteEnabled(app, features.web.login, req, res, features))
       return;
 
@@ -670,6 +760,14 @@ export default function sessionSiteRoute(
       const passwordHash = await bcrypt.hash(password, 12);
       await updateUserPassword(passwordReset.userId, passwordHash);
 
+      // A reset is usually a response to a suspected compromise: every other
+      // session this account holds must stop working now, not in 7 days.
+      try {
+        await destroySessionsForUser(passwordReset.userId);
+      } catch (destroyError) {
+        logRouteError("invalidate sessions after password reset", destroyError);
+      }
+
       delete req.session.passwordReset;
 
       setBannerCookie(
@@ -806,7 +904,20 @@ export default function sessionSiteRoute(
         return res.redirect(`/register`);
       }
 
-      if (existingUuidUser && existingUuidUser.account_registered && existingUuidUser.password_hash) {
+      // Only two kinds of existing row may be (re)claimed from this public
+      // form: a bare profile row created when the player first joined the
+      // server, or a local registration that never got past email
+      // verification. Anything that already belongs to someone -- a Discord
+      // link, a completed registration, a verified email -- must not have its
+      // credentials overwritten here, or anyone who knows a player's username
+      // could take over that account (the old check let a Discord-registered
+      // user through because they had no password_hash yet).
+      if (
+        existingUuidUser &&
+        (existingUuidUser.discordId ||
+          existingUuidUser.account_registered ||
+          existingUuidUser.email_verified)
+      ) {
         setBannerCookie("danger", "An account already exists for this Minecraft player.", res);
         return res.redirect(`/register`);
       }
@@ -989,6 +1100,32 @@ export default function sessionSiteRoute(
     }
   });
 
+  app.post("/register/verify-email/resend", async function (req, res) {
+    if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 3 })) return;
+
+    if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
+      return;
+
+    const pendingRegistration = req.session.pendingRegistration;
+    if (!pendingRegistration || !pendingRegistration.userId || !pendingRegistration.email) {
+      setBannerCookie("warning", "Start by creating an account first.", res);
+      return res.redirect(`/register`);
+    }
+
+    try {
+      await sendRegistrationVerificationCode(
+        pendingRegistration.userId,
+        pendingRegistration.username,
+        pendingRegistration.email
+      );
+      setBannerCookie("success", "We sent a new verification code to your email.", res);
+    } catch (error) {
+      logRouteError("resend registration email", error);
+      setBannerCookie("danger", "We couldn't send a new code right now. Please try again soon.", res);
+    }
+    return res.redirect(`/register/verify-email`);
+  });
+
   app.get("/register/minecraft", async function (req, res) {
     if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
       return;
@@ -1027,6 +1164,9 @@ export default function sessionSiteRoute(
   });
 
   app.post("/register/minecraft", async function (req, res) {
+    // The in-game code is a 6-digit global lookup; without a throttle it is
+    // brute-forceable from a pending registration.
+    if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 10 })) return;
     if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
       return;
 
@@ -1085,7 +1225,7 @@ export default function sessionSiteRoute(
     if (!await isFeatureWebRouteEnabled(app, features.web.register, req, res, features))
       return;
 
-    const discordId = req.cookies.discordId;
+    const discordId = readSignedDiscordId(req);
     if (!discordId) return res.redirect(`/`);
 
     const fetchURL = `${process.env.siteAddress}/api/server/get?type=VERIFICATION`;
@@ -1129,7 +1269,17 @@ export default function sessionSiteRoute(
       setBannerCookie("error", "Failed to refresh permissions. Please try logging out and back in.", res);
     }
 
-    const returnTo = req.headers.referer || "/dashboard";
+    // Only follow the referer when it points back into this site.
+    let returnTo = "/dashboard";
+    try {
+      const referer = new URL(req.headers.referer || "", process.env.siteAddress);
+      const site = new URL(process.env.siteAddress);
+      if (referer.origin === site.origin && isSafeLocalPath(referer.pathname + referer.search)) {
+        returnTo = referer.pathname + referer.search;
+      }
+    } catch {
+      // malformed referer: fall through to the dashboard
+    }
     return res.redirect(returnTo);
   });
 

@@ -83,6 +83,12 @@ function redactForCaller(events, viewerRanks, isStaff) {
   });
 }
 
+/** parseInt that falls back instead of handing NaN to Prisma. */
+function toInt(value, fallback) {
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function isReviewer(req) {
   return checkPermNode(req.session?.user?.permissions || [], "zander.web.events.review");
 }
@@ -117,7 +123,7 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
   app.get("/api/events/upcoming", async (req, res) => {
     if (!features.events) return res.send({ success: false, message: "Events feature disabled" });
     try {
-      const limit = Math.min(parseInt(req.query.limit || "20"), 50);
+      const limit = Math.min(toInt(req.query.limit, 20), 50);
       const viewerRanks = viewerRankSlugs(req);
       const isStaff = Boolean(req.session?.user?.isStaff);
       const events = await getUpcomingPublishedEvents(limit, viewerRanks, isStaff);
@@ -132,8 +138,8 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
   app.get("/api/events/published", async (req, res) => {
     if (!features.events) return res.send({ success: false, message: "Events feature disabled" });
     try {
-      const page = Math.max(parseInt(req.query.page || "1"), 1);
-      const limit = Math.min(parseInt(req.query.limit || "20"), 100);
+      const page = Math.max(toInt(req.query.page, 1), 1);
+      const limit = Math.min(toInt(req.query.limit, 20), 100);
       const viewerRanks = viewerRankSlugs(req);
       const isStaff = Boolean(req.session?.user?.isStaff);
       const result = await getAllPublishedEvents(page, limit, viewerRanks, isStaff);
@@ -224,10 +230,10 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
         statuses: req.query.statuses ? req.query.statuses.split(",").filter(Boolean) : null,
         eventType: req.query.eventType || null,
         search: req.query.search || null,
-        templateId: req.query.templateId ? parseInt(req.query.templateId) : null,
+        templateId: req.query.templateId ? toInt(req.query.templateId, null) : null,
         hidePast: req.query.hidePast === "true" || req.query.hidePast === "1",
-        page: Math.max(parseInt(req.query.page || "1"), 1),
-        limit: Math.min(parseInt(req.query.limit || "50"), 200),
+        page: Math.max(toInt(req.query.page, 1), 1),
+        limit: Math.min(toInt(req.query.limit, 50), 200),
       });
       return res.send({ success: true, ...result });
     } catch (err) {
@@ -443,6 +449,11 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
 
     const { eventId } = req.body || {};
     if (!eventId) return res.send({ success: false, message: "eventId is required" });
+    // Publishing is the reviewer's decision, like approve/reject; a dashboard
+    // editor must not be able to put an event live themselves.
+    if (req.session?.user && !isReviewer(req)) {
+      return res.status(403).send({ success: false, message: "Only approvers can publish events." });
+    }
 
     try {
       const { actorId, actorName } = actorFromReq(req);
