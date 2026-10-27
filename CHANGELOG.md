@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### Upgrading from 2.1.0
+
+Read these before deploying.
+
+- **`sessionCookieSecret` must be a real secret.** The app now refuses to start if it is shorter than 32 characters or still the example value. Generate one with `openssl rand -hex 32`.
+- **Set `TRUST_PROXY_HOPS`** to the number of reverse proxies in front of the app: `1` on Render alone, `2` with a CDN in front. Rate limiting and audit logs use it to find the real client IP; a wrong value makes every visitor look like the proxy.
+- **New environment variables for Compass SSO** (only needed if you run Compass): `OIDC_ISSUER`, `OIDC_JWKS` (generate with `node scripts/generate-oidc-jwks.mjs`), `OIDC_COMPASS_CLIENT_ID`, `OIDC_COMPASS_CLIENT_SECRET`, `OIDC_COMPASS_REDIRECT_URIS` and `OIDC_COMPASS_POST_LOGOUT_URIS`. See `.env.example`.
+- **Two new API key scopes.** Give each game server's key the `hologram` scope (or set a dedicated `holograms.api-key` in the addon's `config.yml`) before installing the new `zander-addon`, and keep `bridge` on keys used by the addon's bridge features. The `compass` scope is for the Compass bot only. Edit keys at **Dashboard → API Keys**.
+- **New permission nodes:** `zander.web.pages`, `zander.web.menus`, `zander.web.resources`, `zander.web.resources.review`, `zander.web.holograms` and `zander.web.tickets.manage`. Ticket category management now needs `zander.web.tickets.manage`; holders of the old view node lose rename/delete until it is granted.
+- **Email error alerts are gone.** `adminErrorEmail` and its ignore list no longer do anything and can be removed from your environment; use Sentry for error reporting.
+- **The Discord staff audit log webhook setting has been removed.**
+- **The legacy `migration/*.sql` files and `dbinit.sql` are gone.** Prisma migrations are now the only way to create or upgrade the database.
+- **10 database migrations** (`0067`–`0076`) run on deploy via `npm run build`. They add tables and columns, and make support tickets' `userId` nullable for guest tickets; nothing is dropped.
+- **Node.js 22** is pinned in `.node-version`; the app no longer starts with experimental Node flags (`Procfile` is now `node app.js`).
+- **New modules start switched off:** Resources and the Contact form are off by default; turn them on at **Dashboard → Modules**. Holograms are on by default.
+- **Plugins:** update `zander-addon` on every game server for holograms.
+
+### New
+
+- **Custom pages** — create, edit and publish your own site pages from the dashboard (`zander.web.pages`).
+- **Menu editor** — edit the top bar, header and footer navigation menus (`zander.web.menus`).
+- **Resources** — a public resources page with category tabs where members can suggest resources. Staff with `zander.web.resources.review` vote on suggestions within a configurable window, and `zander.web.resources` can decide overdue ones or override the result.
+- **Contact form and guest tickets** — people without an account can open a support ticket from the contact form and follow the conversation through a private emailed link.
+- **Support dashboard overview** — ticket queue and statistics at a glance for staff.
+- **Holograms** — design text holograms in the dashboard (`zander.web.holograms`), grouped and with optional countdowns and expiry times, then place them in-game with `/hologram create <name> <group>`. Servers poll for changes, so edits appear without a restart.
+- **Live stream announcements in-game** — when a creator goes live, an in-game tip announces it, and it is removed as soon as the stream ends.
+- **Compass SSO** — Zander is now an OpenID Connect provider, so the Compass staff portal signs staff in with their CFC account. Only members of the configured staff ranks can sign in. Compass also gets read-only lookups for groups (with display names), members (with avatars) and Discord identities.
+- **Report Message** — right-click a Discord message → Apps → Report Message to report it to staff.
+- **Edit scheduled Discord embeds** after creating them; rich-text descriptions are converted to Discord formatting.
+
+### Improved
+
+- **Shop directory** now finds and labels enchanted books, enchanted gear, potions, firework rockets and shulker box contents for shops created since the QuickShop-Hikari item format change. Search for an enchantment such as `sharpness` or `fire protection` and the result shows e.g. "Enchanted Book (Sharpness V)".
+- **Account pages** — redesigned registration, email verification, password reset and Minecraft linking pages, with clearer code entry and password rules.
+- **Punishment settings** apply as soon as they are saved, without a restart.
+- **Discord crons** share one throttled member fetch, so booster rewards, rank role sync, unverified-member reminders and the LuckPerms audit no longer hit Discord's rate limits by running at the same time.
+
 ### Security
 - Public registration can no longer overwrite the credentials of an existing account that is Discord-linked, verified or registered; it only claims bare profile rows or an unfinished local registration.
 - Staff recovery actions (change email, trigger password reset) refuse accounts that hold permissions the actor lacks, a staff-set email is unverified until confirmed, and resets require a verified address.
@@ -16,6 +53,7 @@
 - Rich-text sanitiser no longer allows arbitrary `class` values, protocol-relative URLs or unbounded nesting. `/api` 5xx responses no longer echo internal error text. Sentry no longer receives request bodies or cookies.
 - LuckPerms rank slugs are validated before use in LIKE patterns; QuickShop and user searches escape LIKE wildcards. `multipleStatements` is off on the main pool.
 - Privileged slash commands are guild-only. Rank-permission holders cannot grant nodes to a rank they hold. Placeholder user rows no longer shadow real players in username lookups, nickname enforcement or the birthday rank grant (which now addresses players by UUID).
+- Dependencies: all 8 `npm audit` advisories cleared (2 high), including XSS bypasses in `sanitize-html` and denial-of-service issues in `undici` and `nodemailer`. The lockfile was checked against known 2026 npm supply-chain compromises.
 
 ### Fixed
 - Rank/Discord role sync no longer strips a rank's role from every member when that one rank's lookup fails, and runs are serialised.
@@ -25,6 +63,15 @@
 - Unverified users can request a new email verification code (resend button, and a fresh code on login) instead of having to re-register.
 - Indexes added for sessions, notifications, game sessions, scheduled messages and code tables; the support-message charset conversion is a real migration instead of a boot-time `ALTER`.
 - Maintenance scripts under `scripts/` default to dry-run and require `--apply`. Removed the `crypto`, `path` and `querystring` npm packages that shadow Node built-ins; `package-lock.json` is no longer gitignored.
+- The addon's command bridge no longer gets 404s from the website: the missing API route was added.
+- The verify button on code-entry pages (email verification, password reset) could stay unresponsive because the script looked it up before it existed.
+
+### Removed
+
+- **Email error alerts** (`adminErrorEmail`) — Sentry covers error reporting.
+- **Discord staff audit log webhook** setting.
+- **Legacy SQL migration files** (`migration/`) and `dbinit.sql`, replaced by Prisma migrations.
+- **Experimental Node flags** from `Procfile` and the npm scripts.
 
 ## 2.1.0
 
