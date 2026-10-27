@@ -71,9 +71,8 @@ export const DISALLOW = [
  * appears in the sitemap -- can be tested directly.
  *
  * The entries with no flag are pages that are served unconditionally by their
- * routes. `/finance` is one of them: features.finance exists but
- * routes/financeRoutes.js does not gate on it, and the sitemap follows what is
- * actually served rather than what a flag suggests.
+ * routes, so the sitemap follows what is actually served rather than what a
+ * flag suggests.
  */
 export function staticSitemapPages(features = {}) {
   return [
@@ -86,7 +85,7 @@ export function staticSitemapPages(features = {}) {
     features.vault && { url: "/vault", priority: "0.7", changefreq: "monthly" },
     features.forums && { url: "/forums", priority: "0.7", changefreq: "daily" },
     features.webstore && { url: "/webstore", priority: "0.6", changefreq: "weekly" },
-    { url: "/finance", priority: "0.7", changefreq: "weekly" },
+    features.finance && { url: "/finance", priority: "0.7", changefreq: "weekly" },
     { url: "/staff", priority: "0.6", changefreq: "weekly" },
     features.applications && { url: "/apply", priority: "0.7", changefreq: "weekly" },
     features.watch && { url: "/watch", priority: "0.7", changefreq: "daily" },

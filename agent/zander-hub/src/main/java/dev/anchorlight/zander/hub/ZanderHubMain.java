@@ -13,6 +13,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import dev.anchorlight.zander.hub.bridge.BridgeClient;
+import dev.anchorlight.zander.hub.commands.connect;
 import dev.anchorlight.zander.hub.commands.fly;
 import dev.anchorlight.zander.hub.commands.portal.PortalCommand;
 import dev.anchorlight.zander.hub.events.HubBoosterPlate;
@@ -113,6 +114,7 @@ public class ZanderHubMain extends JavaPlugin {
 
         // Command Registry
         this.getCommand("fly").setExecutor(new fly());
+        this.getCommand("connect").setExecutor(new connect());
         PortalCommand portalCommand = new PortalCommand(portalService, selections, portalWand, portalRenderer);
         this.getCommand("zportal").setExecutor(portalCommand);
         this.getCommand("zportal").setTabCompleter(portalCommand);

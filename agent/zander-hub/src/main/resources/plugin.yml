@@ -10,7 +10,7 @@ commands:
     description: Allows player to fly.
     usage: /fly
   connect:
-    description: Connect to a Server.
+    description: Connect to another server on the network.
     usage: /connect <server>
   zportal:
     description: Manage custom Hub portals.
@@ -18,17 +18,17 @@ commands:
     aliases: [portaladmin]
 
 permissions:
-  zander.fly:
+  zander.hub.fly:
+    description: Use /fly in the hub.
     default: op
-  zanderhub.administrator:
-    default: op
-  zanderhub.build:
+  zander.hub.build:
+    description: Build and break blocks in the protected hub.
     default: op
   zanderhub.nether.bypass:
+    description: Enter the Nether while it is disabled.
     default: op
   zanderhub.end.bypass:
-    default: op
-  zanderhub.portal.admin:
+    description: Enter the End while it is disabled.
     default: op
   zanderhub.portal.wand:
     default: op
@@ -46,3 +46,24 @@ permissions:
     default: op
   zanderhub.portal.send:
     default: op
+  zanderhub.portal.admin:
+    description: Every /zportal permission.
+    default: op
+    children:
+      zanderhub.portal.wand: true
+      zanderhub.portal.create: true
+      zanderhub.portal.delete: true
+      zanderhub.portal.edit: true
+      zanderhub.portal.list: true
+      zanderhub.portal.reload: true
+      zanderhub.portal.teleport: true
+      zanderhub.portal.send: true
+  zanderhub.administrator:
+    description: Every zander-hub permission.
+    default: op
+    children:
+      zander.hub.fly: true
+      zander.hub.build: true
+      zanderhub.nether.bypass: true
+      zanderhub.end.bypass: true
+      zanderhub.portal.admin: true

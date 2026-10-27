@@ -1,4 +1,4 @@
-import { getGlobalImage } from "../api/common.js";
+import { getGlobalImage, isFeatureWebRouteEnabled } from "../api/common.js";
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import {
   buildPublicFinanceSnapshot,
@@ -22,6 +22,7 @@ async function renderNotFound(app, req, res, config, features) {
 
 export default function financeRoutes(app, config, features) {
   app.get("/finance", async function (req, res) {
+    if (!await isFeatureWebRouteEnabled(app, features.finance, req, res, features)) return;
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
@@ -48,6 +49,7 @@ export default function financeRoutes(app, config, features) {
   });
 
   app.get("/finance/reports/:year/:month", async function (req, res) {
+    if (!await isFeatureWebRouteEnabled(app, features.finance, req, res, features)) return;
     const year = parseInt(req.params.year, 10);
     const month = parseInt(req.params.month, 10);
 

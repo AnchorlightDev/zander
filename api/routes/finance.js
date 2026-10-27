@@ -8,6 +8,7 @@
  *   GET  /api/finance/dashboard   — dashboard summary JSON
  */
 
+import { isFeatureEnabled } from "../common.js";
 import {
   getCategories,
   getFinanceDashboardData,
@@ -19,6 +20,7 @@ export default function financeApiRoute(app, config, db, features, lang) {
   // GET /api/finance/categories — list categories
   // ===========================================================================
   app.get("/api/finance/categories", async function (req, res) {
+    if (!isFeatureEnabled(features.finance, res, lang)) return;
     try {
       const categories = await getCategories();
       return res.send({ success: true, data: categories });
@@ -32,6 +34,7 @@ export default function financeApiRoute(app, config, db, features, lang) {
   // GET /api/finance/dashboard — dashboard summary JSON
   // ===========================================================================
   app.get("/api/finance/dashboard", async function (req, res) {
+    if (!isFeatureEnabled(features.finance, res, lang)) return;
     try {
       const data = await getFinanceDashboardData();
       return res.send({ success: true, data });

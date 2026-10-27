@@ -29,6 +29,12 @@ import {
   setContentItemAnnouncementId,
 } from "../controllers/watchController.js";
 
+// "example.net/watch" for in-game announcements, from this site's address.
+function watchPageLabel() {
+  const host = String(process.env.siteAddress || "").replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  return `${host}/watch`;
+}
+
 // ---------------------------------------------------------------------------
 // Discord notification helpers
 // ---------------------------------------------------------------------------
@@ -329,7 +335,7 @@ async function syncYoutubeCreator(creator, apiKey, fetchFn) {
           const saved = await getContentItemByExternal("youtube", video.id);
           if (saved && !saved.ingame_announcement_id) {
             const creatorName = creator.platform_display_name || creator.username;
-            const announcementBody = `Creator ${creatorName} is now live — watch now at craftingforchrist.net/watch`;
+            const announcementBody = `Creator ${creatorName} is now live — watch now at ${watchPageLabel()}`;
             const announcementId = await createInGameAnnouncement(announcementBody, 1440);
             if (announcementId) await setContentItemAnnouncementId(saved.id, announcementId);
           }
@@ -344,7 +350,7 @@ async function syncYoutubeCreator(creator, apiKey, fetchFn) {
         const ingameAlreadySent = await hasNotificationBeenSent("youtube", video.id, ingameNotifType);
         if (!ingameAlreadySent) {
           const creatorName = creator.platform_display_name || creator.username;
-          const announcementBody = `Creator ${creatorName} has released a new video — watch now at craftingforchrist.net/watch`;
+          const announcementBody = `Creator ${creatorName} has released a new video — watch now at ${watchPageLabel()}`;
           try {
             await createInGameAnnouncement(announcementBody);
             await recordNotification("youtube", video.id, ingameNotifType, null);

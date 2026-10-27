@@ -110,6 +110,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
   // GET /dashboard/finance — dashboard overview
   // ===========================================================================
   app.get("/dashboard/finance", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
 
     try {
@@ -175,6 +176,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
 
   // POST /dashboard/finance/accounts/create
   app.post("/dashboard/finance/accounts/create", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     if (!canManageFinance(req)) {
       setBannerCookie("danger", "You do not have permission to manage finance accounts.", res);
@@ -193,6 +195,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
 
   // POST /dashboard/finance/accounts/:accountId/edit
   app.post("/dashboard/finance/accounts/:accountId/edit", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     if (!canManageFinance(req)) {
       setBannerCookie("danger", "You do not have permission to manage finance accounts.", res);
@@ -216,6 +219,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
 
   // POST /dashboard/finance/accounts/:accountId/balance — record a statement balance
   app.post("/dashboard/finance/accounts/:accountId/balance", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     if (!canManageFinance(req)) {
       setBannerCookie("danger", "You do not have permission to reconcile finance accounts.", res);
@@ -243,6 +247,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
 
   // POST /dashboard/finance/accounts/balance/:balanceId/delete
   app.post("/dashboard/finance/accounts/balance/:balanceId/delete", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     if (!canManageFinance(req)) {
       setBannerCookie("danger", "You do not have permission to reconcile finance accounts.", res);
@@ -260,6 +265,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
 
   // GET /dashboard/finance/accounts/:accountId/history — JSON balance history
   app.get("/dashboard/finance/accounts/:accountId/history", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     try {
       const history = await getAccountBalanceHistory(req.params.accountId, req.query.limit);
@@ -273,6 +279,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
   // POST /dashboard/finance/budget/override — set/update this month's amount
   // for a template line item, without touching the template itself.
   app.post("/dashboard/finance/budget/override", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
 
     if (!canManageFinance(req)) {
@@ -294,6 +301,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
   // POST /dashboard/finance/budget/override/reset — revert a line item back
   // to the template amount for this month (deletes the override row).
   app.post("/dashboard/finance/budget/override/reset", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
 
     if (!canManageFinance(req)) {
@@ -315,6 +323,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
   // POST /dashboard/finance/budget/one-off/create — add a line item that
   // only exists for this specific month, not part of the standing template.
   app.post("/dashboard/finance/budget/one-off/create", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
 
     if (!canManageFinance(req)) {
@@ -335,6 +344,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
 
   // POST /dashboard/finance/budget/one-off/:id/delete
   app.post("/dashboard/finance/budget/one-off/:id/delete", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
 
     if (!canManageFinance(req)) {
@@ -355,6 +365,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
 
   // POST /dashboard/finance/budget/create
   app.post("/dashboard/finance/budget/create", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
 
     if (!canManageFinance(req)) {
@@ -375,6 +386,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
 
   // POST /dashboard/finance/budget/:budgetId/edit
   app.post("/dashboard/finance/budget/:budgetId/edit", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
 
     const budgetId = parseInt(req.params.budgetId, 10);
@@ -401,6 +413,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
 
   // POST /dashboard/finance/budget/:budgetId/delete
   app.post("/dashboard/finance/budget/:budgetId/delete", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
 
     const budgetId = parseInt(req.params.budgetId, 10);
@@ -443,36 +456,42 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
 
   // GET /dashboard/finance/transactions
   app.get("/dashboard/finance/transactions", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     return redirectRetiredFinanceSection(res);
   });
 
   // GET /dashboard/finance/transactions/create
   app.get("/dashboard/finance/transactions/create", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     return redirectRetiredFinanceSection(res);
   });
 
   // POST /dashboard/finance/transactions/create
   app.post("/dashboard/finance/transactions/create", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     return redirectRetiredFinanceSection(res);
   });
 
   // GET /dashboard/finance/transactions/:transactionId/edit
   app.get("/dashboard/finance/transactions/:transactionId/edit", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     return redirectRetiredFinanceSection(res);
   });
 
   // POST /dashboard/finance/transactions/:transactionId/edit
   app.post("/dashboard/finance/transactions/:transactionId/edit", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     return redirectRetiredFinanceSection(res);
   });
 
   // POST /dashboard/finance/transactions/:transactionId/delete
   app.post("/dashboard/finance/transactions/:transactionId/delete", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     return redirectRetiredFinanceSection(res);
   });
@@ -484,6 +503,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
   // GET /dashboard/finance/budget — no dedicated page; budget management now
   // lives inline on the main Finance page.
   app.get("/dashboard/finance/budget", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     return redirectRetiredFinanceSection(res);
   });
@@ -493,6 +513,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
   // ===========================================================================
 
   app.get("/dashboard/finance/reports", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
 
     try {
@@ -538,6 +559,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
   });
 
   app.post("/dashboard/finance/reports/publish", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     if (!canManageFinance(req)) {
       setBannerCookie("danger", "You do not have permission to publish finance reports.", res);
@@ -563,6 +585,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
   });
 
   app.post("/dashboard/finance/reports/lock", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     if (!canManageFinance(req)) {
       setBannerCookie("danger", "You do not have permission to lock finance reports.", res);
@@ -587,6 +610,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
 
   // GET /dashboard/finance/settings
   app.get("/dashboard/finance/settings", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
 
     if (!canManageFinance(req)) {
@@ -620,6 +644,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
   // ---- Categories ----
 
   app.post("/dashboard/finance/settings/categories/create", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     if (!canManageFinance(req)) {
       setBannerCookie("danger", "Permission denied.", res);
@@ -637,6 +662,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
   });
 
   app.post("/dashboard/finance/settings/categories/:id/edit", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     if (!canManageFinance(req)) {
       setBannerCookie("danger", "Permission denied.", res);
@@ -679,6 +705,7 @@ export default function dashboardFinanceRoute(app, fetch, config, db, features, 
   });
 
   app.post("/dashboard/finance/settings/categories/:id/delete", async function (req, res) {
+    if (!features.finance) return res.redirect("/dashboard");
     if (!await hasPermission("zander.web.finance", req, res, features)) return;
     if (!canManageFinance(req)) {
       setBannerCookie("danger", "Permission denied.", res);

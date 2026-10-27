@@ -34,6 +34,7 @@ import {
 
 const require = createRequire(import.meta.url);
 const config = require("../lib/config/config.cjs");
+const features = require("../lib/config/features.cjs");
 
 const PUNISHMENT_TYPES = {
   warn: "WARN",
@@ -402,6 +403,26 @@ export function getTargetTag(user) {
 }
 
 /**
+ * When Dashboard → Settings → "Require punishment DM to succeed" is on, a
+ * punishment whose DM could not be delivered is not applied. The DM is always
+ * sent before the action, so stopping here leaves nothing half-done.
+ * Returns an error embed to show the actor, or null to carry on.
+ */
+function requiredDmFailedEmbed(dmStatus) {
+  if (!config.discord?.punishments?.requireDmSuccess || dmStatus === "SENT") return null;
+  const why = dmStatus === "FAILED_CLOSED_DMS"
+    ? "they have DMs from this server turned off"
+    : "Discord returned an error";
+  return new EmbedBuilder()
+    .setTitle("Punishment Not Applied")
+    .setDescription(
+      `The user could not be sent a DM about this punishment (${why}), and this server requires the DM to succeed. ` +
+      "Nothing was applied. Turn off **Require punishment DM to succeed** in the dashboard settings to punish without a DM."
+    )
+    .setColor(Colors.Red);
+}
+
+/**
  * Attempt to DM a user before a punishment action.
  * Returns dm_status string.
  */
@@ -689,6 +710,18 @@ export class PunishCommand extends Command {
       return;
     }
 
+    // Dashboard → Modules → "Punishment commands"
+    if (!features.discord?.punishments) {
+      return interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("Feature Disabled")
+            .setDescription("Punishment commands have been disabled by your System Administrator.")
+            .setColor(Colors.Red),
+        ],
+      });
+    }
+
     // Permission check: actor must have a linked account
     const userGetter = new UserGetter();
     const linkedAccount = await userGetter.byDiscordId(interaction.user.id);
@@ -765,6 +798,8 @@ export class PunishCommand extends Command {
       guildName: interaction.guild.name,
       expiresAt: null,
     });
+    const dmBlock = requiredDmFailedEmbed(dmStatus);
+    if (dmBlock) return interaction.editReply({ embeds: [dmBlock] });
 
     const punishmentId = await createPunishment({
       type: "WARN",
@@ -842,6 +877,8 @@ export class PunishCommand extends Command {
       guildName: interaction.guild.name,
       expiresAt: null,
     });
+    const dmBlock = requiredDmFailedEmbed(dmStatus);
+    if (dmBlock) return interaction.editReply({ embeds: [dmBlock] });
 
     try {
       await targetMember.kick(`[Punish] ${reason}`);
@@ -932,6 +969,8 @@ export class PunishCommand extends Command {
       guildName: interaction.guild.name,
       expiresAt,
     });
+    const dmBlock = requiredDmFailedEmbed(dmStatus);
+    if (dmBlock) return interaction.editReply({ embeds: [dmBlock] });
 
     try {
       await interaction.guild.members.ban(targetUser.id, {
@@ -1018,6 +1057,8 @@ export class PunishCommand extends Command {
       guildName: interaction.guild.name,
       expiresAt: null,
     });
+    const dmBlock = requiredDmFailedEmbed(dmStatus);
+    if (dmBlock) return interaction.editReply({ embeds: [dmBlock] });
 
     try {
       await interaction.guild.members.ban(targetUser.id, {
@@ -1124,6 +1165,8 @@ export class PunishCommand extends Command {
       guildName: interaction.guild.name,
       expiresAt,
     });
+    const dmBlock = requiredDmFailedEmbed(dmStatus);
+    if (dmBlock) return interaction.editReply({ embeds: [dmBlock] });
 
     try {
       await targetMember.roles.add(MUTED_ROLE_ID, `[Punish] ${reason}`);
@@ -1220,6 +1263,8 @@ export class PunishCommand extends Command {
       guildName: interaction.guild.name,
       expiresAt: null,
     });
+    const dmBlock = requiredDmFailedEmbed(dmStatus);
+    if (dmBlock) return interaction.editReply({ embeds: [dmBlock] });
 
     try {
       await targetMember.roles.add(MUTED_ROLE_ID, `[Punish] ${reason}`);

@@ -29,6 +29,12 @@ import {
   setContentItemAnnouncementId,
 } from "../controllers/watchController.js";
 
+// "example.net/watch" for in-game announcements, from this site's address.
+function watchPageLabel() {
+  const host = String(process.env.siteAddress || "").replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  return `${host}/watch`;
+}
+
 // ---------------------------------------------------------------------------
 // Twitch App Access Token (Client Credentials)
 // ---------------------------------------------------------------------------
@@ -203,7 +209,7 @@ async function syncTwitchCreator(creator, stream) {
         const saved = await getContentItemByExternal("twitch", stream.id);
         if (saved && !saved.ingame_announcement_id) {
           const creatorName = creator.platform_display_name || creator.username;
-          const announcementBody = `Creator ${creatorName} is now live — watch now at craftingforchrist.net/watch`;
+          const announcementBody = `Creator ${creatorName} is now live — watch now at ${watchPageLabel()}`;
           // 24h expiry is only a safety net; the offline sweep normally retracts
           // the tip first, well before this.
           const announcementId = await createInGameAnnouncement(announcementBody, 1440);

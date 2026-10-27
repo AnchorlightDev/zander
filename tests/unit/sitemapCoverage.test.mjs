@@ -27,6 +27,7 @@ const ALL_ON = {
   events: true,
   shopdirectory: true,
   report: true,
+  finance: true,
   discord: { punishments: true },
 };
 
@@ -37,7 +38,7 @@ describe("feature flags are respected", () => {
     const listed = urls(ALL_ON);
 
     for (const url of ["/play", "/bedrock", "/ranks", "/vault", "/forums", "/webstore",
-                       "/apply", "/watch", "/events", "/shopdirectory", "/punishments", "/report"]) {
+                       "/apply", "/watch", "/events", "/shopdirectory", "/punishments", "/report", "/finance"]) {
       expect(listed, url).toContain(url);
     }
   });
@@ -46,7 +47,7 @@ describe("feature flags are respected", () => {
     const listed = urls({});
 
     for (const url of ["/play", "/bedrock", "/ranks", "/vault", "/forums", "/webstore",
-                       "/apply", "/watch", "/events", "/shopdirectory", "/punishments", "/report"]) {
+                       "/apply", "/watch", "/events", "/shopdirectory", "/punishments", "/report", "/finance"]) {
       expect(listed, url).not.toContain(url);
     }
   });
@@ -70,7 +71,7 @@ describe("pages served unconditionally are always listed", () => {
   it("keeps the home page, policies and the always-on routes", () => {
     const listed = urls({});
 
-    for (const url of ["/", "/finance", "/staff", "/appeal", "/rules", "/terms", "/privacy", "/refund"]) {
+    for (const url of ["/", "/staff", "/appeal", "/rules", "/terms", "/privacy", "/refund"]) {
       expect(listed, url).toContain(url);
     }
   });

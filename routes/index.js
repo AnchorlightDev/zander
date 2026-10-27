@@ -657,6 +657,7 @@ export default function applicationSiteRoutes(
   // Punishments
   //
   app.get("/punishments", async function (req, res) {
+    if (!await isFeatureWebRouteEnabled(app, features.discord?.punishments, req, res, features)) return;
     const permissionBoolean = await hasPermission(
       "zander.web.punishment.view",
       req,

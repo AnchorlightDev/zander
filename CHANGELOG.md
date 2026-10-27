@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+
+- **`/forcelink` and `/lp-audit` permissions** (`zander.discord.forcelink`, `zander.discord.lpaudit`) can now be ticked in the ranks dashboard.
+- **The unused `internal` API scope has been removed** from the API Keys page. No route ever required it; existing keys that have it are unaffected.
+- **Removed unused variables from `.env.example`:** `STRIPE_PRICE_MAP_TOKEN_*`, `STRIPE_PRICE_SUPPORTER_MONTHLY` and `MINEMONITOR_DATE_FORMAT`.
+
 ### Documentation
 
 - **All documentation now lives at [anchorlight.dev/docs/products/zander](https://anchorlight.dev/docs/products/zander).** The guides that were in `docs/`, `SETUP.md` and the plugin READMEs have moved there and been brought up to date for 2.2.0. The README, `SETUP.md` and the plugin READMEs now point to the site.
@@ -10,6 +16,12 @@
 
 ### Fixed
 
+- **`/connect <server>` works in the hub.** It was declared but had no command behind it. It now asks the proxy to move you, with the same checks as the navigation compass (`serverpermissions.server.<id>`, unknown servers, rate limit).
+- **zander-hub permission names match the code.** `plugin.yml` declared `zander.fly` and `zanderhub.build`, but the plugin checks `zander.hub.fly` and `zander.hub.build`; the declarations now use the real names. `zanderhub.portal.admin` now grants every `/zportal` permission and `zanderhub.administrator` grants every hub permission (both previously did nothing).
+- **The Finance module switch works.** Switching it off now hides the public Finance Centre and reports, the finance dashboard and `/api/finance`, and drops `/finance` from the sitemap. It was previously only cosmetic.
+- **The Punishment commands switch works.** Switching it off now disables `/punish` and the public `/punishments` page; before, it only hid a menu link.
+- **"Require punishment DM to succeed" works.** When it is on and the user can't be sent a DM (for example, they have DMs closed), the punishment is not applied and staff are told why. The setting previously did nothing.
+- **Live-stream announcements use your site's address** instead of a hard-coded `craftingforchrist.net/watch`.
 - **`.env.example` no longer sets `TRUST_PROXY_HOPS=1`.** On Render that value stops the session cookie being set and breaks every login; leave the variable unset. `SETUP.md` and the 2.2.0 upgrade notes said to set it and have been corrected.
 
 ## 2.2.0
