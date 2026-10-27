@@ -1,6 +1,7 @@
 import { getProfilePicture } from "../controllers/userController.js";
 import db, { quickshopDb } from "../controllers/databaseController.js";
 import pLimit from "p-limit";
+import { formatEnchantments, formatContents, formatItemId } from "../lib/quickshopNbt.js";
 
 // Convert a raw minecraft item ID to a human-readable display name
 function formatItemName(rawName) {
@@ -66,6 +67,18 @@ function parseFireworkDuration(rawItemYaml) {
 }
 
 const MAX_RESULTS = 50;
+
+// qs_data.name for new-format rows — a JSON string, or already an object when
+// the column is a native JSON type.
+function parseIndexMeta(raw) {
+  if (!raw) return null;
+  if (typeof raw === "object") return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
 // Parse shulker box contents from raw QuickShop item data
 // Format: minecraft:container: '[{item:{count:64,id:"minecraft:sand"},slot:0},...]'
@@ -263,9 +276,11 @@ export async function searchShops(material, page = 1, options = {}) {
              (data.item NOT LIKE 'item:%' AND (
                JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ? ESCAPE '\\\\'
                OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ? ESCAPE '\\\\'
+               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.tags')) LIKE ? ESCAPE '\\\\'
+               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.tags')) LIKE ? ESCAPE '\\\\'
              ))
            )`,
-        [likeTerm, likeTermUnderscored, likeTerm, likeTermUnderscored],
+        [likeTerm, likeTermUnderscored, likeTerm, likeTermUnderscored, likeTerm, likeTermUnderscored],
         (error, results) => {
           if (error) return reject(error);
           resolve(results[0]?.total || 0);
@@ -314,6 +329,7 @@ export async function searchShops(material, page = 1, options = {}) {
            map.x,
            map.y,
            map.z,
+           CASE WHEN data.item NOT LIKE 'item:%' THEN data.name ELSE NULL END AS meta,
            CASE
              WHEN data.item NOT LIKE 'item:%' THEN NULL
              WHEN LOCATE('minecraft:stored_enchantments:', data.item) > 0
@@ -356,11 +372,13 @@ export async function searchShops(material, page = 1, options = {}) {
              (data.item NOT LIKE 'item:%' AND (
                JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ? ESCAPE '\\\\'
                OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ? ESCAPE '\\\\'
+               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.tags')) LIKE ? ESCAPE '\\\\'
+               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.tags')) LIKE ? ESCAPE '\\\\'
              ))
            )
          ORDER BY shops.id
          LIMIT ? OFFSET ?`,
-        [likeTerm, likeTermUnderscored, likeTerm, likeTermUnderscored, MAX_RESULTS, offset],
+        [likeTerm, likeTermUnderscored, likeTerm, likeTermUnderscored, likeTerm, likeTermUnderscored, MAX_RESULTS, offset],
         (error, results) => {
           if (error) return reject(error);
           resolve(results || []);
@@ -385,7 +403,21 @@ export async function searchShops(material, page = 1, options = {}) {
           const parentLabel = ITEM_DISPLAY_LABEL[itemName];
           let shulkerContents = null;
 
-          if (shop.display_name && parentLabel) {
+          // New-format (NBT) shops: details come from the index JSON the
+          // shopItemIndexCron writes into qs_data.name.
+          const meta = parseIndexMeta(shop.meta);
+
+          if (meta) {
+            const detail = formatEnchantments(meta.ench)
+              || (meta.potion ? formatItemId(meta.potion) : null)
+              || (typeof meta.flight === "number" ? `Duration ${meta.flight}` : null);
+            if (detail) {
+              displayName = `${parentLabel || displayName} (${detail})`;
+            }
+            if (meta.contents) {
+              shulkerContents = formatContents(meta.contents);
+            }
+          } else if (shop.display_name && parentLabel) {
             const cleanedDetail = cleanDisplayName(shop.display_name);
             if (cleanedDetail) {
               displayName = `${parentLabel} (${cleanedDetail})`;

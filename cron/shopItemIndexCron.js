@@ -1,35 +1,16 @@
 import cron from "node-cron";
-import zlib from "zlib";
 import { quickshopDb } from "../controllers/databaseController.js";
+import { SHOP_INDEX_VERSION, decodeShopItem, buildIndexValue } from "../lib/quickshopNbt.js";
 
-// Decode a base64+gzip NBT binary (QuickShop-Hikari new format, ~2026-04-22, id ≥ 6000)
-// and extract the item ID and count.  Returns { id, count } or null on failure.
-// NBT layout we rely on:
-//   TAG_String (0x08) key="id"    → item ID string e.g. "minecraft:diamond"
-//   TAG_Int    (0x03) key="count" → stack size as big-endian int32
-function decodeNbtItemData(rawItem) {
-  try {
-    const buf = Buffer.from(rawItem, "base64");
-    const nbt = zlib.gunzipSync(buf);
+// QuickShop-Hikari stores new-format items (~2026-04-22, id ≥ 6000) as
+// base64+gzip NBT, which SQL can't search. This cron decodes them and writes
+// a JSON summary into qs_data.name — item ID, count, enchantments, potion,
+// firework flight, shulker contents and a flat `tags` string — so the shop
+// directory can search and label them. See lib/quickshopNbt.js.
 
-    // TAG_String = 0x08 | 2-byte key len | key bytes | 2-byte value len | value bytes
-    const idPattern = Buffer.from([0x08, 0x00, 0x02, 0x69, 0x64]); // \x08\x00\x02id
-    const idIdx = nbt.indexOf(idPattern);
-    if (idIdx === -1) return null;
-    const idLen = nbt.readUInt16BE(idIdx + 5);
-    const rawId = nbt.toString("utf8", idIdx + 7, idIdx + 7 + idLen);
-    const itemId = rawId.replace("minecraft:", "");
-
-    // TAG_Int = 0x03 | 2-byte key len | key bytes | 4-byte big-endian int32
-    const countPattern = Buffer.from([0x03, 0x00, 0x05, 0x63, 0x6f, 0x75, 0x6e, 0x74]); // \x03\x00\x05count
-    const countIdx = nbt.indexOf(countPattern);
-    const count = countIdx !== -1 ? nbt.readInt32BE(countIdx + 8) : 1;
-
-    return { id: itemId, count };
-  } catch (err) {
-    return null;
-  }
-}
+const BATCH_SIZE = 500;
+// Safety cap so a pathological table can't keep the startup backfill looping.
+const MAX_BATCHES_PER_RUN = 200;
 
 function queryAsync(sql, params) {
   return new Promise((resolve, reject) => {
@@ -40,47 +21,60 @@ function queryAsync(sql, params) {
   });
 }
 
-async function indexNewShopItems() {
-  // Pick up rows that are new-format AND either not yet indexed (name IS NULL)
-  // or previously indexed with the old plain-ID format (name NOT LIKE '{%').
+// Rows that are new-format and not yet indexed at the current version: never
+// indexed (NULL), indexed under the original plain-ID format, or indexed by an
+// older version of this cron (no / different "v"). Matched as text so it works
+// whether `name` is a VARCHAR or a JSON column (MySQL renders JSON as `"v": 2`).
+const versionPattern = `"v": ?${SHOP_INDEX_VERSION}[,}]`;
+
+async function indexBatch() {
   const rows = await queryAsync(
     `SELECT id, item FROM qs_data
      WHERE item NOT LIKE 'item:%'
-       AND (name IS NULL OR name NOT LIKE '{%')
-     LIMIT 500`,
-    []
+       AND (name IS NULL OR CAST(name AS CHAR) NOT REGEXP ?)
+     LIMIT ?`,
+    [versionPattern, BATCH_SIZE]
   );
 
-  if (!rows || rows.length === 0) return 0;
+  if (!rows || rows.length === 0) return { scanned: 0, decoded: 0 };
 
-  const updates = rows.map((row) => {
-    const data = decodeNbtItemData(row.item);
-    // On decode failure store '{}' so we don't keep retrying this row
-    const nameValue = data ? JSON.stringify({ id: data.id, count: data.count }) : "{}";
-    return queryAsync(`UPDATE qs_data SET name = ? WHERE id = ?`, [nameValue, row.id])
-      .then(() => (data ? 1 : 0))
-      .catch((err) => {
-        console.error(`Shop index update error for data id=${row.id}:`, err);
-        return 0;
-      });
-  });
+  const results = await Promise.all(
+    rows.map((row) => {
+      const meta = decodeShopItem(row.item);
+      // On decode failure we still stamp the version so the row isn't retried forever.
+      return queryAsync(`UPDATE qs_data SET name = ? WHERE id = ?`, [buildIndexValue(meta), row.id])
+        .then(() => (meta ? 1 : 0))
+        .catch((err) => {
+          console.error(`Shop index update error for data id=${row.id}:`, err);
+          return 0;
+        });
+    })
+  );
 
-  const results = await Promise.all(updates);
-  return results.reduce((sum, n) => sum + n, 0);
+  return { scanned: rows.length, decoded: results.reduce((sum, n) => sum + n, 0) };
 }
 
-async function runIndex(label) {
+let running = false;
+
+async function runIndex() {
+  if (running) return;
+  running = true;
   try {
-    await indexNewShopItems();
+    for (let i = 0; i < MAX_BATCHES_PER_RUN; i++) {
+      const { scanned } = await indexBatch();
+      if (scanned < BATCH_SIZE) break;
+    }
   } catch (err) {
     console.error("Shop item index error:", err);
+  } finally {
+    running = false;
   }
 }
 
-// Run on startup to backfill existing unindexed rows
-runIndex("backfilled");
+// Run on startup to backfill (and re-index rows from older index versions)
+runIndex();
 
 // Run every 5 minutes to pick up newly created shops
 cron.schedule("*/5 * * * *", () => {
-  runIndex("indexed");
+  runIndex();
 });
