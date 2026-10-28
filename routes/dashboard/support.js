@@ -1,5 +1,5 @@
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
-import { isSafeLocalPath } from "../../lib/safeLocalPath.mjs";
+import { toSafeLocalPath } from "../../lib/safeLocalPath.mjs";
 import {
   isFeatureWebRouteEnabled,
   getGlobalImage,
@@ -76,7 +76,7 @@ export default function supportDashboardRoutes(
   const requireTicketManagePermission = async (req, res) =>
     await hasPermission("zander.web.tickets.manage", req, res, features);
 
-  const safeRedirect = (value, fallback) => (isSafeLocalPath(value) ? value : fallback);
+  const safeRedirect = (value, fallback) => toSafeLocalPath(value, fallback);
 
   const requireCategoryPermission = async (category, req, res) => {
     const slug = getCategorySlug(category);

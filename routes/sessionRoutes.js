@@ -32,7 +32,7 @@ import {
 import { sendMail } from "../controllers/emailController.js";
 import { checkRateLimit } from "../lib/rateLimiter.mjs";
 import { hasStaffFlag } from "../lib/permissions/staffFlag.mjs";
-import { isSafeLocalPath } from "../lib/safeLocalPath.mjs";
+import { isSafeLocalPath, toSafeLocalPath } from "../lib/safeLocalPath.mjs";
 import crypto from "crypto";
 import { destroySessionsForUser } from "../lib/fastifyPrismaSessionStore.js";
 
@@ -189,7 +189,7 @@ export default function sessionSiteRoute(
     if (!checkRateLimit(req, res, { windowMs: 60_000, max: 30 })) return;
 
     if (req.query.returnTo && typeof req.query.returnTo === "string") {
-      const sanitizedReturnTo = isSafeLocalPath(req.query.returnTo) ? req.query.returnTo : null;
+      const sanitizedReturnTo = toSafeLocalPath(req.query.returnTo);
       if (sanitizedReturnTo) {
         req.session.returnTo = sanitizedReturnTo;
       }
@@ -214,7 +214,7 @@ export default function sessionSiteRoute(
     }
 
     if (req.session.user) {
-      const returnTo = isSafeLocalPath(req.session.returnTo) ? req.session.returnTo : null;
+      const returnTo = toSafeLocalPath(req.session.returnTo);
       if (returnTo) {
         delete req.session.returnTo;
         return res.redirect(returnTo);
@@ -334,7 +334,7 @@ export default function sessionSiteRoute(
       }
 
       setBannerCookie("success", "Logged in successfully.", res);
-      const returnTo = isSafeLocalPath(req.session.returnTo) ? req.session.returnTo : null;
+      const returnTo = toSafeLocalPath(req.session.returnTo);
       if (returnTo) {
         delete req.session.returnTo;
         return res.redirect(returnTo);
@@ -354,7 +354,7 @@ export default function sessionSiteRoute(
       return;
 
     if (req.query.returnTo && typeof req.query.returnTo === "string") {
-      const sanitizedReturnTo = isSafeLocalPath(req.query.returnTo) ? req.query.returnTo : null;
+      const sanitizedReturnTo = toSafeLocalPath(req.query.returnTo);
       if (sanitizedReturnTo) {
         req.session.returnTo = sanitizedReturnTo;
       }
@@ -486,7 +486,7 @@ export default function sessionSiteRoute(
       await hydrateUserSession(req, userLoginData);
       delete req.session.passwordReset;
 
-      const returnTo = isSafeLocalPath(req.session.returnTo) ? req.session.returnTo : null;
+      const returnTo = toSafeLocalPath(req.session.returnTo);
       if (returnTo) {
         delete req.session.returnTo;
         return res.redirect(returnTo);

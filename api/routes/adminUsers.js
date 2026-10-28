@@ -40,7 +40,7 @@ import { sendMail } from "../../controllers/emailController.js";
 
 const PASSWORD_RESET_EXPIRY_MINUTES = 10;
 const EMAIL_VERIFICATION_EXPIRY_MINUTES = 10;
-const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_FORMAT = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/; // domain labels hold no dots, so matching is linear (the old form backtracked quadratically on long input)
 
 // Defense in depth: even though usersAdminController.js never SELECTs these
 // columns, strip them from any response object before it leaves this API —

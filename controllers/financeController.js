@@ -61,11 +61,12 @@ function normaliseBudgetIcon(iconName, iconImageUrl) {
 
 function normaliseBudgetLabel(label) {
   return String(label || "")
-    .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
     .replace(/&#(?:39|x27);/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
+    // Last, so "&amp;lt;" decodes once, to "&lt;", not twice to "<".
+    .replace(/&amp;/gi, "&")
     .trim();
 }
 

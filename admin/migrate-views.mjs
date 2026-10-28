@@ -212,7 +212,7 @@ function alertBlockPattern(depth) {
   const prefix = depth === 1 ? "../" : "../../";
   // The block is optional – only present in some files.
   return new RegExp(
-    `\\s*<% if \\(req\\.cookies\\.alertType\\) \\{[\\s\\S]*?%>\\s*\\n?\\s*<%- include\\(["']${prefix.replace(/\//g, "\\/")}partials\\/alert\\.ejs["'],[\\s\\S]*?%>\\s*\\n?\\s*<% \\} %>`,
+    `\\s*<% if \\(req\\.cookies\\.alertType\\) \\{[\\s\\S]*?%>\\s*\\n?\\s*<%- include\\(["']${prefix.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}partials\\/alert\\.ejs["'],[\\s\\S]*?%>\\s*\\n?\\s*<% \\} %>`,
     "m"
   );
 }

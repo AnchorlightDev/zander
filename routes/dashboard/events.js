@@ -22,6 +22,7 @@ import {
 import { getSelectableRanks } from "../../services/rankMetaService.js";
 import { enrichHostsWithAvatars } from "../../lib/avatarHelpers.js";
 import { sanitizeForumHtml } from "../../lib/htmlSanitize.js";
+import { stripTags } from "../../lib/plainText.mjs";
 import { renderDiscordTimestamps } from "../../lib/discordTimestamps.js";
 
 /**
@@ -87,7 +88,7 @@ async function fetchJson(fetchFn, url, fallback = null) {
     });
     return await res.json();
   } catch (error) {
-    console.error(`[dashboard/events] fetchJson failed for ${url}:`, error.message);
+    console.error("[dashboard/events] fetchJson failed for %s:", url, error.message);
     return fallback;
   }
 }
@@ -217,6 +218,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
         features,
         req,
         apiData,
+        stripTags,
         globalImage,
         announcementWeb,
       })
@@ -534,7 +536,7 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
       res.header("content-type", "text/html; charset=utf-8").send(
         await app.view("modules/events/events-detail", {
           pageTitle: `Preview: ${event.title}`,
-          pageDescription: event.description ? event.description.replace(/<[^>]+>/g, "").slice(0, 200) : `${event.title} — Community event`,
+          pageDescription: event.description ? stripTags(event.description).slice(0, 200) : `${event.title} — Community event`,
           config,
           req,
           features,

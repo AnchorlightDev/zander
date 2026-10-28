@@ -1,0 +1,281 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index dacb281..44f3f67 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -16,6 +16,9 @@
+ 
+ ### Fixed
+ 
++- **Faster page loads, especially when logged in.** Stylesheets, scripts and images no longer each run a notifications query (about 25 per logged-in page view), and the burst of requests a page makes now shares one session lookup instead of one each.
++- **The homepage is about 2 seconds faster.** Its community counters were fetched from the site's own public address on every visit with no time limit; they are now read in-process, kept for 5 minutes, and never hold the page for more than 1.5 seconds.
++- **Blank white pages are now logged.** An HTML page sent with an empty or near-empty body, or an "already sent" error on anything but a HEAD request, is written to the log with its address so the cause can be found. Both were previously silent.
+ - **`/connect <server>` works in the hub.** It was declared but had no command behind it. It now asks the proxy to move you, with the same checks as the navigation compass (`serverpermissions.server.<id>`, unknown servers, rate limit).
+ - **zander-hub permission names match the code.** `plugin.yml` declared `zander.fly` and `zanderhub.build`, but the plugin checks `zander.hub.fly` and `zander.hub.build`; the declarations now use the real names. `zanderhub.portal.admin` now grants every `/zportal` permission and `zanderhub.administrator` grants every hub permission (both previously did nothing).
+ - **The Finance module switch works.** Switching it off now hides the public Finance Centre and reports, the finance dashboard and `/api/finance`, and drops `/finance` from the sitemap. It was previously only cosmetic.
+diff --git a/app.js b/app.js
+index adac091..4b763a1 100644
+--- a/app.js
++++ b/app.js
+@@ -111,6 +111,7 @@ import configApiRoute from "./api/routes/config.js";
+ // API token authentication
+ import verifyToken from "./api/routes/verifyToken.js";
+ import { getGlobalImage } from "./api/common.js";
++import { wantsNotificationSummary } from "./lib/notificationScope.mjs";
+ import { client } from "./controllers/discordController.js";
+ 
+ function isExpectedClientError(error, statusCode) {
+@@ -221,9 +222,13 @@ const buildApp = async () => {
+       // ERR_HTTP_HEADERS_SENT is an expected side-effect of HEAD requests:
+       // @fastify/session's async Prisma save resolves after headRouteOnSendHandler
+       // already committed the response, so the Set-Cookie write races the finalize.
+-      // Nothing to do — the response was delivered correctly.
+-      if (error.code !== "ERR_HTTP_HEADERS_SENT") {
+-        app.log.warn({ err: error }, "error after reply already sent");
++      // On any other method it can mean the browser got headers and no body
++      // (a white page), so it is logged rather than swallowed.
++      if (error.code !== "ERR_HTTP_HEADERS_SENT" || req.method !== "HEAD") {
++        app.log.warn(
++          { err: error, method: req.method, url: req.url, statusCode: res.statusCode },
++          "error after reply already sent"
++        );
+       }
+       return;
+     }
+@@ -343,6 +348,26 @@ const buildApp = async () => {
+     return payload;
+   });
+ 
++  // A white page that loads on refresh has been reported. If the server ever
++  // finishes a 2xx HTML response with (almost) no body, record it with enough
++  // to find it in the logs: the browser's view of it is just a blank tab.
++  app.addHook("onResponse", async (req, res) => {
++    if (req.method !== "GET" || res.statusCode < 200 || res.statusCode >= 300) return;
++    if (!String(res.getHeader("content-type") || "").includes("text/html")) return;
++    const length = Number(res.getHeader("content-length"));
++    if (Number.isFinite(length) && length >= 512) return;
++    app.log.warn(
++      {
++        url: req.url,
++        statusCode: res.statusCode,
++        contentLength: res.getHeader("content-length") ?? null,
++        loggedIn: Boolean(req.session?.user),
++        elapsedMs: Math.round(res.elapsedTime),
++      },
++      "HTML page sent with an empty or tiny body"
++    );
++  });
++
+   // EJS Rendering Engine
+   await app.register(await import("@fastify/view"), {
+     engine: {
+@@ -533,6 +558,11 @@ const buildApp = async () => {
+   app.addHook("preHandler", async (req, res) => {
+     req.notifications = { unreadCount: 0, items: [] };
+ 
++    // Root hooks run for @fastify/static too, so without this every stylesheet,
++    // script and image on a logged-in page view ran its own notifications
++    // query (~25 per page). Only rendered pages show the bell.
++    if (!wantsNotificationSummary(req.url)) return;
++
+     if (req.session?.user?.userId) {
+       try {
+         req.notifications = await getNotificationSummary(req.session.user.userId, 5);
+diff --git a/lib/fastifyPrismaSessionStore.js b/lib/fastifyPrismaSessionStore.js
+index 443256f..7c3b384 100644
+--- a/lib/fastifyPrismaSessionStore.js
++++ b/lib/fastifyPrismaSessionStore.js
+@@ -103,6 +103,12 @@ function invokeCallbackSafely(callback, ...args) {
+ export class FastifyPrismaSessionStore {
+   #cleanupTimer = null;
+   #cache;
++  /**
++   * sid -> in-flight database read. A page load fires its document request
++   * and ~25 asset requests at once, all carrying the same cookie; on a cold
++   * cache each one ran its own SELECT. They now share a single query.
++   */
++  #inflight = new Map();
+ 
+   /** @param {{ cache?: SessionCache }} [opts] */
+   constructor({ cache = new SessionCache() } = {}) {
+@@ -131,26 +137,15 @@ export class FastifyPrismaSessionStore {
+       return;
+     }
+ 
+-    const work = prisma.session
+-      .findUnique({ where: { sid } })
+-      .then((row) => {
+-        if (!row) {
+-          this.#cache.delete(sid);
+-          return null;
+-        }
+-        if (new Date(row.expiresAt) < new Date()) {
+-          this.#cache.delete(sid);
+-          prisma.session.deleteMany({ where: { sid } }).catch(() => {});
+-          return null;
+-        }
+-        try {
+-          const data = JSON.parse(row.data);
+-          this.#cache.set(sid, data, row.expiresAt);
+-          return data;
+-        } catch {
+-          return null;
+-        }
+-      });
++    let work = this.#inflight.get(sid);
++    if (!work) {
++      work = this.#readFromDatabase(sid);
++      this.#inflight.set(sid, work);
++      const clear = () => {
++        if (this.#inflight.get(sid) === work) this.#inflight.delete(sid);
++      };
++      work.then(clear, clear);
++    }
+ 
+     // Two-arg .then(onFulfilled, onRejected) — NOT .then().catch() — so that if
+     // invoking `callback` itself throws (e.g. the caller tries to write reply
+@@ -167,12 +162,38 @@ export class FastifyPrismaSessionStore {
+           }
+           return invokeCallbackSafely(callback, null, stale ?? null);
+         }
+-        invokeCallbackSafely(callback, null, data);
++        // Concurrent callers share one read, so each gets its own copy --
++        // the same rule SessionCache follows.
++        invokeCallbackSafely(callback, null, data == null ? data : structuredClone(data));
+       },
+       (err) => invokeCallbackSafely(callback, err)
+     );
+   }
+ 
++  /** One SELECT for a session, shared by every get() waiting on it. */
++  #readFromDatabase(sid) {
++    return prisma.session
++      .findUnique({ where: { sid } })
++      .then((row) => {
++        if (!row) {
++          this.#cache.delete(sid);
++          return null;
++        }
++        if (new Date(row.expiresAt) < new Date()) {
++          this.#cache.delete(sid);
++          prisma.session.deleteMany({ where: { sid } }).catch(() => {});
++          return null;
++        }
++        try {
++          const data = JSON.parse(row.data);
++          this.#cache.set(sid, data, row.expiresAt);
++          return data;
++        } catch {
++          return null;
++        }
++      });
++  }
++
+   /** Persist (create or update) a session. */
+   set(sid, session, callback) {
+     const ttlMs =
+@@ -191,6 +212,7 @@ export class FastifyPrismaSessionStore {
+     // Visible to this instance's next read straight away, even if the database
+     // write below is slow.
+     this.#cache.set(sid, JSON.parse(data), expiresAt);
++    this.#inflight.delete(sid);
+ 
+     // Atomic upsert — safe under concurrent requests.
+     const work = prisma.$executeRaw`
+@@ -233,6 +255,7 @@ export class FastifyPrismaSessionStore {
+   destroy(sid, callback) {
+     // Gone from this instance at once (logout, session regenerate).
+     this.#cache.delete(sid);
++    this.#inflight.delete(sid);
+     // See get() above for why this must be two-arg .then(), not .then().catch().
+     prisma.session.deleteMany({ where: { sid } }).then(
+       () => invokeCallbackSafely(callback, null),
+diff --git a/routes/index.js b/routes/index.js
+index a5a642b..98ea6f0 100644
+--- a/routes/index.js
++++ b/routes/index.js
+@@ -110,18 +110,51 @@ export default function applicationSiteRoutes(
+     return res.send({});
+   });
+ 
+-  app.get("/", async function (req, res) {
+-    let statApiData = null;
+-    try {
+-      const fetchURL = `${process.env.siteAddress}/api/web/statistics`;
+-      const response = await fetch(fetchURL, {
+-        headers: internalApiHeaders(),
+-      });
+-      const json = await response.json();
+-      if (json?.data) statApiData = json;
+-    } catch (_) {
+-      // stats unavailable — page still renders without counters
++  // Homepage counters. The statistics query sums three months of game
++  // sessions, and it used to be fetched over the public URL -- out through
++  // Cloudflare and back in -- on every homepage view, with no timeout, adding
++  // ~2 s before the first byte. It now runs in-process via inject(), is shared
++  // for STATS_TTL_MS, and the page never waits more than STATS_WAIT_MS for it
++  // (the counters show "—" until a slow first load finishes).
++  const STATS_TTL_MS = 5 * 60 * 1000;
++  const STATS_WAIT_MS = 1500;
++  const homepageStats = { data: null, fetchedAt: 0, pending: null };
++
++  function refreshHomepageStats() {
++    if (!homepageStats.pending) {
++      homepageStats.pending = app
++        .inject({ method: "GET", url: "/api/web/statistics", headers: internalApiHeaders() })
++        .then((response) => {
++          const json = response.json();
++          if (json?.data) {
++            homepageStats.data = json;
++            homepageStats.fetchedAt = Date.now();
++          }
++        })
++        .catch((error) => app.log.warn({ err: error }, "homepage statistics unavailable"))
++        .finally(() => {
++          homepageStats.pending = null;
++        });
+     }
++    return homepageStats.pending;
++  }
++
++  async function getHomepageStats() {
++    if (homepageStats.data && Date.now() - homepageStats.fetchedAt < STATS_TTL_MS) {
++      return homepageStats.data;
++    }
++    const pending = refreshHomepageStats();
++    // Stale counters are fine while a refresh runs in the background.
++    if (homepageStats.data) return homepageStats.data;
++    await Promise.race([
++      pending,
++      new Promise((resolve) => setTimeout(resolve, STATS_WAIT_MS).unref()),
++    ]);
++    return homepageStats.data;
++  }
++
++  app.get("/", async function (req, res) {
++    const statApiData = await getHomepageStats();
+ 
+     const siteName = config.siteConfiguration.siteName;
+     const tagline = config.siteConfiguration.tagline || "";
+diff --git a/tests/integration/sessionStoreCache.test.mjs b/tests/integration/sessionStoreCache.test.mjs
+index 0e76213..c276b1a 100644
+--- a/tests/integration/sessionStoreCache.test.mjs
++++ b/tests/integration/sessionStoreCache.test.mjs
+@@ -36,6 +36,18 @@ afterEach(() => {
+ });
+ 
+ describe("session store with in-memory cache", () => {
++  it("shares one database read between concurrent lookups of the same session", async () => {
++    let release;
++    findUnique.mockReturnValueOnce(new Promise((r) => { release = r; }));
++    const reads = Array.from({ length: 25 }, () => get(store, "burst"));
++    release(row({ user: { userId: 9 } }));
++    const results = await Promise.all(reads);
++    expect(findUnique).toHaveBeenCalledTimes(1);
++    expect(results.every((r) => r.user.userId === 9)).toBe(true);
++    // Each caller gets its own object, so one request cannot mutate another's.
++    expect(results[0]).not.toBe(results[1]);
++  });
++
+   it("answers a repeat read from memory without the database", async () => {
+     findUnique.mockResolvedValue(row({ user: { userId: 1 } }));
+     expect(await get(store, "s1")).toEqual({ user: { userId: 1 } });

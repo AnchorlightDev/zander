@@ -3,7 +3,7 @@ import { MONTHS } from "../lib/birthday.mjs";
 import { groupedTimeZones } from "../lib/timezones.mjs";
 import { getGlobalImage, isLoggedIn, setBannerCookie } from "../api/common.js";
 import { checkRateLimit } from "../lib/rateLimiter.mjs";
-import { isSafeLocalPath } from "../lib/safeLocalPath.mjs";
+import { toSafeLocalPath } from "../lib/safeLocalPath.mjs";
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import {
   UserGetter,
@@ -407,9 +407,7 @@ export default function profileSiteRoutes(
 
     const state = crypto.randomBytes(16).toString("hex");
     const requestedRedirect =
-      isSafeLocalPath(req.query.redirect)
-        ? req.query.redirect
-        : getProfileEditorRedirect(req);
+      toSafeLocalPath(req.query.redirect, getProfileEditorRedirect(req));
 
     req.session.discordLink = {
       state,
@@ -667,9 +665,7 @@ export default function profileSiteRoutes(
 
     const state = crypto.randomBytes(16).toString("hex");
     const requestedRedirect =
-      isSafeLocalPath(req.query.redirect)
-        ? req.query.redirect
-        : getProfileEditorRedirect(req);
+      toSafeLocalPath(req.query.redirect, getProfileEditorRedirect(req));
 
     req.session.twitchLink = { state, redirect: requestedRedirect };
     return res.redirect(buildTwitchAuthorizeUrl(state));
@@ -790,9 +786,7 @@ export default function profileSiteRoutes(
 
     const state = crypto.randomBytes(16).toString("hex");
     const requestedRedirect =
-      isSafeLocalPath(req.query.redirect)
-        ? req.query.redirect
-        : getProfileEditorRedirect(req);
+      toSafeLocalPath(req.query.redirect, getProfileEditorRedirect(req));
 
     req.session.youtubeLink = { state, redirect: requestedRedirect };
     return res.redirect(buildYoutubeAuthorizeUrl(state));

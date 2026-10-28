@@ -711,9 +711,16 @@
       const imagePreview = editor.querySelector('.budget-image-preview');
       const removeButton = editor.querySelector('.budget-icon-image-remove');
 
-      iconPreview.innerHTML = selected ? '<i class="fa-solid fa-' + selected + '"></i>' : '';
+      // Built with DOM APIs: the select's value is the only input, but it is
+      // never parsed as HTML. Only https images are previewed, as on save.
+      iconPreview.replaceChildren();
+      if (selected) {
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-' + selected;
+        iconPreview.appendChild(icon);
+      }
       iconPreview.classList.toggle('d-none', !selected || Boolean(imageUrl));
-      imagePreview.src = imageUrl || '';
+      imagePreview.src = /^https:\/\//i.test(imageUrl) ? imageUrl : '';
       imagePreview.classList.toggle('d-none', !imageUrl);
       removeButton.classList.toggle('d-none', !imageUrl);
     }

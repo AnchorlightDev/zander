@@ -404,6 +404,17 @@ export const adminPages = [
     sortOrder: 62,
   },
   {
+    slug: "credentials",
+    title: "Credential Vault",
+    menuTitle: "Credential Vault",
+    icon: "fa-solid fa-vault",
+    capability: "zander.web.credentials",
+    path: "/dashboard/credentials",
+    featureFlag: "credentialVault",
+    group: "System",
+    sortOrder: 74,
+  },
+  {
     slug: "apikeys",
     title: "API Keys",
     menuTitle: "API Keys",

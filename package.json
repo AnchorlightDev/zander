@@ -38,6 +38,7 @@
     "@sapphire/framework": "^4.7.2",
     "@sentry/node": "^10.69.0",
     "@sentry/profiling-node": "^10.69.0",
+    "argon2": "^0.45.1",
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.10.0",
     "discord-webhook-node": "^1.1.8",

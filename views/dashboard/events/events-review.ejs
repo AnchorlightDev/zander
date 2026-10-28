@@ -58,7 +58,7 @@
                                     <% } %>
                                 </div>
                                 <% if (ev.description) { %>
-                                    <p class="mt-2 mb-0 text-muted small"><%= ev.description.replace(/<[^>]+>/g,'').slice(0,200) %>…</p>
+                                    <p class="mt-2 mb-0 text-muted small"><%= stripTags(ev.description).slice(0,200) %>…</p>
                                 <% } %>
                             </div>
                             <div class="card-footer d-flex gap-2">

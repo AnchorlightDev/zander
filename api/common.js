@@ -123,7 +123,7 @@ function normalisePermissionNode(value) {
   return String(value).trim().toLowerCase();
 }
 
-function hasSpecificPermission(permissionArray, node) {
+export function hasSpecificPermission(permissionArray, node) {
   // An empty node is a programming error (undefined constant, typo), and the
   // safe answer to "may this user do <nothing in particular>" is no.
   if (!node) {

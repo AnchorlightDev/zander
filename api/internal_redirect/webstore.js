@@ -259,7 +259,7 @@ async function processWebhookEvent(event, config) {
         break;
     }
   } catch (err) {
-    console.error(`[webstore] Error processing ${eventType} (${eventId}):`, err);
+    console.error("[webstore] Error processing %s (%s):", eventType, eventId, err);
     // Still record the event ID so we don't retry in an infinite loop
     try {
       await recordWebhookEvent({

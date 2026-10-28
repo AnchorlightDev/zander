@@ -1677,3 +1677,309 @@ model oidcPayloads {
   @@index([uid])
   @@index([expiresAt])
 }
+
+// ---------------------------------------------------------------------------
+// Credential Vault (migration 0077_credential_vault)
+// Design record: docs/credential-vault-architecture.md. Queried with raw SQL
+// in controllers/credentialVaultController.js; secret values exist only as
+// ciphertext in credentialSecretVersions.
+// ---------------------------------------------------------------------------
+
+model credentialVaults {
+  vaultId               Int      @id @default(autoincrement())
+  name                  String   @db.VarChar(100)
+  description           String?  @db.VarChar(500)
+  wrappedFingerprintKey Bytes?   @db.VarBinary(128)
+  fingerprintKekId      String?  @db.VarChar(32)
+  createdAt             DateTime @default(now()) @db.DateTime(3)
+
+  collections credentialCollections[]
+  credentials credentials[]
+  groups      credentialGroups[]
+  grants      credentialGrants[]
+}
+
+model credentialCollections {
+  collectionId  Int       @id @default(autoincrement())
+  vaultId       Int       @default(1)
+  name          String    @db.VarChar(100)
+  description   String?   @db.VarChar(500)
+  icon          String?   @db.VarChar(64)
+  colour        String?   @db.VarChar(7)
+  isRequestable Boolean   @default(false)
+  createdBy     Int?
+  updatedBy     Int?
+  createdAt     DateTime  @default(now()) @db.DateTime(3)
+  updatedAt     DateTime  @default(now()) @db.DateTime(3)
+  deletedAt     DateTime? @db.DateTime(3)
+
+  vault       credentialVaults   @relation(fields: [vaultId], references: [vaultId], map: "credentialCollections_vault_fk")
+  credentials credentials[]
+  grants      credentialGrants[]
+
+  @@index([vaultId, deletedAt], map: "credentialCollections_vault_idx")
+}
+
+model credentials {
+  credentialId    Int       @id @default(autoincrement())
+  vaultId         Int       @default(1)
+  collectionId    Int
+  type            String    @db.VarChar(20)
+  name            String    @db.VarChar(150)
+  url             String?   @db.VarChar(500)
+  username        String?   @db.VarChar(255)
+  email           String?   @db.VarChar(254)
+  description     String?   @db.Text
+  details         String?   @db.Text
+  tags            String?   @db.VarChar(500)
+  ownerUserId     Int?
+  isRequestable   Boolean   @default(false)
+  expiresAt       DateTime? @db.DateTime(3)
+  rotateEveryDays Int?
+  nextRotationAt  DateTime? @db.DateTime(3)
+  lastRotatedAt   DateTime? @db.DateTime(3)
+  lastReviewedAt  DateTime? @db.DateTime(3)
+  lastReviewedBy  Int?
+  currentVersion  Int       @default(0)
+  createdBy       Int?
+  updatedBy       Int?
+  createdAt       DateTime  @default(now()) @db.DateTime(3)
+  updatedAt       DateTime  @default(now()) @db.DateTime(3)
+  deletedAt       DateTime? @db.DateTime(3)
+  deletedBy       Int?
+
+  vault         credentialVaults           @relation(fields: [vaultId], references: [vaultId], map: "credentials_vault_fk")
+  collection    credentialCollections      @relation(fields: [collectionId], references: [collectionId], map: "credentials_collection_fk")
+  keys          credentialKeys[]
+  versions      credentialSecretVersions[]
+  grants        credentialGrants[]
+  favourites    credentialFavourites[]
+  rotationTasks credentialRotationTasks[]
+
+  @@index([collectionId, deletedAt], map: "credentials_collection_idx")
+  @@index([deletedAt, updatedAt], map: "credentials_updated_idx")
+  @@index([ownerUserId], map: "credentials_owner_idx")
+  @@index([deletedAt, nextRotationAt], map: "credentials_rotation_idx")
+  @@index([deletedAt, expiresAt], map: "credentials_expiry_idx")
+}
+
+model credentialKeys {
+  keyId        Int       @id @default(autoincrement())
+  credentialId Int
+  kekId        String    @db.VarChar(32)
+  wrappedKey   Bytes     @db.VarBinary(128)
+  createdAt    DateTime  @default(now()) @db.DateTime(3)
+  retiredAt    DateTime? @db.DateTime(3)
+
+  credential credentials                @relation(fields: [credentialId], references: [credentialId], onDelete: Cascade, map: "credentialKeys_credential_fk")
+  versions   credentialSecretVersions[]
+
+  @@index([credentialId, retiredAt], map: "credentialKeys_credential_idx")
+  @@index([kekId], map: "credentialKeys_kek_idx")
+}
+
+model credentialSecretVersions {
+  versionId           Int      @id @default(autoincrement())
+  credentialId        Int
+  version             Int
+  keyId               Int
+  ciphertext          Bytes    @db.MediumBlob
+  fieldNames          String   @db.Text
+  changedFields       String?  @db.Text
+  passwordStrength    Int?     @db.TinyInt
+  passwordFingerprint String?  @db.Char(64)
+  createdBy           Int?
+  createdAt           DateTime @default(now()) @db.DateTime(3)
+  restoredFromVersion Int?
+
+  credential credentials    @relation(fields: [credentialId], references: [credentialId], onDelete: Cascade, map: "credentialSecretVersions_credential_fk")
+  key        credentialKeys @relation(fields: [keyId], references: [keyId], map: "credentialSecretVersions_key_fk")
+
+  @@unique([credentialId, version], map: "credentialSecretVersions_cred_version_key")
+  @@index([passwordFingerprint], map: "credentialSecretVersions_fingerprint_idx")
+  @@index([keyId], map: "credentialSecretVersions_key_fk")
+}
+
+model credentialGroups {
+  groupId     Int       @id @default(autoincrement())
+  vaultId     Int       @default(1)
+  name        String    @db.VarChar(100)
+  description String?   @db.VarChar(500)
+  createdBy   Int?
+  createdAt   DateTime  @default(now()) @db.DateTime(3)
+  deletedAt   DateTime? @db.DateTime(3)
+
+  vault   credentialVaults         @relation(fields: [vaultId], references: [vaultId], map: "credentialGroups_vault_fk")
+  members credentialGroupMembers[]
+  grants  credentialGrants[]
+
+  @@index([vaultId, deletedAt], map: "credentialGroups_vault_idx")
+}
+
+model credentialGroupMembers {
+  groupId   Int
+  userId    Int
+  addedBy   Int?
+  addedAt   DateTime  @default(now()) @db.DateTime(3)
+  expiresAt DateTime? @db.DateTime(3)
+
+  group credentialGroups @relation(fields: [groupId], references: [groupId], onDelete: Cascade, map: "credentialGroupMembers_group_fk")
+
+  @@id([groupId, userId])
+  @@index([userId], map: "credentialGroupMembers_user_idx")
+}
+
+model credentialGrants {
+  grantId       Int       @id @default(autoincrement())
+  vaultId       Int       @default(1)
+  scope         String    @db.VarChar(12)
+  collectionId  Int?
+  credentialId  Int?
+  principalType String    @db.VarChar(8)
+  userId        Int?
+  groupId       Int?
+  effect        String    @default("allow") @db.VarChar(8)
+  capabilities  String    @db.VarChar(400)
+  expiresAt     DateTime? @db.DateTime(3)
+  reason        String?   @db.VarChar(500)
+  requestId     Int?
+  grantedBy     Int?
+  createdAt     DateTime  @default(now()) @db.DateTime(3)
+  revokedAt     DateTime? @db.DateTime(3)
+  revokedBy     Int?
+  revokeReason  String?   @db.VarChar(100)
+
+  vault      credentialVaults       @relation(fields: [vaultId], references: [vaultId], map: "credentialGrants_vault_fk")
+  collection credentialCollections? @relation(fields: [collectionId], references: [collectionId], onDelete: Cascade, map: "credentialGrants_collection_fk")
+  credential credentials?           @relation(fields: [credentialId], references: [credentialId], onDelete: Cascade, map: "credentialGrants_credential_fk")
+  group      credentialGroups?      @relation(fields: [groupId], references: [groupId], onDelete: Cascade, map: "credentialGrants_group_fk")
+
+  @@index([userId, revokedAt], map: "credentialGrants_user_idx")
+  @@index([groupId, revokedAt], map: "credentialGrants_group_idx")
+  @@index([collectionId, revokedAt], map: "credentialGrants_collection_idx")
+  @@index([credentialId, revokedAt], map: "credentialGrants_credential_idx")
+  @@index([vaultId], map: "credentialGrants_vault_fk")
+}
+
+model credentialAccessRequests {
+  requestId     Int       @id @default(autoincrement())
+  vaultId       Int       @default(1)
+  requesterId   Int
+  scope         String    @db.VarChar(12)
+  collectionId  Int?
+  credentialId  Int?
+  capabilities  String    @db.VarChar(400)
+  reason        String    @db.VarChar(1000)
+  durationHours Int?
+  status        String    @default("pending") @db.VarChar(12)
+  decidedBy     Int?
+  decidedAt     DateTime? @db.DateTime(3)
+  decisionNote  String?   @db.VarChar(1000)
+  grantId       Int?
+  createdAt     DateTime  @default(now()) @db.DateTime(3)
+
+  @@index([status, createdAt], map: "credentialAccessRequests_status_idx")
+  @@index([requesterId, createdAt], map: "credentialAccessRequests_requester_idx")
+}
+
+model credentialChallenges {
+  challengeId  Int       @id @default(autoincrement())
+  tokenHash    String    @unique(map: "credentialChallenges_token_key") @db.Char(64)
+  userId       Int
+  sessionHash  String    @db.Char(64)
+  credentialId Int
+  action       String    @db.VarChar(20)
+  field        String    @db.VarChar(64)
+  versionId    Int?
+  method       String    @db.VarChar(20)
+  status       String    @default("pending") @db.VarChar(10)
+  outcome      String?   @db.VarChar(10)
+  ip           String?   @db.VarChar(45)
+  createdAt    DateTime  @db.DateTime(3)
+  expiresAt    DateTime  @db.DateTime(3)
+  consumedAt   DateTime? @db.DateTime(3)
+
+  @@index([userId, status], map: "credentialChallenges_user_idx")
+  @@index([credentialId, status], map: "credentialChallenges_credential_idx")
+  @@index([expiresAt], map: "credentialChallenges_expiry_idx")
+}
+
+model credentialVaultPasswords {
+  userId                 Int       @id
+  verifier               String?   @db.VarChar(255)
+  enrolledAt             DateTime? @db.DateTime(3)
+  changedAt              DateTime? @db.DateTime(3)
+  enrolmentCodeHash      String?   @db.Char(64)
+  enrolmentCodeExpiresAt DateTime? @db.DateTime(3)
+  enrolmentCodeIssuedBy  Int?
+  failedAttempts Int       @default(0)
+  lastFailedAt   DateTime? @db.DateTime(3)
+  lockedUntil    DateTime? @db.DateTime(3)
+}
+
+model credentialFavourites {
+  userId       Int
+  credentialId Int
+  createdAt    DateTime @default(now()) @db.DateTime(3)
+
+  credential credentials @relation(fields: [credentialId], references: [credentialId], onDelete: Cascade, map: "credentialFavourites_credential_fk")
+
+  @@id([userId, credentialId])
+  @@index([credentialId], map: "credentialFavourites_credential_fk")
+}
+
+model credentialRotationTasks {
+  taskId        Int       @id @default(autoincrement())
+  credentialId  Int
+  reason        String    @db.VarChar(20)
+  details       String?   @db.VarChar(500)
+  relatedUserId Int?
+  status        String    @default("open") @db.VarChar(10)
+  createdBy     Int?
+  createdAt     DateTime  @default(now()) @db.DateTime(3)
+  completedBy   Int?
+  completedAt   DateTime? @db.DateTime(3)
+
+  credential credentials @relation(fields: [credentialId], references: [credentialId], onDelete: Cascade, map: "credentialRotationTasks_credential_fk")
+
+  @@index([status, createdAt], map: "credentialRotationTasks_status_idx")
+  @@index([credentialId, status], map: "credentialRotationTasks_credential_idx")
+}
+
+model credentialAuditEvents {
+  eventId       BigInt   @id @default(autoincrement())
+  occurredAt    DateTime @db.DateTime(3)
+  eventType     String   @db.VarChar(40)
+  outcome       String   @db.VarChar(10)
+  actorUserId   Int?
+  subjectUserId Int?
+  credentialId  Int?
+  collectionId  Int?
+  sessionHash   String?  @db.Char(16)
+  ip            String?  @db.VarChar(45)
+  userAgent     String?  @db.VarChar(255)
+  metadata      String?  @db.Text
+  prevHash      String   @db.Char(64)
+  hash          String   @db.Char(64)
+
+  @@index([occurredAt], map: "credentialAuditEvents_time_idx")
+  @@index([actorUserId, occurredAt], map: "credentialAuditEvents_actor_idx")
+  @@index([credentialId, occurredAt], map: "credentialAuditEvents_credential_idx")
+  @@index([collectionId, occurredAt], map: "credentialAuditEvents_collection_idx")
+  @@index([eventType, occurredAt], map: "credentialAuditEvents_type_idx")
+}
+
+model credentialAuditHead {
+  id            Int     @id @db.TinyInt
+  lastEventId   BigInt?
+  lastHash      String  @db.Char(64)
+  anchorEventId BigInt  @default(0)
+  anchorHash    String  @db.Char(64)
+}
+
+model credentialVaultSettings {
+  settingKey   String   @id @db.VarChar(64)
+  settingValue String   @db.VarChar(500)
+  updatedBy    Int?
+  updatedAt    DateTime @default(now()) @db.DateTime(3)
+}

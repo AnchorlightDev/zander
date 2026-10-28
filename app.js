@@ -95,6 +95,7 @@ import("./cron/badgeLuckpermsSyncCron.js");
 import("./cron/rankDiscordRoleSyncCron.js");
 import("./cron/boosterRewardSyncCron.js");
 import("./cron/shopItemIndexCron.js");
+import("./cron/credentialVaultCron.js");
 
 //
 // Website Related
@@ -111,6 +112,7 @@ import configApiRoute from "./api/routes/config.js";
 // API token authentication
 import verifyToken from "./api/routes/verifyToken.js";
 import { getGlobalImage } from "./api/common.js";
+import { wantsNotificationSummary } from "./lib/notificationScope.mjs";
 import { client } from "./controllers/discordController.js";
 
 function isExpectedClientError(error, statusCode) {
@@ -221,9 +223,13 @@ const buildApp = async () => {
       // ERR_HTTP_HEADERS_SENT is an expected side-effect of HEAD requests:
       // @fastify/session's async Prisma save resolves after headRouteOnSendHandler
       // already committed the response, so the Set-Cookie write races the finalize.
-      // Nothing to do — the response was delivered correctly.
-      if (error.code !== "ERR_HTTP_HEADERS_SENT") {
-        app.log.warn({ err: error }, "error after reply already sent");
+      // On any other method it can mean the browser got headers and no body
+      // (a white page), so it is logged rather than swallowed.
+      if (error.code !== "ERR_HTTP_HEADERS_SENT" || req.method !== "HEAD") {
+        app.log.warn(
+          { err: error, method: req.method, url: req.url, statusCode: res.statusCode },
+          "error after reply already sent"
+        );
       }
       return;
     }
@@ -341,6 +347,26 @@ const buildApp = async () => {
       res.header("cache-control", "private, no-store");
     }
     return payload;
+  });
+
+  // A white page that loads on refresh has been reported. If the server ever
+  // finishes a 2xx HTML response with (almost) no body, record it with enough
+  // to find it in the logs: the browser's view of it is just a blank tab.
+  app.addHook("onResponse", async (req, res) => {
+    if (req.method !== "GET" || res.statusCode < 200 || res.statusCode >= 300) return;
+    if (!String(res.getHeader("content-type") || "").includes("text/html")) return;
+    const length = Number(res.getHeader("content-length"));
+    if (Number.isFinite(length) && length >= 512) return;
+    app.log.warn(
+      {
+        url: req.url,
+        statusCode: res.statusCode,
+        contentLength: res.getHeader("content-length") ?? null,
+        loggedIn: Boolean(req.session?.user),
+        elapsedMs: Math.round(res.elapsedTime),
+      },
+      "HTML page sent with an empty or tiny body"
+    );
   });
 
   // EJS Rendering Engine
@@ -532,6 +558,11 @@ const buildApp = async () => {
   // the onSend pipeline and producing a blank page on first load.
   app.addHook("preHandler", async (req, res) => {
     req.notifications = { unreadCount: 0, items: [] };
+
+    // Root hooks run for @fastify/static too, so without this every stylesheet,
+    // script and image on a logged-in page view ran its own notifications
+    // query (~25 per page). Only rendered pages show the bell.
+    if (!wantsNotificationSummary(req.url)) return;
 
     if (req.session?.user?.userId) {
       try {

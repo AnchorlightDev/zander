@@ -1739,14 +1739,14 @@ export async function createSupportTicketMessage(
                     // server must not hold up the reply.
                     if (ticket?.guestEmail && userId != null && messageType === "message" && String(message || "").trim()) {
                         emailGuestTicketUpdate(ticket, { kind: "reply", actorName, message }).catch((error) =>
-                            console.error(`Failed to email guest about ticket #${ticketId}:`, error.message),
+                            console.error("Failed to email guest about ticket #%s:", ticketId, error.message),
                         );
                     }
 
                     if (messageType === "status") {
                         if (ticket?.guestEmail && ticket.status === "closed") {
                             emailGuestTicketUpdate(ticket, { kind: "closed" }).catch((error) =>
-                                console.error(`Failed to email guest about closing ticket #${ticketId}:`, error.message),
+                                console.error("Failed to email guest about closing ticket #%s:", ticketId, error.message),
                             );
                         }
                         const title = `Status updated for ${target.label}`;
@@ -1814,7 +1814,7 @@ export async function notifyTicketStatusChange(ticketId, status, actor) {
     const ticket = await getTicketById(ticketId);
     if (ticket?.guestEmail && status === "closed") {
         emailGuestTicketUpdate(ticket, { kind: "closed" }).catch((error) =>
-            console.error(`Failed to email guest about closing ticket #${ticketId}:`, error.message),
+            console.error("Failed to email guest about closing ticket #%s:", ticketId, error.message),
         );
     }
     if (!ticket) return;

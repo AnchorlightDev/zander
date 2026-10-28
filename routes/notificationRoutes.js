@@ -1,6 +1,6 @@
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import { getGlobalImage, setBannerCookie } from "../api/common.js";
-import { isSafeLocalPath } from "../lib/safeLocalPath.mjs";
+import { toSafeLocalPath } from "../lib/safeLocalPath.mjs";
 import {
   getNotificationSummary,
   getUserNotifications,
@@ -14,7 +14,7 @@ import {
 } from "../controllers/notificationController.js";
 
 /** Back to the page a bulk action came from, if it is on this site. */
-const returnPath = (value) => (isSafeLocalPath(value) ? value : "/notifications");
+const returnPath = (value) => toSafeLocalPath(value, "/notifications");
 
 export default function notificationRoutes(app, config, features) {
   app.get("/notifications", async function (req, res) {
@@ -124,7 +124,7 @@ export default function notificationRoutes(app, config, features) {
 
     await markNotificationRead(notificationId, req.session.user.userId);
 
-    return res.redirect(isSafeLocalPath(notification.url) ? notification.url : "/notifications");
+    return res.redirect(toSafeLocalPath(notification.url, "/notifications"));
   });
 
   app.post("/notifications/mark-all", async function (req, res) {

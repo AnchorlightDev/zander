@@ -21,7 +21,7 @@ export default function dashboardVaultSiteRoute(
       const res = await fetch(url, { headers });
       return await res.json();
     } catch (error) {
-      console.error(`[dashboard/vault] fetchJson failed for ${url}:`, error.message);
+      console.error("[dashboard/vault] fetchJson failed for %s:", url, error.message);
       return fallback;
     }
   }

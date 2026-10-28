@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **Credential Vault** (`/dashboard/credentials`, off by default). Shared staff credentials -- logins, API keys, development secrets, recovery codes and secure notes -- encrypted with per-credential keys under a key-encryption key held outside the database (`CREDENTIAL_VAULT_KEKS`). Every reveal, copy or history access asks for the person's password again through a single-use, 30-second, action-specific challenge; administrators get no automatic access to secrets. Collections, permission groups, allow/deny grants with expiry, access requests and approvals, encrypted version history, credential health, rotation tasks, offboarding, a hash-chained audit log and notifications. Staff without a Zander password set a dedicated vault password with a one-time code from a vault administrator. Entry node `zander.web.credentials`; needs `npm install` for the new `argon2` dependency and migration `0077`. Not yet approved for production secrets: see `docs/credential-vault-architecture.md`.
+
 ### Changed
 
 - **`/forcelink` and `/lp-audit` permissions** (`zander.discord.forcelink`, `zander.discord.lpaudit`) can now be ticked in the ranks dashboard.
@@ -14,8 +18,22 @@
 - **Dashboard "Documentation" links** go to the matching pages on the docs site. Several pointed at old page names that no longer existed.
 - **The permission reference is generated from the registry.** `node scripts/permissionsTable.mjs` prints the tables for the docs site's permissions page, so the published list matches the ranks dashboard checklist.
 
+### Security
+
+- **Open redirect after login closed.** A `returnTo` or `redirect` value with a tab or line break after the first slash (`/%09/evil.example`) passed the same-site check, but browsers strip those characters and followed it to another site. Control characters are now refused, and redirect targets are rebuilt from the parsed path rather than passed through. Affects login, Discord login, password reset, profile account linking, notifications and support category settings.
+- **Email validation can no longer be made slow.** The email pattern used by the site settings, admin user and public page forms backtracked quadratically on long crafted input; it is now linear. Slug, CSV filename and URL tidy-ups no longer use end-anchored regexes on user input for the same reason.
+- **Event banners only get the Cloudinary transform on Cloudinary's own host**, not any URL that merely contains `res.cloudinary.com`.
+- **Rate limit on profile saves** (display, personal, interests, about, social): 30 a minute per address.
+
 ### Fixed
 
+- **Discord event text and budget labels decode entities once.** `&amp;lt;` became `<` instead of `&lt;`.
+- **Event descriptions are stripped of tags completely** in page descriptions and the review queue; a single pass could leave a nested tag behind (the text was still escaped on output).
+- **Dashboard image previews** only show `https://` or same-site images, and the finance icon preview no longer builds HTML from a string.
+- **Error logs keep their arguments in order** when an event ID, ticket number or URL contains `%`.
+- **Faster page loads, especially when logged in.** Stylesheets, scripts and images no longer each run a notifications query (about 25 per logged-in page view), and the burst of requests a page makes now shares one session lookup instead of one each.
+- **The homepage is about 2 seconds faster.** Its community counters were fetched from the site's own public address on every visit with no time limit; they are now read in-process, kept for 5 minutes, and never hold the page for more than 1.5 seconds.
+- **Blank white pages are now logged.** An HTML page sent with an empty or near-empty body, or an "already sent" error on anything but a HEAD request, is written to the log with its address so the cause can be found. Both were previously silent.
 - **`/connect <server>` works in the hub.** It was declared but had no command behind it. It now asks the proxy to move you, with the same checks as the navigation compass (`serverpermissions.server.<id>`, unknown servers, rate limit).
 - **zander-hub permission names match the code.** `plugin.yml` declared `zander.fly` and `zanderhub.build`, but the plugin checks `zander.hub.fly` and `zander.hub.build`; the declarations now use the real names. `zanderhub.portal.admin` now grants every `/zportal` permission and `zanderhub.administrator` grants every hub permission (both previously did nothing).
 - **The Finance module switch works.** Switching it off now hides the public Finance Centre and reports, the finance dashboard and `/api/finance`, and drops `/finance` from the sitemap. It was previously only cosmetic.

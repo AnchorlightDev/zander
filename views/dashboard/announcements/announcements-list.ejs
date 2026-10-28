@@ -347,7 +347,7 @@
     if (!fileInput || !urlInput) return;
 
     function showPreview(url) {
-      if (url) {
+      if (url && /^(https:\/\/|\/(?![\/\\]))/i.test(url)) {
         thumb.src = url;
         preview.classList.remove("d-none");
       } else {

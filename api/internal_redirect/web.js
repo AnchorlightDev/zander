@@ -45,6 +45,8 @@ export default function webRedirectRoute(app, config, lang, features) {
   });
 
   app.post(baseEndpoint + "/user/profile/display", async function (req, res) {    
+    // Each save is a write plus an internal API round trip.
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 30 })) return;
     if (!requireLogin(req, res)) return;
     // Add userId to req.body
     req.body.userId = req.session.user.userId;
@@ -64,6 +66,8 @@ export default function webRedirectRoute(app, config, lang, features) {
   });
 
   app.post(baseEndpoint + "/user/profile/personal", async function (req, res) {
+    // Each save is a write plus an internal API round trip.
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 30 })) return;
     if (!requireLogin(req, res)) return;
     req.body.userId = req.session.user.userId;
 
@@ -81,6 +85,8 @@ export default function webRedirectRoute(app, config, lang, features) {
   });
 
   app.post(baseEndpoint + "/user/profile/interests", async function (req, res) {
+    // Each save is a write plus an internal API round trip.
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 30 })) return;
     if (!requireLogin(req, res)) return;
     // Add userId to req.body
     req.body.userId = req.session.user.userId;
@@ -99,6 +105,8 @@ export default function webRedirectRoute(app, config, lang, features) {
   });
 
   app.post(baseEndpoint + "/user/profile/about", async function (req, res) {
+    // Each save is a write plus an internal API round trip.
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 30 })) return;
     if (!requireLogin(req, res)) return;
     // Add userId to req.body
     req.body.userId = req.session.user.userId;
@@ -117,6 +125,8 @@ export default function webRedirectRoute(app, config, lang, features) {
   });
 
   app.post(baseEndpoint + "/user/profile/social", async function (req, res) {
+    // Each save is a write plus an internal API round trip.
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 30 })) return;
     if (!requireLogin(req, res)) return;
     // Add userId to req.body
     req.body.userId = req.session.user.userId;

@@ -56,10 +56,20 @@ async function applyRankLock(event, siteBaseUrl = process.env.siteAddress) {
   return { event: redactLockedEvent(event), lock };
 }
 
+/** Remove tags until none are left: one pass can leave "<scr<b>ipt>" as "<script>". */
+function stripRemainingTags(text) {
+  let previous;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]+>/g, "");
+  } while (text !== previous);
+  return text;
+}
+
 /** Convert HTML from Summernote to Discord-compatible markdown. */
 export function htmlToMarkdown(html) {
   if (!html) return "";
-  return html
+  const converted = html
     // Block-level: headings → bold line
     .replace(/<h[1-3][^>]*>(.*?)<\/h[1-3]>/gi, (_, inner) => `**${inner.trim()}**\n`)
     .replace(/<h[4-6][^>]*>(.*?)<\/h[4-6]>/gi, (_, inner) => `${inner.trim()}\n`)
@@ -84,16 +94,16 @@ export function htmlToMarkdown(html) {
     // Line breaks and paragraphs
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n\n")
-    .replace(/<\/div>/gi, "\n")
-    // Strip all remaining tags
-    .replace(/<[^>]+>/g, "")
-    // Decode HTML entities
-    .replace(/&amp;/g, "&")
+    .replace(/<\/div>/gi, "\n");
+
+  return stripRemainingTags(converted)
+    // Decode HTML entities. &amp; goes last so "&amp;lt;" decodes once, to "&lt;".
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
     // Collapse excess blank lines
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -118,7 +128,13 @@ export function toDiscordCoverImage(url) {
 
   const marker = "/image/upload/";
   const idx = url.indexOf(marker);
-  if (!url.includes("res.cloudinary.com") || idx === -1) return url;
+  let host = "";
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return url;
+  }
+  if (host !== "res.cloudinary.com" || idx === -1) return url;
 
   const transform = "f_jpg,q_auto,c_limit,w_1280,h_512";
   const after = url.slice(idx + marker.length);

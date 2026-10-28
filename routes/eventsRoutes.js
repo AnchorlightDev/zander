@@ -9,6 +9,7 @@ import { getUpcomingPublishedEvents, getAllPublishedEvents, getPublishedEventByS
 import { enrichHostsWithAvatars } from "../lib/avatarHelpers.js";
 import { renderDiscordTimestamps } from "../lib/discordTimestamps.js";
 import { getRankMetaMap, getDonatorRankSlugs } from "../services/rankMetaService.js";
+import { stripTags } from "../lib/plainText.mjs";
 import {
   viewerRankSlugs,
   resolveEventAccess,
@@ -167,7 +168,7 @@ export default function eventsRoutes(app, config, features) {
         await app.view("modules/events/events-detail", {
           pageTitle: event.title,
           pageDescription: event.description
-            ? event.description.replace(/<[^>]+>/g, "").slice(0, 200)
+            ? stripTags(event.description).slice(0, 200)
             : `${event.title} — Community event on ${config.siteConfiguration.siteName}`,
           config,
           req,

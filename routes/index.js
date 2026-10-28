@@ -110,18 +110,51 @@ export default function applicationSiteRoutes(
     return res.send({});
   });
 
-  app.get("/", async function (req, res) {
-    let statApiData = null;
-    try {
-      const fetchURL = `${process.env.siteAddress}/api/web/statistics`;
-      const response = await fetch(fetchURL, {
-        headers: internalApiHeaders(),
-      });
-      const json = await response.json();
-      if (json?.data) statApiData = json;
-    } catch (_) {
-      // stats unavailable — page still renders without counters
+  // Homepage counters. The statistics query sums three months of game
+  // sessions, and it used to be fetched over the public URL -- out through
+  // Cloudflare and back in -- on every homepage view, with no timeout, adding
+  // ~2 s before the first byte. It now runs in-process via inject(), is shared
+  // for STATS_TTL_MS, and the page never waits more than STATS_WAIT_MS for it
+  // (the counters show "—" until a slow first load finishes).
+  const STATS_TTL_MS = 5 * 60 * 1000;
+  const STATS_WAIT_MS = 1500;
+  const homepageStats = { data: null, fetchedAt: 0, pending: null };
+
+  function refreshHomepageStats() {
+    if (!homepageStats.pending) {
+      homepageStats.pending = app
+        .inject({ method: "GET", url: "/api/web/statistics", headers: internalApiHeaders() })
+        .then((response) => {
+          const json = response.json();
+          if (json?.data) {
+            homepageStats.data = json;
+            homepageStats.fetchedAt = Date.now();
+          }
+        })
+        .catch((error) => app.log.warn({ err: error }, "homepage statistics unavailable"))
+        .finally(() => {
+          homepageStats.pending = null;
+        });
     }
+    return homepageStats.pending;
+  }
+
+  async function getHomepageStats() {
+    if (homepageStats.data && Date.now() - homepageStats.fetchedAt < STATS_TTL_MS) {
+      return homepageStats.data;
+    }
+    const pending = refreshHomepageStats();
+    // Stale counters are fine while a refresh runs in the background.
+    if (homepageStats.data) return homepageStats.data;
+    await Promise.race([
+      pending,
+      new Promise((resolve) => setTimeout(resolve, STATS_WAIT_MS).unref()),
+    ]);
+    return homepageStats.data;
+  }
+
+  app.get("/", async function (req, res) {
+    const statApiData = await getHomepageStats();
 
     const siteName = config.siteConfiguration.siteName;
     const tagline = config.siteConfiguration.tagline || "";

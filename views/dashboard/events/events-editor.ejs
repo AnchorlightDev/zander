@@ -836,7 +836,7 @@ function setupImageUpload(hiddenId, fileId, uploadBtnId, manualId, previewId, st
         hidden.value = url;
         manual.value = url;
         const img = preview.querySelector('img');
-        if (url && img) { img.src = url; preview.classList.remove('d-none'); }
+        if (url && img && /^(https:\/\/|\/(?![\/\\]))/i.test(url)) { img.src = url; preview.classList.remove('d-none'); }
         else { preview.classList.add('d-none'); }
     }
 

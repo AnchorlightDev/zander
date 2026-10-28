@@ -36,6 +36,18 @@ afterEach(() => {
 });
 
 describe("session store with in-memory cache", () => {
+  it("shares one database read between concurrent lookups of the same session", async () => {
+    let release;
+    findUnique.mockReturnValueOnce(new Promise((r) => { release = r; }));
+    const reads = Array.from({ length: 25 }, () => get(store, "burst"));
+    release(row({ user: { userId: 9 } }));
+    const results = await Promise.all(reads);
+    expect(findUnique).toHaveBeenCalledTimes(1);
+    expect(results.every((r) => r.user.userId === 9)).toBe(true);
+    // Each caller gets its own object, so one request cannot mutate another's.
+    expect(results[0]).not.toBe(results[1]);
+  });
+
   it("answers a repeat read from memory without the database", async () => {
     findUnique.mockResolvedValue(row({ user: { userId: 1 } }));
     expect(await get(store, "s1")).toEqual({ user: { userId: 1 } });
