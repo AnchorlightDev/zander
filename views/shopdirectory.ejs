@@ -248,8 +248,12 @@
         ? `<a href="/profile/${encodeURIComponent(shop.userData.username)}">${escapeHtml(shop.userData.username)}</a>`
         : 'Unknown';
 
-      const stockClass = shop.stock <= 0 ? 'shop-stock-out' : 'shop-stock-in';
-      const stockText = shop.stock < 0 ? 'Buying' : (shop.stock === 0 ? 'Out of Stock' : shop.stock);
+      const isBuying = shop.shopType === 'buying';
+      // stock -1 = QuickShop hasn't counted it recently (unknown), not empty.
+      const stockClass = (!isBuying && shop.stock === 0) ? 'shop-stock-out' : 'shop-stock-in';
+      const stockText = isBuying
+        ? 'Buying'
+        : (shop.stock > 0 ? `Selling (${shop.stock})` : (shop.stock === 0 ? 'Out of Stock' : 'Selling'));
 
       const shulkerLine = shop.shulkerContents
         ? `<br><small class="text-muted">${escapeHtml(shop.shulkerContents)}</small>`

@@ -91,16 +91,17 @@ export class ShopDirectoryCommand extends Command {
         });
       }
 
-      // Filter out shops with no stock (stock is 0)
+      // Filter out selling shops known to be empty (stock 0). A stock of -1 means
+      // QuickShop hasn't counted it recently, so keep those. Buying shops are always listed.
       const originalShopCount = apiData.data.length;
-      let inStockShops = apiData.data.filter(shop => shop.stock !== 0);
+      let inStockShops = apiData.data.filter(shop => shop.shopType === "buying" || shop.stock !== 0);
       const outOfStockCount = originalShopCount - inStockShops.length;
       
       if (type) {
         if (type === "buying") {
-          inStockShops = inStockShops.filter(shop => shop.stock === -1);
+          inStockShops = inStockShops.filter(shop => shop.shopType === "buying");
         } else if (type === "selling") {
-          inStockShops = inStockShops.filter(shop => shop.stock > 0);
+          inStockShops = inStockShops.filter(shop => shop.shopType === "selling");
         }
       }
 
@@ -169,8 +170,9 @@ export class ShopDirectoryCommand extends Command {
         }
 
         page.forEach((shop) => {
-          const transactionType = shop.stock === -1 ? "💰 Buying" : "📦 Selling";
-          const stockInfo = shop.stock !== -1 ? `**Stock:** ${shop.stock}\n` : "";
+          const isBuying = shop.shopType === "buying";
+          const transactionType = isBuying ? "💰 Buying" : "📦 Selling";
+          const stockInfo = !isBuying && shop.stock >= 0 ? `**Stock:** ${shop.stock}\n` : "";
           const contentsInfo = shop.shulkerContents ? `**Contents:** ${shop.shulkerContents}\n` : "";
 
           embed.addFields([

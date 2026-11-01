@@ -324,7 +324,9 @@ export async function searchShops(material, page = 1, options = {}) {
              ))
            END AS amount,
            data.price,
+           data.type AS shop_type,
            stock.stock,
+           stock.space,
            map.world,
            map.x,
            map.y,
@@ -438,8 +440,14 @@ export async function searchShops(material, page = 1, options = {}) {
             }
           }
 
+          // QuickShop-Hikari qs_data.type: 0 = SELLING, 1 = BUYING (2 = legacy frozen).
+          // qs_external_cache.stock/space are only "last calculated" values, with -1
+          // meaning "not calculated", so they can't be used to infer the shop type.
+          const shopType = Number(shop.shop_type) === 1 ? "buying" : "selling";
+
           return {
             ...shop,
+            shopType,
             itemData: {
               ...itemData,
               displayName,
