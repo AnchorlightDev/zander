@@ -31,6 +31,7 @@ import {
   isCrossSiteRequest,
 } from "./lib/securityConfig.js";
 import { checkRateLimit } from "./lib/rateLimiter.mjs";
+import { registerReturnReplyGuard } from "./lib/returnReplyGuard.mjs";
 import { serveCustomPage } from "./routes/customPageRoutes.js";
 import { getRegion } from "./lib/region.mjs";
 import {
@@ -169,6 +170,11 @@ const buildApp = async () => {
     pluginTimeout: 120000,
     trustProxy,
   });
+
+  // Must run before any route is registered: makes async handlers that call
+  // res.send() without returning it behave as if they returned the reply.
+  // See lib/returnReplyGuard.mjs.
+  registerReturnReplyGuard(app);
 
   // Surface the resolved proxy/scheme at boot so a protocol/cookie mismatch is
   // diagnosable from the logs rather than only as mysterious "login expired".
