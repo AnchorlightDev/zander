@@ -7,7 +7,8 @@
  *   GET  /webstore              — storefront listing
  *   POST /webstore/checkout     — start a Stripe Checkout session
  *   GET  /webstore/thank-you    — post-payment landing page
- *   GET  /webstore/history      — authenticated purchase history
+ *   GET  /webstore/history      — authenticated purchase history + live subscriptions
+ *   POST /webstore/billing-portal — open the Stripe Billing Portal for a subscription the user pays for
  *   GET  /give                  — legacy redirect to the Finance Centre support section
  */
 
@@ -19,13 +20,16 @@ import {
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import {
   createPendingPurchase,
+  createStripeBillingPortalSession,
   createStripeCheckoutSession,
   findWebstoreItem,
   formatPrice,
+  getBillingCustomerForPurchaser,
   getPurchaseHistory,
   getPurchaseHistoryCount,
   getReceivedGifts,
   getReceivedGiftsCount,
+  getUserSubscriptions,
   getWebstoreItems,
   preferredCurrencyFromLocale,
 } from "../controllers/webstoreController.js";
@@ -36,6 +40,7 @@ import {
   groupByCategory,
   isPubliclyVisible,
 } from "../lib/webstore/catalogVisibility.mjs";
+import { describeSubscription } from "../lib/webstore/subscriptionView.mjs";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -227,6 +232,7 @@ export default function webstoreRoutes(app, config, features) {
 
     let recipientUsername;
     let isGift = false;
+    let isAnonymous = false;
 
     if (purchaseFor === "gift") {
       const raw = typeof req.body?.recipientUsername === "string"
@@ -255,6 +261,7 @@ export default function webstoreRoutes(app, config, features) {
 
       recipientUsername = raw;
       isGift = true;
+      isAnonymous = req.body?.giftAnonymous === "1";
     } else {
       recipientUsername = purchaserUsername;
     }
@@ -268,8 +275,9 @@ export default function webstoreRoutes(app, config, features) {
         recipientMinecraftUsername: recipientUsername,
         purchaserMinecraftUsername: purchaserUsername,
         isGift,
+        isAnonymous,
       });
-      console.log(`[webstore] Stripe session created | sessionId=${session.id} user=${req.session.user.userId} item=${item.slug} recipient=${recipientUsername} isGift=${isGift}`);
+      console.log(`[webstore] Stripe session created | sessionId=${session.id} user=${req.session.user.userId} item=${item.slug} recipient=${recipientUsername} isGift=${isGift} anonymous=${isAnonymous}`);
     } catch (err) {
       console.error("[webstore] Stripe checkout session error:", err.message);
       setBannerCookie(
@@ -289,6 +297,7 @@ export default function webstoreRoutes(app, config, features) {
         recipientMinecraftUsername: recipientUsername,
         stripeSessionId: session.id,
         isGift,
+        isAnonymous,
       });
       console.log(`[webstore] pending purchase recorded | sessionId=${session.id} user=${req.session.user.userId} item=${item.slug}`);
     } catch (err) {
@@ -358,15 +367,19 @@ export default function webstoreRoutes(app, config, features) {
     let totalCount = 0;
     let receivedGifts = [];
     let receivedGiftsTotal = 0;
+    let subscriptions = [];
 
     try {
-      [purchases, totalCount, receivedGifts, receivedGiftsTotal] = await Promise.all([
+      let subscriptionRows;
+      [purchases, totalCount, receivedGifts, receivedGiftsTotal, subscriptionRows] = await Promise.all([
         getPurchaseHistory(userId, limit, offset),
         getPurchaseHistoryCount(userId),
         minecraftUsername ? getReceivedGifts(minecraftUsername, limit, giftOffset) : [],
         minecraftUsername ? getReceivedGiftsCount(minecraftUsername) : 0,
+        getUserSubscriptions(userId, minecraftUsername),
       ]);
-      console.log(`[webstore] purchase history loaded | user=${userId} purchases=${totalCount} receivedGifts=${receivedGiftsTotal}`);
+      subscriptions = subscriptionRows.map((row) => describeSubscription(row, userId));
+      console.log(`[webstore] purchase history loaded | user=${userId} purchases=${totalCount} receivedGifts=${receivedGiftsTotal} subscriptions=${subscriptions.length}`);
     } catch (err) {
       console.error("[webstore] getPurchaseHistory error:", err.message);
       setBannerCookie("warning", "Could not load purchase history right now.", res);
@@ -391,7 +404,53 @@ export default function webstoreRoutes(app, config, features) {
       receivedGiftsTotal,
       giftPage,
       receivedGiftsTotalPages,
+      subscriptions,
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /webstore/billing-portal — hand the purchaser to Stripe to manage
+  // -------------------------------------------------------------------------
+  app.post("/webstore/billing-portal", async function (req, res) {
+    if (!features.webstore) return res.redirect("/");
+
+    if (!isLoggedIn(req)) {
+      return res.redirect("/login?returnTo=/webstore/history");
+    }
+
+    const userId = req.session.user.userId;
+    const subscriptionId = parseInt(req.body?.subscriptionId, 10);
+    if (!Number.isInteger(subscriptionId) || subscriptionId <= 0) {
+      setBannerCookie("warning", "Invalid subscription.", res);
+      return res.redirect("/webstore/history");
+    }
+
+    let customerId = null;
+    try {
+      // Ownership is enforced here: only the paying user resolves a customer.
+      customerId = await getBillingCustomerForPurchaser(userId, subscriptionId);
+    } catch (err) {
+      console.error("[webstore] getBillingCustomerForPurchaser error:", err.message);
+    }
+
+    if (!customerId) {
+      console.log(`[webstore] billing portal refused | user=${userId} subscription=${subscriptionId}`);
+      setBannerCookie("warning", "You can only manage subscriptions you pay for.", res);
+      return res.redirect("/webstore/history");
+    }
+
+    try {
+      const portal = await createStripeBillingPortalSession(
+        customerId,
+        `${process.env.siteAddress}/webstore/history`
+      );
+      console.log(`[webstore] billing portal opened | user=${userId} subscription=${subscriptionId}`);
+      return res.redirect(portal.url, 303);
+    } catch (err) {
+      console.error("[webstore] createStripeBillingPortalSession error:", err.message);
+      setBannerCookie("danger", "Could not open billing management right now. Please try again later.", res);
+      return res.redirect("/webstore/history");
+    }
   });
 
   // -------------------------------------------------------------------------

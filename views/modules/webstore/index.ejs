@@ -162,6 +162,16 @@
                 </div>
                 <div id="giftSuggestions" class="list-group mt-1 mb-2"></div>
                 <small class="text-muted">Enter the exact Minecraft username of the player you want to gift.</small>
+                <div class="form-check mt-3">
+                  <input class="form-check-input" type="checkbox" name="giftAnonymous"
+                    id="giftAnonymous" value="1">
+                  <label class="form-check-label" for="giftAnonymous">
+                    Send anonymously
+                  </label>
+                  <div class="form-text">
+                    The recipient and other players won't see your username. Staff can still see who sent it.
+                  </div>
+                </div>
               </div>
             </div>
             <div class="modal-footer">
@@ -184,6 +194,7 @@
           const giftRadio        = document.getElementById("purchaseForGift");
           const giftSection      = document.getElementById("giftSection");
           const recipientInput   = document.getElementById("recipientUsername");
+          const anonymousInput   = document.getElementById("giftAnonymous");
           const giftSuggestions  = document.getElementById("giftSuggestions");
           const subscriptionNote = document.getElementById("subscriptionNotice");
 
@@ -203,6 +214,7 @@
 
             // Reset form state
             selfRadio.checked = true;
+            if (anonymousInput) anonymousInput.checked = false;
             giftSection.classList.add("d-none");
             recipientInput.removeAttribute("required");
             recipientInput.value = "";
@@ -226,6 +238,7 @@
             } else {
               recipientInput.removeAttribute("required");
               recipientInput.value = "";
+              if (anonymousInput) anonymousInput.checked = false;
               clearSuggestions();
             }
           }

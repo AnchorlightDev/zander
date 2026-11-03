@@ -17,7 +17,10 @@
  *
  * Command templates support the following placeholders:
  *   {{ username }}          — recipient Minecraft username
- *   {{ purchaserUsername }} — purchaser Minecraft username
+ *   {{ purchaserUsername }} — purchaser Minecraft username, or "Anonymous"
+ *                             for an anonymous gift
+ *   {{ purchaserUsernameReal }} — purchaser Minecraft username, always real
+ *                             (use only in staff-facing commands)
  *   {{ purchaseId }}        — internal purchase ID (for auditing)
  *   {{ itemSlug }}          — Stripe price ID / item slug
  *   {{ purchaseType }}      — 'one_time' or 'subscription'
@@ -26,6 +29,7 @@
 
 import db from "./databaseController.js";
 import fetch from "node-fetch";
+import { publicGifterName } from "../lib/webstore/giftPrivacy.mjs";
 
 // ---------------------------------------------------------------------------
 // Internal DB helper
@@ -154,6 +158,7 @@ export async function createStripeCheckoutSession({
   recipientMinecraftUsername,
   purchaserMinecraftUsername,
   isGift,
+  isAnonymous = false,
 }) {
   const apiKey = process.env.STRIPE_SECRET_KEY;
   if (!apiKey) throw new Error("STRIPE_SECRET_KEY is not configured");
@@ -176,6 +181,7 @@ export async function createStripeCheckoutSession({
   body.append("metadata[recipientUsername]", recipientMinecraftUsername);
   body.append("metadata[purchaserUsername]", purchaserMinecraftUsername);
   body.append("metadata[isGift]", isGift ? "true" : "false");
+  body.append("metadata[isAnonymous]", isGift && isAnonymous ? "true" : "false");
 
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
@@ -379,13 +385,14 @@ export async function createPendingPurchase({
   recipientMinecraftUsername,
   stripeSessionId,
   isGift,
+  isAnonymous = false,
 }) {
   const result = await query(
     `INSERT INTO webstorePurchases
        (userId, itemSlug, itemName, purchaseType,
         purchaserMinecraftUsername, recipientMinecraftUsername,
-        stripeSessionId, amountCents, currency, isGift)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        stripeSessionId, amountCents, currency, isGift, isAnonymous)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       userId,
       item.slug,
@@ -397,6 +404,7 @@ export async function createPendingPurchase({
       item.priceCents,
       item.currency,
       isGift ? 1 : 0,
+      isGift && isAnonymous ? 1 : 0,
     ]
   );
   return result.insertId;
@@ -451,7 +459,7 @@ export async function getPurchaseHistory(userId, limit = 20, offset = 0) {
   return query(
     `SELECT purchaseId, itemName, purchaseType, recipientMinecraftUsername,
             purchaserMinecraftUsername, amountCents, currency, isGift,
-            status, createdAt
+            isAnonymous, status, createdAt
      FROM webstorePurchases
      WHERE userId = ?
      ORDER BY createdAt DESC
@@ -475,12 +483,18 @@ export async function getPurchaseHistoryCount(userId) {
 export async function getReceivedGifts(minecraftUsername, limit = 20, offset = 0) {
   return query(
     `SELECT purchaseId, itemName, purchaseType, purchaserMinecraftUsername,
-            amountCents, currency, status, createdAt
+            isAnonymous, amountCents, currency, status, createdAt
      FROM webstorePurchases
      WHERE recipientMinecraftUsername = ? AND isGift = 1
      ORDER BY createdAt DESC
      LIMIT ? OFFSET ?`,
     [minecraftUsername, limit, offset]
+  ).then((rows) =>
+    // Recipients never see who sent an anonymous gift.
+    rows.map(({ purchaserMinecraftUsername, ...rest }) => ({
+      ...rest,
+      fromUsername: publicGifterName({ purchaserMinecraftUsername, isAnonymous: rest.isAnonymous }),
+    }))
   );
 }
 
@@ -508,17 +522,20 @@ export async function upsertSubscription({
   recipientMinecraftUsername,
   purchaserMinecraftUsername,
   purchaserUserId,
+  isAnonymous = 0,
   status,
   currentPeriodStart,
   currentPeriodEnd,
   cancelAtPeriodEnd,
 }) {
+  // isAnonymous is only written on insert: it is fixed at checkout and a
+  // renewal event must never flip it.
   return query(
     `INSERT INTO webstoreSubscriptions
        (purchaseId, stripeSubscriptionId, stripeCustomerId, stripePriceId,
         recipientMinecraftUsername, purchaserMinecraftUsername, purchaserUserId,
-        status, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        isAnonymous, status, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        status             = VALUES(status),
        currentPeriodStart = VALUES(currentPeriodStart),
@@ -534,6 +551,7 @@ export async function upsertSubscription({
       recipientMinecraftUsername,
       purchaserMinecraftUsername,
       purchaserUserId,
+      Number(isAnonymous) === 1 ? 1 : 0,
       status,
       currentPeriodStart ? new Date(currentPeriodStart * 1000) : null,
       currentPeriodEnd ? new Date(currentPeriodEnd * 1000) : null,
@@ -557,6 +575,84 @@ export async function updateSubscriptionStatus(stripeSubscriptionId, status, can
      WHERE stripeSubscriptionId = ?`,
     [status, cancelledAt, stripeSubscriptionId]
   );
+}
+
+/**
+ * Live subscriptions a user can see on their purchase history: ones they pay
+ * for, plus ones gifted to their Minecraft username.  Only statuses that are
+ * still running (or recoverable) are returned; ended subscriptions are already
+ * visible as rows in the purchase list.
+ *
+ * stripeCustomerId is deliberately not selected -- the view never needs it,
+ * and the billing portal looks it up again server-side with an ownership check.
+ */
+export async function getUserSubscriptions(userId, minecraftUsername = null) {
+  return query(
+    `SELECT s.subscriptionId, s.status, s.recipientMinecraftUsername,
+            s.purchaserMinecraftUsername, s.purchaserUserId, s.isAnonymous,
+            s.currentPeriodEnd, s.cancelAtPeriodEnd, s.createdAt,
+            (s.stripeCustomerId IS NOT NULL) AS hasBillingCustomer,
+            p.itemName, p.amountCents, p.currency
+     FROM webstoreSubscriptions s
+     JOIN webstorePurchases p ON p.purchaseId = s.purchaseId
+     WHERE s.status IN ('active', 'past_due', 'unpaid')
+       AND (s.purchaserUserId = ? OR s.recipientMinecraftUsername = ?)
+     ORDER BY FIELD(s.status, 'past_due', 'unpaid', 'active'), s.currentPeriodEnd ASC`,
+    [userId, minecraftUsername || ""]
+  );
+}
+
+/**
+ * Resolve the Stripe customer behind a subscription, but only if the given
+ * user is the one paying for it.  Recipients of a gift cannot open the
+ * purchaser's billing portal.
+ */
+export async function getBillingCustomerForPurchaser(userId, subscriptionId) {
+  const rows = await query(
+    `SELECT stripeCustomerId FROM webstoreSubscriptions
+     WHERE subscriptionId = ? AND purchaserUserId = ? AND stripeCustomerId IS NOT NULL
+     LIMIT 1`,
+    [subscriptionId, userId]
+  );
+  return rows[0]?.stripeCustomerId || null;
+}
+
+/**
+ * Create a Stripe Billing Portal session so a purchaser can update their card
+ * or cancel.  Requires a portal configuration to be saved in the Stripe
+ * dashboard (Settings > Billing > Customer portal) for the key's mode.
+ */
+export async function createStripeBillingPortalSession(customerId, returnUrl) {
+  const apiKey = process.env.STRIPE_SECRET_KEY;
+  if (!apiKey) throw new Error("STRIPE_SECRET_KEY is not configured");
+
+  const body = new URLSearchParams();
+  body.append("customer", customerId);
+  body.append("return_url", returnUrl);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), STRIPE_FETCH_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Stripe billing portal error ${response.status}: ${text}`);
+  }
+
+  return response.json();
 }
 
 export async function updateSubscriptionPeriod(stripeSubscriptionId, currentPeriodStart, currentPeriodEnd) {
@@ -924,7 +1020,8 @@ export async function fulfillSubscriptionRenewal(subscription, grantCommands, di
 
   const metadata = {
     username: subscription.recipientMinecraftUsername,
-    purchaserUsername: subscription.purchaserMinecraftUsername,
+    purchaserUsername: publicGifterName(subscription),
+    purchaserUsernameReal: subscription.purchaserMinecraftUsername,
     purchaseId: subscription.purchaseId,
     itemSlug: subscription.stripePriceId,
     purchaseType: "subscription",
@@ -966,7 +1063,8 @@ export async function revokeSubscription(subscription, revokeCommands, discord =
 
   const metadata = {
     username: subscription.recipientMinecraftUsername,
-    purchaserUsername: subscription.purchaserMinecraftUsername,
+    purchaserUsername: publicGifterName(subscription),
+    purchaserUsernameReal: subscription.purchaserMinecraftUsername,
     purchaseId: subscription.purchaseId,
     itemSlug: subscription.stripePriceId,
     purchaseType: "subscription",
@@ -999,7 +1097,8 @@ export async function revokeSubscription(subscription, revokeCommands, discord =
 function buildCommandMetadata(purchase) {
   return {
     username: purchase.recipientMinecraftUsername,
-    purchaserUsername: purchase.purchaserMinecraftUsername,
+    purchaserUsername: publicGifterName(purchase),
+    purchaserUsernameReal: purchase.purchaserMinecraftUsername,
     purchaseId: purchase.purchaseId,
     itemSlug: purchase.itemSlug,
     purchaseType: purchase.purchaseType,
@@ -1134,7 +1233,7 @@ export async function getAllPurchases(limit = 20, offset = 0) {
   return query(
     `SELECT purchaseId, userId, itemName, purchaseType,
             purchaserMinecraftUsername, recipientMinecraftUsername,
-            amountCents, currency, isGift, status, createdAt
+            amountCents, currency, isGift, isAnonymous, status, createdAt
      FROM webstorePurchases
      ORDER BY createdAt DESC
      LIMIT ? OFFSET ?`,

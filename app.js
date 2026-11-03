@@ -31,7 +31,7 @@ import {
   isCrossSiteRequest,
 } from "./lib/securityConfig.js";
 import { checkRateLimit } from "./lib/rateLimiter.mjs";
-import { registerReturnReplyGuard } from "./lib/returnReplyGuard.mjs";
+import { registerReturnReplyGuard, wrapAsyncHandler } from "./lib/returnReplyGuard.mjs";
 import { serveCustomPage } from "./routes/customPageRoutes.js";
 import { getRegion } from "./lib/region.mjs";
 import {
@@ -200,7 +200,9 @@ const buildApp = async () => {
   }
 
   // When app errors, render the error on a page, do not provide JSON
-  app.setNotFoundHandler(async function (req, res) {
+  // The 404 handler is not a route, so the onRoute guard above does not reach
+  // it; wrap it directly or every 404 logs "Reply was already sent".
+  app.setNotFoundHandler(wrapAsyncHandler(async function (req, res) {
     // Staff-written pages answer only paths no route claimed.
     if (await serveCustomPage(app, req, res, config, features)) return;
 
@@ -221,7 +223,7 @@ const buildApp = async () => {
       app.log.error(viewError);
       res.send("404 Not Found");
     }
-  });
+  }));
 
   // When app errors, render the error on a page, do not provide JSON
   app.setErrorHandler(async function (error, req, res) {

@@ -28,6 +28,7 @@
 
 import crypto from "crypto";
 import fetch from "node-fetch";
+import { publicGifterName } from "../../lib/webstore/giftPrivacy.mjs";
 import { Colors } from "discord.js";
 import { Webhook, MessageBuilder } from "discord-webhook-node";
 import { sendWebhookMessage } from "../../lib/discord/webhooks.mjs";
@@ -139,7 +140,8 @@ async function notifyPurchase(config, purchase) {
   if (!webhookUrl) return;
 
   const recipient = purchase.recipientMinecraftUsername || "—";
-  const purchaser = purchase.purchaserMinecraftUsername || "—";
+  // The webstore channel may be player-visible, so anonymous gifts stay anonymous.
+  const purchaser = publicGifterName(purchase) || "—";
   const price = `${(purchase.currency || "USD").toUpperCase()} ${(purchase.amountCents / 100).toFixed(2)}`;
   const type = purchase.purchaseType === "subscription" ? "Subscription" : "One-time";
 
@@ -347,6 +349,7 @@ async function handleCheckoutCompleted(event, config) {
       recipientMinecraftUsername: purchase.recipientMinecraftUsername,
       purchaserMinecraftUsername: purchase.purchaserMinecraftUsername,
       purchaserUserId: purchase.userId,
+      isAnonymous: purchase.isAnonymous,
       status: "active",
       currentPeriodStart: stripeSub?.current_period_start ?? null,
       currentPeriodEnd: stripeSub?.current_period_end ?? null,
@@ -486,7 +489,7 @@ async function handleInvoicePaymentSucceeded(event, config) {
 
   const renewalFields = [
     ["Player", subscription.recipientMinecraftUsername, true],
-    ["Purchaser", subscription.purchaserMinecraftUsername, true],
+    ["Purchaser", publicGifterName(subscription), true],
     ["Price ID", subscription.stripePriceId, false],
     ["Next Renewal", periodEndDate, true],
   ];
@@ -610,6 +613,7 @@ async function handleSubscriptionUpdated(event, config) {
     recipientMinecraftUsername: subscription.recipientMinecraftUsername,
     purchaserMinecraftUsername: subscription.purchaserMinecraftUsername,
     purchaserUserId: subscription.purchaserUserId,
+    isAnonymous: subscription.isAnonymous,
     status: stripeStatusToLocal(stripeSub.status),
     currentPeriodStart: stripeSub.current_period_start ?? null,
     currentPeriodEnd: stripeSub.current_period_end ?? null,
@@ -672,7 +676,7 @@ async function handleSubscriptionDeleted(event, config) {
 
   const cancelledFields = [
     ["Player", subscription.recipientMinecraftUsername, true],
-    ["Purchaser", subscription.purchaserMinecraftUsername, true],
+    ["Purchaser", publicGifterName(subscription), true],
     ["Price ID", subscription.stripePriceId, false],
     ["Reason", stripeSub.cancellation_details?.reason || "unknown", true],
     ["Revoke commands", String(revokeCommands.length), true],

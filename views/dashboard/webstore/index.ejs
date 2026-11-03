@@ -103,7 +103,7 @@
                     <td>
                       <span class="fw-semibold"><%= p.recipientMinecraftUsername %></span>
                       <% if (p.isGift) { %>
-                        <br><span class="text-muted small">from <%= p.purchaserMinecraftUsername %></span>
+                        <br><span class="text-muted small">from <%= p.purchaserMinecraftUsername %><% if (p.isAnonymous) { %> <span class="badge bg-light text-dark border" title="Hidden from the recipient and players">Anonymous</span><% } %></span>
                       <% } %>
                     </td>
                     <td><%= formatPrice(p.amountCents, p.currency) %></td>

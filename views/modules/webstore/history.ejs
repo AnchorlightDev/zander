@@ -29,6 +29,62 @@
       <a href="/webstore" class="btn btn-outline-primary btn-sm">Back to Store</a>
     </div>
 
+    <%# My Subscriptions -%>
+    <% if (subscriptions && subscriptions.length) { %>
+      <div class="mb-3">
+        <h4 class="mb-1">My Subscriptions</h4>
+        <p class="text-muted mb-0">
+          Subscriptions you pay for, and any that have been gifted to you.
+        </p>
+      </div>
+
+      <div class="table-responsive mb-5">
+        <table class="table table-hover align-middle">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Username</th>
+              <th>Price</th>
+              <th>Status</th>
+              <th>Renewal</th>
+              <th class="text-end"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% subscriptions.forEach(function (s) { %>
+              <tr>
+                <td class="fw-semibold"><%= s.itemName %></td>
+                <td>
+                  <span class="fw-semibold"><%= s.username %></span>
+                  <% if (s.relationship === 'gifted') { %>
+                    <span class="badge bg-secondary ms-1" title="You pay for this subscription">Gift you pay for</span>
+                    <% if (s.isAnonymous) { %>
+                      <span class="badge bg-light text-dark border ms-1" title="The recipient can't see your username">Anonymous</span>
+                    <% } %>
+                  <% } else if (s.relationship === 'received') { %>
+                    <span class="badge bg-info text-dark ms-1">Gift from <%= s.purchaserUsername %></span>
+                  <% } %>
+                </td>
+                <td><%= s.amount %></td>
+                <td><span class="badge <%= s.statusBadge %>"><%= s.statusLabel %></span></td>
+                <td class="text-muted small"><%= s.renewal %></td>
+                <td class="text-end">
+                  <% if (s.canManage) { %>
+                    <form method="post" action="/webstore/billing-portal" class="d-inline">
+                      <input type="hidden" name="subscriptionId" value="<%= s.subscriptionId %>">
+                      <button type="submit" class="btn btn-outline-primary btn-sm">Manage</button>
+                    </form>
+                  <% } else if (s.relationship === 'received') { %>
+                    <span class="text-muted small">Managed by <%= s.isAnonymous ? 'the gifter' : s.purchaserUsername %></span>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+
     <%# My Purchases -%>
     <% if (!purchases || !purchases.length) { %>
       <div class="alert alert-info">
@@ -63,6 +119,9 @@
                   <span class="fw-semibold"><%= p.itemName %></span>
                   <% if (p.isGift) { %>
                     <span class="badge bg-secondary ms-1" title="This was a gift">Gift</span>
+                    <% if (p.isAnonymous) { %>
+                      <span class="badge bg-light text-dark border ms-1" title="The recipient can't see your username">Anonymous</span>
+                    <% } %>
                   <% } %>
                 </td>
                 <td>
@@ -151,7 +210,13 @@
             %>
               <tr>
                 <td class="fw-semibold"><%= g.itemName %></td>
-                <td><%= g.purchaserMinecraftUsername %></td>
+                <td>
+                  <% if (g.isAnonymous) { %>
+                    <span class="text-muted fst-italic"><%= g.fromUsername %></span>
+                  <% } else { %>
+                    <%= g.fromUsername %>
+                  <% } %>
+                </td>
                 <td>
                   <% if (g.purchaseType === 'subscription') { %>
                     <span class="badge bg-primary">Monthly</span>

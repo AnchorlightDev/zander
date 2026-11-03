@@ -1081,6 +1081,7 @@ model webstorePurchases {
   amountCents                  Int
   currency                     String                           @db.VarChar(10)
   isGift                       Int                              @default(0) @db.TinyInt
+  isAnonymous                  Int                              @default(0) @db.TinyInt
   createdAt                    DateTime                         @default(now())
   updatedAt                    DateTime                         @updatedAt
 
@@ -1099,6 +1100,7 @@ model webstoreSubscriptions {
   recipientMinecraftUsername   String                        @db.VarChar(16)
   purchaserMinecraftUsername   String                        @db.VarChar(16)
   purchaserUserId              Int
+  isAnonymous                  Int                           @default(0) @db.TinyInt
   status                       webstoreSubscriptions_status  @default(active)
   currentPeriodStart           DateTime?
   currentPeriodEnd             DateTime?
