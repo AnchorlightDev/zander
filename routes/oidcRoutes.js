@@ -24,6 +24,10 @@
 
 import { getOidcProvider } from "../controllers/oidcController.js";
 import { resolveStaffStatus } from "../lib/oidc/accounts.mjs";
+import { getUserPermissions } from "../controllers/userController.js";
+import { hasPermission as holdsNode } from "../lib/discord/permissions.mjs";
+import { MCP_PERMISSION_NODE, mcpClientId } from "../lib/mcp/config.mjs";
+import { applyGrantScopes } from "../lib/mcp/oidcConfig.mjs";
 
 const MOUNT = "/oidc";
 
@@ -65,12 +69,13 @@ export function registerOidcInteractions(instance) {
       details = await provider.interactionDetails(req.raw, reply.raw);
     } catch {
       reply.raw.writeHead(400, { "content-type": "text/html; charset=utf-8" });
-      reply.raw.end(page("Sign-in expired", "This sign-in link has expired. Please start again from Compass."));
+      reply.raw.end(page("Sign-in expired", "This sign-in link has expired. Please start the sign-in again."));
       return;
     }
 
     const { params, uid } = details;
     const sessionUser = req.session?.user;
+    const isMcp = params.client_id === mcpClientId();
 
     // 1. Not logged in to Zander → send to the normal login, come back here.
     if (!sessionUser?.userId) {
@@ -87,16 +92,34 @@ export function registerOidcInteractions(instance) {
       reply.raw.end(
         page(
           "Staff only",
-          "Compass is for CFC staff only. Your account doesn't currently hold a staff role, so it can't sign in."
+          isMcp
+            ? "Connecting Claude to Zander is for CFC staff only. Your account doesn't currently hold a staff role, so it can't sign in."
+            : "Compass is for CFC staff only. Your account doesn't currently hold a staff role, so it can't sign in."
         )
       );
       return;
     }
 
+    // 2b. Claude (MCP) additionally needs the zander.web.mcp node.
+    if (isMcp) {
+      const permissions = await getUserPermissions(status.user).catch(() => []);
+      if (!holdsNode(permissions, MCP_PERMISSION_NODE)) {
+        reply.raw.writeHead(403, { "content-type": "text/html; charset=utf-8" });
+        reply.raw.end(
+          page(
+            "Not enabled for your account",
+            `Your rank doesn't include the ${MCP_PERMISSION_NODE} permission, so Claude can't be connected to Zander for you. Ask an admin to grant it.`
+          )
+        );
+        return;
+      }
+    }
+
     // 3. First-party client → skip consent: grant the requested scopes outright.
     const accountId = String(status.user.userId);
     const grant = new provider.Grant({ accountId, clientId: params.client_id });
-    grant.addOIDCScope(params.scope || "openid");
+    // OIDC scopes as requested; for Claude, also the zander:mcp scope on /mcp.
+    applyGrantScopes(grant, params);
     const grantId = await grant.save();
 
     await provider.interactionFinished(
@@ -111,7 +134,7 @@ export function registerOidcInteractions(instance) {
 function page(title, body) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title} — Compass</title>
+<title>${title} — Zander sign-in</title>
 <style>
   :root { color-scheme: light dark; }
   body { font: 16px/1.5 system-ui, sans-serif; margin: 0; display: grid; place-items: center; min-height: 100vh; background: #0f1115; color: #e7e9ee; }

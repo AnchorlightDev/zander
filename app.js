@@ -111,6 +111,8 @@ import configApiRoute from "./api/routes/config.js";
 
 // API token authentication
 import verifyToken from "./api/routes/verifyToken.js";
+import { mcpPrincipalHook } from "./lib/mcp/principal.mjs";
+import mcpRoutes from "./routes/mcpRoutes.js";
 import { getGlobalImage } from "./api/common.js";
 import { client } from "./controllers/discordController.js";
 
@@ -397,6 +399,9 @@ const buildApp = async () => {
   await app.register((instance, options, next) => {
     // API routes (Token authenticated)
     try {
+      // Ahead of verifyToken: an MCP tool calling a route in-process as the
+      // signed-in staff member (lib/mcp/principal.mjs) gets their session.
+      instance.addHook("preValidation", mcpPrincipalHook);
       instance.addHook("preValidation", verifyToken);
       apiRoutes(instance, client, moment, config, db, features, lang);
     } catch (err) {
@@ -566,6 +571,13 @@ const buildApp = async () => {
       return next(err);
     }
     next();
+  });
+
+  // MCP server for Claude (routes/mcpRoutes.js) -- inert unless the `mcp`
+  // module is switched on. Given the root instance so tools can call the API
+  // routes above in-process.
+  await app.register(async (instance) => {
+    mcpRoutes(instance, app, features);
   });
 
   // Warm up the Prisma connection pool before accepting requests so the first

@@ -17,7 +17,8 @@ import Provider from "oidc-provider";
 import { createAdapter } from "../lib/oidc/prismaAdapter.mjs";
 import { loadJwks } from "../lib/oidc/jwks.mjs";
 import { findAccount } from "../lib/oidc/accounts.mjs";
-import { seedCompassClient } from "../lib/oidc/clientStore.mjs";
+import { seedCompassClient, seedMcpClient } from "../lib/oidc/clientStore.mjs";
+import { issueRefreshToken, resourceIndicators } from "../lib/mcp/oidcConfig.mjs";
 
 const TEN_MINUTES = 10 * 60; // brief: access tokens last 10 minutes
 const FOURTEEN_DAYS = 14 * 24 * 60 * 60;
@@ -38,6 +39,7 @@ export function getOidcProvider() {
 
 async function build() {
   await seedCompassClient();
+  await seedMcpClient();
   const jwks = await loadJwks();
 
   const provider = new Provider(getIssuer(), {
@@ -67,7 +69,11 @@ async function build() {
       rpInitiatedLogout: { enabled: true },
       revocation: { enabled: true },
       introspection: { enabled: true },
+      resourceIndicators,
     },
+
+    // Claude (MCP) always gets a refresh token; see lib/mcp/oidcConfig.mjs.
+    issueRefreshToken,
 
     // PKCE required for every client (brief: Compass logs in with PKCE).
     pkce: { required: () => true },
