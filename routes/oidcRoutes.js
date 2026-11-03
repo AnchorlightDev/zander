@@ -24,6 +24,7 @@
 
 import { getOidcProvider } from "../controllers/oidcController.js";
 import { resolveStaffStatus } from "../lib/oidc/accounts.mjs";
+import { explainDenial } from "../lib/oidc/denial.mjs";
 import { getUserPermissions } from "../controllers/userController.js";
 import { hasPermission as holdsNode } from "../lib/discord/permissions.mjs";
 import { MCP_PERMISSION_NODE, mcpClientId } from "../lib/mcp/config.mjs";
@@ -89,14 +90,8 @@ export function registerOidcInteractions(instance) {
     const status = await resolveStaffStatus(sessionUser.userId);
     if (!status.ok) {
       reply.raw.writeHead(403, { "content-type": "text/html; charset=utf-8" });
-      reply.raw.end(
-        page(
-          "Staff only",
-          isMcp
-            ? "Connecting Claude to Zander is for CFC staff only. Your account doesn't currently hold a staff role, so it can't sign in."
-            : "Compass is for CFC staff only. Your account doesn't currently hold a staff role, so it can't sign in."
-        )
-      );
+      const why = explainDenial(status, { product: isMcp ? "Connecting Claude to Zander" : "Compass" });
+      reply.raw.end(page("Staff only", why.summary, { reasons: why.reasons, footer: why.footer }));
       return;
     }
 
@@ -131,16 +126,29 @@ export function registerOidcInteractions(instance) {
   });
 }
 
-function page(title, body) {
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+function page(title, body, { reasons = [], footer = "" } = {}) {
+  const why = reasons.length
+    ? `<section class="why"><h2>Why</h2><ul>${reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul></section>`
+    : "";
+  const foot = footer ? `<p class="foot">${escapeHtml(footer)}</p>` : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title} — Zander sign-in</title>
+<title>${escapeHtml(title)} — Zander sign-in</title>
 <style>
   :root { color-scheme: light dark; }
   body { font: 16px/1.5 system-ui, sans-serif; margin: 0; display: grid; place-items: center; min-height: 100vh; background: #0f1115; color: #e7e9ee; }
-  main { max-width: 28rem; padding: 2rem; text-align: center; }
+  main { max-width: 32rem; padding: 2rem 1rem; text-align: center; }
   h1 { font-size: 1.4rem; margin: 0 0 .5rem; }
   p { opacity: .85; }
+  .why { text-align: left; background: #181b22; border: 1px solid #2a2f3a; border-radius: 10px; padding: .75rem 1rem; margin: 1rem 0; }
+  .why h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; opacity: .7; margin: 0 0 .35rem; }
+  .why ul { margin: 0; padding-left: 1.1rem; }
+  .why li { margin: .25rem 0; overflow-wrap: anywhere; }
+  .foot { font-size: .85rem; opacity: .65; }
 </style></head>
-<body><main><h1>${title}</h1><p>${body}</p></main></body></html>`;
+<body><main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(body)}</p>${why}${foot}</main></body></html>`;
 }

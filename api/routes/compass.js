@@ -8,14 +8,17 @@
  * because only Zander can see LuckPerms.
  *
  * Auth: the per-client API-key hook (api/routes/verifyToken.js). This surface
- * requires the `compass` scope and is strictly read-only — Compass never writes
- * to Zander and never grants groups (group-granting stays entirely in Zander).
+ * requires the `compass` scope. Everything is read-only EXCEPT the staff rank
+ * list (PUT /api/compass/staff-groups): Compass's "Who can sign in" setting is
+ * the source of truth for who may obtain a Compass token, so Compass pushes it
+ * here. Compass still never grants groups (that stays entirely in Zander).
  */
 
 import { UserGetter } from "../../controllers/userController.js";
 import db, { luckpermsDb } from "../../controllers/databaseController.js";
 import { getEffectiveGroups, isStaff } from "../../lib/permissions/effectiveGroups.mjs";
 import { staffGroups } from "../../lib/oidc/accounts.mjs";
+import { cleanStaffGroups, describeStaffGroups, setManagedStaffGroups } from "../../lib/oidc/staffGroups.mjs";
 import { resolveAvatarUrl } from "../../lib/avatarHelpers.js";
 
 export default function compassApiRoute(app, config, db, features, lang) {
@@ -49,7 +52,7 @@ export default function compassApiRoute(app, config, db, features, lang) {
           username: user.username,
           discordId: user.discordId,
           groups,
-          isStaff: isStaff(groups, staffGroups()),
+          isStaff: isStaff(groups, await staffGroups()),
         },
       });
     } catch (error) {
@@ -57,6 +60,41 @@ export default function compassApiRoute(app, config, db, features, lang) {
       if (!res.sent) {
         return res.status(500).send({ success: false, message: "Lookup failed." });
       }
+    }
+  });
+
+  // GET /api/compass/staff-groups
+  // → { groups, source: "compass"|"zander", updatedBy, updatedAt } — the ranks
+  //   currently allowed to obtain a Compass token, and where the list came from.
+  app.get(baseEndpoint + "/staff-groups", async function (req, res) {
+    try {
+      return res.send({ success: true, data: await describeStaffGroups() });
+    } catch (error) {
+      console.error("[compass] staff-groups read failed:", error);
+      if (!res.sent) return res.status(500).send({ success: false, message: "Lookup failed." });
+    }
+  });
+
+  // PUT /api/compass/staff-groups  { groups: string[] | null, updatedBy?: string }
+  // Compass pushes its "Who can sign in" list here on save and on boot. An empty
+  // list or null clears it, so Zander's own default (config.compass.staffGroups)
+  // applies again — matching Compass's "nothing ticked → leave it to Zander".
+  app.put(baseEndpoint + "/staff-groups", async function (req, res) {
+    const raw = req.body?.groups;
+    const groups = raw === null || raw === undefined ? [] : cleanStaffGroups(raw);
+    if (groups === null) {
+      return res.status(400).send({ success: false, message: "groups must be an array of rank slugs." });
+    }
+    try {
+      const data = await setManagedStaffGroups(groups, { updatedBy: req.body?.updatedBy });
+      console.log(
+        `[compass] staff rank list ${groups.length ? `set to [${groups.join(", ")}]` : "cleared"}` +
+          (req.body?.updatedBy ? ` by ${String(req.body.updatedBy).slice(0, 80)}` : "")
+      );
+      return res.send({ success: true, data });
+    } catch (error) {
+      console.error("[compass] staff-groups save failed:", error);
+      if (!res.sent) return res.status(500).send({ success: false, message: "Save failed." });
     }
   });
 
