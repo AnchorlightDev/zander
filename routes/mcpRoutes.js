@@ -72,7 +72,19 @@ export default function mcpRoutes(app, root, features) {
   // path-insertion URLs; the provider itself only serves it under /oidc.
   const authServerMetadata = async (req, res) => {
     if (!isOn()) return res.callNotFound();
-    const discovery = await root.inject({ method: "GET", url: "/oidc/.well-known/openid-configuration" });
+    // oidc-provider builds every endpoint URL from the request's host and
+    // scheme (it trusts X-Forwarded-*), so pass the caller's through --
+    // otherwise the document advertises http://localhost/oidc/... endpoints.
+    const forwardedHost = req.headers["x-forwarded-host"] || req.headers.host;
+    const discovery = await root.inject({
+      method: "GET",
+      url: "/oidc/.well-known/openid-configuration",
+      headers: {
+        host: req.headers.host,
+        ...(forwardedHost ? { "x-forwarded-host": forwardedHost } : {}),
+        "x-forwarded-proto": req.headers["x-forwarded-proto"] || req.protocol,
+      },
+    });
     if (discovery.statusCode !== 200) {
       return res.status(502).send({ error: "server_error", error_description: "OIDC discovery unavailable" });
     }

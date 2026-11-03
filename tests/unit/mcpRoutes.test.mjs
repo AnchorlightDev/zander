@@ -47,7 +47,11 @@ async function build(features = { mcp: true }) {
   const app = Fastify({ logger: false });
   await app.register(async (instance) => mcpRoutes(instance, app, features));
   // Stand-in for the provider's own discovery document.
-  app.get("/oidc/.well-known/openid-configuration", async () => ({ issuer: `${SITE}/oidc` }));
+  // Like oidc-provider, it builds URLs from the forwarded host and scheme.
+  app.get("/oidc/.well-known/openid-configuration", async (req) => ({
+    issuer: `${SITE}/oidc`,
+    authorization_endpoint: `${req.headers["x-forwarded-proto"]}://${req.headers["x-forwarded-host"]}/oidc/auth`,
+  }));
   await app.ready();
   return app;
 }
@@ -85,8 +89,13 @@ describe("/mcp", () => {
       authorization_servers: [`${SITE}/oidc`],
       scopes_supported: ["zander:mcp"],
     });
-    const as = await app.inject("/.well-known/oauth-authorization-server/oidc");
+    const as = await app.inject({
+      method: "GET",
+      url: "/.well-known/oauth-authorization-server/oidc",
+      headers: { host: "zander.example.com", "x-forwarded-proto": "https" },
+    });
     expect(as.json().issuer).toBe(`${SITE}/oidc`);
+    expect(as.json().authorization_endpoint).toBe(`${SITE}/oidc/auth`);
   });
 
   it("speaks MCP to a signed-in staff member", async () => {
