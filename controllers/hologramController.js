@@ -86,16 +86,28 @@ export function getGroups() {
   ).then((rows) => rows.map((r) => r.hologram_group));
 }
 
+/**
+ * Minecraft renders stray control characters as boxed glyphs: textarea input
+ * arrives with CRLF line endings, and emoji carry invisible variation
+ * selectors / zero-width joiners. Normalise to plain \n and drop those.
+ */
+export function cleanHologramText(value) {
+  if (value == null) return null;
+  return String(value)
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\uFE00-\uFE0F\u200B-\u200D\u2060\uFEFF]/g, "");
+}
+
 export function createMessage({ hologram_group, message, link = null, countdown_to = null, countdown_finished_text = null, expires_at = null, sort_order = 0, enabled = 1 }) {
   return runQuery(
     `INSERT INTO hologram_messages (hologram_group, message, link, countdown_to, countdown_finished_text, expires_at, sort_order, enabled)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       normaliseGroup(hologram_group),
-      String(message ?? ""),
+      cleanHologramText(message ?? ""),
       link || null,
       normaliseCountdownTo(countdown_to),
-      countdown_finished_text || null,
+      cleanHologramText(countdown_finished_text) || null,
       normaliseExpiresAt(expires_at),
       Number(sort_order) || 0,
       enabled ? 1 : 0,
@@ -110,10 +122,10 @@ export function updateMessage(id, { hologram_group, message, link = null, countd
       WHERE id = ?`,
     [
       normaliseGroup(hologram_group),
-      String(message ?? ""),
+      cleanHologramText(message ?? ""),
       link || null,
       normaliseCountdownTo(countdown_to),
-      countdown_finished_text || null,
+      cleanHologramText(countdown_finished_text) || null,
       normaliseExpiresAt(expires_at),
       Number(sort_order) || 0,
       enabled ? 1 : 0,

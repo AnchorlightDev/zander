@@ -144,8 +144,18 @@ public final class HologramManager implements Listener, CommandExecutor, TabComp
                 display.text(Component.empty());
                 continue;
             }
-            display.text(LEGACY.deserialize(format(frame)));
+            display.text(LEGACY.deserialize(sanitise(format(frame))));
         }
+    }
+
+    /**
+     * Strips characters the client font draws as boxed glyphs: CR from CRLF line endings,
+     * emoji variation selectors (U+FE0E/FE0F) and zero-width joiners/spaces.
+     */
+    private static String sanitise(String text) {
+        if (text == null) return "";
+        return text.replace("\r\n", "\n").replace('\r', '\n')
+                .replaceAll("[\\uFE00-\\uFE0F\\u200B-\\u200D\\u2060\\uFEFF]", "");
     }
 
     private String format(HologramFrame frame) {
@@ -194,6 +204,7 @@ public final class HologramManager implements Listener, CommandExecutor, TabComp
         }
         TextDisplay display = current;
         if (display == null || !display.isValid()) {
+            int lineWidth = Math.max(50, plugin.getConfig().getInt("holograms.line-width", 200));
             display = world.spawn(location, TextDisplay.class, text -> {
                 text.setPersistent(false);
                 text.setBillboard(Display.Billboard.CENTER);
@@ -203,7 +214,7 @@ public final class HologramManager implements Listener, CommandExecutor, TabComp
                 text.setSeeThrough(true);
                 text.setDefaultBackground(false);
                 text.setAlignment(TextDisplay.TextAlignment.CENTER);
-                text.setLineWidth(320);
+                text.setLineWidth(lineWidth);
             });
             displays.put(key, display);
         }

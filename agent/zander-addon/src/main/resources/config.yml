@@ -17,6 +17,8 @@ holograms:
   api-key: ""
   poll-interval-seconds: 30
   rotation-interval-seconds: 5
+  # Max width of a hologram line in pixels before it wraps (vanilla default 200).
+  line-width: 200
 
 # This server's identifier, used to target queued commands at this server.
 # Matches the serverName / slug used when commands are queued on the web side.
