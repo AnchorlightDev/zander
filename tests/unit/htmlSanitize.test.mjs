@@ -36,6 +36,18 @@ describe("sanitizeForumHtml", () => {
     expect(sanitizeForumHtml('<iframe src="https://www.youtube.com/embed/abc"></iframe>')).toContain("youtube.com/embed/abc");
   });
 
+  it("upgrades Summernote's protocol-relative YouTube embeds to https instead of blanking them", () => {
+    // Summernote emits src="//www.youtube.com/embed/ID"; it must survive sanitizing.
+    const result = sanitizeForumHtml('<iframe frameborder="0" src="//www.youtube.com/embed/dQw4w9WgXcQ" width="640" height="360"></iframe>');
+    expect(result).toContain('src="https://www.youtube.com/embed/dQw4w9WgXcQ"');
+    expect(result).not.toContain('src="//');
+  });
+
+  it("does not let a protocol-relative iframe reach a disallowed host", () => {
+    const result = sanitizeForumHtml('<iframe src="//evil.example.com/x"></iframe>');
+    expect(result).not.toContain("evil.example.com");
+  });
+
   it("drops layout classes and protocol-relative URLs", () => {
     const overlay = sanitizeForumHtml('<div class="position-fixed top-0 start-0 w-100 h-100 text-center">x</div>');
     expect(overlay).not.toContain("position-fixed");
