@@ -253,8 +253,12 @@ export async function searchShops(material, page = 1, options = {}) {
     // Escape LIKE metacharacters so "%%" cannot turn into a full-table scan
     // of every shop, and the ESCAPE clause below makes the backslash count.
     const escapeLike = (value) => String(value).replace(/[\\%_]/g, (m) => `\\${m}`);
-    const underscored = material.toUpperCase().replace(/ /g, "_");
-    const likeTerm = `%${escapeLike(material)}%`;
+    // Match case-insensitively: JSON_EXTRACT results are utf8mb4_bin and old-format
+    // items store upper-case YAML ("GOLDEN_CARROT"), so LIKE alone is case-sensitive.
+    // Both sides are lower-cased (CONVERT first, since LOWER() is a no-op on binary strings).
+    const needle = material.trim().toLowerCase();
+    const underscored = needle.replace(/\s+/g, "_");
+    const likeTerm = `%${escapeLike(needle)}%`;
     const likeTermUnderscored = `%${escapeLike(underscored)}%`;
 
     // Get total count for pagination.
@@ -271,13 +275,13 @@ export async function searchShops(material, page = 1, options = {}) {
          JOIN qs_external_cache stock ON shops.id = stock.shop
          WHERE data.unlimited = 0
            AND (
-             (data.item LIKE 'item:%' AND (data.item LIKE ? ESCAPE '\\\\' OR data.item LIKE ? ESCAPE '\\\\'))
+             (data.item LIKE 'item:%' AND (LOWER(CONVERT(data.item USING utf8mb4)) LIKE ? ESCAPE '\\\\' OR LOWER(CONVERT(data.item USING utf8mb4)) LIKE ? ESCAPE '\\\\'))
              OR
              (data.item NOT LIKE 'item:%' AND (
-               JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ? ESCAPE '\\\\'
-               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ? ESCAPE '\\\\'
-               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.tags')) LIKE ? ESCAPE '\\\\'
-               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.tags')) LIKE ? ESCAPE '\\\\'
+               LOWER(CONVERT(JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) USING utf8mb4)) LIKE ? ESCAPE '\\\\'
+               OR LOWER(CONVERT(JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) USING utf8mb4)) LIKE ? ESCAPE '\\\\'
+               OR LOWER(CONVERT(JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.tags')) USING utf8mb4)) LIKE ? ESCAPE '\\\\'
+               OR LOWER(CONVERT(JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.tags')) USING utf8mb4)) LIKE ? ESCAPE '\\\\'
              ))
            )`,
         [likeTerm, likeTermUnderscored, likeTerm, likeTermUnderscored, likeTerm, likeTermUnderscored],
@@ -369,13 +373,13 @@ export async function searchShops(material, page = 1, options = {}) {
          JOIN qs_external_cache stock ON shops.id = stock.shop
          WHERE data.unlimited = 0
            AND (
-             (data.item LIKE 'item:%' AND (data.item LIKE ? ESCAPE '\\\\' OR data.item LIKE ? ESCAPE '\\\\'))
+             (data.item LIKE 'item:%' AND (LOWER(CONVERT(data.item USING utf8mb4)) LIKE ? ESCAPE '\\\\' OR LOWER(CONVERT(data.item USING utf8mb4)) LIKE ? ESCAPE '\\\\'))
              OR
              (data.item NOT LIKE 'item:%' AND (
-               JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ? ESCAPE '\\\\'
-               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) LIKE ? ESCAPE '\\\\'
-               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.tags')) LIKE ? ESCAPE '\\\\'
-               OR JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.tags')) LIKE ? ESCAPE '\\\\'
+               LOWER(CONVERT(JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) USING utf8mb4)) LIKE ? ESCAPE '\\\\'
+               OR LOWER(CONVERT(JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) USING utf8mb4)) LIKE ? ESCAPE '\\\\'
+               OR LOWER(CONVERT(JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.tags')) USING utf8mb4)) LIKE ? ESCAPE '\\\\'
+               OR LOWER(CONVERT(JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.tags')) USING utf8mb4)) LIKE ? ESCAPE '\\\\'
              ))
            )
          ORDER BY shops.id
