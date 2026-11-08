@@ -80,15 +80,30 @@ document.addEventListener('DOMContentLoaded', function () {
                 const data = await res.json();
                 if (!data.success) { failureCallback(data.message); return; }
 
-                const events = data.data.map(ev => ({
-                    id: ev.eventId,
-                    title: ev.title,
-                    start: ev.startAt,
-                    end: ev.endAt,
-                    color: STATUS_COLORS[ev.status] || '#6c757d',
-                    textColor: ['pending_review', 'approved', 'archived'].includes(ev.status) ? '#000' : '#fff',
-                    extendedProps: { status: ev.status, eventId: ev.eventId },
-                }));
+                const DAY_MS = 24 * 60 * 60 * 1000;
+                const events = data.data.map(ev => {
+                    // An event that spans a full day or more belongs in the
+                    // all-day lane at the top, the way calendars conventionally
+                    // show multi-day events, instead of as a full-height block
+                    // filling every day column. Shorter events stay on the grid.
+                    const start = ev.startAt ? new Date(ev.startAt) : null;
+                    const end = ev.endAt ? new Date(ev.endAt) : null;
+                    const allDay = Boolean(
+                        start && end && !isNaN(start) && !isNaN(end) &&
+                        (end - start) >= DAY_MS
+                    );
+
+                    return {
+                        id: ev.eventId,
+                        title: ev.title,
+                        start: ev.startAt,
+                        end: ev.endAt,
+                        allDay,
+                        color: STATUS_COLORS[ev.status] || '#6c757d',
+                        textColor: ['pending_review', 'approved', 'archived'].includes(ev.status) ? '#000' : '#fff',
+                        extendedProps: { status: ev.status, eventId: ev.eventId },
+                    };
+                });
                 successCallback(events);
             } catch (err) {
                 failureCallback(err);
