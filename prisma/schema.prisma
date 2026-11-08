@@ -422,7 +422,7 @@ model forms {
 model formFields {
   fieldId     Int     @id @default(autoincrement())
   formId      Int
-  label       String  @db.VarChar(255)
+  label       String  @db.Text
   fieldKey    String  @db.VarChar(64)
   fieldType   String  @default("text") @db.VarChar(32)
   placeholder String? @db.VarChar(255)

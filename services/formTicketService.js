@@ -15,6 +15,7 @@
  * error. Failures are logged and swallowed.
  */
 
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { client } from "../controllers/discordController.js";
 import {
   createSupportTicket,
@@ -25,7 +26,45 @@ import {
   syncParticipantsForMessage,
 } from "../controllers/supportTicketController.js";
 import { formatAnswer, isDisplayType } from "../lib/formFields.js";
+import { buildSubmissionEmbed } from "./formDiscordService.js";
 import { buildTicketMessage } from "../lib/formTicketMessages.mjs";
+
+/**
+ * Post the opening embed into the freshly created ticket channel, and pin it.
+ *
+ * createSupportTicket only creates and links the channel -- it does not post
+ * anything -- and the ticket's stored opening message is written with
+ * skipDiscordPost so it never reaches Discord. So unless we post here, an
+ * application ticket's channel opens completely blank. Every other ticket flow
+ * (the /support command and the contact form) posts its own opener the same way.
+ *
+ * Best-effort: the ticket and its stored message already exist, so a failed or
+ * blocked send must not undo them.
+ */
+async function postOpenerToChannel(channel, { form, fields, answers, submissionId, submitter, ticketId, siteAddress }) {
+  if (!channel?.send) return;
+
+  try {
+    const embed = buildSubmissionEmbed({ form, fields, answers, submissionId, submitter });
+
+    const components = [];
+    if (siteAddress && ticketId) {
+      components.push(
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setStyle(ButtonStyle.Link)
+            .setLabel("View Ticket Online")
+            .setURL(`${String(siteAddress).replace(/\/+$/, "")}/support/ticket/${ticketId}`)
+        )
+      );
+    }
+
+    const sent = await channel.send({ embeds: [embed], components });
+    await sent.pin().catch(() => {});
+  } catch (error) {
+    console.error("[forms] Could not post the ticket opener to Discord:", error.message);
+  }
+}
 
 /**
  * Render the submitted answers as the ticket's opening message.
@@ -57,7 +96,7 @@ function buildOpeningMessage({ form, fields, answers, submissionId }) {
  * Returns the new ticketId, or null when no ticket was opened (option off,
  * Discord unavailable, or creation failed).
  */
-export async function openTicketForSubmission({ form, fields, answers, submissionId, user }) {
+export async function openTicketForSubmission({ form, fields, answers, submissionId, user, siteAddress }) {
   if (!form?.createTicket) return null;
 
   if (!client?.isReady?.()) {
@@ -74,7 +113,7 @@ export async function openTicketForSubmission({ form, fields, answers, submissio
       getCategoryDiscordParentId(categoryId).catch(() => null),
     ]);
 
-    const ticket = await createSupportTicket(
+    const { ticketId, channel } = await createSupportTicket(
       client,
       user.userId,
       categoryId,
@@ -86,23 +125,36 @@ export async function openTicketForSubmission({ form, fields, answers, submissio
       }
     );
 
-    // skipDiscordPost: createSupportTicket already pins an opener in the new
-    // channel, so re-posting the body would duplicate it.
+    // skipDiscordPost: we post the opener embed ourselves below, so letting
+    // createSupportTicketMessage also post the body would duplicate it. The
+    // stored message is still what the website ticket page renders.
     await createSupportTicketMessage(
       client,
-      ticket.ticketId,
+      ticketId,
       user.userId,
       buildOpeningMessage({ form, fields, answers, submissionId }),
       "web",
       { skipDiscordPost: true }
     );
 
-    await syncParticipantsForMessage(client, ticket.ticketId, {
+    // createSupportTicket only creates the channel; without this the ticket
+    // opens with no message at all. Best-effort, like everything else here.
+    await postOpenerToChannel(channel, {
+      form,
+      fields,
+      answers,
+      submissionId,
+      submitter: user.username,
+      ticketId,
+      siteAddress,
+    });
+
+    await syncParticipantsForMessage(client, ticketId, {
       userId: user.userId,
       rankSlugs: user.ranks?.map((rank) => rank.rankSlug) || [],
     });
 
-    return ticket.ticketId;
+    return ticketId;
   } catch (error) {
     console.error("[forms] Failed to open ticket for submission", submissionId, error);
     return null;

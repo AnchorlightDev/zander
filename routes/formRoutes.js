@@ -446,6 +446,7 @@ export default function formSiteRoutes(app, config, features) {
         answers,
         submissionId: submission.submissionId,
         user,
+        siteAddress: process.env.siteAddress,
       });
       if (ticketId) {
         await setSubmissionTicket(submission.submissionId, ticketId);

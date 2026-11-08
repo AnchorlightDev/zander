@@ -258,7 +258,9 @@ export async function replaceFields(formId, rawFields = []) {
 
     rows.push({
       formId: id,
-      label: label.slice(0, 255),
+      // Labels are the question itself and can be multi-sentence scenario
+      // prompts, so the cap is generous; the column is TEXT (migration 0078).
+      label: label.slice(0, 2000),
       fieldKey: key,
       fieldType: String(raw.fieldType),
       placeholder: raw.placeholder ? String(raw.placeholder).slice(0, 255) : null,

@@ -24,7 +24,7 @@ const STATUS_COLOURS = {
  * Discord embeds cap at 25 fields and 1024 characters per field value, so long
  * paragraph answers are truncated rather than rejected by the API.
  */
-function buildSubmissionEmbed({ form, fields, answers, submissionId, submitter }) {
+export function buildSubmissionEmbed({ form, fields, answers, submissionId, submitter }) {
   const embed = new EmbedBuilder()
     .setTitle(`New submission: ${form.name}`)
     .setColor(STATUS_COLOURS.pending)
