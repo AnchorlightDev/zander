@@ -384,12 +384,13 @@ function mapDiscussionRow(row) {
     isLocked: !!row.isLocked,
     isSticky: !!row.isSticky,
     isArchived: !!row.isArchived,
+    viewCount: Number(row.viewCount ?? 0),
   };
 }
 
 async function getDiscussionRow(discussionId) {
   const [row] = await query(
-    `SELECT discussionId, categoryId, title, slug, createdBy, createdAt, updatedAt, lastPostAt, lastPostBy, isLocked, isSticky, isArchived
+    `SELECT discussionId, categoryId, title, slug, createdBy, createdAt, updatedAt, lastPostAt, lastPostBy, isLocked, isSticky, isArchived, viewCount
        FROM forumDiscussions
       WHERE discussionId = ?
       LIMIT 1`,
@@ -413,6 +414,7 @@ export async function getDiscussionWithCategory(discussionId) {
             d.isLocked,
             d.isSticky,
             d.isArchived,
+            d.viewCount,
             c.name       AS categoryName,
             c.slug       AS categorySlug,
             c.description AS categoryDescription,
@@ -975,6 +977,7 @@ export async function getRecentDiscussions({
             d.isLocked,
             d.isSticky,
             d.isArchived,
+            d.viewCount,
             c.name AS categoryName,
             c.slug AS categorySlug
        FROM forumDiscussions d
@@ -1070,7 +1073,7 @@ export async function getLatestDiscussions({ categoryIds = [], limit = 4, excerp
   const placeholders = categoryIds.map(() => "?").join(",");
   const rows = await query(
     `SELECT d.discussionId, d.categoryId, d.title, d.slug, d.createdBy, d.createdAt,
-            d.updatedAt, d.lastPostAt, d.lastPostBy, d.isLocked, d.isSticky, d.isArchived,
+            d.updatedAt, d.lastPostAt, d.lastPostBy, d.isLocked, d.isSticky, d.isArchived, d.viewCount,
             c.name AS categoryName, c.slug AS categorySlug
        FROM forumDiscussions d
        JOIN forumCategories c ON c.categoryId = d.categoryId
@@ -1170,6 +1173,21 @@ export async function setDiscussionFlags(discussionId, flags = {}) {
   );
 
   return getDiscussionRow(discussionId);
+}
+
+/**
+ * Bump a discussion's view counter by one. Best-effort and deliberately not
+ * awaited on the critical path: a failed counter write must never stop the
+ * thread from rendering. Deduplication (once per session) is the caller's job
+ * -- see routes/forumRoutes.js -- so this just does the increment.
+ */
+export async function incrementDiscussionViews(discussionId) {
+  const id = Number.parseInt(discussionId, 10);
+  if (!Number.isFinite(id) || id <= 0) return;
+  await query(
+    `UPDATE forumDiscussions SET viewCount = viewCount + 1 WHERE discussionId = ?`,
+    [id]
+  );
 }
 
 export async function getPostRevisions(postId) {

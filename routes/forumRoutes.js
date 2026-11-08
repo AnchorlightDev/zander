@@ -18,6 +18,7 @@ import {
   moveDiscussion,
   getAllCategoriesForAdmin,
   forumViewerPermissions,
+  incrementDiscussionViews,
 } from "../controllers/forumController.js";
 import {
   validatePollInput,
@@ -727,6 +728,26 @@ export default function forumRoutes(
           `/forums/discussion/${discussion.discussionId}/${discussion.slug}`
         );
         return;
+      }
+
+      // Count this as a view, once per session per discussion, so a refresh or
+      // the author re-reading their own thread does not inflate the number.
+      // Best-effort: a counter write must never stop the thread from loading.
+      try {
+        const seen = Array.isArray(req.session?.viewedDiscussions)
+          ? req.session.viewedDiscussions
+          : [];
+        if (!seen.includes(discussion.discussionId)) {
+          await incrementDiscussionViews(discussion.discussionId);
+          discussion.viewCount = (discussion.viewCount || 0) + 1;
+          if (req.session) {
+            // Keep the most recent ids only, so the session row cannot grow
+            // without bound for someone who reads a lot of threads.
+            req.session.viewedDiscussions = [...seen, discussion.discussionId].slice(-250);
+          }
+        }
+      } catch (viewError) {
+        console.error("[FORUMS] Failed to record discussion view", viewError);
       }
 
       const permissions = getUserPermissions(req);

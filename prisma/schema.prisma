@@ -227,6 +227,7 @@ model forumDiscussions {
   isLocked     Int             @default(0) @db.TinyInt
   isSticky     Int             @default(0) @db.TinyInt
   isArchived   Int             @default(0) @db.TinyInt
+  viewCount    Int             @default(0)
 
   category     forumCategories @relation(fields: [categoryId], references: [categoryId])
   posts        forumPosts[]

@@ -48,6 +48,7 @@
                   <tr>
                     <th scope="col">Discussion</th>
                     <th scope="col" class="text-center">Replies</th>
+                    <th scope="col" class="text-center">Views</th>
                     <th scope="col">Latest Post</th>
                   </tr>
                 </thead>
@@ -76,6 +77,7 @@
                         </div>
                       </td>
                       <td class="text-center"><strong><%= discussion.replyCount %></strong></td>
+                      <td class="text-center text-muted"><%= (discussion.viewCount || 0).toLocaleString() %></td>
                       <td>
                         <% if (discussion.latestPost && discussion.latestPost.user) { %>
                           <div class="forums-latest-post d-flex align-items-center">
@@ -119,6 +121,7 @@
                       · started by <a href="/profile/<%= discussion.author.username %>"><%= discussion.author.username %></a>
                     <% } %>
                     · <span data-relative-time="<%= new Date(discussion.createdAt).toISOString() %>"></span>
+                    · <i class="fa-regular fa-eye" aria-hidden="true"></i> <%= (discussion.viewCount || 0).toLocaleString() %>
                   </div>
                   <% if (discussion.latestPost && discussion.latestPost.user) { %>
                     <div class="d-flex align-items-center">

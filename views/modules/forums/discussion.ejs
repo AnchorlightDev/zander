@@ -50,6 +50,7 @@
                 <% if (discussion.createdBy && posts.length) { %>
                   · <span data-relative-time="<%= new Date(discussion.createdAt).toISOString() %>" data-relative-format="datetime"></span>
                 <% } %>
+                · <i class="fa-regular fa-eye" aria-hidden="true"></i> <%= (discussion.viewCount || 0).toLocaleString() %> <%= (discussion.viewCount === 1) ? 'view' : 'views' %>
               </div>
             </div>
             <div class="d-flex flex-wrap gap-2">

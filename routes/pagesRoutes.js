@@ -23,7 +23,8 @@ import { getGlobalImage, isFeatureWebRouteEnabled, setBannerCookie } from "../ap
 import { getWebAnnouncement } from "../controllers/announcementController.js";
 import { getPublishedByCategory, listCategories } from "../controllers/resourceController.js";
 import { checkRateLimit } from "../lib/rateLimiter.mjs";
-import { CONTACT_LIMITS, parseContactSubmission, parseGuestReply } from "../lib/publicPages.mjs";
+import { CONTACT_LIMITS, isSubmittedTooFast, parseContactSubmission, parseGuestReply } from "../lib/publicPages.mjs";
+import { isTurnstileEnabled, turnstileSiteKey, verifyTurnstileToken } from "../lib/turnstile.mjs";
 import { getTicketMessages } from "../controllers/supportTicketController.js";
 import { getGuestTicket, openContactTicket, replyAsGuest } from "../services/contactTicketService.js";
 import { RESOURCE_LIMITS } from "../lib/resources.mjs";
@@ -102,6 +103,9 @@ export default function pagesSiteRoutes(app, config, features) {
       pageDescription: `Get in touch with the ${config.siteConfiguration.siteName} team.`,
       req,
       limits: CONTACT_LIMITS,
+      // Stamped into a hidden field so the POST can reject instant submissions.
+      formRenderedAt: Date.now(),
+      turnstileSiteKey: turnstileSiteKey(),
     });
   });
 
@@ -114,6 +118,23 @@ export default function pagesSiteRoutes(app, config, features) {
     if (String(req.body?.website ?? "").trim() !== "") {
       setBannerCookie("success", "Thanks — your message has been sent.", res);
       return res.redirect("/contact");
+    }
+
+    // Timing: a form returned in under a few seconds was not typed by a person.
+    // Same silent "success" as the honeypot so the bot gets no signal.
+    if (isSubmittedTooFast(req.body?.formRenderedAt)) {
+      setBannerCookie("success", "Thanks — your message has been sent.", res);
+      return res.redirect("/contact");
+    }
+
+    // Turnstile: the main defence against bots that render JS. Skipped
+    // automatically until the keys are configured (lib/turnstile.mjs).
+    if (isTurnstileEnabled()) {
+      const verdict = await verifyTurnstileToken(req.body?.["cf-turnstile-response"], req.ip);
+      if (!verdict.ok) {
+        setBannerCookie("danger", "Please complete the verification challenge and try again.", res);
+        return res.redirect("/contact");
+      }
     }
 
     const user = req.session?.user || null;

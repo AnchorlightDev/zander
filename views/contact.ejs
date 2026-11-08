@@ -59,6 +59,12 @@
               <label for="website">Leave this empty</label>
               <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
             </div>
+            <%# Timing check: when the form was served. A near-instant POST is a bot. %>
+            <input type="hidden" name="formRenderedAt" value="<%= typeof formRenderedAt !== 'undefined' ? formRenderedAt : '' %>">
+            <% if (typeof turnstileSiteKey !== 'undefined' && turnstileSiteKey) { %>
+              <%# Cloudflare Turnstile: mostly-invisible CAPTCHA. Server verifies the token. %>
+              <div class="cf-turnstile mb-3" data-sitekey="<%= turnstileSiteKey %>" data-theme="auto"></div>
+            <% } %>
             <button type="submit" class="btn btn-primary w-100">Send message</button>
           </form>
         </div>
@@ -81,5 +87,9 @@
     </div>
   </div>
 </section>
+
+<% if (typeof turnstileSiteKey !== 'undefined' && turnstileSiteKey) { %>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<% } %>
 
 <%- include("modules/footer.ejs") %>
