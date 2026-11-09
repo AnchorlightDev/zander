@@ -193,7 +193,10 @@ describe("events published before the fix", () => {
     });
   });
 
-  it("cancelling pulls their messages out of the old Discord queue", async () => {
+  it("cancelling marks their legacy Discord announcements cancelled", async () => {
+    // The old scheduledDiscordMessages queue was migrated into the unified
+    // scheduler and dropped in 0082, so cancelling only updates the
+    // event_announcements record now.
     const queuedAt = new Date(Date.now() + 86400000);
     prismaMock.events.findUnique.mockResolvedValue({ eventId: 1, status: "published", deletedAt: null });
     prismaMock.event_announcements.findMany.mockImplementation(async ({ where }) =>
@@ -201,10 +204,6 @@ describe("events published before the fix", () => {
 
     await cancelEvent(1, null, "t");
 
-    expect(prismaMock.scheduledDiscordMessages.updateMany).toHaveBeenCalledWith({
-      where: { channelId: "c1", scheduledFor: queuedAt, status: "scheduled", sentAt: null },
-      data: { status: "failed", lastError: "Event cancelled" },
-    });
     expect(prismaMock.event_announcements.update).toHaveBeenCalledWith({ where: { id: 9 }, data: { status: "cancelled" } });
   });
 });

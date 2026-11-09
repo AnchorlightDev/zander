@@ -52,10 +52,29 @@ enum announcements_type {
   hologram
 }
 
-enum scheduledDiscordMessages_status {
-  scheduled
-  sent
+enum scheduled_jobs_scheduleType {
+  once
+  recurring
+}
+
+enum scheduled_jobs_frequency {
+  daily
+  weekly
+  monthly
+}
+
+enum scheduled_job_runs_status {
+  running
+  succeeded
+  partial
   failed
+  missed
+  skipped
+}
+
+enum scheduled_job_runs_triggerType {
+  schedule
+  manual
 }
 
 enum discord_punishments_type {
@@ -377,20 +396,59 @@ model announcements {
   @@index([postId], map: "announcements_postId_idx")
 }
 
-model scheduledDiscordMessages {
-  scheduleId        Int                             @id @default(autoincrement())
-  channelId         String                          @db.VarChar(50)
-  embedTitle        String?                         @db.VarChar(255)
-  embedDescription  String?                         @db.Text
-  embedColor        String?                         @db.VarChar(20)
-  scheduledFor      DateTime
-  createdBy         Int
-  createdAt         DateTime                        @default(now())
-  sentAt            DateTime?
-  status            scheduledDiscordMessages_status @default(scheduled)
-  lastError         String?                         @db.Text
+model scheduled_jobs {
+  id             Int                          @id @default(autoincrement())
+  title          String                       @db.VarChar(160)
+  description    String?                      @db.Text
+  enabled        Boolean                      @default(true)
+  scheduleType   scheduled_jobs_scheduleType  @default(once)
+  runAt          DateTime?                    @db.DateTime(3)
+  frequency      scheduled_jobs_frequency?
+  recurInterval  Int                          @default(1)
+  byWeekday      String?                      @db.VarChar(32)
+  byMonthDay     Int?
+  timeOfDay      String?                      @db.VarChar(5)
+  timezone       String                       @default("Australia/Sydney") @db.VarChar(64)
+  untilDate      DateTime?                    @db.DateTime(3)
+  nextRunAt      DateTime?                    @db.DateTime(3)
+  runNumberStart Int                          @default(1)
+  createdBy      Int?
+  updatedBy      Int?
+  createdAt      DateTime                     @default(now()) @db.DateTime(3)
+  updatedAt      DateTime                     @default(now()) @db.DateTime(3)
+  actions        scheduled_job_actions[]
+  runs           scheduled_job_runs[]
 
-  @@index([status, scheduledFor], map: "scheduledDiscordMessages_status_scheduledFor_idx")
+  @@index([enabled, nextRunAt], map: "scheduled_jobs_due_idx")
+}
+
+model scheduled_job_actions {
+  id              Int            @id @default(autoincrement())
+  jobId           Int
+  sortOrder       Int            @default(0)
+  actionType      String         @db.VarChar(32)
+  payload         Json?
+  continueOnError Boolean        @default(false)
+  job             scheduled_jobs @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, sortOrder], map: "scheduled_job_actions_job_idx")
+}
+
+model scheduled_job_runs {
+  id          Int                            @id @default(autoincrement())
+  jobId       Int
+  dueAt       DateTime                       @db.DateTime(3)
+  status      scheduled_job_runs_status      @default(running)
+  startedAt   DateTime?                      @db.DateTime(3)
+  finishedAt  DateTime?                      @db.DateTime(3)
+  triggerType scheduled_job_runs_triggerType @default(schedule)
+  triggeredBy Int?
+  runNumber   Int?
+  results     Json?
+  job         scheduled_jobs                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, dueAt, triggerType], map: "scheduled_job_runs_unique")
+  @@index([jobId, dueAt], map: "scheduled_job_runs_job_idx")
 }
 
 model applications {

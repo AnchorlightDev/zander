@@ -113,10 +113,9 @@ async function recalculateAnnouncementSchedules(eventId, previous = null) {
     if (ann.triggerType === "on_publish") continue;
     const scheduledFor = discordScheduledFor(ann, event.startAt, event.endAt);
     if (!scheduledFor) continue;
-    await prisma.scheduledDiscordMessages.updateMany({
-      where: { channelId: ann.channelId, scheduledFor: ann.scheduledFor, status: "scheduled", sentAt: null },
-      data: { scheduledFor },
-    });
+    // The pre-cron Discord queue (scheduledDiscordMessages) was migrated into the
+    // unified scheduler and dropped in 0082, so there is no longer a queue row to
+    // reschedule here; we still keep event_announcements in sync.
     await prisma.event_announcements.update({ where: { id: ann.id }, data: { scheduledFor } });
   }
 }
@@ -191,10 +190,8 @@ async function stopEventAnnouncements(eventId) {
   });
 
   for (const ann of await legacyQueuedDiscordAnnouncements(eventId)) {
-    await prisma.scheduledDiscordMessages.updateMany({
-      where: { channelId: ann.channelId, scheduledFor: ann.scheduledFor, status: "scheduled", sentAt: null },
-      data: { status: "failed", lastError: "Event cancelled" },
-    });
+    // scheduledDiscordMessages was migrated into the unified scheduler and
+    // dropped in 0082; only the event_announcements record is updated now.
     await prisma.event_announcements.update({ where: { id: ann.id }, data: { status: "cancelled" } });
   }
 
@@ -976,16 +973,8 @@ export async function upsertEventAnnouncements(eventId, announcements, actorId, 
   const keepIds = new Set(list.map((a) => parseInt(a.id, 10)).filter((n) => sent.some((s) => s.id === n)));
   const dropped = sent.filter((s) => !keepIds.has(s.id));
 
-  const now = new Date();
-  for (const s of dropped) {
-    // Pre-cron Discord announcement still waiting in the old queue
-    if (s.platform === "discord" && !s.sentAt && s.channelId && s.scheduledFor > now) {
-      await prisma.scheduledDiscordMessages.updateMany({
-        where: { channelId: s.channelId, scheduledFor: s.scheduledFor, status: "scheduled", sentAt: null },
-        data: { status: "failed", lastError: "Removed from event" },
-      });
-    }
-  }
+  // The pre-cron Discord queue (scheduledDiscordMessages) was migrated into the
+  // unified scheduler and dropped in 0082, so there is nothing to cancel here.
 
   const droppedLinks = dropped.map((s) => s.linkedAnnouncementId).filter(Boolean);
   if (droppedLinks.length > 0) {
