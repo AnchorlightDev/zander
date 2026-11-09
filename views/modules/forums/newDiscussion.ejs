@@ -139,9 +139,33 @@
               </div>
             </div>
 
+            <!-- Publishing options -->
+            <div class="mt-4 pt-3 border-top">
+              <label class="form-label fw-semibold d-block mb-2"><i class="fa-regular fa-paper-plane me-1"></i> Publishing</label>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="publishMode" id="publishNow" value="now" checked>
+                <label class="form-check-label" for="publishNow">Publish now</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="publishMode" id="publishDraft" value="draft">
+                <label class="form-check-label" for="publishDraft">Save as draft <span class="text-muted small">(only you can see it)</span></label>
+              </div>
+              <% if (typeof canSchedule !== 'undefined' && canSchedule) { %>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="publishMode" id="publishSchedule" value="schedule">
+                <label class="form-check-label" for="publishSchedule">Schedule for later</label>
+              </div>
+              <div id="scheduleAtWrap" class="mt-2 ms-4 d-none" style="max-width:320px;">
+                <label class="form-label small mb-1" for="publishAt">Publish date &amp; time</label>
+                <input type="datetime-local" class="form-control" id="publishAt" name="publishAt">
+                <div class="form-text">It will go live automatically at this time.</div>
+              </div>
+              <% } %>
+            </div>
+
             <div class="text-end mt-4">
               <a class="btn btn-link" href="/forums/category/<%= category.slug %>">Cancel</a>
-              <button type="submit" class="btn btn-main">Post Discussion</button>
+              <button type="submit" class="btn btn-main" id="forumSubmitBtn">Post Discussion</button>
             </div>
           </form>
         </div>
@@ -213,6 +237,23 @@
     });
 
     updateRemoveButtons();
+
+    // Publishing mode: reveal the schedule date only when "Schedule" is chosen,
+    // require it then, and relabel the submit button to match the action.
+    const scheduleWrap = document.getElementById('scheduleAtWrap');
+    const publishAtInput = document.getElementById('publishAt');
+    const submitBtn = document.getElementById('forumSubmitBtn');
+    const modeLabels = { now: 'Post Discussion', draft: 'Save Draft', schedule: 'Schedule Discussion' };
+    function syncPublishMode() {
+      const mode = (document.querySelector('input[name="publishMode"]:checked') || {}).value || 'now';
+      if (scheduleWrap) scheduleWrap.classList.toggle('d-none', mode !== 'schedule');
+      if (publishAtInput) publishAtInput.required = (mode === 'schedule');
+      if (submitBtn) submitBtn.textContent = modeLabels[mode] || 'Post Discussion';
+    }
+    document.querySelectorAll('input[name="publishMode"]').forEach(r =>
+      r.addEventListener('change', syncPublishMode)
+    );
+    syncPublishMode();
 
     document.querySelectorAll('form[method="post"]').forEach(form => {
       form.addEventListener('submit', () => {

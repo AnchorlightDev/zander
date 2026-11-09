@@ -384,13 +384,15 @@ function mapDiscussionRow(row) {
     isLocked: !!row.isLocked,
     isSticky: !!row.isSticky,
     isArchived: !!row.isArchived,
+    status: row.status || "published",
+    publishAt: row.publishAt || null,
     viewCount: Number(row.viewCount ?? 0),
   };
 }
 
 async function getDiscussionRow(discussionId) {
   const [row] = await query(
-    `SELECT discussionId, categoryId, title, slug, createdBy, createdAt, updatedAt, lastPostAt, lastPostBy, isLocked, isSticky, isArchived, viewCount
+    `SELECT discussionId, categoryId, title, slug, createdBy, createdAt, updatedAt, lastPostAt, lastPostBy, isLocked, isSticky, isArchived, status, publishAt, viewCount
        FROM forumDiscussions
       WHERE discussionId = ?
       LIMIT 1`,
@@ -414,6 +416,8 @@ export async function getDiscussionWithCategory(discussionId) {
             d.isLocked,
             d.isSticky,
             d.isArchived,
+            d.status,
+            d.publishAt,
             d.viewCount,
             c.name       AS categoryName,
             c.slug       AS categorySlug,
@@ -517,15 +521,22 @@ async function recalculateDiscussionMeta(discussionId) {
   }
 }
 
-export async function createDiscussion({ categoryId, userId, title, content }) {
+export async function createDiscussion({
+  categoryId,
+  userId,
+  title,
+  content,
+  status = "published",
+  publishAt = null,
+}) {
   content = sanitizeForumHtml(content);
   const slug = await ensureUniqueDiscussionSlug(categoryId, title, null);
 
   const result = await query(
     `INSERT INTO forumDiscussions
-      (categoryId, title, slug, createdBy, lastPostBy)
-    VALUES (?, ?, ?, ?, ?)`,
-    [categoryId, title, slug, userId, userId]
+      (categoryId, title, slug, createdBy, lastPostBy, status, publishAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [categoryId, title, slug, userId, userId, status, publishAt]
   );
 
   const discussionId = result.insertId || result?.[0]?.insertId;
@@ -958,6 +969,7 @@ export async function getRecentDiscussions({
     `SELECT COUNT(*) AS total
        FROM forumDiscussions
       WHERE categoryId IN (${placeholders})
+        AND status = 'published'
         ${includeArchived ? "" : "AND isArchived = 0"}`,
     categoryIds
   );
@@ -983,6 +995,7 @@ export async function getRecentDiscussions({
        FROM forumDiscussions d
        JOIN forumCategories c ON c.categoryId = d.categoryId
       WHERE d.categoryId IN (${placeholders})
+        AND d.status = 'published'
         ${includeArchived ? "" : "AND d.isArchived = 0"}
       ORDER BY d.isSticky DESC, d.lastPostAt DESC, d.discussionId DESC
       LIMIT ? OFFSET ?`,
@@ -1079,6 +1092,7 @@ export async function getLatestDiscussions({ categoryIds = [], limit = 4, excerp
        JOIN forumCategories c ON c.categoryId = d.categoryId
       WHERE d.categoryId IN (${placeholders})
         AND d.isArchived = 0
+        AND d.status = 'published'
       ORDER BY d.createdAt DESC, d.discussionId DESC
       LIMIT ?`,
     [...categoryIds, limit]
@@ -1188,6 +1202,90 @@ export async function incrementDiscussionViews(discussionId) {
     `UPDATE forumDiscussions SET viewCount = viewCount + 1 WHERE discussionId = ?`,
     [id]
   );
+}
+
+/**
+ * A user's own unpublished threads (drafts and scheduled), newest first, for the
+ * "My drafts" page. Includes the category name/slug so each can link out.
+ */
+export async function getUserDraftDiscussions(userId) {
+  const id = Number.parseInt(userId, 10);
+  if (!Number.isFinite(id) || id <= 0) return [];
+
+  const rows = await query(
+    `SELECT d.discussionId, d.categoryId, d.title, d.slug, d.createdBy, d.createdAt,
+            d.updatedAt, d.lastPostAt, d.lastPostBy, d.isLocked, d.isSticky, d.isArchived,
+            d.status, d.publishAt, d.viewCount,
+            c.name AS categoryName, c.slug AS categorySlug
+       FROM forumDiscussions d
+       JOIN forumCategories c ON c.categoryId = d.categoryId
+      WHERE d.createdBy = ?
+        AND d.status IN ('draft','scheduled')
+      ORDER BY d.updatedAt DESC, d.discussionId DESC`,
+    [id]
+  );
+
+  return rows.map((row) => ({
+    ...mapDiscussionRow(row),
+    categoryName: row.categoryName,
+    categorySlug: row.categorySlug,
+  }));
+}
+
+/**
+ * Publish a draft or scheduled thread now: clear the schedule and stamp its
+ * post time to the moment it goes live, so it sorts in as a fresh discussion
+ * rather than back-dated to when the draft was written. The original post's
+ * timestamp is moved too, so "Posted ..." on the thread matches.
+ */
+export async function publishDiscussion(discussionId) {
+  const id = Number.parseInt(discussionId, 10);
+  if (!Number.isFinite(id) || id <= 0) return null;
+
+  await query(
+    `UPDATE forumDiscussions
+        SET status = 'published',
+            publishAt = NULL,
+            createdAt = NOW(),
+            lastPostAt = NOW(),
+            updatedAt = NOW()
+      WHERE discussionId = ?
+        AND status IN ('draft','scheduled')`,
+    [id]
+  );
+
+  await query(
+    `UPDATE forumPosts
+        SET createdAt = NOW(),
+            updatedAt = NOW()
+      WHERE discussionId = ?
+        AND isOriginal = 1`,
+    [id]
+  );
+
+  return getDiscussionRow(id);
+}
+
+/**
+ * Publish every scheduled thread whose time has come. Called by the forum
+ * scheduler cron. Returns the ids it published, so the cron can log them.
+ */
+export async function publishDueScheduledDiscussions() {
+  const due = await query(
+    `SELECT discussionId
+       FROM forumDiscussions
+      WHERE status = 'scheduled'
+        AND publishAt IS NOT NULL
+        AND publishAt <= NOW()`
+  );
+
+  const published = [];
+  for (const row of due) {
+    // eslint-disable-next-line no-await-in-loop
+    await publishDiscussion(row.discussionId);
+    published.push(row.discussionId);
+  }
+  return published;
 }
 
 export async function getPostRevisions(postId) {

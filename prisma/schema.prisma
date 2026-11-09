@@ -227,6 +227,8 @@ model forumDiscussions {
   isLocked     Int             @default(0) @db.TinyInt
   isSticky     Int             @default(0) @db.TinyInt
   isArchived   Int             @default(0) @db.TinyInt
+  status       String          @default("published") @db.VarChar(16)
+  publishAt    DateTime?
   viewCount    Int             @default(0)
 
   category     forumCategories @relation(fields: [categoryId], references: [categoryId])
@@ -234,6 +236,7 @@ model forumDiscussions {
   poll         forumPolls?
 
   @@unique([categoryId, slug])
+  @@index([status, publishAt])
 }
 
 model forumPosts {

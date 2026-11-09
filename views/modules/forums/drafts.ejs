@@ -1,0 +1,81 @@
+<%- include("../../modules/header.ejs", {
+    pageTitle: `My Drafts :: Forums`,
+    pageDescription: "Your unpublished and scheduled forum threads"
+}) %>
+
+<%- include("../../modules/navigationBar.ejs") %>
+
+<%- include("../../partials/miniHeader.ejs", {
+  headerTitle: "My Drafts",
+  backgroundImage: globalImage
+}) %>
+
+<div class="container my-5 forums-container">
+  <div class="row g-4">
+    <div class="col-lg-3">
+      <%- include("./partials/sidebar.ejs", {
+        categories: categories,
+        activeCategory: activeCategory
+      }) %>
+    </div>
+    <div class="col-lg-9">
+      <% if (req.cookies.alertType) { %>
+        <%- include("../../partials/alert.ejs", {
+          alertType: req.cookies.alertType,
+          content: req.cookies.alertContent
+        }) %>
+      <% } %>
+
+      <div class="forums-card card shadow-sm">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <h4 class="mb-1">My Drafts &amp; Scheduled</h4>
+              <p class="text-muted mb-0">Threads you have saved but not published yet. Only you and moderators can see these.</p>
+            </div>
+            <a class="btn btn-outline-secondary" href="/forums"><i class="fa-solid fa-arrow-left me-2"></i>Back to Forums</a>
+          </div>
+
+          <% if (!drafts.length) { %>
+            <div class="text-center py-5 text-muted">
+              <i class="fa-regular fa-pen-to-square fa-2x mb-3"></i>
+              <p class="mb-0">You have no drafts or scheduled threads.</p>
+            </div>
+          <% } else { %>
+            <div class="list-group">
+              <% drafts.forEach(function(d) { %>
+                <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                  <div class="me-auto">
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                      <% if (d.status === 'scheduled') { %>
+                        <span class="badge bg-info text-dark"><i class="fa-regular fa-clock me-1"></i>Scheduled</span>
+                      <% } else { %>
+                        <span class="badge bg-secondary"><i class="fa-regular fa-pen-to-square me-1"></i>Draft</span>
+                      <% } %>
+                      <a href="/forums/discussion/<%= d.discussionId %>/<%= d.slug %>" class="fw-semibold"><%= d.title %></a>
+                    </div>
+                    <div class="text-muted small">
+                      in <a href="/forums/category/<%= d.categorySlug %>"><%= d.categoryName %></a>
+                      <% if (d.status === 'scheduled' && d.publishAt) { %>
+                        · publishes <span data-relative-time="<%= new Date(d.publishAt).toISOString() %>" data-relative-format="datetime"></span>
+                      <% } %>
+                      · last edited <span data-relative-time="<%= new Date(d.updatedAt).toISOString() %>"></span>
+                    </div>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <a href="/forums/discussion/<%= d.discussionId %>/edit" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-pen"></i> Edit</a>
+                    <form action="/forums/discussion/<%= d.discussionId %>/publish" method="post" class="m-0">
+                      <button type="submit" class="btn btn-sm btn-success"><i class="fa-solid fa-paper-plane me-1"></i>Publish</button>
+                    </form>
+                  </div>
+                </div>
+              <% }); %>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include("../../modules/footer.ejs") %>

@@ -29,6 +29,11 @@
         <li class="forums-sidebar-item <%= !activeCategory ? 'active' : '' %>">
           <a href="/forums">Recent Discussions</a>
         </li>
+        <% if (req.session && req.session.user) { %>
+        <li class="forums-sidebar-item">
+          <a href="/forums/drafts"><i class="fa-regular fa-pen-to-square me-1"></i>My Drafts</a>
+        </li>
+        <% } %>
       </ul>
       <% categories.forEach(function(section) { %>
         <div class="forums-sidebar-section">

@@ -19,7 +19,10 @@ import {
   getAllCategoriesForAdmin,
   forumViewerPermissions,
   incrementDiscussionViews,
+  getUserDraftDiscussions,
+  publishDiscussion,
 } from "../controllers/forumController.js";
+import { resolvePublishState } from "../lib/forumPublishing.mjs";
 import {
   validatePollInput,
   createPoll,
@@ -53,6 +56,7 @@ const PERMISSIONS = {
   STICKY: "zander.forums.discussion.sticky",
   LOCK: "zander.forums.discussion.lock",
   ARCHIVE: "zander.forums.discussion.archive",
+  SCHEDULE: "zander.forums.schedule",
 };
 
 // Shared with the homepage's latest-posts section (forumViewerPermissions)
@@ -145,6 +149,14 @@ function userCanArchive(req) {
   const permissions = getUserPermissions(req);
   return (
     permissionMatch(permissions, PERMISSIONS.ARCHIVE) ||
+    permissionMatch(permissions, PERMISSIONS.MODERATE)
+  );
+}
+
+function userCanSchedule(req) {
+  const permissions = getUserPermissions(req);
+  return (
+    permissionMatch(permissions, PERMISSIONS.SCHEDULE) ||
     permissionMatch(permissions, PERMISSIONS.MODERATE)
   );
 }
@@ -404,6 +416,45 @@ export default function forumRoutes(
     return;
   });
 
+  app.get("/forums/drafts", async function (req, res) {
+    if (!(await ensureFeature(req, res))) {
+      return;
+    }
+
+    if (!isLoggedIn(req)) {
+      setBannerCookie("warning", "Sign in to see your drafts.", res);
+      return res.redirect("/login");
+    }
+
+    try {
+      const permissions = getUserPermissions(req);
+      const [categoryTree, drafts] = await Promise.all([
+        getCategoriesForUser(permissions),
+        getUserDraftDiscussions(getCurrentUserId(req)),
+      ]);
+
+      await renderForumsView(
+        app,
+        res,
+        req,
+        "modules/forums/drafts",
+        {
+          pageTitle: `My Drafts`,
+          categories: categoryTree.tree,
+          activeCategory: null,
+          drafts,
+          moment,
+        },
+        config,
+        features
+      );
+    } catch (error) {
+      console.error("[FORUMS] GET /forums/drafts error:", error);
+      if (!res.sent) throw error;
+    }
+    return;
+  });
+
   app.get("/forums/category/:slug", async function (req, res) {
     if (!(await ensureFeature(req, res))) {
       return;
@@ -527,6 +578,7 @@ export default function forumRoutes(
           categories: categoryTree.tree,
           activeCategory: category,
           category,
+          canSchedule: userCanSchedule(req),
         },
         config,
         features
@@ -626,12 +678,25 @@ export default function forumRoutes(
       }
     }
 
+    // Draft now, publish now, or schedule for later. Scheduling is gated.
+    const publishState = resolvePublishState({
+      mode: req.body.publishMode,
+      publishAt: req.body.publishAt,
+      canSchedule: userCanSchedule(req),
+    });
+    if (!publishState.ok) {
+      setBannerCookie("danger", publishState.error, res);
+      return res.redirect(`/forums/category/${category.slug}/new`);
+    }
+
     try {
       const discussion = await createDiscussion({
         categoryId: category.categoryId,
         userId,
         title,
         content,
+        status: publishState.status,
+        publishAt: publishState.publishAt,
       });
 
       if (pollEnabled) {
@@ -650,28 +715,34 @@ export default function forumRoutes(
         }
       }
 
-      const baseUrl = getSiteBaseUrl(req);
-      const username = req.session?.user?.username || "Unknown";
-      const uuid = req.session?.user?.uuid;
-      const contentSnippet = stripHtmlAndTruncate(content);
-      sendForumLog(config, {
-        action: "create",
-        title: "New Discussion Created",
-        description: `**${title}**`,
-        url: baseUrl ? `${baseUrl}/forums/discussion/${discussion.discussionId}/${discussion.slug}` : undefined,
-        avatarUrl: uuid ? `https://crafthead.net/helm/${uuid}` : undefined,
-        fields: [
-          ["Author", username],
-          ["Category", category.name],
-          ["Content", contentSnippet || "—", false],
-        ],
-      });
+      // Only announce threads that are actually live. A draft or a scheduled
+      // post is not public yet, so logging it would be noise (and a leak).
+      if (publishState.status === "published") {
+        const baseUrl = getSiteBaseUrl(req);
+        const username = req.session?.user?.username || "Unknown";
+        const uuid = req.session?.user?.uuid;
+        const contentSnippet = stripHtmlAndTruncate(content);
+        sendForumLog(config, {
+          action: "create",
+          title: "New Discussion Created",
+          description: `**${title}**`,
+          url: baseUrl ? `${baseUrl}/forums/discussion/${discussion.discussionId}/${discussion.slug}` : undefined,
+          avatarUrl: uuid ? `https://crafthead.net/helm/${uuid}` : undefined,
+          fields: [
+            ["Author", username],
+            ["Category", category.name],
+            ["Content", contentSnippet || "—", false],
+          ],
+        });
+      }
 
-      setBannerCookie(
-        "success",
-        "Discussion created successfully.",
-        res
-      );
+      const createdMessage =
+        publishState.status === "draft"
+          ? "Draft saved. Only you can see it until you publish it."
+          : publishState.status === "scheduled"
+            ? "Scheduled. It will publish automatically at the time you set."
+            : "Discussion created successfully.";
+      setBannerCookie("success", createdMessage, res);
 
       return res.redirect(
         `/forums/discussion/${discussion.discussionId}/${discussion.slug}`
@@ -723,6 +794,16 @@ export default function forumRoutes(
         return;
       }
 
+      // A draft or scheduled thread is not public: only its author and
+      // moderators can open it (to preview, edit, or publish). To everyone
+      // else it simply does not exist.
+      const isOwnThread = getCurrentUserId(req) === discussion.createdBy;
+      const canModerateThread = userCanModerate(req);
+      if (discussion.status !== "published" && !isOwnThread && !canModerateThread) {
+        await renderForumsView(app, res, req, "session/notFound", { pageTitle: `404 Not Found` }, config, features);
+        return;
+      }
+
       if (req.params.slug && req.params.slug !== discussion.slug) {
         res.redirect(
           `/forums/discussion/${discussion.discussionId}/${discussion.slug}`
@@ -732,12 +813,13 @@ export default function forumRoutes(
 
       // Count this as a view, once per session per discussion, so a refresh or
       // the author re-reading their own thread does not inflate the number.
+      // Draft/scheduled threads are not public, so previewing one is not a view.
       // Best-effort: a counter write must never stop the thread from loading.
       try {
         const seen = Array.isArray(req.session?.viewedDiscussions)
           ? req.session.viewedDiscussions
           : [];
-        if (!seen.includes(discussion.discussionId)) {
+        if (discussion.status === "published" && !seen.includes(discussion.discussionId)) {
           await incrementDiscussionViews(discussion.discussionId);
           discussion.viewCount = (discussion.viewCount || 0) + 1;
           if (req.session) {
@@ -762,6 +844,7 @@ export default function forumRoutes(
       // postPermission gates starting new discussions only — any signed-in
       // user who can view the category may reply to an existing one.
       const canReply =
+        discussion.status === "published" &&
         !discussion.isLocked &&
         !discussion.isArchived &&
         (isLoggedIn(req) || canModerate);
@@ -794,6 +877,7 @@ export default function forumRoutes(
           currentUserId: viewerUserId,
           canDeleteAnyPost: userCanDeleteAnyPost(req),
           moveCategories: allCategories.flat,
+          canPublishDiscussion: isOwnThread || canModerateThread,
         },
         config,
         features
@@ -831,6 +915,13 @@ export default function forumRoutes(
     if (!userCanViewCategory(category, req)) {
       setBannerCookie("danger", "You cannot reply to this discussion.", res);
       return res.redirect("/forums");
+    }
+
+    if (discussion.status !== "published") {
+      setBannerCookie("warning", "This discussion is not published yet.", res);
+      return res.redirect(
+        `/forums/discussion/${discussion.discussionId}/${discussion.slug}`
+      );
     }
 
     if (discussion.isLocked && !userCanModerate(req)) {
@@ -1604,6 +1695,65 @@ export default function forumRoutes(
         message: "An unexpected error occurred while submitting your report.",
       });
     }
+  });
+
+  app.post("/forums/discussion/:discussionId/publish", async function (req, res) {
+    if (!(await ensureFeature(req, res))) {
+      return;
+    }
+
+    if (await hasActiveWebBan(getCurrentUserId(req))) {
+      setBannerCookie("danger", "You are currently banned and cannot publish discussions.", res);
+      return res.redirect("/forums");
+    }
+
+    const discussionId = Number.parseInt(req.params.discussionId, 10);
+    const result = await getDiscussionWithCategory(discussionId);
+
+    if (!result) {
+      setBannerCookie("danger", "Discussion not found.", res);
+      return res.redirect("/forums");
+    }
+
+    const { discussion, category } = result;
+    const isAuthor = getCurrentUserId(req) === discussion.createdBy;
+
+    if (!isAuthor && !userCanModerate(req)) {
+      setBannerCookie("danger", "You do not have permission to publish this discussion.", res);
+      return res.redirect("/forums");
+    }
+
+    if (discussion.status === "published") {
+      setBannerCookie("info", "This discussion is already published.", res);
+      return res.redirect(`/forums/discussion/${discussion.discussionId}/${discussion.slug}`);
+    }
+
+    try {
+      await publishDiscussion(discussionId);
+
+      // Now that it is live, announce it like any freshly posted discussion.
+      const baseUrl = getSiteBaseUrl(req);
+      const username = req.session?.user?.username || "Unknown";
+      const uuid = req.session?.user?.uuid;
+      sendForumLog(config, {
+        action: "create",
+        title: "New Discussion Created",
+        description: `**${discussion.title}**`,
+        url: baseUrl ? `${baseUrl}/forums/discussion/${discussion.discussionId}/${discussion.slug}` : undefined,
+        avatarUrl: uuid ? `https://crafthead.net/helm/${uuid}` : undefined,
+        fields: [
+          ["Author", username],
+          ["Category", category?.name || "Unknown"],
+        ],
+      });
+
+      setBannerCookie("success", "Your discussion is now live.", res);
+    } catch (error) {
+      console.error("[FORUMS] Failed to publish discussion", error);
+      setBannerCookie("danger", "We were unable to publish the discussion.", res);
+    }
+
+    return res.redirect(`/forums/discussion/${discussion.discussionId}/${discussion.slug}`);
   });
 
   app.post(

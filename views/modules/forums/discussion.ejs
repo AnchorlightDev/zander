@@ -89,6 +89,28 @@
         </div>
       </div>
 
+      <% if (discussion.status && discussion.status !== 'published') { %>
+        <div class="alert <%= discussion.status === 'scheduled' ? 'alert-info' : 'alert-warning' %> d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <div>
+            <% if (discussion.status === 'scheduled') { %>
+              <i class="fa-regular fa-clock me-1"></i>
+              <strong>Scheduled.</strong> This thread is not public yet. It will publish automatically
+              <% if (discussion.publishAt) { %>
+                at <span data-relative-time="<%= new Date(discussion.publishAt).toISOString() %>" data-relative-format="datetime"></span>.
+              <% } else { %>at its scheduled time.<% } %>
+            <% } else { %>
+              <i class="fa-regular fa-pen-to-square me-1"></i>
+              <strong>Draft.</strong> Only you and moderators can see this thread until it is published.
+            <% } %>
+          </div>
+          <% if (typeof canPublishDiscussion !== 'undefined' && canPublishDiscussion) { %>
+            <form action="/forums/discussion/<%= discussion.discussionId %>/publish" method="post" class="m-0">
+              <button type="submit" class="btn btn-sm btn-success"><i class="fa-solid fa-paper-plane me-1"></i>Publish now</button>
+            </form>
+          <% } %>
+        </div>
+      <% } %>
+
       <div class="forums-thread">
         <% posts.forEach(function(post) { %>
           <% const isAuthor = currentUserId && post.user && currentUserId === post.user.userId; %>
