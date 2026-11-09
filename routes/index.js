@@ -26,6 +26,7 @@ import sitemapRoutes from "./sitemapRoute.js";
 import eventsSiteRoutes from "./eventsRoutes.js";
 import financeRoutes from "./financeRoutes.js";
 import webstoreSiteRoutes from "./webstoreRoutes.js";
+import wrappedSiteRoutes from "./wrappedRoutes.js";
 import formSiteRoutes from "./formRoutes.js";
 import bedrockSiteRoutes from "./bedrockRoutes.js";
 import pagesSiteRoutes from "./pagesRoutes.js";
@@ -99,6 +100,7 @@ export default function applicationSiteRoutes(
   eventsSiteRoutes(app, config, features);
   financeRoutes(app, config, features);
   webstoreSiteRoutes(app, config, features);
+  wrappedSiteRoutes(app, client, fetch, moment, config, db, features, lang);
   formSiteRoutes(app, config, features);
   bedrockSiteRoutes(app, config, features, lang);
   pagesSiteRoutes(app, config, features);

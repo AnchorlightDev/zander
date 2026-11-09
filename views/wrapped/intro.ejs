@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<link rel="icon" href="/images/favicon.ico" />
+<title>Your <%= year %> Wrapped · <%= siteName %></title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(120% 120% at 50% 0%, #1a103d 0%, #0a1330 60%, #060a1f 100%);
+    color: #fff; display: grid; place-items: center; padding: 24px; text-align: center;
+  }
+  #bg {
+    position: fixed; inset: 0; z-index: 0;
+    background-position: center; background-size: cover; background-repeat: no-repeat;
+    opacity: .22; transform: scale(1.06);
+  }
+  #bg::after {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(120% 90% at 50% 20%, rgba(6,10,31,.25), rgba(6,10,31,.72) 70%, rgba(6,10,31,.92));
+  }
+  .card { position: relative; z-index: 1; max-width: 460px; }
+  .kicker { letter-spacing: 3px; font-size: 13px; color: #b9a7ff; margin-bottom: 18px; }
+  h1 { font-size: clamp(30px, 8vw, 46px); line-height: 1.1; margin-bottom: 14px; }
+  p { color: #c9d4ff; font-size: 16px; margin-bottom: 30px; }
+  .btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  a.btn, button.btn {
+    font: inherit; cursor: pointer; border: 0; border-radius: 999px;
+    padding: 13px 26px; text-decoration: none; font-weight: 600;
+  }
+  .btn.primary { background: #ffd479; color: #241a00; }
+  .btn.ghost { background: rgba(255,255,255,.1); color: #fff; }
+  form { display: inline; }
+</style>
+</head>
+<body>
+  <% if (typeof bgImage !== 'undefined' && bgImage) { %>
+  <div id="bg" style="background-image:url('<%= bgImage %>')"></div>
+  <% } %>
+  <div class="card">
+    <div class="kicker">CRAFTING FOR CHRIST · WRAPPED</div>
+    <h1>Your <%= year %> Wrapped is ready</h1>
+    <p>A look back at your year on the server — playtime, chat, voice, and the moments in between.</p>
+    <div class="btns">
+      <a class="btn primary" href="/wrapped?start=1">Start</a>
+      <form method="post" action="/wrapped/dismiss">
+        <button class="btn ghost" type="submit">Maybe later</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

@@ -245,6 +245,16 @@ export const adminPages = [
     group: "System",
     sortOrder: 74,
   },
+  {
+    slug: "wrapped",
+    title: "Wrapped",
+    menuTitle: "Wrapped",
+    icon: "fa-solid fa-gift",
+    capability: "zander.web.wrapped",
+    path: "/dashboard/wrapped",
+    group: "System",
+    sortOrder: 74.5,
+  },
 
   // ── Webstore group ─────────────────────────────────────────────────────────
   {

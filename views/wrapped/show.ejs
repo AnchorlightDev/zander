@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex" />
+<link rel="icon" href="/images/favicon.ico" />
+<title><%= payload.user.username %>'s <%= payload.period.label %> Wrapped · <%= siteName %></title>
+<meta property="og:title" content="<%= payload.user.username %>'s <%= payload.period.label %> Wrapped" />
+<meta property="og:image" content="<%= cardUrl %>" />
+<style>
+  :root { color-scheme: dark; --gold:#ffd479; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #060a1f; color: #fff; user-select: none;
+  }
+  /* site global background, shared behind every slide */
+  #bg {
+    position: fixed; inset: 0; z-index: 0;
+    background-position: center; background-size: cover; background-repeat: no-repeat;
+    opacity: .5; transform: scale(1.06);
+    filter: saturate(1.05);
+  }
+  #bg::after {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(120% 90% at 50% 30%, rgba(6,10,31,.15), rgba(6,10,31,.5) 72%, rgba(6,10,31,.72));
+  }
+  #stage { position: fixed; inset: 0; z-index: 1; display: grid; place-items: center; }
+  .slide {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+    padding: 64px 28px 90px; text-align: center;
+    opacity: 0; transform: scale(1.04) translateY(10px);
+    transition: opacity .5s ease, transform .5s ease; pointer-events: none;
+  }
+  .slide.active { opacity: 1; transform: none; pointer-events: auto; }
+  /* light mood tint only — the shared background photo carries the visuals */
+  .slide[data-mood="rise"]   { background: radial-gradient(130% 100% at 50% 100%, rgba(20,61,107,.30), rgba(6,10,31,.55) 70%, rgba(6,10,31,.72)); }
+  .slide[data-mood="pop"]    { background: radial-gradient(130% 100% at 50% 0%,   rgba(58,29,107,.30), rgba(6,10,31,.55) 70%, rgba(6,10,31,.72)); }
+  .slide[data-mood="fanfare"]{ background: radial-gradient(130% 120% at 50% 40%,  rgba(107,74,18,.30), rgba(6,10,31,.55) 65%, rgba(6,10,31,.72)); }
+  .slide[data-mood="drum"]   { background: radial-gradient(130% 120% at 50% 40%,  rgba(16,64,58,.30), rgba(6,10,31,.55) 65%, rgba(6,10,31,.72)); }
+  .slide[data-mood="chime"]  { background: radial-gradient(130% 100% at 50% 0%,   rgba(26,35,80,.30), rgba(6,10,31,.55) 70%, rgba(6,10,31,.72)); }
+  .brandlogo { display: block; height: clamp(64px, 17vw, 104px); width: auto; max-width: 70vw;
+    margin: 0 auto 6px; object-fit: contain; opacity: .97;
+    filter: drop-shadow(0 4px 16px rgba(0,0,0,.55)); }
+  .avatar { width: clamp(96px, 26vw, 132px); height: clamp(96px, 26vw, 132px);
+    object-fit: cover; border-radius: 16px;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    box-shadow: 0 10px 34px rgba(0,0,0,.5); }
+  .avatar.photo { image-rendering: auto; }
+  .emoji { font-size: clamp(52px, 14vw, 92px); filter: drop-shadow(0 6px 20px rgba(0,0,0,.4)); }
+  .stat, .name, .flavor, .sub, .rank, .kicker { text-shadow: 0 2px 14px rgba(0,0,0,.55); }
+  .flavor { color: #c9d4ff; font-size: clamp(15px, 4.4vw, 19px); max-width: 22ch; }
+  .stat { font-size: clamp(40px, 13vw, 84px); font-weight: 800; line-height: 1.05; }
+  .sub { color: #aeb9de; font-size: clamp(14px, 4vw, 17px); }
+  .rank { margin-top: 6px; font-size: clamp(14px, 4vw, 17px); color: var(--gold); font-weight: 600; max-width: 24ch; }
+  .name { font-size: clamp(30px, 9vw, 52px); font-weight: 800; }
+
+  /* leaderboard-neighbourhood slide */
+  .lbwrap { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; width: min(88vw, 380px); }
+  .lbrow { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: 10px;
+    background: rgba(255,255,255,.08); font-size: clamp(14px, 4vw, 17px); }
+  .lbrow.you { background: var(--gold); color: #241a00; font-weight: 700; }
+  .lbrank { flex: 0 0 auto; min-width: 3.6ch; text-align: right; opacity: .7;
+    font-variant-numeric: tabular-nums; }
+  .lbrow.you .lbrank { opacity: 1; }
+  .lbav { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex: 0 0 auto;
+    image-rendering: pixelated; image-rendering: crisp-edges; background: rgba(255,255,255,.12); }
+  .lbname { flex: 1 1 auto; min-width: 0; text-align: left; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .lbval { flex: 0 0 auto; opacity: .85; font-variant-numeric: tabular-nums; }
+  .kicker { letter-spacing: 3px; font-size: 12px; color: #b9a7ff; }
+
+  /* story-style segment progress */
+  #bars { position: fixed; top: 10px; left: 10px; right: 10px; display: flex; gap: 5px; z-index: 5; }
+  #bars .seg { flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.22); overflow: hidden; }
+  #bars .seg > i { display: block; height: 100%; width: 0; background: #fff; }
+  #bars .seg.done > i { width: 100%; }
+  #bars .seg.active > i { width: 0; animation: fill var(--dur, 5s) linear forwards; }
+  @keyframes fill { to { width: 100%; } }
+
+  /* tap zones */
+  .zone { position: fixed; top: 0; bottom: 0; width: 34%; z-index: 4; }
+  .zone.left { left: 0; } .zone.right { right: 0; width: 66%; }
+
+  #hud { position: fixed; bottom: 14px; left: 0; right: 0; display: flex; justify-content: center; gap: 10px; z-index: 6; }
+  .chip { font: inherit; cursor: pointer; border: 0; border-radius: 999px; padding: 9px 16px;
+    background: rgba(255,255,255,.12); color: #fff; font-size: 13px; text-decoration: none; }
+  .chip.gold { background: var(--gold); color: #241a00; font-weight: 700; }
+
+  #share { display: flex; flex-direction: column; gap: 12px; align-items: center; margin-top: 10px; }
+  #share input { font: inherit; border: 0; border-radius: 8px; padding: 10px 12px; width: min(80vw, 340px);
+    background: rgba(255,255,255,.1); color: #fff; text-align: center; }
+  #share .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .muted { color: #8a95bd; font-size: 12px; }
+  canvas { display: none; }
+
+  /* preload / loading gate */
+  #loading {
+    position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px;
+    background: #060a1f; color: #c9d4ff; transition: opacity .45s ease;
+  }
+  #loading.hide { opacity: 0; pointer-events: none; }
+  #loading .lg { height: clamp(38px, 10vw, 48px); width: auto; opacity: .9; margin-bottom: 4px; }
+  #loading .spin {
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,.18); border-top-color: var(--gold);
+    animation: lspin 1s linear infinite;
+  }
+  @keyframes lspin { to { transform: rotate(360deg); } }
+  #loading .msg { font-size: 13px; letter-spacing: .5px; opacity: .8; }
+</style>
+</head>
+<body>
+  <div id="loading">
+    <img class="lg" src="/images/siteLogo.png" alt="" onerror="this.remove()" />
+    <div class="spin"></div>
+    <div class="msg">Preparing your Wrapped…</div>
+  </div>
+  <%
+    var _firstBg = (typeof bgImages !== 'undefined' && bgImages && bgImages[0])
+      || (typeof bgImage !== 'undefined' ? bgImage : null);
+  %>
+  <% if (_firstBg) { %>
+  <div id="bg" style="background-image:url('<%= _firstBg %>')"></div>
+  <% } else { %>
+  <div id="bg" style="display:none"></div>
+  <% } %>
+  <div id="bars"></div>
+  <div id="stage"></div>
+  <div class="zone left"  id="zprev"></div>
+  <div class="zone right" id="znext"></div>
+  <div id="hud">
+    <button class="chip" id="sound" type="button" aria-pressed="true">Sound: on</button>
+    <% if (typeof cardBase !== 'undefined' && cardBase) { %><button class="chip" id="saveslide" type="button">Save slide</button><% } %>
+    <% if (!shared) { %><a class="chip" href="/">Exit</a><% } %>
+  </div>
+  <canvas id="cardcanvas" width="1200" height="630"></canvas>
+  <!-- Real music bed, only when a file is actually deployed
+       (assets/audio/wrapped-bed.mp3|ogg). Otherwise a generative bed plays. -->
+  <% if (typeof musicUrl !== 'undefined' && musicUrl) { %>
+  <audio id="bgm" loop preload="auto" src="<%= musicUrl %>"></audio>
+  <% } %>
+
+<script>
+(function () {
+  var P = <%- payloadJson %>;
+  var SHARED = <%= shared ? 'true' : 'false' %>;
+  var PREVIEW = <%= (typeof preview !== 'undefined' && preview) ? 'true' : 'false' %>;
+  var SHARE_URL = <%- JSON.stringify(typeof shareUrl !== 'undefined' ? shareUrl : null) %>;
+  var CARD_URL = <%- JSON.stringify(cardUrl) %>;
+  // Base for per-slide story cards: CARD_BASE + "/s/" + slide.key + ".svg"
+  var CARD_BASE = <%- JSON.stringify(typeof cardBase !== 'undefined' ? cardBase : null) %>;
+  // Slide descriptors, built server-side (lib/wrapped/slides.js) so the deck and
+  // the downloadable per-slide cards always match.
+  var SLIDES = <%- typeof slidesJson !== 'undefined' ? slidesJson : '[]' %>;
+  var SITE = <%- JSON.stringify(siteName) %>;
+  var BG = <%- JSON.stringify(typeof bgImage !== 'undefined' ? bgImage : null) %>;
+  var BGS = <%- JSON.stringify(typeof bgImages !== 'undefined' && bgImages ? bgImages : []) %>;
+  if (!BGS.length && BG) BGS = [BG];
+
+  // Swap the shared backdrop to a different global image on each slide.
+  var bgEl = document.getElementById("bg");
+  if (bgEl && BGS.length) bgEl.dataset.src = BGS[0]; // server already rendered BGS[0]
+  function applySlideBg(i) {
+    if (!bgEl || !BGS.length) return;
+    var url = BGS[((i % BGS.length) + BGS.length) % BGS.length];
+    if (bgEl.dataset.src === url) return;
+    bgEl.style.transition = "opacity .35s ease";
+    bgEl.style.opacity = "0";
+    setTimeout(function () {
+      bgEl.style.backgroundImage = "url('" + url + "')";
+      bgEl.dataset.src = url;
+      bgEl.style.opacity = "";
+    }, 180);
+    var nxt = BGS[(i + 1) % BGS.length];
+    if (nxt) { var p = new Image(); p.src = nxt; }
+  }
+  var s = P.stats || {};
+  // Honour the user's profile-picture preference (resolved server-side); fall
+  // back to their skin head.
+  var AVATAR = <%- JSON.stringify(typeof avatarUrl !== 'undefined' && avatarUrl ? avatarUrl : null) %>
+    || (P.user && P.user.uuid
+      ? "https://crafthead.net/avatar/" + encodeURIComponent(P.user.uuid)
+      : null);
+
+  var MONTHS = ["January","February","March","April","May","June",
+    "July","August","September","October","November","December"];
+  var WEEKDAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  function toDate(dateish) {
+    if (!dateish) return null;
+    // accept "YYYY-MM-DD", ISO, or epoch-ish; noon UTC avoids TZ day-shift
+    var s = String(dateish);
+    var d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s + "T12:00:00Z" : s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function dmy(dateish) {
+    var d = toDate(dateish);
+    if (!d) return null;
+    return d.getUTCFullYear() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCDate();
+  }
+  function weekdayLabel(dateish) {
+    var d = toDate(dateish);
+    if (!d) return null;
+    return WEEKDAYS[d.getUTCDay()] + ", " + MONTHS[d.getUTCMonth()] + " " + d.getUTCDate();
+  }
+  function plur(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }
+  function sinceJoin(dateish, fallbackDays) {
+    var d = new Date(dateish);
+    // Anchor to the end of the Wrapped window (or now, if the window is still open)
+    // so the elapsed time matches the period, like every other stat.
+    var pEnd = P.period && P.period.end ? new Date(P.period.end).getTime() : Date.now();
+    var now = new Date(Math.min(Date.now(), pEnd || Date.now()));
+    if (isNaN(d.getTime())) {
+      var fd = Number(fallbackDays) || 0;
+      return fd >= 1 ? plur(fd, "day") : "today";
+    }
+    var years = now.getUTCFullYear() - d.getUTCFullYear();
+    var months = now.getUTCMonth() - d.getUTCMonth();
+    var days = now.getUTCDate() - d.getUTCDate();
+    if (days < 0) months--;
+    if (months < 0) { months += 12; years--; }
+    if (years < 0) return "today";
+    if (years >= 1) return plur(years, "year") + (months ? ", " + plur(months, "month") : "");
+    if (months >= 1) return plur(months, "month");
+    var totalDays = Math.max(0, Math.round((now - d) / 86400000));
+    return totalDays >= 1 ? plur(totalDays, "day") : "today";
+  }
+
+  function rankLine(block, unitPlural) {
+    if (!block || block.rank == null || block.total == null) return null;
+    // A rank among a field of all-zeros is noise — hide it when the user has
+    // no actual value for this stat (e.g. playtime source not wired up).
+    if (block.value != null && Number(block.value) <= 0) return null;
+    return "You're #" + block.rank + " of " + block.total + " " + (unitPlural || "players");
+  }
+  function hasVal(block) { return block && Number(block.value) > 0; }
+  function num(n) { return (n == null ? "0" : Number(n).toLocaleString()); }
+  function pct(v) {
+    if (v == null) return null;
+    return (v >= 0 ? "up " : "down ") + Math.abs(v) + "% vs " + (P.yoy && P.yoy.priorYear);
+  }
+
+  function neighborsHtml(title, nb) {
+    var rows = nb.rows.map(function (r) {
+      return '<div class="lbrow' + (r.you ? ' you' : '') + '">' +
+        '<span class="lbrank">#' + r.rank + '</span>' +
+        (r.avatar ? '<img class="lbav" src="' + escapeAttr(r.avatar) + '" alt="" ' +
+          'onerror="this.style.visibility=\'hidden\'" />' : '') +
+        '<span class="lbname">' + escapeHtml(r.name) + '</span>' +
+        '<span class="lbval">' + escapeHtml(r.displayValue != null ? r.displayValue : r.value) + '</span></div>';
+    }).join('');
+    var rankLine = (nb.rank != null && nb.total != null)
+      ? '<div class="rank">You\'re #' + nb.rank + ' of ' + nb.total + '</div>'
+      : (nb.total != null ? '<div class="rank">' + nb.total + ' miners in total</div>' : '');
+    return '<div class="emoji">🏆</div>' +
+      '<div class="flavor">' + escapeHtml(title) + '</div>' +
+      '<div class="lbwrap">' + rows + '</div>' + rankLine;
+  }
+
+  function titleHtml() {
+    return '<img class="brandlogo" src="/images/siteLogo.png" alt="" />' +
+      (AVATAR ? '<img class="avatar' + (/gravatar\.com/.test(AVATAR) ? ' photo' : '') + '" ' +
+        'src="' + escapeAttr(AVATAR) + '" alt="" onerror="this.style.display=\'none\'" />' : '') +
+      '<div class="kicker">' + escapeHtml(SITE.toUpperCase()) + ' · WRAPPED</div>' +
+      '<div class="name">' + escapeHtml(P.user.username) + '</div>' +
+      '<div class="flavor">Here\'s your ' + escapeHtml(P.period.label) + ' on the server.</div>';
+  }
+
+  function genericHtml(sl) {
+    var stat = sl.kind === "vibe" ? sl.label : sl.stat;
+    var sub = sl.kind === "vibe" ? sl.blurb : sl.sub;
+    return '<div class="emoji">' + (sl.emoji || "✨") + '</div>' +
+      (sl.flavor ? '<div class="flavor">' + escapeHtml(sl.flavor) + '</div>' : '') +
+      (stat ? '<div class="stat">' + escapeHtml(String(stat)) + '</div>' : '') +
+      (sub ? '<div class="sub">' + escapeHtml(String(sub)) + '</div>' : '') +
+      (sl.rank ? '<div class="rank">' + escapeHtml(sl.rank) + '</div>' : '');
+  }
+
+  // ── slide list (built server-side; see lib/wrapped/slides.js) ──────────
+  var slides = Array.isArray(SLIDES) && SLIDES.length ? SLIDES : [
+    { key: "intro", kind: "title", mood: "chime", dur: 3800 },
+    { key: "vibe", kind: "vibe", mood: "drum", emoji: "🎭",
+      flavor: "This year, you were a",
+      label: (P.vibe && P.vibe.label) || "Steady Builder",
+      blurb: (P.vibe && P.vibe.blurb) || "" }
+  ];
+
+  // ── render + navigation ───────────────────────────────────────────────
+  var stage = document.getElementById("stage");
+  var bars = document.getElementById("bars");
+  var idx = 0, timer = null, soundOn = true;
+
+  slides.forEach(function (sl, i) {
+    var d = document.createElement("div");
+    d.className = "slide"; d.dataset.mood = sl.mood;
+    var inner = sl.kind === "title" ? titleHtml()
+      : sl.kind === "board" ? neighborsHtml(sl.title, sl.neighbors)
+      : genericHtml(sl);
+    d.innerHTML = inner;
+    if (sl.kind === "vibe") d.appendChild(buildShare());
+    stage.appendChild(d);
+
+    var seg = document.createElement("div");
+    seg.className = "seg"; seg.innerHTML = "<i></i>";
+    bars.appendChild(seg);
+  });
+
+  function show(n) {
+    if (n < 0) n = 0;
+    if (n >= slides.length) n = slides.length - 1;
+    idx = n;
+    var els = stage.children, segs = bars.children;
+    for (var i = 0; i < els.length; i++) {
+      els[i].classList.toggle("active", i === idx);
+      segs[i].classList.toggle("done", i < idx);
+      segs[i].classList.toggle("active", i === idx);
+    }
+    var dur = slides[idx].dur || 5000;
+    segs[idx].style.setProperty("--dur", dur + "ms");
+    applySlideBg(idx);
+    sting(slides[idx].mood);
+    setMusicMood(slides[idx].mood);
+    clearTimeout(timer);
+    if (idx < slides.length - 1) timer = setTimeout(function () { show(idx + 1); }, dur);
+  }
+  function next() { if (idx < slides.length - 1) show(idx + 1); }
+  function prev() { show(idx - 1); }
+
+  document.getElementById("znext").addEventListener("click", next);
+  document.getElementById("zprev").addEventListener("click", prev);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight" || e.key === " ") next();
+    if (e.key === "ArrowLeft") prev();
+  });
+
+  // ── minimal WebAudio stings (no asset files) ──────────────────────────
+  var actx = null;
+  function ensureAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (actx && actx.state === "suspended") actx.resume();
+  }
+  document.addEventListener("pointerdown", function () {
+    ensureAudio();
+    maybeStartMusic();
+  }, { once: true });
+
+  function tone(freq, dur, type, when, gain) {
+    if (!actx) return;
+    var o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || "sine"; o.frequency.value = freq;
+    var t = actx.currentTime + (when || 0);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain || 0.18, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(actx.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  function sting(mood) {
+    if (!soundOn) return;
+    ensureAudio();
+    maybeStartMusic();
+    if (mood === "rise")    { tone(330, .18, "sine", 0); tone(495, .22, "sine", .12); }
+    else if (mood === "pop"){ tone(880, .09, "triangle", 0, .22); }
+    else if (mood === "fanfare") { tone(523, .16, "sawtooth", 0, .14); tone(659, .16, "sawtooth", .12, .14); tone(784, .3, "sawtooth", .24, .14); }
+    else if (mood === "drum") { tone(120, .3, "sine", 0, .3); tone(180, .2, "sine", .16, .2); }
+    else { tone(660, .12, "sine", 0, .14); }
+  }
+
+  // ── music bed: real audio file if present, else generative ───────────
+  var music = { on: false, master: null, timer: null, step: 0 };
+  var bgm = document.getElementById("bgm");
+  var bgmTried = false, bgmActive = false;
+  function maybeStartMusic() {
+    if (!soundOn) return;
+    // Prefer a real track if one is deployed; fall back to the generative bed.
+    if (bgm && (bgmActive || !bgmTried)) {
+      bgmTried = true;
+      bgm.volume = 0.5;
+      var p = bgm.play();
+      if (p && p.then) {
+        p.then(function () { bgmActive = true; stopGenerative(); })
+         .catch(function () { if (actx && !music.on) startMusic(); });
+      }
+      return;
+    }
+    if (!bgmActive && actx && !music.on) startMusic();
+  }
+  // Generative arrangement: I–V–vi–IV in C, ~74 BPM, with pad + bass +
+  // arpeggio + soft pulse, a feedback delay for space, and a master filter
+  // that opens/closes with the current slide mood.
+  var TEMPO = 74, SIX = (60 / TEMPO) / 4; // seconds per 16th note
+  var PROG = [ // [chord tones (Hz), bass root (Hz)]
+    { c: [261.63, 329.63, 392.00], b: 130.81 }, // C
+    { c: [246.94, 293.66, 392.00], b: 196.00 }, // G/B-ish
+    { c: [220.00, 261.63, 329.63], b: 110.00 }, // Am
+    { c: [174.61, 261.63, 349.23], b: 174.61 }  // F
+  ];
+  var MOOD_CUTOFF = { chime: 1700, rise: 1500, pop: 2800, fanfare: 3400, drum: 1150 };
+
+  function startMusic() {
+    if (!actx || music.on) return;
+    music.on = true;
+    music.step = 0;
+
+    music.master = actx.createGain();
+    music.master.gain.setValueAtTime(0.0001, actx.currentTime);
+    music.master.gain.linearRampToValueAtTime(0.085, actx.currentTime + 3.5);
+    music.filter = actx.createBiquadFilter();
+    music.filter.type = "lowpass";
+    music.filter.frequency.value = 1700;
+    music.filter.Q.value = 0.7;
+    music.filter.connect(music.master);
+    music.master.connect(actx.destination);
+
+    // feedback delay send for a sense of space
+    music.delay = actx.createDelay(1.0);
+    music.delay.delayTime.value = 3 * SIX; // dotted-ish
+    music.fb = actx.createGain(); music.fb.gain.value = 0.32;
+    music.wet = actx.createGain(); music.wet.gain.value = 0.5;
+    music.delay.connect(music.fb); music.fb.connect(music.delay);
+    music.delay.connect(music.wet); music.wet.connect(music.filter);
+
+    music.nextTime = actx.currentTime + 0.08;
+    music.arpIdx = 0;
+    tick();
+  }
+
+  function voice(freq, t, dur, type, gain, sendWet) {
+    var o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(music.filter);
+    if (sendWet) g.connect(music.delay);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+
+  function scheduleStep(step16, t) {
+    var barStep = step16 % 16;
+    var chord = PROG[Math.floor(step16 / 16) % PROG.length];
+
+    // pad — swells in over each bar
+    if (barStep === 0) {
+      chord.c.forEach(function (f, i) {
+        var o = actx.createOscillator(), g = actx.createGain();
+        o.type = i === 0 ? "triangle" : "sine";
+        o.frequency.value = f; o.detune.value = (i - 1) * 5;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.05, t + 1.6);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 16 * SIX + 0.4);
+        o.connect(g); g.connect(music.filter);
+        o.start(t); o.stop(t + 16 * SIX + 0.5);
+      });
+    }
+
+    // bass — beats 1 and 3
+    if (barStep === 0 || barStep === 8) {
+      voice(chord.b, t, 0.42, "sine", 0.14, false);
+      voice(chord.b, t, 0.42, "triangle", 0.05, false);
+    }
+
+    // soft pulse — every beat
+    if (barStep % 4 === 0) {
+      var k = actx.createOscillator(), kg = actx.createGain();
+      k.type = "sine"; k.frequency.setValueAtTime(120, t);
+      k.frequency.exponentialRampToValueAtTime(48, t + 0.12);
+      kg.gain.setValueAtTime(0.12, t);
+      kg.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      k.connect(kg); kg.connect(music.master);
+      k.start(t); k.stop(t + 0.2);
+    }
+
+    // arpeggio — every 8th note, climbing chord tones + octave
+    if (barStep % 2 === 0) {
+      var scale = chord.c.concat([chord.c[0] * 2, chord.c[1] * 2]);
+      var n = scale[music.arpIdx % scale.length]; music.arpIdx++;
+      voice(n, t, 0.28, "triangle", 0.045, true);
+    }
+  }
+
+  function tick() {
+    if (!music.on || !actx) return;
+    while (music.nextTime < actx.currentTime + 0.25) {
+      scheduleStep(music.step, music.nextTime);
+      music.step++;
+      music.nextTime += SIX;
+    }
+    music.timer = setTimeout(tick, 60);
+  }
+
+  function setMusicMood(mood) {
+    if (!music.on || !actx || !music.filter) return;
+    var target = MOOD_CUTOFF[mood] || 1700;
+    music.filter.frequency.cancelScheduledValues(actx.currentTime);
+    music.filter.frequency.setTargetAtTime(target, actx.currentTime, 0.7);
+  }
+
+  function stopGenerative() {
+    music.on = false;
+    clearTimeout(music.timer);
+    if (music.master && actx) {
+      music.master.gain.cancelScheduledValues(actx.currentTime);
+      music.master.gain.setTargetAtTime(0.0001, actx.currentTime, 0.7);
+    }
+  }
+  function stopMusic() {
+    stopGenerative();
+    if (bgm) { try { bgm.pause(); } catch (e) {} }
+  }
+
+  var soundBtn = document.getElementById("sound");
+  soundBtn.addEventListener("click", function () {
+    soundOn = !soundOn;
+    soundBtn.textContent = "Sound: " + (soundOn ? "on" : "off");
+    soundBtn.setAttribute("aria-pressed", String(soundOn));
+    if (soundOn) { maybeStartMusic(); sting(slides[idx].mood); }
+    else stopMusic();
+  });
+
+  // ── share panel (final slide) ────────────────────────────────────────
+  function buildShare() {
+    var box = document.createElement("div");
+    box.id = "share";
+    if (PREVIEW || !SHARE_URL) {
+      box.innerHTML =
+        '<div class="row"><button class="chip" id="dlbtn" type="button">Save summary image</button></div>' +
+        '<div class="muted">' + (PREVIEW ? "Admin preview — not saved" : escapeHtml(SITE)) +
+        ' · Wrapped ' + P.period.label + '</div>';
+    } else {
+      box.innerHTML =
+        '<input readonly value="' + escapeAttr(SHARE_URL) + '" id="shareurl" />' +
+        '<div class="row">' +
+          '<button class="chip gold" id="copybtn" type="button">Copy link</button>' +
+          '<button class="chip" id="dlbtn" type="button">Save summary image</button>' +
+          (SHARED ? '' : '<a class="chip" href="' + escapeAttr(SHARE_URL) + '" target="_blank" rel="noopener">View as shared</a>') +
+        '</div>' +
+        '<div class="muted">' + escapeHtml(SITE) + ' · Wrapped ' + P.period.label + '</div>';
+    }
+    setTimeout(wireShare, 0);
+    return box;
+  }
+  function wireShare() {
+    var copy = document.getElementById("copybtn");
+    if (copy) copy.addEventListener("click", function () {
+      var i = document.getElementById("shareurl");
+      navigator.clipboard.writeText(i.value).then(function () {
+        copy.textContent = "Copied!"; setTimeout(function () { copy.textContent = "Copy link"; }, 1800);
+      }).catch(function () { i.select(); document.execCommand("copy"); });
+    });
+    var dl = document.getElementById("dlbtn");
+    if (dl) dl.addEventListener("click", function () { saveSummary(dl); });
+  }
+
+  function fileBase() {
+    return (P.user.username || "wrapped").replace(/[^\w.-]+/g, "_") + "-wrapped-" + P.period.label;
+  }
+
+  // Card fetch + rasterise to PNG, for the summary card and the per-slide story
+  // cards. The server sends SVG; we draw it to a canvas and export a PNG. The
+  // SVG is loaded via a Blob URL (NOT a data: URI) so a big embedded avatar /
+  // background can't blow past the data-URI length ceiling — that was what made
+  // the summary card's PNG conversion flaky. A 10s guard means a stuck decode
+  // never wedges the button; svgBlob is only ever an internal last resort.
+  var cardCache = {};
+
+  function getCard(url, w, h) {
+    var c = cardCache[url] || (cardCache[url] = { svgBlob: null, pngBlob: null, _p: null });
+    if (c._p) return c._p;
+    c._p = fetch(url, { credentials: "same-origin" })
+      .then(function (r) { if (!r.ok) throw new Error("card " + r.status); return r.text(); })
+      .then(function (svgText) {
+        c.svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+        var blobUrl = URL.createObjectURL(c.svgBlob);
+        return new Promise(function (resolve) {
+          var settled = false;
+          var finish = function () {
+            if (settled) return;
+            settled = true;
+            try { URL.revokeObjectURL(blobUrl); } catch (e) {}
+            resolve(c);
+          };
+          setTimeout(finish, 10000);
+
+          var img = new Image();
+          img.decoding = "sync";
+          var draw = function () {
+            try {
+              var cv = document.createElement("canvas");
+              cv.width = w; cv.height = h;
+              var ctx = cv.getContext("2d");
+              ctx.fillStyle = "#060a1f"; ctx.fillRect(0, 0, w, h);
+              ctx.drawImage(img, 0, 0, w, h);
+              if (cv.toBlob) {
+                cv.toBlob(function (b) { if (b && b.size) c.pngBlob = b; finish(); }, "image/png");
+              } else {
+                try { c.pngDataUrl = cv.toDataURL("image/png"); } catch (e) {}
+                finish();
+              }
+            } catch (e) { finish(); }
+          };
+          img.onload = function () {
+            if (img.decode) img.decode().then(draw, draw);
+            else draw();
+          };
+          img.onerror = finish;
+          img.src = blobUrl;
+        });
+      })
+      .catch(function () { return c; });
+    return c._p;
+  }
+
+  function dataUrlToBlob(dataUrl) {
+    try {
+      var parts = dataUrl.split(",");
+      var mime = (parts[0].match(/:(.*?);/) || [])[1] || "image/png";
+      var bin = atob(parts[1]);
+      var arr = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return new Blob([arr], { type: mime });
+    } catch (e) { return null; }
+  }
+
+  function triggerDownload(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = name; a.rel = "noopener";
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { a.remove(); URL.revokeObjectURL(url); }, 1500);
+  }
+
+  function saveCard(url, nameBase, btn, w, h) {
+    var orig = btn ? (btn.getAttribute("data-orig") || btn.textContent) : "";
+    if (btn) btn.setAttribute("data-orig", orig);
+    var done = function (t) { if (btn) { btn.textContent = t; setTimeout(function () { btn.textContent = orig; }, 2200); } };
+
+    var deliver = function (c, isRetry) {
+      var png = (c && c.pngBlob) || (c && c.pngDataUrl && dataUrlToBlob(c.pngDataUrl));
+      if (png) {
+        triggerDownload(png, nameBase + ".png");
+        done("Saved PNG");
+        return;
+      }
+      if (!isRetry) {
+        // One clean retry — drop the cache entry and rasterise fresh.
+        delete cardCache[url];
+        done("Retrying…");
+        getCard(url, w, h).then(function (c2) { deliver(c2, true); }, function () { deliver(cardCache[url], true); });
+        return;
+      }
+      // PNG genuinely failed. Open the card in a tab as an escape hatch — never
+      // hand back an .svg download.
+      try { window.open(url, "_blank", "noopener"); done("Opened in tab"); }
+      catch (e) { done("PNG failed"); }
+    };
+
+    var cached = cardCache[url];
+    if (btn && !(cached && cached.pngBlob)) btn.textContent = "Preparing…";
+    getCard(url, w, h).then(function (c) { deliver(c, false); }, function () { deliver(cardCache[url], false); });
+  }
+
+  function saveSummary(btn) { return saveCard(CARD_URL, fileBase(), btn, 1080, 1920); }
+
+  function saveCurrentSlide(btn) {
+    if (!CARD_BASE) return;
+    var k = slides[idx] && slides[idx].key;
+    if (!k) return;
+    saveCard(CARD_BASE + "/s/" + encodeURIComponent(k) + ".svg", fileBase() + "-" + k, btn, 1080, 1920);
+  }
+
+  // ── helpers ──────────────────────────────────────────────────────────
+  function escapeHtml(x) { return String(x).replace(/[&<>"]/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function escapeAttr(x) { return escapeHtml(x).replace(/'/g, "&#39;"); }
+  function fmtSecs(sec) {
+    sec = Number(sec) || 0; var h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+    return h ? (h + "h " + m + "m") : (m + "m");
+  }
+  function monthLabel(ym) {
+    var p = String(ym).split("-"); if (p.length < 2) return ym;
+    return new Date(+p[0], +p[1] - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+
+  // ── preload gate: don't start the story until assets are in ──────────
+  function preloadImage(src) {
+    return new Promise(function (resolve) {
+      if (!src) return resolve();
+      var im = new Image();
+      im.onload = im.onerror = function () { resolve(); };
+      im.src = src;
+    });
+  }
+  function begin() {
+    var ld = document.getElementById("loading");
+    if (ld) {
+      ld.classList.add("hide");
+      setTimeout(function () { if (ld.parentNode) ld.remove(); }, 550);
+    }
+    show(0);
+  }
+  (function boot() {
+    var started = false;
+    var finish = function () { if (started) return; started = true; begin(); };
+
+    var ld = document.getElementById("loading");
+    if (ld) ld.addEventListener("click", finish); // tap to skip the wait
+
+    // Rasterise the summary image up-front so the button works in one tap.
+    if (CARD_URL) getCard(CARD_URL, 1080, 1920);
+    var _ssBtn = document.getElementById("saveslide");
+    if (_ssBtn) _ssBtn.addEventListener("click", function () { saveCurrentSlide(_ssBtn); });
+
+    Promise.all([
+      preloadImage(BGS[0] || BG),
+      preloadImage(BGS[1] || null),
+      preloadImage("/images/siteLogo.png"),
+      preloadImage(AVATAR)
+    ]).then(finish);
+
+    setTimeout(finish, 4500); // never hang on a slow/failed asset
+  })();
+})();
+</script>
+</body>
+</html>
