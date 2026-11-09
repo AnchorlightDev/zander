@@ -135,6 +135,47 @@
     </div>
   </div>
 
+  <!-- ── Music bed ────────────────────────────────────────────────────── -->
+  <div class="row g-4 mt-1">
+    <div class="col-lg-8">
+      <h5>Music</h5>
+      <p class="text-muted small mb-2">
+        A soundtrack for the deck. Upload a short, seamless, <strong>no-copyright</strong>
+        track (loops while people scroll through their slides). When no track is set the
+        deck plays a soft generative bed instead. Keep it modest: a minute or two,
+        <code>mp3</code> / <code>ogg</code> / <code>wav</code> / <code>m4a</code>, max 8 MB.
+      </p>
+
+      <% if (settings.musicUrl) { %>
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <audio controls preload="none" src="<%= settings.musicUrl %>" style="height:36px;"></audio>
+        <form method="post" action="/dashboard/wrapped/music/remove" class="d-inline"
+              onsubmit="return confirm('Remove the current Wrapped track? The deck will revert to the generative bed.');">
+          <button class="btn btn-outline-danger btn-sm">Remove</button>
+        </form>
+      </div>
+      <% } else { %>
+      <p class="small text-muted mb-3">No custom track set, the deck uses the generative bed.</p>
+      <% } %>
+
+      <form method="post" action="/dashboard/wrapped/music" enctype="multipart/form-data" class="mb-3">
+        <div class="input-group input-group-sm" style="max-width:520px;">
+          <input class="form-control form-control-sm" type="file" name="track"
+                 accept="audio/*,.mp3,.ogg,.wav,.m4a,.aac" required>
+          <button class="btn btn-primary btn-sm">Upload track</button>
+        </div>
+        <div class="form-text">Only you confirm the track is cleared for use. Uploaded files are stored on Cloudinary.</div>
+      </form>
+
+      <form method="post" action="/dashboard/wrapped/music/url" class="d-flex gap-2 align-items-start" style="max-width:520px;">
+        <input class="form-control form-control-sm" type="url" name="musicUrl"
+               placeholder="...or paste an https URL to a hosted track"
+               value="<%= (settings.musicUrl && /^https?:/.test(settings.musicUrl)) ? settings.musicUrl : '' %>">
+        <button class="btn btn-outline-secondary btn-sm text-nowrap">Use URL</button>
+      </form>
+    </div>
+  </div>
+
   <!-- ── Recent runs ──────────────────────────────────────────────────── -->
   <h5 class="mt-4">Runs this period (<%= period.year %>)</h5>
   <table class="table table-sm">

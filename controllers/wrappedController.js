@@ -237,14 +237,29 @@ export async function listWrappedRuns(periodYear, limit = 25) {
 
 export async function getWrappedSettings() {
   const [row] = await q(
-    `SELECT enabled, periodStart, periodEnd, rollingMonths FROM wrappedSettings WHERE id = 1`
+    `SELECT enabled, periodStart, periodEnd, rollingMonths, musicUrl FROM wrappedSettings WHERE id = 1`
   );
   return {
     enabled: row && row.enabled !== null ? Boolean(row.enabled) : null,
     periodStart: row?.periodStart ?? null,
     periodEnd: row?.periodEnd ?? null,
     rollingMonths: row?.rollingMonths != null ? Number(row.rollingMonths) : null,
+    musicUrl: row?.musicUrl ?? null,
   };
+}
+
+/**
+ * Set (or clear, with null) the custom Wrapped music track URL. Kept separate
+ * from saveWrappedSettings so saving the period form never wipes the track and
+ * uploading a track never touches the period.
+ */
+export async function setWrappedMusicUrl(url) {
+  await q(
+    `INSERT INTO wrappedSettings (id, musicUrl) VALUES (1, ?)
+     ON DUPLICATE KEY UPDATE musicUrl = VALUES(musicUrl)`,
+    [url ? String(url).slice(0, 512) : null]
+  );
+  return getWrappedSettings();
 }
 
 export async function saveWrappedSettings({ enabled, periodStart, periodEnd, rollingMonths }) {

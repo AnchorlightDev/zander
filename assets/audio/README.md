@@ -4,12 +4,18 @@ Optional audio the site serves from `/audio/…`.
 
 ## Wrapped music bed
 
-Drop a looping instrumental here to give the Wrapped deck a real soundtrack:
+There are three ways the deck gets a soundtrack, tried in this order:
 
-- `wrapped-bed.mp3` (preferred) and/or `wrapped-bed.ogg`
+1. **Dashboard upload (preferred).** Dashboard > Wrapped > Music lets an admin
+   upload a no-copyright track (or paste an https URL to one). The file is
+   stored on Cloudinary and its URL kept in `wrappedSettings.musicUrl`, so it
+   survives redeploys on an ephemeral host (unlike a file dropped here).
+2. **On-disk file baked into the deploy.** Commit a looping instrumental here:
+   - `wrapped-bed.mp3` (preferred) and/or `wrapped-bed.ogg`
+3. **Generative bed.** If neither of the above is set, or playback is blocked,
+   the deck synthesises a soft ambient bed in the browser, so there is always
+   music either way.
 
-`views/wrapped/show.ejs` tries to play `/audio/wrapped-bed.mp3` (then `.ogg`) on
-the viewer's first interaction. If neither file is present or playback is
-blocked, it falls back to a generative ambient bed synthesised in the browser —
-so the deck always has music either way. Keep the file modest (a minute or two,
-seamless loop, ~128 kbps is plenty).
+`views/wrapped/show.ejs` plays whatever `musicUrl` resolves to (see
+`lib/wrapped/pageAssets.js`) on the viewer's first interaction. Keep any file
+modest (a minute or two, seamless loop, ~128 kbps is plenty).

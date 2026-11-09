@@ -40,3 +40,33 @@ export async function uploadImage(buffer, { folder = "zander", resourceType = "i
     stream.end(buffer);
   });
 }
+
+/**
+ * Upload an audio file (e.g. the Wrapped music bed). Cloudinary treats audio as
+ * a "video" resource, so delivery/transforms go through that pipeline. Returns
+ * the secure URL and basic metadata.
+ */
+export async function uploadAudio(buffer, { folder = "zander/wrapped" } = {}) {
+  if (!configured) throw new Error("Cloudinary is not configured");
+
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: "video",
+        allowed_formats: ["mp3", "ogg", "wav", "m4a", "aac", "webm"],
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve({
+          url: result.secure_url,
+          publicId: result.public_id,
+          format: result.format,
+          bytes: result.bytes,
+          duration: result.duration,
+        });
+      }
+    );
+    stream.end(buffer);
+  });
+}

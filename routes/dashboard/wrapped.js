@@ -17,9 +17,12 @@ import db from "../../controllers/databaseController.js";
 import {
   getWrappedSettings,
   saveWrappedSettings,
+  setWrappedMusicUrl,
   listWrappedRuns,
   getUserProfileRow,
 } from "../../controllers/wrappedController.js";
+import { isCloudinaryConfigured, uploadAudio } from "../../services/cloudinaryService.js";
+import { checkRateLimit } from "../../lib/rateLimiter.mjs";
 import {
   getConfiguredWrappedPeriod,
   buildWrappedPreview,
@@ -56,6 +59,32 @@ const CAP = "zander.web.wrapped";
 const MMDD = /^\d{2}-\d{2}$/;
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const isDate = (v) => MMDD.test(v) || YMD.test(v);
+
+const MAX_MUSIC_BYTES = 8 * 1024 * 1024; // 8 MB, matching @fastify/multipart limits
+
+/**
+ * Sniff the leading bytes so a renamed file can't be stored as audio. Covers
+ * MP3 (ID3 tag or MPEG frame sync), OGG, WAV, and MP4/M4A/AAC containers.
+ */
+function looksLikeAudio(buf) {
+  if (!buf || buf.length < 12) return false;
+  if (buf.toString("ascii", 0, 3) === "ID3") return true; // MP3 with ID3 tag
+  if (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0) return true; // MPEG/AAC frame sync
+  if (buf.toString("ascii", 0, 4) === "OggS") return true; // OGG
+  if (buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WAVE") return true; // WAV
+  if (buf.toString("ascii", 4, 8) === "ftyp") return true; // MP4 / M4A
+  return false;
+}
+
+/** Accept only http(s) URLs for a pasted track link. */
+function isHttpUrl(v) {
+  try {
+    const u = new URL(String(v));
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 export default function dashboardWrappedRoute(app, config, features, lang) {
   async function shell(req, view, extra) {
@@ -211,6 +240,80 @@ export default function dashboardWrappedRoute(app, config, features, lang) {
     return res.redirect("/dashboard/wrapped?saved=1");
   });
 
+  // ── Music bed: upload a (no-copyright) track that plays over the deck ────
+  // Stored on Cloudinary (persists across deploys, unlike the server disk) and
+  // its URL kept in wrappedSettings. The deck falls back to the on-disk file
+  // and then to the browser's generative bed when no track is set.
+  app.post("/dashboard/wrapped/music", async (req, res) => {
+    if (!(await hasPermission(CAP, req, res, features))) return;
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 10 })) return;
+
+    if (!isCloudinaryConfigured()) {
+      return res.redirect("/dashboard/wrapped?error=Audio+uploads+are+not+configured+(Cloudinary)");
+    }
+
+    let data;
+    try {
+      data = await req.file();
+    } catch {
+      data = null;
+    }
+    if (!data || !data.file) {
+      return res.redirect("/dashboard/wrapped?error=No+file+provided");
+    }
+
+    const mimeOk = typeof data.mimetype === "string" && data.mimetype.startsWith("audio/");
+
+    try {
+      const chunks = [];
+      let total = 0;
+      for await (const chunk of data.file) {
+        total += chunk.length;
+        if (total > MAX_MUSIC_BYTES) {
+          data.file.resume();
+          return res.redirect("/dashboard/wrapped?error=File+too+large+(max+8+MB)");
+        }
+        chunks.push(chunk);
+      }
+      if (data.file.truncated) {
+        return res.redirect("/dashboard/wrapped?error=File+too+large+(max+8+MB)");
+      }
+      const buffer = Buffer.concat(chunks);
+
+      if (!mimeOk && !looksLikeAudio(buffer)) {
+        return res.redirect("/dashboard/wrapped?error=That+file+does+not+look+like+audio+(mp3/ogg/wav/m4a)");
+      }
+
+      const result = await uploadAudio(buffer, { folder: "zander/wrapped" });
+      await setWrappedMusicUrl(result.url);
+      return res.redirect("/dashboard/wrapped?saved=1");
+    } catch (err) {
+      if (err?.code === "FST_REQ_FILE_TOO_LARGE") {
+        return res.redirect("/dashboard/wrapped?error=File+too+large+(max+8+MB)");
+      }
+      req.log?.error?.({ err }, "[WRAPPED] music upload failed");
+      return res.redirect("/dashboard/wrapped?error=Music+upload+failed");
+    }
+  });
+
+  // Point the deck at an externally hosted track instead of uploading one.
+  app.post("/dashboard/wrapped/music/url", async (req, res) => {
+    if (!(await hasPermission(CAP, req, res, features))) return;
+    const url = String((req.body || {}).musicUrl || "").trim();
+    if (!isHttpUrl(url)) {
+      return res.redirect("/dashboard/wrapped?error=Enter+a+valid+http(s)+audio+URL");
+    }
+    await setWrappedMusicUrl(url);
+    return res.redirect("/dashboard/wrapped?saved=1");
+  });
+
+  // Clear the custom track; the deck reverts to the generative bed.
+  app.post("/dashboard/wrapped/music/remove", async (req, res) => {
+    if (!(await hasPermission(CAP, req, res, features))) return;
+    await setWrappedMusicUrl(null);
+    return res.redirect("/dashboard/wrapped?saved=1");
+  });
+
   // ── Preview (no persistence) ──────────────────────────────────────────
   app.post("/dashboard/wrapped/preview", async (req, res) => {
     if (!(await hasPermission(CAP, req, res, features))) return;
@@ -270,6 +373,7 @@ export default function dashboardWrappedRoute(app, config, features, lang) {
     const stash = req.session?.wrappedPreview;
     if (!stash?.payload) return res.redirect("/dashboard/wrapped?error=Run+a+preview+first");
 
+    const trackUrl = (await getWrappedSettings()).musicUrl;
     return send(
       res,
       await app.view("wrapped/show", {
@@ -283,7 +387,7 @@ export default function dashboardWrappedRoute(app, config, features, lang) {
         cardBase: "/dashboard/wrapped/preview/card",
         bgImage: pickGlobalBackground(),
         bgImages: pickGlobalBackgrounds(24),
-        musicUrl: musicUrl(),
+        musicUrl: musicUrl(trackUrl),
         avatarUrl: await previewAvatarUrl(stash.payload?.user),
         siteName: config?.siteConfiguration?.siteName || "Crafting For Christ",
       })

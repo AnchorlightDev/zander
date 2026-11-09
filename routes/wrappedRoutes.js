@@ -22,7 +22,7 @@ import {
 import { renderWrappedCard } from "../lib/wrapped/card.js";
 import { buildWrappedSlides } from "../lib/wrapped/slides.js";
 import { renderWrappedSlideCard } from "../lib/wrapped/slideCard.js";
-import { getUserProfileRow } from "../controllers/wrappedController.js";
+import { getUserProfileRow, getWrappedSettings } from "../controllers/wrappedController.js";
 import {
   pickGlobalBackground,
   pickGlobalBackgrounds,
@@ -61,7 +61,7 @@ export default function wrappedSiteRoutes(app, client, fetch, moment, cfg, db, f
     return resolveAvatarUrl(row);
   }
 
-  function deckData(run, { shared, avatarUrl }) {
+  function deckData(run, { shared, avatarUrl, trackUrl }) {
     const slides = buildWrappedSlides(run.payload);
     return {
       payload: run.payload,
@@ -74,7 +74,7 @@ export default function wrappedSiteRoutes(app, client, fetch, moment, cfg, db, f
       cardBase: `/wrapped/card/${run.shareId}`,
       bgImage: pickGlobalBackground(),
       bgImages: pickGlobalBackgrounds(24),
-      musicUrl: musicUrl(),
+      musicUrl: musicUrl(trackUrl),
       avatarUrl: avatarUrl || null,
       siteName,
     };
@@ -106,7 +106,8 @@ export default function wrappedSiteRoutes(app, client, fetch, moment, cfg, db, f
       await markWrappedViewed(user.userId, period.year);
       if (req.session) delete req.session.wrappedPending;
       const avatarUrl = await deckAvatarUrl(run.payload?.user);
-      return renderHtml(res, "wrapped/show", deckData(run, { shared: false, avatarUrl }));
+      const trackUrl = (await getWrappedSettings()).musicUrl;
+      return renderHtml(res, "wrapped/show", deckData(run, { shared: false, avatarUrl, trackUrl }));
     } catch (err) {
       req.log?.error?.({ err }, "[WRAPPED] build failed");
       return res.status(500).header("content-type", "text/html; charset=utf-8")
@@ -136,7 +137,8 @@ export default function wrappedSiteRoutes(app, client, fetch, moment, cfg, db, f
         .send("<p>That Wrapped link isn't valid.</p>");
     }
     const avatarUrl = await deckAvatarUrl(run.payload?.user);
-    return renderHtml(res, "wrapped/show", deckData(run, { shared: true, avatarUrl }));
+    const trackUrl = (await getWrappedSettings()).musicUrl;
+    return renderHtml(res, "wrapped/show", deckData(run, { shared: true, avatarUrl, trackUrl }));
   });
 
   // ── Downloadable per-slide card (1080×1920, story format) ───────────────
