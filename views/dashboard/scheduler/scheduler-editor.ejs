@@ -1,0 +1,291 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><%= type === "create" ? "Create" : "Edit" %> Job</h1>
+        <a href="/dashboard/scheduler" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <form id="job-form" method="post" action="/dashboard/scheduler/save">
+        <input type="hidden" name="payload" id="job-payload">
+
+        <div class="row">
+          <div class="mb-3 col-md-8">
+            <label class="form-label">Title</label>
+            <input type="text" class="form-control" id="job-title" maxlength="160">
+          </div>
+          <div class="mb-3 col-md-4">
+            <label class="form-label">Run number starts at</label>
+            <input type="number" class="form-control" id="job-runstart" min="1" value="1">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description <span class="text-muted">(optional)</span></label>
+          <textarea class="form-control" id="job-desc" rows="2"></textarea>
+        </div>
+
+        <!-- Schedule -->
+        <div class="card mb-3"><div class="card-body">
+          <h2 class="h6">Schedule</h2>
+          <div class="btn-group mb-3" role="group">
+            <input type="radio" class="btn-check" name="sched-type" id="sched-once" value="once">
+            <label class="btn btn-outline-primary" for="sched-once">Once</label>
+            <input type="radio" class="btn-check" name="sched-type" id="sched-recurring" value="recurring" checked>
+            <label class="btn btn-outline-primary" for="sched-recurring">Recurring</label>
+          </div>
+
+          <div id="sched-once-fields" class="d-none">
+            <label class="form-label">Run at (local)</label>
+            <input type="datetime-local" class="form-control" id="job-runat" style="max-width:320px">
+          </div>
+
+          <div id="sched-recurring-fields">
+            <div class="row">
+              <div class="mb-2 col-md-3">
+                <label class="form-label">Frequency</label>
+                <select class="form-select" id="job-freq"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select>
+              </div>
+              <div class="mb-2 col-md-2">
+                <label class="form-label">Every</label>
+                <input type="number" class="form-control" id="job-interval" min="1" value="1">
+              </div>
+              <div class="mb-2 col-md-3">
+                <label class="form-label">Time of day (HH:MM)</label>
+                <input type="time" class="form-control" id="job-timeofday" value="18:00">
+              </div>
+              <div class="mb-2 col-md-4">
+                <label class="form-label">Timezone (IANA)</label>
+                <input type="text" class="form-control" id="job-timezone" list="tz-list" value="Australia/Sydney">
+                <datalist id="tz-list"><option>Australia/Sydney</option><option>UTC</option><option>America/New_York</option><option>Europe/London</option></datalist>
+              </div>
+            </div>
+            <div class="mb-2" id="freq-weekly">
+              <label class="form-label d-block">Weekdays</label>
+              <% const WD = [[1,"Mon"],[2,"Tue"],[3,"Wed"],[4,"Thu"],[5,"Fri"],[6,"Sat"],[7,"Sun"]]; %>
+              <% WD.forEach(function (d) { %>
+                <div class="form-check form-check-inline"><input class="form-check-input job-weekday" type="checkbox" value="<%= d[0] %>" id="wd-<%= d[0] %>"><label class="form-check-label" for="wd-<%= d[0] %>"><%= d[1] %></label></div>
+              <% }); %>
+            </div>
+            <div class="mb-2 d-none" id="freq-monthly">
+              <label class="form-label">Day of month</label>
+              <input type="number" class="form-control" id="job-monthday" min="1" max="31" value="1" style="max-width:120px">
+              <small class="text-muted d-block">29-31 falls back to the last day of shorter months.</small>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Until <span class="text-muted">(optional)</span></label>
+              <input type="datetime-local" class="form-control" id="job-until" style="max-width:320px">
+            </div>
+          </div>
+
+          <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="btn-preview-occ"><i class="fas fa-eye"></i> Preview next runs</button>
+          <ul class="mt-2 small" id="occ-preview"></ul>
+        </div></div>
+
+        <!-- Actions -->
+        <div class="card mb-3"><div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <h2 class="h6 mb-0">Actions <span class="text-muted">(run in order)</span></h2>
+            <div>
+              <select id="add-action-type" class="form-select form-select-sm d-inline-block" style="width:auto">
+                <option value="command">Run server command</option>
+                <option value="routine">Run saved routine</option>
+                <option value="discord_message">Send Discord embed</option>
+                <option value="forum_publish">Publish forum draft</option>
+                <option value="announcement_post">Enable/disable announcement</option>
+                <option value="broadcast">In-game broadcast</option>
+              </select>
+              <button type="button" class="btn btn-sm btn-primary" id="btn-add-action"><i class="fas fa-plus"></i> Add</button>
+            </div>
+          </div>
+          <div class="form-text">Placeholders: <code>{date}</code>, <code>{week}</code>, <code>{runNumber}</code>. Use <code>{{</code> and <code>}}</code> for literal braces.</div>
+          <div id="action-list" class="mt-3"></div>
+        </div></div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save job</button>
+          <button type="button" class="btn btn-outline-secondary" id="btn-preview"><i class="fas fa-eye"></i> Preview actions</button>
+          <% if (type === "edit" && job) { %>
+            <button type="button" class="btn btn-outline-warning" id="btn-runnow"><i class="fas fa-play"></i> Run now</button>
+            <button type="button" class="btn btn-outline-secondary" id="btn-duplicate"><i class="fas fa-copy"></i> Duplicate</button>
+          <% } %>
+        </div>
+        <div id="action-preview" class="mt-3"></div>
+      </form>
+
+      <% if (type === "edit" && job) { %>
+        <form id="runnow-form" method="post" action="/dashboard/scheduler/runnow" class="d-none"><input type="hidden" name="id" value="<%= job.id %>"></form>
+        <form id="dup-form" method="post" action="/dashboard/scheduler/duplicate" class="d-none"><input type="hidden" name="id" value="<%= job.id %>"></form>
+      <% } %>
+    </div>
+  </div>
+  <%- include("../../admin/_footer.ejs") %>
+</div>
+
+<script>
+(function () {
+  const JOB = <%- JSON.stringify(job) %>;
+  const PICKERS = <%- JSON.stringify(pickers) %>;
+  const PH_FIELDS = { command: ["command"], discord_message: ["embedTitle", "embedDescription"], broadcast: ["message"] };
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const isoToLocal = (iso) => { if (!iso) return ""; const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+  const localToIso = (v) => { if (!v) return null; const d = new Date(v); return Number.isNaN(d.getTime()) ? null : d.toISOString(); };
+
+  const ACTION_DEFS = {
+    command: [ { k: "target", label: "Target server", type: "slug" }, { k: "command", label: "Command", type: "text", ph: true } ],
+    routine: [ { k: "routineSlug", label: "Routine", type: "routine" } ],
+    discord_message: [ { k: "channelId", label: "Channel", type: "channel" }, { k: "embedTitle", label: "Title", type: "text", ph: true }, { k: "embedDescription", label: "Description (HTML)", type: "textarea", ph: true }, { k: "embedColor", label: "Colour (#hex)", type: "text" } ],
+    forum_publish: [ { k: "discussionId", label: "Forum draft", type: "forum" } ],
+    announcement_post: [ { k: "postId", label: "Announcement post", type: "post" }, { k: "mode", label: "Mode", type: "mode" } ],
+    broadcast: [ { k: "message", label: "Message (& colour codes)", type: "text", ph: true } ],
+  };
+
+  let actionsState = (JOB && JOB.actions ? JOB.actions : []).map((a) => ({ actionType: a.actionType, payload: { ...(a.payload || {}) }, continueOnError: !!a.continueOnError }));
+
+  function options(list, valueKey, labelFn, selected) {
+    return ['<option value="">-- choose --</option>'].concat(list.map((x) => {
+      const v = valueKey ? x[valueKey] : x;
+      return `<option value="${esc(v)}" ${String(v) === String(selected) ? "selected" : ""}>${esc(labelFn(x))}</option>`;
+    })).join("");
+  }
+
+  function fieldInput(actionType, idx, def, value) {
+    const id = `act-${idx}-${def.k}`;
+    const phBtns = def.ph ? `<div class="mt-1">${["{date}","{week}","{runNumber}"].map((t) => `<button type="button" class="btn btn-sm btn-outline-secondary ph-ins" data-target="${id}">${t}</button>`).join(" ")}</div>` : "";
+    let input = "";
+    if (def.type === "textarea") input = `<textarea class="form-control act-field" id="${id}" data-k="${def.k}" rows="3">${esc(value)}</textarea>`;
+    else if (def.type === "slug") input = `<input class="form-control act-field" id="${id}" data-k="${def.k}" list="slug-list" value="${esc(value || "any")}">`;
+    else if (def.type === "routine") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}">${options(PICKERS.routines, "routineSlug", (x) => x.displayName || x.routineSlug, value)}</select>`;
+    else if (def.type === "channel") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}">${options(PICKERS.channels, "id", (x) => "#" + x.name, value)}</select>`;
+    else if (def.type === "forum") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}">${options(PICKERS.forumDrafts, "discussionId", (x) => `#${x.discussionId} ${x.title} (${x.status})`, value)}</select>`;
+    else if (def.type === "post") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}">${options(PICKERS.posts, "postId", (x) => `#${x.postId} ${x.title || "(untitled)"}`, value)}</select>`;
+    else if (def.type === "mode") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}"><option value="enable" ${value === "enable" ? "selected" : ""}>Enable</option><option value="disable" ${value === "disable" ? "selected" : ""}>Disable</option></select>`;
+    else input = `<input class="form-control act-field" id="${id}" data-k="${def.k}" value="${esc(value)}">`;
+    return `<div class="mb-2"><label class="form-label small">${def.label}</label>${input}${phBtns}</div>`;
+  }
+
+  function render() {
+    const wrap = $("action-list");
+    if (!actionsState.length) { wrap.innerHTML = '<div class="text-muted small">No actions yet. Add one above.</div>'; return; }
+    wrap.innerHTML = actionsState.map((a, idx) => {
+      const defs = ACTION_DEFS[a.actionType] || [];
+      const fields = defs.map((d) => fieldInput(a.actionType, idx, d, a.payload[d.k])).join("");
+      return `<div class="border rounded p-3 mb-2" data-idx="${idx}">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <strong>${idx + 1}. ${a.actionType}</strong>
+          <div>
+            <button type="button" class="btn btn-sm btn-outline-secondary act-up" ${idx === 0 ? "disabled" : ""}><i class="fas fa-arrow-up"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary act-down" ${idx === actionsState.length - 1 ? "disabled" : ""}><i class="fas fa-arrow-down"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-danger act-del"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        ${fields}
+        <div class="form-check"><input class="form-check-input act-coe" type="checkbox" id="coe-${idx}" ${a.continueOnError ? "checked" : ""}><label class="form-check-label small" for="coe-${idx}">Continue the run even if this action fails</label></div>
+      </div>`;
+    }).join("");
+
+    wrap.querySelectorAll(".act-field").forEach((el) => el.addEventListener("input", () => { const idx = +el.closest("[data-idx]").dataset.idx; actionsState[idx].payload[el.dataset.k] = el.value; }));
+    wrap.querySelectorAll(".act-coe").forEach((el) => el.addEventListener("change", () => { const idx = +el.closest("[data-idx]").dataset.idx; actionsState[idx].continueOnError = el.checked; }));
+    wrap.querySelectorAll(".act-del").forEach((b) => b.addEventListener("click", () => { readFields(); const idx = +b.closest("[data-idx]").dataset.idx; actionsState.splice(idx, 1); render(); }));
+    wrap.querySelectorAll(".act-up").forEach((b) => b.addEventListener("click", () => { readFields(); const idx = +b.closest("[data-idx]").dataset.idx; [actionsState[idx - 1], actionsState[idx]] = [actionsState[idx], actionsState[idx - 1]]; render(); }));
+    wrap.querySelectorAll(".act-down").forEach((b) => b.addEventListener("click", () => { readFields(); const idx = +b.closest("[data-idx]").dataset.idx; [actionsState[idx + 1], actionsState[idx]] = [actionsState[idx], actionsState[idx + 1]]; render(); }));
+    wrap.querySelectorAll(".ph-ins").forEach((b) => b.addEventListener("click", () => { const el = document.getElementById(b.dataset.target); const s = el.selectionStart ?? el.value.length; el.value = el.value.slice(0, s) + b.textContent + el.value.slice(el.selectionEnd ?? s); el.dispatchEvent(new Event("input")); el.focus(); }));
+  }
+
+  function readFields() {
+    document.querySelectorAll("#action-list .act-field").forEach((el) => { const idx = +el.closest("[data-idx]").dataset.idx; actionsState[idx].payload[el.dataset.k] = el.value; });
+  }
+
+  function buildPayload() {
+    readFields();
+    const recurring = $("sched-recurring").checked;
+    const actions = actionsState.map((a) => {
+      const payload = { ...a.payload };
+      if (a.actionType === "forum_publish") payload.discussionId = Number(payload.discussionId);
+      if (a.actionType === "announcement_post") payload.postId = Number(payload.postId);
+      return { actionType: a.actionType, payload, continueOnError: a.continueOnError };
+    });
+    return {
+      id: JOB ? JOB.id : null,
+      title: $("job-title").value,
+      description: $("job-desc").value || null,
+      runNumberStart: Number($("job-runstart").value) || 1,
+      scheduleType: recurring ? "recurring" : "once",
+      runAt: recurring ? null : localToIso($("job-runat").value),
+      frequency: recurring ? $("job-freq").value : null,
+      recurInterval: Number($("job-interval").value) || 1,
+      byWeekday: [...document.querySelectorAll(".job-weekday:checked")].map((c) => c.value).join(","),
+      byMonthDay: Number($("job-monthday").value) || null,
+      timeOfDay: $("job-timeofday").value || "00:00",
+      timezone: $("job-timezone").value || "Australia/Sydney",
+      untilDate: recurring ? localToIso($("job-until").value) : null,
+      actions,
+    };
+  }
+
+  function syncScheduleVisibility() {
+    const recurring = $("sched-recurring").checked;
+    $("sched-once-fields").classList.toggle("d-none", recurring);
+    $("sched-recurring-fields").classList.toggle("d-none", !recurring);
+    const freq = $("job-freq").value;
+    $("freq-weekly").classList.toggle("d-none", freq !== "weekly");
+    $("freq-monthly").classList.toggle("d-none", freq !== "monthly");
+  }
+
+  async function postJson(url, body) {
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return res.json();
+  }
+
+  async function previewAll() {
+    const data = await postJson("/dashboard/scheduler/preview", buildPayload());
+    const occ = (data.occurrences || []).map((iso) => `<li>${new Date(iso).toLocaleString()} <span class="text-muted">(${iso})</span></li>`).join("") || "<li class='text-muted'>No upcoming runs</li>";
+    $("occ-preview").innerHTML = occ;
+    const errs = (data.errors || []).length ? `<div class="alert alert-warning"><ul class="mb-0">${data.errors.map((e) => `<li>${esc(e)}</li>`).join("")}</ul></div>` : "";
+    const acts = (data.actions || []).map((a) => `<div class="border rounded p-2 mb-1"><strong>${esc(a.actionType)}</strong>: ${esc(a.preview ? a.preview.summary : "")}${a.preview && a.preview.sideEffects ? `<div class="small text-muted">${a.preview.sideEffects.map(esc).join("<br>")}</div>` : ""}</div>`).join("");
+    $("action-preview").innerHTML = errs + acts;
+  }
+
+  function init() {
+    document.querySelectorAll("[list]").forEach(() => {});
+    // slug datalist
+    const dl = document.createElement("datalist"); dl.id = "slug-list";
+    dl.innerHTML = (PICKERS.serverSlugs || []).map((s) => `<option value="${esc(s)}">`).join("");
+    document.body.appendChild(dl);
+
+    if (JOB) {
+      $("job-title").value = JOB.title || "";
+      $("job-desc").value = JOB.description || "";
+      $("job-runstart").value = JOB.runNumberStart || 1;
+      if (JOB.scheduleType === "once") { $("sched-once").checked = true; $("job-runat").value = isoToLocal(JOB.runAt); }
+      else { $("sched-recurring").checked = true; }
+      if (JOB.frequency) $("job-freq").value = JOB.frequency;
+      $("job-interval").value = JOB.recurInterval || 1;
+      $("job-timeofday").value = JOB.timeOfDay || "18:00";
+      $("job-timezone").value = JOB.timezone || "Australia/Sydney";
+      $("job-until").value = isoToLocal(JOB.untilDate);
+      if (JOB.byMonthDay) $("job-monthday").value = JOB.byMonthDay;
+      String(JOB.byWeekday || "").split(/[,\s]+/).filter(Boolean).forEach((d) => { const c = document.getElementById("wd-" + d); if (c) c.checked = true; });
+    }
+    syncScheduleVisibility();
+    render();
+
+    document.querySelectorAll("input[name='sched-type']").forEach((r) => r.addEventListener("change", syncScheduleVisibility));
+    $("job-freq").addEventListener("change", syncScheduleVisibility);
+    $("btn-add-action").addEventListener("click", () => { readFields(); actionsState.push({ actionType: $("add-action-type").value, payload: {}, continueOnError: false }); render(); });
+    $("btn-preview").addEventListener("click", previewAll);
+    $("btn-preview-occ").addEventListener("click", previewAll);
+    $("job-form").addEventListener("submit", () => { $("job-payload").value = JSON.stringify(buildPayload()); });
+    if ($("btn-runnow")) $("btn-runnow").addEventListener("click", () => { if (confirm("Run this job now?")) $("runnow-form").submit(); });
+    if ($("btn-duplicate")) $("btn-duplicate").addEventListener("click", () => $("dup-form").submit());
+  }
+  document.addEventListener("DOMContentLoaded", init);
+})();
+</script>

@@ -1,628 +1,184 @@
-<%- include("../../admin/_head.ejs", { pageTitle, extraHead: `
-  <link rel="stylesheet" href="/vendors/cdn/tom-select/2.3.1/tom-select.bootstrap5.min.css">
-` }) %>
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
 <%- include("../../admin/_topbar.ejs") %>
 <%- include("../../admin/_sidebar.ejs") %>
+
+<%
+  const WEEK_NAMES = { 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun" };
+  function scheduleSummary(j) {
+    if (j.scheduleType === "once") return j.runAt ? `Once at ${new Date(j.runAt).toISOString()}` : "Once";
+    const every = j.recurInterval > 1 ? `every ${j.recurInterval} ` : "every ";
+    let unit = { daily: "day", weekly: "week", monthly: "month" }[j.frequency] || j.frequency;
+    let when = "";
+    if (j.frequency === "weekly" && j.byWeekday) when = " on " + String(j.byWeekday).split(/[,\s]+/).filter(Boolean).map((d) => WEEK_NAMES[d] || d).join(", ");
+    if (j.frequency === "monthly" && j.byMonthDay) when = ` on day ${j.byMonthDay}`;
+    return `${every}${unit}${when} at ${j.timeOfDay || "00:00"} ${j.timezone}`;
+  }
+  const STATUS_BADGE = { succeeded: "success", partial: "warning", failed: "danger", missed: "secondary", skipped: "secondary", running: "info" };
+%>
 
 <div id="wpcontent">
   <div id="wpbody-content">
     <div class="wrap">
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                <h1 class="h2">Scheduler</h1>
-            </div>
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Scheduler</h1>
+        <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+          <a href="/dashboard/scheduler/create" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Create Job</a>
+          <%- include("../../partials/documentationLink.ejs", { doclink: "https://anchorlight.dev/docs/products/zander/features/scheduler" }) %>
+        </div>
+      </div>
+
       <%- include("../../admin/_notices.ejs") %>
 
-            <% const channelMap = Object.fromEntries(discordChannels.map((channel) => [channel.id, channel.name])); %>
-            <% const channelOptions = [
-                {
-                    optionName: "Select a Channel",
-                    optionValue: "null",
-                    selected: true,
-                    disabled: true
-                },
-                ...discordChannels.map((channel) => ({
-                    optionName: `#${channel.name}`,
-                    optionValue: channel.id,
-                    selected: false,
-                    disabled: false
-                }))
-            ]; %>
+      <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item"><a class="nav-link active" href="#tab-jobs" data-tab="tab-jobs">Jobs</a></li>
+        <li class="nav-item"><a class="nav-link" href="#tab-history" data-tab="tab-history">History</a></li>
+        <li class="nav-item"><a class="nav-link" href="#tab-forum" data-tab="tab-forum">Forum (read-only)</a></li>
+        <li class="nav-item"><a class="nav-link" href="#tab-ann" data-tab="tab-ann">Announcements (read-only)</a></li>
+      </ul>
 
-            <ul class="nav nav-tabs" id="schedulerTabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="announcements-tab" data-bs-toggle="tab" data-bs-target="#announcements-pane" type="button" role="tab" aria-controls="announcements-pane" aria-selected="true">Announcements</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="discord-tab" data-bs-toggle="tab" data-bs-target="#discord-pane" type="button" role="tab" aria-controls="discord-pane" aria-selected="false">Discord Embeds</button>
-                </li>
-            </ul>
+      <!-- Jobs -->
+      <div id="tab-jobs" class="sched-tab">
+        <% if (!jobs.length) { %>
+          <div class="alert alert-info">No jobs yet. <a href="/dashboard/scheduler/create">Create one.</a></div>
+        <% } else { %>
+          <table class="table table-sm align-middle">
+            <thead><tr><th>Title</th><th>Schedule</th><th>Next run</th><th>Actions</th><th>Last run</th><th></th></tr></thead>
+            <tbody>
+              <% jobs.forEach(function (j) { %>
+                <tr>
+                  <td>
+                    <a href="/dashboard/scheduler/edit?id=<%= j.id %>"><%= j.title %></a>
+                    <%= j.enabled ? "" : " (disabled)" %>
+                  </td>
+                  <td class="small"><%= scheduleSummary(j) %></td>
+                  <td class="small" data-local-date="<%= (j.nextFew && j.nextFew[0]) || "" %>"><%= (j.nextFew && j.nextFew[0]) ? j.nextFew[0] : "-" %></td>
+                  <td><% j.actions.forEach(function (a) { %><span class="badge bg-light text-dark border me-1"><%= a.actionType %></span><% }); %></td>
+                  <td><% if (j.lastRun) { %><span class="badge bg-<%= STATUS_BADGE[j.lastRun.status] || "secondary" %>"><%= j.lastRun.status %></span><% } else { %><span class="text-muted small">-</span><% } %></td>
+                  <td class="text-nowrap">
+                    <form method="post" action="/dashboard/scheduler/toggle" class="d-inline">
+                      <input type="hidden" name="id" value="<%= j.id %>"><input type="hidden" name="enabled" value="<%= j.enabled ? "0" : "1" %>">
+                      <button class="btn btn-sm btn-outline-secondary" title="<%= j.enabled ? "Disable" : "Enable" %>"><i class="fas fa-power-off"></i></button>
+                    </form>
+                    <a href="/dashboard/scheduler/edit?id=<%= j.id %>" class="btn btn-sm btn-outline-primary"><i class="fas fa-pen"></i></a>
+                    <form method="post" action="/dashboard/scheduler/runnow" class="d-inline" onsubmit="return confirm('Run \'<%= j.title %>\' now?');">
+                      <input type="hidden" name="id" value="<%= j.id %>"><button class="btn btn-sm btn-outline-warning" title="Run now"><i class="fas fa-play"></i></button>
+                    </form>
+                    <form method="post" action="/dashboard/scheduler/duplicate" class="d-inline">
+                      <input type="hidden" name="id" value="<%= j.id %>"><button class="btn btn-sm btn-outline-secondary" title="Duplicate"><i class="fas fa-copy"></i></button>
+                    </form>
+                    <form method="post" action="/dashboard/scheduler/delete" class="d-inline" onsubmit="return confirm('Delete this job?');">
+                      <input type="hidden" name="id" value="<%= j.id %>"><button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                    </form>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
 
-            <div class="tab-content pt-4">
-                <div class="tab-pane fade show active" id="announcements-pane" role="tabpanel" aria-labelledby="announcements-tab">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="mb-0">Temporary Announcements</h5>
-                        <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#announcementWizardModal">
-                            <i class="fas fa-calendar-plus"></i> Schedule Announcement
-                        </button>
-                    </div>
+      <!-- History -->
+      <div id="tab-history" class="sched-tab d-none">
+        <% if (!runs.length) { %><div class="alert alert-info">No runs yet.</div><% } else { %>
+          <table class="table table-sm align-middle">
+            <thead><tr><th>Job</th><th>Due</th><th>Trigger</th><th>Run #</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              <% runs.forEach(function (run) { const results = Array.isArray(run.results) ? run.results : []; %>
+                <tr>
+                  <td class="small">#<%= run.jobId %></td>
+                  <td class="small" data-local-date="<%= run.dueAt ? new Date(run.dueAt).toISOString() : "" %>"><%= run.dueAt ? new Date(run.dueAt).toISOString() : "" %></td>
+                  <td class="small"><%= run.triggerType %></td>
+                  <td class="small"><%= run.runNumber == null ? "-" : run.runNumber %></td>
+                  <td><span class="badge bg-<%= STATUS_BADGE[run.status] || "secondary" %>"><%= run.status %></span></td>
+                  <td class="small">
+                    <% results.forEach(function (r) { const tid = r.refs && r.refs.executorTaskId; %>
+                      <div>
+                        <span class="badge bg-<%= STATUS_BADGE[r.status] || "secondary" %>"><%= r.actionType %>: <span <%= tid ? `data-task-id="${tid}"` : "" %>><%= r.status %></span></span>
+                        <% if (r.message) { %><span class="text-muted"><%= String(r.message).slice(0,120) %></span><% } %>
+                      </div>
+                    <% }); %>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
 
-                    <% const scheduledAnnouncements = announcementsData.success ? announcementsData.data.filter((announcement) => announcement.startDate || announcement.endDate) : []; %>
-                    <% if (!announcementsData.success || scheduledAnnouncements.length === 0) { %>
-                        <p class="text-muted mb-0">No temporary announcements scheduled.</p>
-                    <% } else { %>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Type</th>
-                                        <th>Schedule</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <% scheduledAnnouncements.forEach((announcement) => { %>
-                                        <tr>
-                                            <td><span class="badge text-bg-primary"><%= announcement.announcementType %></span></td>
-                                            <td>
-                                                <small>
-                                                    <span class="js-datetime" data-iso="<%= announcement.startDate || '' %>" data-fallback="Now"></span>
-                                                    →
-                                                    <span class="js-datetime" data-iso="<%= announcement.endDate || '' %>" data-fallback="No end"></span>
-                                                </small>
-                                            </td>
-                                            <td>
-                                                <% if (announcement.enabled === 1) { %>
-                                                    <span class="badge text-bg-success">Enabled</span>
-                                                <% } else { %>
-                                                    <span class="badge text-bg-secondary">Disabled</span>
-                                                <% } %>
-                                            </td>
-                                        </tr>
-                                    <% }) %>
-                                </tbody>
-                            </table>
-                        </div>
-                    <% } %>
-                </div>
+      <!-- Forum read-only -->
+      <div id="tab-forum" class="sched-tab d-none">
+        <p class="text-muted small">Forum threads with a publish time. Scheduled here so nothing is double-booked without being visible. Edit in the forum.</p>
+        <% if (!forumScheduled.length) { %><div class="alert alert-info">No scheduled forum threads.</div><% } else { %>
+          <table class="table table-sm align-middle">
+            <thead><tr><th>Thread</th><th>Status</th><th>Publish at</th></tr></thead>
+            <tbody>
+              <% forumScheduled.forEach(function (d) { %>
+                <tr>
+                  <td><a href="/forum/thread/<%= d.slug %>"><%= d.title %></a></td>
+                  <td class="small"><%= d.status %></td>
+                  <td class="small" data-local-date="<%= d.publishAt ? new Date(d.publishAt).toISOString() : "" %>"><%= d.publishAt ? new Date(d.publishAt).toISOString() : "" %></td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
 
-                <div class="tab-pane fade" id="discord-pane" role="tabpanel" aria-labelledby="discord-tab">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="mb-0">Scheduled Discord Embeds</h5>
-                        <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#discordWizardModal">
-                            <i class="fab fa-discord"></i> Schedule Discord Embed
-                        </button>
-                    </div>
+      <!-- Announcements read-only -->
+      <div id="tab-ann" class="sched-tab d-none">
+        <p class="text-muted small">Announcement posts with a future start or end. Edit in the announcements wizard.</p>
+        <% if (!futurePosts.length) { %><div class="alert alert-info">No upcoming announcement windows.</div><% } else { %>
+          <table class="table table-sm align-middle">
+            <thead><tr><th>Post</th><th>Status</th><th>Platforms</th></tr></thead>
+            <tbody>
+              <% futurePosts.forEach(function (p) { %>
+                <tr>
+                  <td><a href="/dashboard/announcements/edit?postId=<%= p.postId %>"><%= p.title || "(untitled)" %></a></td>
+                  <td class="small"><%= p.status %></td>
+                  <td class="small"><% p.platforms.forEach(function (r) { %><span class="badge bg-light text-dark border me-1"><%= r.announcementType %></span><% }); %></td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
 
-                    <%
-                        // Past (already-sent) embeds are hidden from this list; only
-                        // upcoming ("scheduled") and "failed" ones remain actionable.
-                        const upcomingMessages = scheduledMessages.success
-                            ? scheduledMessages.data.filter((message) => message.status !== "sent")
-                            : [];
-                    %>
-                    <% if (upcomingMessages.length === 0) { %>
-                        <p class="text-muted mb-0">No upcoming Discord embeds scheduled.</p>
-                    <% } else { %>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Channel</th>
-                                        <th>Broadcast</th>
-                                        <th>Author</th>
-                                        <th>Status</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <% upcomingMessages.forEach((message) => { %>
-                                        <tr>
-                                            <td>#<%= channelMap[message.channelId] || message.channelId %></td>
-                                            <td>
-                                                <small class="js-datetime" data-iso="<%= message.scheduledFor %>" data-fallback=""></small>
-                                            </td>
-                                            <td>
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <% if (message.profilePictureUrl) { %>
-                                                        <img src="<%= message.profilePictureUrl %>" alt="<%= message.username || 'User' %>" class="rounded-circle" width="28" height="28">
-                                                    <% } else { %>
-                                                        <div class="rounded-circle bg-secondary" style="width: 28px; height: 28px;"></div>
-                                                    <% } %>
-                                                    <span><%= message.username || "Unknown" %></span>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span class="badge <%= message.status === 'failed' ? 'text-bg-danger' : 'text-bg-secondary' %>"><%= message.status %></span>
-                                            </td>
-                                            <td>
-                                                <div class="d-flex gap-2">
-                                                    <button type="button" class="btn btn-sm btn-outline-primary js-edit-embed"
-                                                        data-schedule-id="<%= message.scheduleId %>"
-                                                        data-channel-id="<%= message.channelId %>"
-                                                        data-scheduled-for="<%= message.scheduledFor %>"
-                                                        data-embed-title="<%= message.embedTitle || '' %>"
-                                                        data-embed-color="<%= message.embedColor || '#5865f2' %>"
-                                                        data-embed-description="<%= message.embedDescription || '' %>">Edit</button>
-                                                    <form action="<%= process.env.siteAddress %>/redirect/scheduler/discord/delete" method="post">
-                                                        <input type="hidden" name="scheduleId" value="<%= message.scheduleId %>">
-                                                        <button class="btn btn-sm btn-danger" type="submit">Delete</button>
-                                                    </form>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    <% }) %>
-                                </tbody>
-                            </table>
-                        </div>
-                    <% } %>
-                </div>
-            </div>
-
-
-<div class="modal fade" id="announcementWizardModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Schedule Announcement</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="announcementWizardForm" method="post" action="<%= process.env.siteAddress %>/redirect/announcement/create">
-                    <input type="hidden" name="timezoneOffset" value="">
-                    <div class="wizard-step" data-step="1">
-                        <div class="mb-3">
-                            <label for="announcementType">Announcement Type</label>
-                            <%- include("../../partials/form/inputSelect.ejs", {
-                                elementName: "announcementType",
-                                elementValue: "null",
-                                required: true,
-                                optionElements: [
-                                    {
-                                        optionName: "Select a Type",
-                                        optionValue: "null",
-                                        selected: true,
-                                        disabled: true
-                                    },
-                                    {
-                                        optionName: "Server Ping MOTD",
-                                        optionValue: "motd",
-                                        selected: false,
-                                        disabled: false
-                                    },
-                                    {
-                                        optionName: "In-Game Tip",
-                                        optionValue: "tip",
-                                        selected: false,
-                                        disabled: false
-                                    },
-                                    {
-                                        optionName: "Website Banner",
-                                        optionValue: "web",
-                                        selected: false,
-                                        disabled: false
-                                    },
-                                    {
-                                        optionName: "Website Popup Announcement",
-                                        optionValue: "popup",
-                                        selected: false,
-                                        disabled: false
-                                    }
-                                ]
-                            }) %>
-                        </div>
-
-                        <div class="mb-3" data-announcement-field="body">
-                            <label for="body">Announcement Text</label>
-                            <%- include("../../partials/form/inputTextArea.ejs", {
-                                elementName: "body",
-                                elementValue: null,
-                                required: false
-                            }) %>
-                        </div>
-
-                        <div class="mb-3" data-announcement-field="colourMessageFormat">
-                            <label for="colourMessageFormat">Colour Message Format</label>
-                            <%- include("../../partials/form/inputTextArea.ejs", {
-                                elementName: "colourMessageFormat",
-                                elementValue: null,
-                                required: false
-                            }) %>
-                        </div>
-
-                        <div class="mb-3" data-announcement-field="link">
-                            <label for="link">Announcement Link</label>
-                            <%- include("../../partials/form/inputText.ejs", {
-                                elementName: "link",
-                                elementValue: null,
-                                required: false
-                            }) %>
-                        </div>
-
-                        <div class="mb-3" data-announcement-field="popupButtonText">
-                            <label for="popupButtonText">Popup Button Text</label>
-                            <%- include("../../partials/form/inputText.ejs", {
-                                elementName: "popupButtonText",
-                                elementValue: null,
-                                required: false
-                            }) %>
-                            <small class="text-muted">Optional label for popup call-to-action button.</small>
-                        </div>
-
-                        <div class="mb-3" data-announcement-field="popupImageUrl">
-                            <label for="popupImageUrl">Popup Image URL</label>
-                            <%- include("../../partials/form/inputText.ejs", {
-                                elementName: "popupImageUrl",
-                                elementValue: null,
-                                required: false
-                            }) %>
-                            <small class="text-muted">Optional banner image for popup announcements.</small>
-                        </div>
-                    </div>
-
-                    <div class="wizard-step d-none" data-step="2">
-                        <div class="mb-3">
-                            <label for="enabled">Announcement Visibility</label>
-                            <%- include("../../partials/form/inputSelect.ejs", {
-                                elementName: "enabled",
-                                elementValue: "1",
-                                required: true,
-                                optionElements: [
-                                    {
-                                        optionName: "Enabled",
-                                        optionValue: "1",
-                                        selected: true,
-                                        disabled: false
-                                    },
-                                    {
-                                        optionName: "Disabled",
-                                        optionValue: "0",
-                                        selected: false,
-                                        disabled: false
-                                    }
-                                ]
-                            }) %>
-                        </div>
-
-                        <div class="row">
-                            <div class="mb-3 col">
-                                <label for="startDate">Start Date</label>
-                                <%- include("../../partials/form/inputDateTime.ejs", {
-                                    elementName: "startDate",
-                                    elementValue: null,
-                                    required: false
-                                }) %>
-                            </div>
-
-                            <div class="mb-3 col">
-                                <label for="endDate">End Date</label>
-                                <%- include("../../partials/form/inputDateTime.ejs", {
-                                    elementName: "endDate",
-                                    elementValue: null,
-                                    required: false
-                                }) %>
-                            </div>
-                        </div>
-                        <small class="text-muted">All times are in your local timezone.</small>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary wizard-back" data-target="announcement">Back</button>
-                <button type="button" class="btn btn-primary wizard-next" data-target="announcement">Next</button>
-                <button type="submit" form="announcementWizardForm" class="btn btn-success d-none wizard-submit">Schedule</button>
-            </div>
-        </div>
     </div>
-</div>
-
-<div class="modal fade" id="discordWizardModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Schedule Discord Embed</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="discordWizardForm" method="post" action="<%= process.env.siteAddress %>/redirect/scheduler/discord/create">
-                    <input type="hidden" name="timezoneOffset" value="">
-                    <div class="wizard-step" data-step="1">
-                        <div class="mb-3">
-                            <label for="channelId" class="form-label">Channel</label>
-                            <select id="discordChannelSelect" name="channelId" required class="form-select">
-                                <option value="" disabled selected>Select a Channel</option>
-                                <% discordChannels.forEach(function(channel) { %>
-                                  <option value="<%= channel.id %>">#<%= channel.name %></option>
-                                <% }); %>
-                            </select>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="embedTitle">Embed Title</label>
-                            <%- include("../../partials/form/inputText.ejs", {
-                                elementName: "embedTitle",
-                                elementValue: null,
-                                required: false
-                            }) %>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="embedDescription">Embed Description</label>
-                            <%- include("../../partials/summerNoteEditor.ejs", {
-                                editorElementName: "embedDescriptionEditor",
-                                editorPOSTElementName: "embedDescription",
-                                editorElementText: ""
-                            }) %>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="embedColor">Embed Color (Hex)</label>
-                            <input type="color" class="form-control form-control-color" name="embedColor" value="#5865f2">
-                        </div>
-                    </div>
-
-                    <div class="wizard-step d-none" data-step="2">
-                        <div class="mb-3">
-                            <label for="scheduledFor">Send At</label>
-                            <%- include("../../partials/form/inputDateTime.ejs", {
-                                elementName: "scheduledFor",
-                                elementValue: null,
-                                required: true
-                            }) %>
-                        </div>
-                        <small class="text-muted">All times are in your local timezone.</small>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary wizard-back" data-target="discord">Back</button>
-                <button type="button" class="btn btn-primary wizard-next" data-target="discord">Next</button>
-                <button type="submit" form="discordWizardForm" class="btn btn-success d-none wizard-submit">Schedule</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade" id="discordEditModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Edit Scheduled Discord Embed</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="discordEditForm" method="post" action="<%= process.env.siteAddress %>/redirect/scheduler/discord/edit">
-                    <input type="hidden" name="timezoneOffset" value="">
-                    <input type="hidden" name="scheduleId" id="editScheduleId" value="">
-
-                    <div class="mb-3">
-                        <label for="editChannelId" class="form-label">Channel</label>
-                        <select id="editChannelId" name="channelId" required class="form-select">
-                            <option value="" disabled>Select a Channel</option>
-                            <% discordChannels.forEach(function(channel) { %>
-                              <option value="<%= channel.id %>">#<%= channel.name %></option>
-                            <% }); %>
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="editEmbedTitle" class="form-label">Embed Title</label>
-                        <input type="text" class="form-control" id="editEmbedTitle" name="embedTitle">
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="editEmbedDescription" class="form-label">Embed Description</label>
-                        <textarea class="form-control" id="editEmbedDescription" name="embedDescription" rows="4"></textarea>
-                    </div>
-
-                    <div class="row">
-                        <div class="mb-3 col-md-4">
-                            <label for="editEmbedColor" class="form-label">Embed Color (Hex)</label>
-                            <input type="color" class="form-control form-control-color" id="editEmbedColor" name="embedColor" value="#5865f2">
-                        </div>
-                        <div class="mb-3 col-md-8">
-                            <label for="editScheduledFor" class="form-label">Send At</label>
-                            <input type="datetime-local" class="form-control" id="editScheduledFor" name="scheduledFor" required>
-                        </div>
-                    </div>
-                    <small class="text-muted">All times are in your local timezone.</small>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" form="discordEditForm" class="btn btn-success">Save Changes</button>
-            </div>
-        </div>
-    </div>
+  </div>
+  <%- include("../../admin/_footer.ejs") %>
 </div>
 
 <script>
-    const setupWizard = (modalId, onStepReset) => {
-        const modal = document.getElementById(modalId);
-        if (!modal) return;
-
-        const steps = modal.querySelectorAll(".wizard-step");
-        const nextButton = modal.querySelector(".wizard-next");
-        const backButton = modal.querySelector(".wizard-back");
-        const submitButton = modal.querySelector(".wizard-submit");
-        let currentStep = 0;
-
-        const renderStep = () => {
-            steps.forEach((step, index) => {
-                step.classList.toggle("d-none", index !== currentStep);
-            });
-
-            backButton.disabled = currentStep === 0;
-            nextButton.classList.toggle("d-none", currentStep === steps.length - 1);
-            submitButton.classList.toggle("d-none", currentStep !== steps.length - 1);
-        };
-
-        nextButton.addEventListener("click", () => {
-            if (currentStep < steps.length - 1) {
-                currentStep += 1;
-                renderStep();
-            }
-        });
-
-        backButton.addEventListener("click", () => {
-            if (currentStep > 0) {
-                currentStep -= 1;
-                renderStep();
-            }
-        });
-
-        modal.addEventListener("hidden.bs.modal", () => {
-            currentStep = 0;
-            renderStep();
-            const form = modal.querySelector("form");
-            if (form) {
-                form.reset();
-            }
-            if (onStepReset) {
-                onStepReset();
-            }
-            applyDateInputMinimums();
-            updateTimezoneOffsets();
-        });
-
-        renderStep();
-    };
-
-    setupWizard("announcementWizardModal", () => {
-        updateAnnouncementWizardFields();
-        applyDateInputMinimums();
-        updateTimezoneOffsets();
+  // Tabs
+  document.querySelectorAll(".nav-link[data-tab]").forEach(function (link) {
+    link.addEventListener("click", function (e) {
+      e.preventDefault();
+      document.querySelectorAll(".nav-link[data-tab]").forEach((n) => n.classList.remove("active"));
+      link.classList.add("active");
+      document.querySelectorAll(".sched-tab").forEach((t) => t.classList.toggle("d-none", t.id !== link.dataset.tab));
     });
-    setupWizard("discordWizardModal");
-
-    const announcementTypeSelect = document.querySelector("#announcementWizardForm select[name='announcementType']");
-    const announcementFieldGroups = document.querySelectorAll("#announcementWizardForm [data-announcement-field]");
-
-    const updateAnnouncementWizardFields = () => {
-        const type = announcementTypeSelect?.value || "";
-
-        announcementFieldGroups.forEach((group) => {
-            const field = group.dataset.announcementField;
-            let visible = true;
-
-            if (field === "popupButtonText" || field === "popupImageUrl") {
-                visible = type === "popup";
-            }
-
-            if (field === "colourMessageFormat") {
-                visible = type === "motd" || type === "tip";
-            }
-
-            if (field === "link") {
-                visible = type === "web" || type === "popup";
-            }
-
-            group.classList.toggle("d-none", !visible);
-        });
-    };
-
-    if (announcementTypeSelect) {
-        announcementTypeSelect.addEventListener("change", updateAnnouncementWizardFields);
-        updateAnnouncementWizardFields();
+  });
+  // Local times
+  document.querySelectorAll("[data-local-date]").forEach(function (el) {
+    const iso = el.getAttribute("data-local-date");
+    if (!iso) return;
+    const d = new Date(iso);
+    if (!Number.isNaN(d.getTime())) el.textContent = d.toLocaleString();
+  });
+  // Poll queued command task status in the history tab.
+  (function () {
+    const spans = [...document.querySelectorAll("[data-task-id]")];
+    if (!spans.length) return;
+    async function poll() {
+      const ids = spans.map((s) => s.getAttribute("data-task-id")).join(",");
+      try {
+        const res = await fetch("/dashboard/scheduler/task-status?ids=" + encodeURIComponent(ids));
+        const data = await res.json();
+        const byId = Object.fromEntries((data.tasks || []).map((t) => [String(t.executorTaskId), t.status]));
+        spans.forEach((s) => { const st = byId[s.getAttribute("data-task-id")]; if (st) s.textContent = "queued → " + st; });
+      } catch {}
     }
-
-    const applyDateInputMinimums = () => {
-        const now = new Date();
-        const offset = now.getTimezoneOffset();
-        const local = new Date(now.getTime() - offset * 60000).toISOString().slice(0, 16);
-        document.querySelectorAll("#announcementWizardForm input[type='datetime-local'], #discordWizardForm input[type='datetime-local'], #discordEditForm input[type='datetime-local']").forEach((input) => {
-            input.min = local;
-        });
-    };
-
-    const updateTimezoneOffsets = () => {
-        const offset = String(new Date().getTimezoneOffset());
-        document.querySelectorAll("input[name='timezoneOffset']").forEach((input) => {
-            input.value = offset;
-        });
-    };
-
-    applyDateInputMinimums();
-    updateTimezoneOffsets();
-
-    const parseDateValue = (value) => {
-        if (!value) return null;
-        const normalized = value.includes(" ") ? value.replace(" ", "T") : value;
-        const withTimezone = normalized.endsWith("Z") ? normalized : `${normalized}Z`;
-        const date = new Date(withTimezone);
-        if (Number.isNaN(date.getTime())) {
-            return null;
-        }
-        return date;
-    };
-
-    document.querySelectorAll(".js-datetime").forEach((element) => {
-        const isoValue = element.dataset.iso;
-        const date = parseDateValue(isoValue);
-        if (!date) {
-            element.textContent = element.dataset.fallback || "";
-            return;
-        }
-
-        element.textContent = date.toLocaleString();
-    });
-
-    // ── Edit scheduled Discord embed: open the modal pre-filled from the row ──
-    const dbToLocalInput = (dbValue) => {
-        const date = parseDateValue(dbValue); // stored UTC -> Date
-        if (!date) return "";
-        const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-        return local.toISOString().slice(0, 16);
-    };
-
-    const editModalEl = document.getElementById("discordEditModal");
-    document.querySelectorAll(".js-edit-embed").forEach((btn) => {
-        btn.addEventListener("click", () => {
-            document.getElementById("editScheduleId").value = btn.dataset.scheduleId || "";
-            document.getElementById("editChannelId").value = btn.dataset.channelId || "";
-            document.getElementById("editEmbedTitle").value = btn.dataset.embedTitle || "";
-            document.getElementById("editEmbedDescription").value = btn.dataset.embedDescription || "";
-            document.getElementById("editEmbedColor").value = btn.dataset.embedColor || "#5865f2";
-            document.getElementById("editScheduledFor").value = dbToLocalInput(btn.dataset.scheduledFor);
-            updateTimezoneOffsets();
-            if (editModalEl && window.bootstrap?.Modal) {
-                window.bootstrap.Modal.getOrCreateInstance(editModalEl).show();
-            }
-        });
-    });
+    poll();
+    setInterval(poll, 5000);
+  })();
 </script>
-
-    </div><!-- /.wrap -->
-  </div><!-- /#wpbody-content -->
-  <%- include("../../admin/_footer.ejs", { extraScripts: `
-    <script src="/vendors/cdn/tom-select/2.3.1/tom-select.complete.min.js"></script>
-    <script>
-      (function () {
-        var selectEl = document.getElementById('discordChannelSelect');
-        if (!selectEl) return;
-
-        var ts = new TomSelect(selectEl, {
-          placeholder: 'Search channels…',
-          allowEmptyOption: false,
-          maxOptions: 300,
-          render: {
-            option: function (data, escape) {
-              return '<div>' + escape(data.text) + '</div>';
-            },
-            item: function (data, escape) {
-              return '<div>' + escape(data.text) + '</div>';
-            },
-          },
-        });
-
-        // Re-init when the modal resets so the selection clears properly
-        var discordModal = document.getElementById('discordWizardModal');
-        if (discordModal) {
-          discordModal.addEventListener('hidden.bs.modal', function () {
-            ts.clear();
-            ts.blur();
-          });
-        }
-      }());
-    </script>
-  ` }) %>
-</div><!-- /#wpcontent -->

@@ -14,7 +14,6 @@ import bridgeApiRoute from "./bridge.js";
 import punishmentsApiRoute from "./punishments.js";
 import configApiRoute from "./config.js";
 import discordPunishmentsApiRoute from "./discordPunishments.js";
-import schedulerApiRoute from "./scheduler.js";
 import eventsApiRoute from "./events.js";
 import badgeApiRoute from "./badges.js";
 import financeApiRoute from "./finance.js";
@@ -38,7 +37,6 @@ export default (app, client, moment, config, db, features, lang) => {
   vaultApiRoute(app, config, db, features, lang);
   bridgeApiRoute(app, config, db, features, lang);
   punishmentsApiRoute(app, config, db, features, lang);
-  schedulerApiRoute(app, client, config, db, features, lang);
   discordPunishmentsApiRoute(app, config, db, features, lang);
   configApiRoute(app, config, db, features, lang);
   eventsApiRoute(app, config, db, features, lang);
