@@ -1690,13 +1690,13 @@ model oidcPayloads {
 // =============================================================================
 
 model nicknames {
-  nicknameId   Int      @id @default(autoincrement())
-  userId       Int      @unique
-  nickname     String   @db.VarChar(16)
-  skeleton     String   @db.VarChar(32)
-  color        String?  @db.VarChar(16)
-  setAt        DateTime @default(now())
-  lastChangeAt DateTime @default(now())
+  nicknameId   Int       @id @default(autoincrement())
+  userId       Int       @unique
+  nickname     String?   @db.VarChar(16)
+  skeleton     String?   @db.VarChar(32)
+  color        String?   @db.VarChar(16)
+  setAt        DateTime?
+  lastChangeAt DateTime?
 
   @@index([skeleton])
 }

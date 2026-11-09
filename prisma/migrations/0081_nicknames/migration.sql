@@ -13,17 +13,22 @@
 --  * No DB-level foreign keys, matching the existing `reports` / `logs` tables;
 --    userId columns are plain indexed INTs.
 
--- Current owned nickname, one row per user (displayed iff the owner holds the perk).
+-- One durable row per user who has ever set a nickname.
+--  * nickname/skeleton NOT NULL  -> the user's current nickname (displayed iff
+--    the owner currently holds zander.nickname; otherwise "hidden").
+--  * nickname/skeleton NULL       -> the user cleared it. The row is kept so the
+--    cooldown anchor survives the clear.
+-- lastChangeAt anchors the once-per-24h cooldown: set to NOW on every accepted
+-- set/change, PRESERVED on a clear (clearing does not reset the cooldown), and
+-- set to NULL by a staff reset (staff resets do not count against the player).
 CREATE TABLE `nicknames` (
   `nicknameId`   INT          NOT NULL AUTO_INCREMENT,
   `userId`       INT          NOT NULL,
-  `nickname`     VARCHAR(16)  NOT NULL,
-  `skeleton`     VARCHAR(32)  NOT NULL,
+  `nickname`     VARCHAR(16)  NULL,
+  `skeleton`     VARCHAR(32)  NULL,
   `color`        VARCHAR(16)  NULL,
-  `setAt`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  -- Anchors the 24h cooldown. Set on every accepted change. Clearing a nickname
-  -- does NOT reset it (the service preserves the prior value on clear).
-  `lastChangeAt` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `setAt`        DATETIME     NULL,
+  `lastChangeAt` DATETIME     NULL,
   PRIMARY KEY (`nicknameId`),
   UNIQUE KEY `nicknames_userId_key` (`userId`),
   KEY `nicknames_skeleton_idx` (`skeleton`)
