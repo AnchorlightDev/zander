@@ -1,5 +1,6 @@
 import db, { luckpermsDb } from "./databaseController.js";
 import { getUserPermissions } from "./userController.js";
+import { createAnnouncementPost } from "./announcementController.js";
 import { hasPermission } from "../lib/discord/permissions.mjs";
 
 const CREATOR_PERMISSION_NODE = "zander.watch.creator";
@@ -320,14 +321,16 @@ export function recordNotification(platform, externalContentId, notificationType
  * game.  `&a` is the legacy colour code for green; TipChatter deserialises with
  * `&` as the translate char.
  */
-export function createInGameAnnouncement(body, durationMinutes = 120) {
+export async function createInGameAnnouncement(body, durationMinutes = 120) {
   const endDate = new Date(Date.now() + durationMinutes * 60 * 1000);
   const endDateStr = endDate.toISOString().slice(0, 19).replace("T", " ");
   const link = `${String(process.env.siteAddress || "").replace(/\/$/, "")}/watch`;
+  // Every announcements row now belongs to a parent post (postId NOT NULL).
+  const postId = await createAnnouncementPost({ title: body ? String(body).slice(0, 120) : null });
   return new Promise((resolve, reject) => {
     db.query(
-      `INSERT INTO announcements (enabled, announcementType, body, colourMessageFormat, link, endDate) VALUES (1, 'tip', ?, ?, ?, ?)`,
-      [body, `&a${body}`, link, endDateStr],
+      `INSERT INTO announcements (postId, enabled, announcementType, body, colourMessageFormat, link, endDate) VALUES (?, 1, 'tip', ?, ?, ?, ?)`,
+      [postId, body, `&a${body}`, link, endDateStr],
       (error, results) => {
         if (error) return reject(error);
         resolve(results?.insertId || null);
@@ -342,7 +345,16 @@ export function deleteAnnouncementById(announcementId) {
     db.query(
       `DELETE FROM announcements WHERE announcementId=?`,
       [announcementId],
-      (error) => { if (error) return reject(error); resolve(true); }
+      (error) => {
+        if (error) return reject(error);
+        // Remove the now-childless parent post (the tip owned its own post).
+        db.query(
+          `DELETE p FROM announcement_posts p
+             LEFT JOIN announcements a ON a.postId = p.postId
+            WHERE a.announcementId IS NULL`,
+          () => resolve(true)
+        );
+      }
     );
   });
 }

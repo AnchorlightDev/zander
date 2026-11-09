@@ -1090,19 +1090,31 @@ async function scheduleAnnouncementsForEvent(eventId, onlyIds = null) {
     } else if (SITE_ANNOUNCEMENT_PLATFORMS.includes(platform)) {
       const now = new Date();
       const window = siteAnnouncementWindow(ann, event.startAt, event.endAt);
-      const site = await prisma.announcements.create({
-        data: {
-          enabled: true,
-          announcementType: platform,
-          body: ann.body || null,
-          colourMessageFormat: ann.colourMessageFormat || null,
-          link: ann.link || null,
-          popupButtonText: ann.popupButtonText || null,
-          popupImageUrl: ann.popupImageUrl || null,
-          ...window,
-          createdAt: now,
-          updatedDate: now,
-        },
+      // Every announcements row now belongs to a parent post (postId NOT NULL).
+      // An event's site announcement is a single-platform post.
+      const site = await prisma.$transaction(async (tx) => {
+        const post = await tx.announcement_posts.create({
+          data: {
+            title: (ann.body && String(ann.body).slice(0, 120)) || "Event announcement",
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+        return tx.announcements.create({
+          data: {
+            postId: post.postId,
+            enabled: true,
+            announcementType: platform,
+            body: ann.body || null,
+            colourMessageFormat: ann.colourMessageFormat || null,
+            link: ann.link || null,
+            popupButtonText: ann.popupButtonText || null,
+            popupImageUrl: ann.popupImageUrl || null,
+            ...window,
+            createdAt: now,
+            updatedDate: now,
+          },
+        });
       });
 
       await prisma.event_announcements.update({

@@ -1,4 +1,5 @@
 import { isAllowedUrl } from "../../lib/navigation/menus.mjs";
+import { createAnnouncementPost } from "../../controllers/announcementController.js";
 import {
   isFeatureEnabled,
   required,
@@ -17,7 +18,12 @@ export default function announcementApiRoute(app, config, db, features, lang) {
 
     try {
       const activeWindowFilter =
-        " AND (startDate IS NULL OR startDate <= NOW()) AND (endDate IS NULL OR endDate >= NOW())";
+        " AND (startDate IS NULL OR startDate <= UTC_TIMESTAMP(3)) AND (endDate IS NULL OR endDate >= UTC_TIMESTAMP(3))";
+      // Holograms are an announcement platform but are delivered only through the
+      // hub API (GET /api/hologram/messages); the plugins that read this endpoint
+      // for tips/MOTDs must never receive hologram rows in an "all" result.
+      const excludeHologram =
+        " AND (announcementType IS NULL OR announcementType <> 'hologram')";
 
       let dbQuery;
       let params = [];
@@ -28,17 +34,17 @@ export default function announcementApiRoute(app, config, db, features, lang) {
       } else if (announcementType === "web") {
         dbQuery = `SELECT * FROM announcements WHERE announcementType='web' AND enabled=1${activeWindowFilter} ORDER BY RAND() LIMIT 1;`;
       } else if (announcementType === "popup") {
-        dbQuery = `SELECT * FROM announcements WHERE announcementType='popup' AND enabled=1${activeWindowFilter} ORDER BY COALESCE(startDate, updatedDate, NOW()) ASC;`;
+        dbQuery = `SELECT * FROM announcements WHERE announcementType='popup' AND enabled=1${activeWindowFilter} ORDER BY COALESCE(startDate, updatedDate, UTC_TIMESTAMP(3)) ASC;`;
       } else if (announcementType === "tip") {
         dbQuery = `SELECT * FROM announcements WHERE announcementType='tip' AND enabled=1${activeWindowFilter} ORDER BY RAND() LIMIT 1;`;
       } else if (announcementType === "motd") {
         dbQuery = `SELECT * FROM announcements WHERE announcementType='motd' AND enabled=1${activeWindowFilter} ORDER BY RAND() LIMIT 1;`;
       } else if (enabled === "1") {
-        dbQuery = `SELECT * FROM announcements WHERE enabled=1${activeWindowFilter};`;
+        dbQuery = `SELECT * FROM announcements WHERE enabled=1${excludeHologram}${activeWindowFilter};`;
       } else if (enabled === "0") {
-        dbQuery = `SELECT * FROM announcements WHERE enabled=0;`;
+        dbQuery = `SELECT * FROM announcements WHERE enabled=0${excludeHologram};`;
       } else {
-        dbQuery = `SELECT * FROM announcements;`;
+        dbQuery = `SELECT * FROM announcements WHERE 1=1${excludeHologram};`;
       }
 
       const results = await new Promise((resolve, reject) => {
@@ -129,10 +135,16 @@ export default function announcementApiRoute(app, config, db, features, lang) {
     }
 
     try {
+      // Every announcements row now belongs to a parent post (postId NOT NULL).
+      // This single-platform legacy endpoint gets its own one-row post.
+      const postId = await createAnnouncementPost({
+        title: (body && String(body).slice(0, 120)) || null,
+      });
       await new Promise((resolve, reject) => {
         db.query(
-          `INSERT INTO announcements (enabled, body, announcementType, link, colourMessageFormat, popupButtonText, popupImageUrl, startDate, endDate, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
+          `INSERT INTO announcements (postId, enabled, body, announcementType, link, colourMessageFormat, popupButtonText, popupImageUrl, startDate, endDate, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3))`,
           [
+            postId,
             enabled,
             body,
             announcementType,
@@ -297,6 +309,18 @@ export default function announcementApiRoute(app, config, db, features, lang) {
         db.query(
           `DELETE FROM announcements WHERE announcementId=?;`,
           [announcementId],
+          (error, results) => {
+            if (error) return reject(error);
+            resolve(results);
+          }
+        );
+      });
+      // Clean up a parent post left with no remaining platform rows.
+      await new Promise((resolve, reject) => {
+        db.query(
+          `DELETE p FROM announcement_posts p
+             LEFT JOIN announcements a ON a.postId = p.postId
+            WHERE a.announcementId IS NULL;`,
           (error, results) => {
             if (error) return reject(error);
             resolve(results);
