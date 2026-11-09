@@ -1683,3 +1683,67 @@ model oidcPayloads {
   @@index([uid])
   @@index([expiresAt])
 }
+
+// =============================================================================
+// Nicknames (supporter perk, gated by zander.nickname). See migration 0081.
+// Queried with raw SQL via the mysql2 pool; Prisma here is migration tooling.
+// =============================================================================
+
+model nicknames {
+  nicknameId   Int      @id @default(autoincrement())
+  userId       Int      @unique
+  nickname     String   @db.VarChar(16)
+  skeleton     String   @db.VarChar(32)
+  color        String?  @db.VarChar(16)
+  setAt        DateTime @default(now())
+  lastChangeAt DateTime @default(now())
+
+  @@index([skeleton])
+}
+
+model nicknameReservations {
+  reservationId Int      @id @default(autoincrement())
+  userId        Int
+  nickname      String   @db.VarChar(16)
+  skeleton      String   @db.VarChar(32)
+  reservedUntil DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([skeleton])
+  @@index([userId])
+  @@index([reservedUntil])
+}
+
+model nicknameHistory {
+  historyId Int       @id @default(autoincrement())
+  userId    Int
+  nickname  String    @db.VarChar(16)
+  color     String?   @db.VarChar(16)
+  setAt     DateTime  @default(now())
+  clearedAt DateTime?
+  clearedBy Int?
+  reason    String?   @db.VarChar(255)
+
+  @@index([userId])
+}
+
+model nicknameLockouts {
+  lockoutId Int       @id @default(autoincrement())
+  userId    Int       @unique
+  reason    String?   @db.VarChar(255)
+  lockedBy  Int
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+model nicknameBlocklist {
+  entryId   Int      @id @default(autoincrement())
+  entryType String   @db.VarChar(8)
+  value     String   @db.VarChar(64)
+  addedBy   Int?
+  createdAt DateTime @default(now())
+
+  @@unique([entryType, value], map: "nicknameBlocklist_type_value_key")
+}
