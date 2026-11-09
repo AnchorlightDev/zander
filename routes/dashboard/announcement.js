@@ -4,13 +4,22 @@ import {
   generateLog,
 } from "../../api/common.js";
 import { adminViewData } from "../../admin/adminHelpers.js";
-import { getWebAnnouncement, listHologramGroups } from "../../controllers/announcementController.js";
+import {
+  getWebAnnouncement,
+  listHologramGroups,
+  moveHologramFrame,
+} from "../../controllers/announcementController.js";
+import { prisma } from "../../controllers/databaseController.js";
 import {
   createPost,
   updatePost,
   deletePost,
   getPost,
+  setPostEnabled,
+  listPosts,
 } from "../../services/announcementPostService.js";
+
+const STATUSES = ["active", "scheduled", "ended", "disabled"];
 
 const PLATFORMS = ["web", "popup", "tip", "motd", "hologram"];
 const COLOUR_PLATFORMS = new Set(["tip", "motd", "hologram"]);
@@ -130,23 +139,44 @@ export default function dashboardAnnouncementSiteRoute(app, fetch, config, db, f
   }
 
   //
-  // List (full rebuild lands in checkpoint 5; keep the current list working)
+  // List — posts, with platform/status/group filters. A hologram group view
+  // shows the group's frames in order with up/down reordering.
   //
   app.get("/dashboard/announcements", async function (req, res) {
     if (!await isFeatureWebRouteEnabled(app, features.announcements, req, res, features)) return;
     if (!await hasPermission("zander.web.announcements", req, res, features)) return;
 
-    const { prisma } = await import("../../controllers/databaseController.js");
-    const [announcements, announcementWeb] = await Promise.all([
-      prisma.announcements.findMany({ orderBy: { announcementId: "desc" } }),
+    const platform = PLATFORMS.includes(req.query.platform) ? req.query.platform : "";
+    const status = STATUSES.includes(req.query.status) ? req.query.status : "";
+    const group = (platform === "hologram" && req.query.group) ? String(req.query.group) : "";
+
+    const [posts, groups, announcementWeb] = await Promise.all([
+      listPosts({ platform: platform || undefined, status: status || undefined, group: group || undefined }).catch((e) => {
+        console.error("[dashboard/announcements] list failed:", e?.message || e);
+        return [];
+      }),
+      listHologramGroups().catch(() => []),
       getWebAnnouncement(),
     ]);
+
+    // Hologram group reorder view: every frame in the group (enabled or not), ordered.
+    let frames = null;
+    if (platform === "hologram" && group) {
+      frames = await prisma.announcements.findMany({
+        where: { announcementType: "hologram", hologramGroup: group },
+        orderBy: [{ sortOrder: "asc" }, { announcementId: "asc" }],
+      }).catch(() => []);
+    }
 
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/announcements/announcements-list", {
         pageTitle: "Announcements",
         config,
-        apiData: { success: true, data: announcements },
+        posts,
+        groups,
+        frames,
+        filters: { platform, status, group },
+        hologramsEnabled: !!features.holograms,
         features,
         req,
         announcementWeb,
@@ -244,6 +274,48 @@ export default function dashboardAnnouncementSiteRoute(app, fetch, config, db, f
         console.error("[dashboard/announcements] delete failed:", error?.message || error);
       }
     }
-    return res.redirect("/dashboard/announcements");
+    return res.redirect(req.body?.returnTo || "/dashboard/announcements");
   });
+
+  //
+  // Enable / disable every platform row of a post.
+  //
+  app.post("/dashboard/announcements/toggle", async function (req, res) {
+    if (!await hasPermission("zander.web.announcements", req, res, features)) return;
+    const postId = Number(req.body?.postId);
+    const enabled = String(req.body?.enabled) === "1";
+    if (Number.isInteger(postId)) {
+      try {
+        await setPostEnabled(postId, enabled);
+        await generateLog(req.session?.user?.userId ?? null, "SUCCESS", "ANNOUNCEMENT", `${enabled ? "Enabled" : "Disabled"} post ${postId}`).catch(() => {});
+      } catch (error) {
+        console.error("[dashboard/announcements] toggle failed:", error?.message || error);
+      }
+    }
+    return res.redirect(req.body?.returnTo || "/dashboard/announcements");
+  });
+
+  //
+  // Reorder a hologram frame within its group.
+  //
+  app.post("/dashboard/announcements/move", async function (req, res) {
+    if (!await hasPermission("zander.web.announcements", req, res, features)) return;
+    const id = Number(req.body?.id);
+    const direction = req.body?.direction === "up" ? "up" : "down";
+    if (Number.isInteger(id)) {
+      try {
+        await moveHologramFrame(id, direction);
+      } catch (error) {
+        console.error("[dashboard/announcements] move failed:", error?.message || error);
+      }
+    }
+    return res.redirect(req.body?.returnTo || "/dashboard/announcements?platform=hologram");
+  });
+
+  //
+  // Legacy holograms dashboard: 301 to the merged announcements wizard/list.
+  //
+  for (const path of ["/dashboard/holograms", "/dashboard/holograms/create", "/dashboard/holograms/edit"]) {
+    app.get(path, (req, res) => res.redirect(301, "/dashboard/announcements?platform=hologram"));
+  }
 }

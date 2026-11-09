@@ -27,7 +27,6 @@ import dashboardFormsRoute from "./forms.js";
 import dashboardPagesRoute from "./pages.js";
 import dashboardMenusRoute from "./menus.js";
 import dashboardResourcesRoute from "./resources.js";
-import dashboardHologramsRoute from "./holograms.js";
 import { hasStaffFlag } from "../../lib/permissions/staffFlag.mjs";
 
 export default function dashboardSiteRoutes(
@@ -154,5 +153,4 @@ export default function dashboardSiteRoutes(
   dashboardPagesRoute(app, config, db, features, lang);
   dashboardMenusRoute(app, config, db, features, lang);
   dashboardResourcesRoute(app, config, db, features, lang);
-  dashboardHologramsRoute(app, config, db, features, lang);
 }
