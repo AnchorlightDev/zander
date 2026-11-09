@@ -13,7 +13,22 @@
                     </div>
                 </div>
                 <div class="col">
-                    <h1 class="text-white display-6 fw-bold mb-2"><%= profileApiData.username %></h1>
+                    <% const nick = typeof profileNickname !== "undefined" ? profileNickname : null; %>
+                    <% if (nick && nick.nickname) { %>
+                        <h1 class="display-6 fw-bold mb-1" style="color: <%= nick.hex || '#ffffff' %>;">~<%= nick.nickname %></h1>
+                        <p class="text-white-50 mb-2">
+                            Real username: <span class="text-white fw-semibold"><%= profileApiData.username %></span>
+                            <% if (typeof viewerCanReportNickname !== "undefined" && viewerCanReportNickname) { %>
+                                <form action="/profile/<%= profileApiData.username %>/report-nickname" method="post" class="d-inline ms-2">
+                                    <button type="submit" class="btn btn-sm btn-outline-light py-0 px-2">
+                                        <i class="fa-regular fa-flag me-1"></i>Report nickname
+                                    </button>
+                                </form>
+                            <% } %>
+                        </p>
+                    <% } else { %>
+                        <h1 class="text-white display-6 fw-bold mb-2"><%= profileApiData.username %></h1>
+                    <% } %>
                     <% if (ranks.length) { %>
                         <div class="d-flex flex-wrap align-items-center profile-rank-pills mb-3">
                             <% ranks.forEach(function(rank) { %>

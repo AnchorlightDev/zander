@@ -37,6 +37,17 @@ import {
 import { checkAndReportNickname } from "../lib/discord/nicknameCheck.mjs";
 import { syncMemberRankRoles, stripAllTrackedRankRoles } from "../lib/discord/rankRoleSync.mjs";
 import { syncBoosterRewardsForDiscordId } from "../controllers/boosterRewardController.js";
+import { hasPermission } from "../lib/discord/permissions.mjs";
+import {
+  resolveNickname,
+  getStoredNickname,
+  setNickname,
+  clearNickname,
+  NICKNAME_COLORS,
+} from "../controllers/nicknameController.js";
+import { MessageBuilder, Webhook } from "discord-webhook-node";
+import { sendWebhookMessage } from "../lib/discord/webhooks.mjs";
+import { Colors } from "discord.js";
 
 export default function profileSiteRoutes(
   app,
@@ -247,6 +258,31 @@ export default function profileSiteRoutes(
         }
 
         //
+        // Effective nickname for public display: shown with a ~ marker only
+        // while the profile owner currently holds the perk; the real username
+        // stays visible either way.
+        //
+        let profileNickname = null;
+        try {
+          const eff = await resolveNickname({ username: profileData.username });
+          if (eff && eff.isNick) {
+            const colourDef = NICKNAME_COLORS.find((c) => c.key === eff.color);
+            profileNickname = {
+              nickname: eff.nickname,
+              color: eff.color,
+              hex: colourDef ? colourDef.hex : null,
+              realname: eff.realname,
+            };
+          }
+        } catch (err) {
+          console.error("[PROFILE] Failed to resolve nickname for profile", err);
+        }
+        const viewerIsLoggedIn = isLoggedIn(req);
+        const viewerIsOwner =
+          viewerIsLoggedIn &&
+          req.session?.user?.username?.toLowerCase() === profileData.username.toLowerCase();
+
+        //
         // Render the profile page
         //
         res.header("content-type", "text/html; charset=utf-8").send(
@@ -271,6 +307,8 @@ export default function profileSiteRoutes(
           contextPermissions: contextPermissions,
           platformConnections: profilePlatformConnections,
           profileBadges: profileBadges,
+          profileNickname: profileNickname,
+          viewerCanReportNickname: Boolean(profileNickname) && viewerIsLoggedIn && !viewerIsOwner,
         }));
         return;
       }
@@ -356,6 +394,28 @@ export default function profileSiteRoutes(
         }
 
         //
+        // Nickname editor context. Permission is read from the session (what the
+        // ranks UI granted), so no extra LuckPerms round-trip. The stored row is
+        // shown even when hidden, so the owner can see a lapsed nickname.
+        //
+        const sessionPerms = req.session?.user?.permissions || [];
+        const nicknameCanUse = hasPermission(sessionPerms, "zander.nickname");
+        const nicknameCanColor = hasPermission(sessionPerms, "zander.nickname.color");
+        let nicknameData = { nickname: null, color: null, lastChangeAt: null };
+        try {
+          const stored = await getStoredNickname({ userId: profileData.userId });
+          if (stored && stored.row) {
+            nicknameData = {
+              nickname: stored.row.nickname || null,
+              color: stored.row.color || null,
+              lastChangeAt: stored.row.lastChangeAt || null,
+            };
+          }
+        } catch (err) {
+          console.error("[PROFILE] Failed to load nickname", err);
+        }
+
+        //
         // Render the profile page
         //
         res.header("content-type", "text/html; charset=utf-8").send(
@@ -376,6 +436,10 @@ export default function profileSiteRoutes(
           // Straight from the runtime's ICU data, so the list never goes stale.
           timeZoneGroups: groupedTimeZones(),
           months: MONTHS,
+          nicknameCanUse,
+          nicknameCanColor,
+          nicknameData,
+          nicknameColors: NICKNAME_COLORS,
         }));
         return;
       }
@@ -392,6 +456,109 @@ export default function profileSiteRoutes(
         announcementWeb: await getWebAnnouncement(),
       });
     }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Nickname (supporter perk). Same-origin + session protected by the global
+  // hook in app.js; the service enforces permission, punishment, lockout,
+  // cooldown, validation and impersonation.
+  // ---------------------------------------------------------------------------
+
+  app.post("/profile/nickname/set", async function (req, res) {
+    if (!isLoggedIn(req)) return res.redirect("/login");
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 20 })) return;
+    const username = req.session.user.username;
+    try {
+      const result = await setNickname(
+        { userId: req.session.user.userId },
+        { name: req.body?.nickname, color: req.body?.color || null }
+      );
+      if (result.ok) {
+        setBannerCookie("success", result.unchanged ? "Nickname unchanged." : "Nickname saved.", res);
+      } else {
+        setBannerCookie("danger", result.message || "We couldn't save that nickname.", res);
+      }
+    } catch (error) {
+      console.error("[PROFILE] Nickname set failed", error);
+      setBannerCookie("danger", "We couldn't save that nickname.", res);
+    }
+    return res.redirect(`/profile/${username}/edit`);
+  });
+
+  app.post("/profile/nickname/clear", async function (req, res) {
+    if (!isLoggedIn(req)) return res.redirect("/login");
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 20 })) return;
+    const username = req.session.user.username;
+    try {
+      const result = await clearNickname({ userId: req.session.user.userId });
+      if (result.ok) {
+        setBannerCookie("success", result.cleared ? "Nickname removed." : "You have no nickname set.", res);
+      } else {
+        setBannerCookie("danger", result.message || "We couldn't remove your nickname.", res);
+      }
+    } catch (error) {
+      console.error("[PROFILE] Nickname clear failed", error);
+      setBannerCookie("danger", "We couldn't remove your nickname.", res);
+    }
+    return res.redirect(`/profile/${username}/edit`);
+  });
+
+  app.post("/profile/:username/report-nickname", async function (req, res) {
+    if (!isLoggedIn(req)) return res.redirect("/login");
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 10 })) return;
+    const targetUsername = req.params.username;
+    try {
+      const eff = await resolveNickname({ username: targetUsername });
+      if (!eff || !eff.isNick) {
+        setBannerCookie("warning", "That player doesn't have a nickname to report.", res);
+        return res.redirect(`/profile/${targetUsername}`);
+      }
+
+      const note = typeof req.body?.note === "string" ? req.body.note.slice(0, 500) : null;
+      const reason = `Nickname report: ~${eff.nickname}`.slice(0, 100);
+      const evidence = [
+        `Real username: ${eff.realname}`,
+        `Displayed nickname: ~${eff.nickname}`,
+        note ? `Reporter note: ${note}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      await new Promise((resolve, reject) => {
+        db.query(
+          `INSERT INTO reports (reporterId, reportedUser, reportReason, reportReasonEvidence, reportPlatform)
+           VALUES (?, ?, ?, ?, 'web')`,
+          [
+            req.session.user.userId,
+            String(eff.realname).slice(0, 30),
+            reason,
+            evidence,
+          ],
+          (error, results) => (error ? reject(error) : resolve(results))
+        );
+      });
+
+      try {
+        const staffChannelHook = new Webhook(config.discord.webhooks.staffChannel);
+        const embed = new MessageBuilder()
+          .setTitle(`Nickname Report: ~${eff.nickname}`)
+          .addField("Reported By", req.session.user.username, true)
+          .addField("Real Username", eff.realname, true)
+          .addField("Displayed Nickname", `~${eff.nickname}`)
+          .setColor(Colors.Orange)
+          .setTimestamp();
+        if (note) embed.addField("Note", note);
+        await sendWebhookMessage(staffChannelHook, embed, { context: "web/profile#report-nickname" });
+      } catch (hookError) {
+        console.error("[PROFILE] Nickname report webhook failed", hookError);
+      }
+
+      setBannerCookie("success", "Thanks, staff have been notified.", res);
+    } catch (error) {
+      console.error("[PROFILE] Nickname report failed", error);
+      setBannerCookie("danger", "We couldn't submit that report.", res);
+    }
+    return res.redirect(`/profile/${targetUsername}`);
   });
 
   app.get("/profile/social/discord/connect", async function (req, res) {

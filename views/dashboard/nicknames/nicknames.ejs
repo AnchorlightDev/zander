@@ -1,0 +1,201 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+
+<%
+  function fmt(d) { return d ? new Date(d).toLocaleString() : "—"; }
+%>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+
+      <div class="wp-admin-page-header">
+        <h1 class="wp-heading-inline">Nicknames</h1>
+      </div>
+      <hr class="wp-section-divider">
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <p class="text-muted" style="max-width:760px;">
+        Look up a player to reset or release their nickname, lock them out of nicknames, or review
+        their full history. Edit the blocklist and rank-word list below. Nicknames are a supporter
+        perk (<code>zander.nickname</code>); staff tools require <code>zander.nickname.manage</code>.
+      </p>
+
+      <!-- Player lookup -->
+      <form method="get" action="/dashboard/nicknames" class="row g-2 align-items-end mb-4" style="max-width:520px;">
+        <div class="col">
+          <label class="form-label fw-semibold" for="username">Player username</label>
+          <input type="text" class="form-control" id="username" name="username" value="<%= query %>" placeholder="Steve" maxlength="16">
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-primary"><i class="fas fa-search me-1"></i>Look up</button>
+        </div>
+      </form>
+
+      <% if (notFound) { %>
+        <div class="alert alert-warning">No player found for "<%= query %>".</div>
+      <% } %>
+
+      <% if (player) { %>
+        <div class="card shadow-sm mb-4">
+          <div class="card-body">
+            <h5 class="card-title mb-3">
+              <%= player.user.username %>
+              <span class="text-muted small">(userId <%= player.user.userId %>)</span>
+            </h5>
+
+            <div class="row g-4">
+              <div class="col-lg-6">
+                <h6 class="fw-semibold">Current nickname</h6>
+                <% if (player.nickname && player.nickname.nickname) { %>
+                  <p class="mb-1">
+                    <span class="badge bg-dark fs-6">~<%= player.nickname.nickname %></span>
+                    <% if (player.nickname.color) { %><span class="text-muted ms-2"><%= player.nickname.color %></span><% } %>
+                  </p>
+                  <p class="text-muted small mb-3">Set <%= fmt(player.nickname.setAt) %> · last change <%= fmt(player.nickname.lastChangeAt) %></p>
+                  <div class="d-flex gap-2">
+                    <form method="post" action="/dashboard/nicknames/reset" onsubmit="return confirm('Reset this nickname? The player keeps their cooldown-free next change.');">
+                      <input type="hidden" name="username" value="<%= player.user.username %>">
+                      <button class="btn btn-sm btn-outline-danger"><i class="fas fa-rotate-left me-1"></i>Reset nickname</button>
+                    </form>
+                    <form method="post" action="/dashboard/nicknames/release" onsubmit="return confirm('Release this held/hidden nickname? It will no longer be reserved to them.');">
+                      <input type="hidden" name="username" value="<%= player.user.username %>">
+                      <button class="btn btn-sm btn-outline-secondary"><i class="fas fa-unlock me-1"></i>Release hold</button>
+                    </form>
+                  </div>
+                <% } else { %>
+                  <p class="text-muted">No nickname set.</p>
+                <% } %>
+              </div>
+
+              <div class="col-lg-6">
+                <h6 class="fw-semibold">Lockout</h6>
+                <% if (player.lockoutActive) { %>
+                  <div class="alert alert-danger py-2">
+                    Locked<%= player.lockout.reason ? `: ${player.lockout.reason}` : "" %>.
+                    <%= player.lockout.expiresAt ? `Expires ${fmt(player.lockout.expiresAt)}` : "No expiry." %>
+                  </div>
+                  <form method="post" action="/dashboard/nicknames/unlock">
+                    <input type="hidden" name="username" value="<%= player.user.username %>">
+                    <button class="btn btn-sm btn-outline-success"><i class="fas fa-lock-open me-1"></i>Unlock</button>
+                  </form>
+                <% } else { %>
+                  <form method="post" action="/dashboard/nicknames/lock" class="row g-2">
+                    <input type="hidden" name="username" value="<%= player.user.username %>">
+                    <div class="col-12">
+                      <input type="text" class="form-control form-control-sm" name="reason" placeholder="Reason (optional)" maxlength="255">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label small mb-0">Expiry (optional)</label>
+                      <input type="datetime-local" class="form-control form-control-sm" name="expiresAt">
+                    </div>
+                    <div class="col-12">
+                      <button class="btn btn-sm btn-danger"><i class="fas fa-ban me-1"></i>Lock out</button>
+                    </div>
+                  </form>
+                <% } %>
+              </div>
+            </div>
+
+            <!-- Reservations -->
+            <% if (player.reservations && player.reservations.length) { %>
+              <hr>
+              <h6 class="fw-semibold">Reserved holds</h6>
+              <table class="table table-sm align-middle">
+                <thead><tr><th>Nickname</th><th>Reserved until</th><th></th></tr></thead>
+                <tbody>
+                  <% player.reservations.forEach(function (r) { %>
+                    <tr>
+                      <td>~<%= r.nickname %></td>
+                      <td class="text-muted small"><%= fmt(r.reservedUntil) %></td>
+                      <td class="text-end">
+                        <form method="post" action="/dashboard/nicknames/release" class="d-inline">
+                          <input type="hidden" name="username" value="<%= player.user.username %>">
+                          <input type="hidden" name="reservationId" value="<%= r.reservationId %>">
+                          <button class="btn btn-sm btn-outline-secondary">Release</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            <% } %>
+
+            <!-- History -->
+            <hr>
+            <h6 class="fw-semibold">History</h6>
+            <% if (player.history && player.history.length) { %>
+              <table class="table table-sm align-middle">
+                <thead><tr><th>Nickname</th><th>Colour</th><th>Set</th><th>Cleared</th><th>By</th><th>Reason</th></tr></thead>
+                <tbody>
+                  <% player.history.forEach(function (h) { %>
+                    <tr>
+                      <td>~<%= h.nickname %></td>
+                      <td class="text-muted small"><%= h.color || "—" %></td>
+                      <td class="text-muted small"><%= fmt(h.setAt) %></td>
+                      <td class="text-muted small"><%= fmt(h.clearedAt) %></td>
+                      <td class="text-muted small"><%= h.clearedBy == null ? "—" : h.clearedBy %></td>
+                      <td class="text-muted small"><%= h.reason || "—" %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            <% } else { %>
+              <p class="text-muted">No history yet.</p>
+            <% } %>
+          </div>
+        </div>
+      <% } %>
+
+      <!-- Blocklist editor -->
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Blocklist &amp; rank words</h5>
+          <p class="text-muted small">
+            Matched against the normalised form of a nickname (leetspeak is folded, so <code>sh1t</code> is caught too).
+            Rank words block names that impersonate staff or system roles.
+          </p>
+
+          <form method="post" action="/dashboard/nicknames/blocklist/add" class="row g-2 align-items-end mb-3" style="max-width:520px;">
+            <div class="col-auto">
+              <label class="form-label small mb-0">Type</label>
+              <select class="form-select form-select-sm" name="entryType">
+                <option value="word">Banned word</option>
+                <option value="rank">Rank word</option>
+              </select>
+            </div>
+            <div class="col">
+              <label class="form-label small mb-0">Value</label>
+              <input type="text" class="form-control form-control-sm" name="value" maxlength="64" placeholder="word" required>
+            </div>
+            <div class="col-auto">
+              <button class="btn btn-sm btn-primary">Add</button>
+            </div>
+          </form>
+
+          <div class="row">
+            <% ["word", "rank"].forEach(function (type) { %>
+              <div class="col-md-6">
+                <h6 class="fw-semibold"><%= type === "rank" ? "Rank words" : "Banned words" %></h6>
+                <div class="d-flex flex-wrap gap-2">
+                  <% blocklist.filter(function (e) { return e.entryType === type; }).forEach(function (e) { %>
+                    <form method="post" action="/dashboard/nicknames/blocklist/remove" class="d-inline">
+                      <input type="hidden" name="entryId" value="<%= e.entryId %>">
+                      <button class="btn btn-sm btn-outline-secondary" title="Remove">
+                        <%= e.value %> <i class="fas fa-xmark ms-1"></i>
+                      </button>
+                    </form>
+                  <% }) %>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <%- include("../../admin/_footer.ejs") %>
+</div>

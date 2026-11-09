@@ -9,7 +9,9 @@
     profileSession: profileSession,
     profileApiData: profileApiData,
     profilePicture: profilePicture,
-    profileRanks: profileRanks
+    profileRanks: profileRanks,
+    profileNickname: typeof profileNickname !== "undefined" ? profileNickname : null,
+    viewerCanReportNickname: typeof viewerCanReportNickname !== "undefined" ? viewerCanReportNickname : false
 }) %>
 
 <div class="container py-5 profile-container">

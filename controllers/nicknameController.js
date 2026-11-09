@@ -606,6 +606,57 @@ export async function staffRelease({ reservationId = null, targetIdentity = null
   return { ok: true, released: row.nickname, target: user };
 }
 
+/**
+ * The raw stored nickname row for a user (NOT permission-filtered), so the
+ * owner's own settings page can show a hidden nickname. Returns { user, row }.
+ */
+export async function getStoredNickname(identity) {
+  const user = await resolveUser(identity);
+  if (!user) return null;
+  const row = await getNicknameRowReal(user.userId);
+  return { user, row };
+}
+
+/**
+ * Everything the staff management page needs for one player: their stored
+ * nickname (incl. hidden), active/expired lockout, full history and any
+ * reservation holds.
+ */
+export async function getManageView(identity) {
+  const user = await resolveUser(identity);
+  if (!user) return null;
+  const [rows, lockoutRows, history, reservations] = await Promise.all([
+    mainQuery(
+      `SELECT nickname, skeleton, color, setAt, lastChangeAt FROM nicknames WHERE userId = ? LIMIT 1`,
+      [user.userId]
+    ),
+    mainQuery(
+      `SELECT lockoutId, reason, lockedBy, expiresAt, createdAt FROM nicknameLockouts WHERE userId = ? LIMIT 1`,
+      [user.userId]
+    ),
+    mainQuery(
+      `SELECT historyId, nickname, color, setAt, clearedAt, clearedBy, reason
+         FROM nicknameHistory WHERE userId = ? ORDER BY setAt DESC, historyId DESC`,
+      [user.userId]
+    ),
+    mainQuery(
+      `SELECT reservationId, nickname, reservedUntil, createdAt
+         FROM nicknameReservations WHERE userId = ? ORDER BY reservedUntil DESC`,
+      [user.userId]
+    ),
+  ]);
+  const lockout = lockoutRows[0] || null;
+  const active = lockout && (!lockout.expiresAt || new Date(lockout.expiresAt).getTime() > Date.now());
+  return {
+    user,
+    nickname: rows[0] || null,
+    lockout,
+    lockoutActive: Boolean(active),
+    history,
+    reservations,
+  };
+}
+
 export async function getNicknameHistory(targetIdentity) {
   const user = await resolveUser(targetIdentity);
   if (!user) return null;

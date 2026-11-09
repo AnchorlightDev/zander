@@ -256,6 +256,16 @@ export const adminPages = [
     group: "System",
     sortOrder: 74.5,
   },
+  {
+    slug: "nicknames",
+    title: "Nicknames",
+    menuTitle: "Nicknames",
+    icon: "fa-solid fa-signature",
+    capability: "zander.nickname.manage",
+    path: "/dashboard/nicknames",
+    group: "System",
+    sortOrder: 74.6,
+  },
 
   // ── Webstore group ─────────────────────────────────────────────────────────
   {
