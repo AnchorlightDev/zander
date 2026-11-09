@@ -10,3 +10,7 @@ graphify-out
 .idea/
 target/
 .vscode/
+
+# Local-only nickname-feature working docs (handover artifacts; not committed)
+docs-draft/
+nickname-discovery.md
