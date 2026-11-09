@@ -2,687 +2,531 @@
 <%- include("../../admin/_topbar.ejs") %>
 <%- include("../../admin/_sidebar.ejs") %>
 
+<%
+  // wizardState and hologramsEnabled are supplied by routes/dashboard/announcement.js.
+  // wizardState carries ISO-UTC date strings; the client converts to/from local.
+%>
+
 <div id="wpcontent">
   <div id="wpbody-content">
     <div class="wrap">
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                <h1 class="h2"><%= type === 'create' ? 'Create' : 'Edit' %> Announcement</h1>
-                <div class="btn-toolbar mb-2 mb-md-0">
-                    <%- include("../../partials/documentationLink.ejs", {
-                        doclink: "https://anchorlight.dev/docs/products/zander/features/announcements"
-                    }) %>
-                </div>
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><%= type === 'create' ? 'Create' : 'Edit' %> Announcement</h1>
+        <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+          <a href="/dashboard/announcements" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Back
+          </a>
+          <%- include("../../partials/documentationLink.ejs", {
+            doclink: "https://anchorlight.dev/docs/products/zander/features/announcements"
+          }) %>
+        </div>
+      </div>
+
+      <%- include("../../admin/_notices.ejs") %>
+
+      <!-- Stepper -->
+      <ol class="wiz-steps list-unstyled d-flex flex-wrap gap-2 mb-4" id="wiz-steps">
+        <li class="wiz-step active" data-step="1"><span class="wiz-num">1</span> Message</li>
+        <li class="wiz-step" data-step="2"><span class="wiz-num">2</span> Platforms</li>
+        <li class="wiz-step" data-step="3"><span class="wiz-num">3</span> Per-platform</li>
+        <li class="wiz-step" data-step="4"><span class="wiz-num">4</span> Schedule</li>
+        <li class="wiz-step" data-step="5"><span class="wiz-num">5</span> Review</li>
+      </ol>
+
+      <form id="wizard-form" method="post" action="/dashboard/announcements/save">
+        <input type="hidden" name="payload" id="wizard-payload">
+
+        <!-- Step 1: Message -->
+        <section class="wiz-panel" data-step="1">
+          <div class="mb-3">
+            <label for="wiz-title" class="form-label">Post title <span class="text-muted">(optional)</span></label>
+            <input type="text" class="form-control" id="wiz-title" maxlength="120"
+                   placeholder="Defaults to the start of the message">
+          </div>
+          <div class="mb-3">
+            <label for="wiz-body" class="form-label">Message</label>
+            <textarea class="form-control" id="wiz-body" rows="4"
+                      placeholder="The main message. Each platform can tweak this later."></textarea>
+            <small class="text-muted">Seeds every platform; you can edit each one independently in step 3.</small>
+          </div>
+          <div class="mb-3">
+            <label for="wiz-link" class="form-label">Link <span class="text-muted">(optional)</span></label>
+            <input type="text" class="form-control" id="wiz-link" placeholder="/store, https://..., mailto:...">
+          </div>
+        </section>
+
+        <!-- Step 2: Platforms -->
+        <section class="wiz-panel d-none" data-step="2">
+          <p class="text-muted">Choose where this announcement publishes. Each ticked platform gets its own tab next.</p>
+          <div class="row g-3" id="platform-choices"></div>
+          <div class="mt-3 d-none" id="hologram-group-wrap">
+            <label for="wiz-hologram-group" class="form-label">Hologram group</label>
+            <input type="text" class="form-control" id="wiz-hologram-group" list="hologram-groups"
+                   maxlength="64" placeholder="default">
+            <datalist id="hologram-groups">
+              <% (groups || []).forEach(function (g) { %><option value="<%= g %>"></option><% }); %>
+            </datalist>
+            <small class="text-muted">Pick an existing group or type a new one. Holograms in a group cycle through its frames.</small>
+          </div>
+        </section>
+
+        <!-- Step 3: Per-platform tabs -->
+        <section class="wiz-panel d-none" data-step="3">
+          <ul class="nav nav-tabs" id="platform-tabs" role="tablist"></ul>
+          <div class="tab-content border border-top-0 p-3" id="platform-tab-panes"></div>
+        </section>
+
+        <!-- Step 4: Schedule -->
+        <section class="wiz-panel d-none" data-step="4">
+          <p class="text-muted">One window for every platform. Times are shown in your local timezone and stored as UTC.</p>
+          <div class="row">
+            <div class="mb-3 col-md-6">
+              <label for="wiz-start" class="form-label">Start</label>
+              <input type="datetime-local" class="form-control" id="wiz-start">
+              <small class="text-muted">Leave blank to publish immediately.</small>
             </div>
-
-            <div class="basic-form">
-                <% if (type === 'create') { %>
-                    <form method="post" action="<%= process.env.siteAddress %>/redirect/announcement/create">
-                        <input type="hidden" name="timezoneOffset" value="">
-                <% } %>
-
-                <% if (type === 'edit') { %>
-                    <form method="post" action="<%= process.env.siteAddress %>/redirect/announcement/edit">
-                        <input type="hidden" name="timezoneOffset" value="">
-                        <%- include("../../partials/form/inputHidden.ejs", {
-                            elementName: "announcementId",
-                            elementValue: announcementApiData.announcementId
-                        }) %>
-                <% } %>
-
-                        <div class="row">
-                            <!-- Announcement Type -->
-                            <div class="mb-3 col">
-                                <label for="announcementType">Announcement Type</label>
-
-                                <% if (type === 'create') { %>
-                                    <%- include("../../partials/form/inputSelect.ejs", {
-                                        elementName: "announcementType",
-                                        elementValue: "null",
-                                        required: true,
-                                        optionElements: [
-                                            {
-                                                optionName: "Select a Type",
-                                                optionValue: "null",
-                                                selected: true,
-                                                disabled: true
-                                            },
-                                            {
-                                                optionName: "Server Ping MOTD",
-                                                optionValue: "motd",
-                                                selected: false,
-                                                disabled: false
-                                            },
-                                            {
-                                                optionName: "In-Game Tip",
-                                                optionValue: "tip",
-                                                selected: false,
-                                                disabled: false
-                                            },
-                                            {
-                                                optionName: "Website Banner",
-                                                optionValue: "web",
-                                                selected: false,
-                                                disabled: false
-                                            },
-                                            {
-                                                optionName: "Website Popup Announcement",
-                                                optionValue: "popup",
-                                                selected: false,
-                                                disabled: false
-                                            }
-                                        ]
-                                    }) %>
-                                <% } %>
-                                <% if (type === 'edit') { %>
-                                    <%- include("../../partials/form/inputSelect.ejs", {
-                                        elementName: "announcementType",
-                                        elementValue: announcementApiData.announcementType,
-                                        required: true,
-                                        optionElements: [
-                                            {
-                                                optionName: "Select a Type",
-                                                optionValue: null,
-                                                selected: true,
-                                                disabled: true
-                                            },
-                                            {
-                                                optionName: "Server Ping MOTD",
-                                                optionValue: "motd",
-                                                selected: false,
-                                                disabled: false
-                                            },
-                                            {
-                                                optionName: "In-Game Tip",
-                                                optionValue: "tip",
-                                                selected: false,
-                                                disabled: false
-                                            },
-                                            {
-                                                optionName: "Website Banner",
-                                                optionValue: "web",
-                                                selected: false,
-                                                disabled: false
-                                            },
-                                            {
-                                                optionName: "Website Popup Announcement",
-                                                optionValue: "popup",
-                                                selected: false,
-                                                disabled: false
-                                            }
-                                        ]
-                                    }) %>
-                                <% } %>
-                            </div>
-                        </div>
-
-                        <!-- Body -->
-                        <div class="mb-3" data-announcement-field="body">
-                            <label for="body" id="label-body">Message</label>
-
-                            <% if (type === 'create') { %>
-                                <%- include("../../partials/form/inputTextArea.ejs", {
-                                    elementName: "body",
-                                    elementValue: null,
-                                    required: false
-                                }) %>
-                            <% } %>
-                            <% if (type === 'edit') { %>
-                                <%- include("../../partials/form/inputTextArea.ejs", {
-                                    elementName: "body",
-                                    elementValue: announcementApiData.body,
-                                    required: false
-                                }) %>
-                            <% } %>
-                        </div>
-
-                        <!-- Colour Message Body Format -->
-                        <div class="mb-3" data-announcement-field="colourMessageFormat">
-                            <label for="colourMessageFormat">Colour Message Format</label>
-
-                            <!-- Minecraft colour/format toolbar -->
-                            <div class="mc-toolbar mb-1" role="toolbar" aria-label="Minecraft colour codes">
-                                <button type="button" class="mc-code-btn" data-code="&0" title="Black (&0)"        style="background:#000000;color:#fff;border-color:#444;">&amp;0</button>
-                                <button type="button" class="mc-code-btn" data-code="&1" title="Dark Blue (&1)"    style="background:#0000AA;color:#fff;border-color:#000066;">&amp;1</button>
-                                <button type="button" class="mc-code-btn" data-code="&2" title="Dark Green (&2)"   style="background:#00AA00;color:#fff;border-color:#006600;">&amp;2</button>
-                                <button type="button" class="mc-code-btn" data-code="&3" title="Dark Aqua (&3)"    style="background:#00AAAA;color:#fff;border-color:#006666;">&amp;3</button>
-                                <button type="button" class="mc-code-btn" data-code="&4" title="Dark Red (&4)"     style="background:#AA0000;color:#fff;border-color:#660000;">&amp;4</button>
-                                <button type="button" class="mc-code-btn" data-code="&5" title="Dark Purple (&5)"  style="background:#AA00AA;color:#fff;border-color:#660066;">&amp;5</button>
-                                <button type="button" class="mc-code-btn" data-code="&6" title="Gold (&6)"         style="background:#FFAA00;color:#000;border-color:#aa7000;">&amp;6</button>
-                                <button type="button" class="mc-code-btn" data-code="&7" title="Gray (&7)"         style="background:#AAAAAA;color:#000;border-color:#777;">&amp;7</button>
-                                <button type="button" class="mc-code-btn" data-code="&8" title="Dark Gray (&8)"    style="background:#555555;color:#fff;border-color:#222;">&amp;8</button>
-                                <button type="button" class="mc-code-btn" data-code="&9" title="Blue (&9)"         style="background:#5555FF;color:#fff;border-color:#2222cc;">&amp;9</button>
-                                <button type="button" class="mc-code-btn" data-code="&a" title="Green (&a)"        style="background:#55FF55;color:#000;border-color:#22bb22;">&amp;a</button>
-                                <button type="button" class="mc-code-btn" data-code="&b" title="Aqua (&b)"         style="background:#55FFFF;color:#000;border-color:#22bbbb;">&amp;b</button>
-                                <button type="button" class="mc-code-btn" data-code="&c" title="Red (&c)"          style="background:#FF5555;color:#fff;border-color:#cc2222;">&amp;c</button>
-                                <button type="button" class="mc-code-btn" data-code="&d" title="Light Purple (&d)" style="background:#FF55FF;color:#000;border-color:#cc22cc;">&amp;d</button>
-                                <button type="button" class="mc-code-btn" data-code="&e" title="Yellow (&e)"       style="background:#FFFF55;color:#000;border-color:#cccc22;">&amp;e</button>
-                                <button type="button" class="mc-code-btn" data-code="&f" title="White (&f)"        style="background:#FFFFFF;color:#000;border-color:#ccc;">&amp;f</button>
-                                <span class="mc-toolbar-sep mx-1" aria-hidden="true"></span>
-                                <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&l" title="Bold (&l)"><b>&amp;l</b></button>
-                                <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&o" title="Italic (&o)"><i>&amp;o</i></button>
-                                <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&n" title="Underline (&n)" style="text-decoration:underline;">&amp;n</button>
-                                <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&m" title="Strikethrough (&m)" style="text-decoration:line-through;">&amp;m</button>
-                                <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&k" title="Obfuscated (&k)">&amp;k</button>
-                                <button type="button" class="mc-code-btn mc-fmt-btn" data-code="&r" title="Reset (&r)">&amp;r</button>
-                            </div>
-
-                            <% if (type === 'create') { %>
-                                <textarea id="colourMessageFormat" name="colourMessageFormat"
-                                          class="form-control input-default"
-                                          cols="30" rows="3"
-                                          style="height:80px;font-family:monospace;"></textarea>
-                            <% } %>
-                            <% if (type === 'edit') { %>
-                                <textarea id="colourMessageFormat" name="colourMessageFormat"
-                                          class="form-control input-default"
-                                          cols="30" rows="3"
-                                          style="height:80px;font-family:monospace;"><%= announcementApiData.colourMessageFormat || '' %></textarea>
-                            <% } %>
-
-                            <small class="text-muted">Use <code>&amp;X</code> colour codes (e.g. <code>&amp;aHello &amp;eWorld</code>). For MOTD, a newline sets line&nbsp;2.</small>
-
-                            <!-- Live preview -->
-                            <div class="mt-2">
-                                <!-- MOTD: server-list mockup -->
-                                <div id="mc-motd-preview" class="mc-preview d-none">
-                                    <div class="mc-preview-label">MOTD Preview</div>
-                                    <div class="mc-server-list-row">
-                                        <div class="mc-icon-placeholder">
-                                            <i class="fas fa-server"></i>
-                                        </div>
-                                        <div class="mc-server-details">
-                                            <div class="mc-server-name-bar">CraftingForChrist.net</div>
-                                            <div id="mc-motd-line1" class="mc-motd-text">&nbsp;</div>
-                                            <div id="mc-motd-line2" class="mc-motd-text">&nbsp;</div>
-                                        </div>
-                                        <div class="mc-server-status">
-                                            <div><i class="fas fa-signal" style="color:#55FF55;font-size:10px;"></i></div>
-                                            <div class="mc-player-count">42/100</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Tip: in-game chat mockup -->
-                                <div id="mc-tip-preview" class="mc-preview d-none">
-                                    <div class="mc-preview-label">In-Game Tip Preview</div>
-                                    <div class="mc-chat-area">
-                                        <div id="mc-tip-text" class="mc-chat-line">&nbsp;</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <!-- Announcement Link -->
-                            <div class="mb-3 col" data-announcement-field="link">
-                                <label for="position">Announcement Link</label>
-
-                                <% if (type === 'create') { %>
-                                    <%- include("../../partials/form/inputText.ejs", {
-                                        elementName: "link",
-                                        elementValue: null,
-                                        required: false
-                                    }) %>
-                                <% } %>
-                                <% if (type === 'edit') { %>
-                                    <%- include("../../partials/form/inputText.ejs", {
-                                        elementName: "link",
-                                        elementValue: announcementApiData.link,
-                                        required: false
-                                    }) %>
-                                <% } %>
-                            </div>
-
-                            <!-- Popup Button Text -->
-                            <div class="mb-3 col" data-announcement-field="popupButtonText">
-                                <label for="popupButtonText">Popup Button Text</label>
-
-                                <% if (type === 'create') { %>
-                                    <%- include("../../partials/form/inputText.ejs", {
-                                        elementName: "popupButtonText",
-                                        elementValue: null,
-                                        required: false
-                                    }) %>
-                                <% } %>
-                                <% if (type === 'edit') { %>
-                                    <%- include("../../partials/form/inputText.ejs", {
-                                        elementName: "popupButtonText",
-                                        elementValue: announcementApiData.popupButtonText,
-                                        required: false
-                                    }) %>
-                                <% } %>
-                                <small class="text-muted">Optional label for popup call-to-action button.</small>
-                            </div>
-
-                            <!-- Announcement Visibility -->
-                            <div class="mb-3 col">
-                                <label for="enabled">Announcement Visibility</label>
-
-                                <% if (type === 'create') { %>
-                                    <%- include("../../partials/form/inputSelect.ejs", {
-                                        elementName: "enabled",
-                                        elementValue: "null",
-                                        required: true,
-                                        optionElements: [
-                                            {
-                                                optionName: "Select a Visibility",
-                                                optionValue: "null",
-                                                selected: true,
-                                                disabled: true
-                                            },
-                                            {
-                                                optionName: "Enabled",
-                                                optionValue: "1",
-                                                selected: false,
-                                                disabled: false
-                                            },
-                                            {
-                                                optionName: "Disabled",
-                                                optionValue: "0",
-                                                selected: false,
-                                                disabled: false
-                                            }
-                                        ]
-                                    }) %>
-                                <% } %>
-                                <% if (type === 'edit') { %>
-                                    <%- include("../../partials/form/inputSelect.ejs", {
-                                        elementName: "enabled",
-                                        elementValue: announcementApiData.enabled,
-                                        required: true,
-                                        optionElements: [
-                                            {
-                                                optionName: "Select a Visibility",
-                                                optionValue: "null",
-                                                selected: true,
-                                                disabled: true
-                                            },
-                                            {
-                                                optionName: "Enabled",
-                                                optionValue: "1",
-                                                selected: false,
-                                                disabled: false
-                                            },
-                                            {
-                                                optionName: "Disabled",
-                                                optionValue: "0",
-                                                selected: false,
-                                                disabled: false
-                                            }
-                                        ]
-                                    }) %>
-                                <% } %>
-                            </div>
-                        </div>
-
-                        <div class="mb-3" data-announcement-field="popupImageUrl">
-                            <label class="form-label">Popup Image</label>
-
-                            <div id="popup-img-preview" class="mb-2 d-none">
-                                <div class="d-inline-flex align-items-start gap-2 border rounded p-2">
-                                    <img id="popup-img-thumb" src="" alt="Popup image preview"
-                                         style="max-height:120px;max-width:280px;object-fit:contain;">
-                                    <button type="button" id="popup-img-remove"
-                                            class="btn btn-sm btn-outline-danger flex-shrink-0"
-                                            title="Remove image">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="d-flex gap-2 align-items-center flex-wrap">
-                                <label for="popup-img-file"
-                                       class="btn btn-outline-secondary btn-sm mb-0"
-                                       style="cursor:pointer">
-                                    <i class="fas fa-upload me-1"></i>Upload image
-                                </label>
-                                <input type="file" id="popup-img-file"
-                                       accept="image/png,image/jpeg,image/gif,image/webp"
-                                       class="d-none">
-                                <span class="text-muted small">or paste a URL:</span>
-                                <input type="url" name="popupImageUrl" id="popupImageUrl"
-                                       class="form-control form-control-sm flex-grow-1"
-                                       style="max-width:420px"
-                                       placeholder="https://..."
-                                       value="<%= (type === 'edit' && announcementApiData.popupImageUrl) ? announcementApiData.popupImageUrl : '' %>">
-                                <span id="popup-img-status" class="small"></span>
-                            </div>
-                            <small class="text-muted mt-1 d-block">
-                                Upload PNG, JPG, GIF or WebP (max 8 MB) or paste an image URL directly.
-                            </small>
-                        </div>
-
-                        <div class="row">
-                            <!-- Announcement Start Date -->
-                            <div class="mb-3 col">
-                                <label for="startDate">Start Date</label>
-
-                                <% if (type === 'create') { %>
-                                    <%- include("../../partials/form/inputDateTime.ejs", {
-                                        elementName: "startDate",
-                                        elementValue: null,
-                                        required: false
-                                    }) %>
-                                <% } %>
-                                <% if (type === 'edit') { %>
-                                    <%- include("../../partials/form/inputDateTime.ejs", {
-                                        elementName: "startDate",
-                                        elementValue: null,
-                                        required: false,
-                                        elementAttributes: `data-iso="${announcementApiData.startDate || ""}"`
-                                    }) %>
-                                <% } %>
-                                <small class="text-muted">Leave blank to publish immediately.</small>
-                            </div>
-
-                            <!-- Announcement End Date -->
-                            <div class="mb-3 col">
-                                <label for="endDate">End Date</label>
-
-                                <% if (type === 'create') { %>
-                                    <%- include("../../partials/form/inputDateTime.ejs", {
-                                        elementName: "endDate",
-                                        elementValue: null,
-                                        required: false
-                                    }) %>
-                                <% } %>
-                                <% if (type === 'edit') { %>
-                                    <%- include("../../partials/form/inputDateTime.ejs", {
-                                        elementName: "endDate",
-                                        elementValue: null,
-                                        required: false,
-                                        elementAttributes: `data-iso="${announcementApiData.endDate || ""}"`
-                                    }) %>
-                                <% } %>
-                                <small class="text-muted">Leave blank to keep this announcement active.</small>
-                            </div>
-                        </div>
-
-                        <% if (type === 'create') { %>
-                            <button type="submit" class="btn btn-primary"><i class="fas fa-server"></i> Create Announcement</button>
-                        <% } %>
-
-                        <% if (type === 'edit') { %>
-                            <button type="submit" class="btn btn-warning"><i class="fas fa-server"></i> Edit Announcement</button>
-                        <% } %>
-                </form>
+            <div class="mb-3 col-md-6">
+              <label for="wiz-end" class="form-label">End</label>
+              <input type="datetime-local" class="form-control" id="wiz-end">
+              <small class="text-muted">Leave blank to keep it active. Expired posts move to the "Ended" filter.</small>
             </div>
-    </div><!-- /.wrap -->
-  </div><!-- /#wpbody-content -->
+          </div>
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="per-platform-schedule">
+            <label class="form-check-label" for="per-platform-schedule">Different times per platform</label>
+          </div>
+          <div id="per-platform-schedule-fields" class="d-none"></div>
+        </section>
+
+        <!-- Step 5: Review -->
+        <section class="wiz-panel d-none" data-step="5">
+          <div id="review-summary"></div>
+          <div class="mt-4 d-flex gap-2">
+            <button type="button" class="btn btn-primary" id="btn-publish"><i class="fas fa-paper-plane"></i> Publish</button>
+            <button type="button" class="btn btn-outline-secondary" id="btn-draft"><i class="fas fa-save"></i> Save as draft</button>
+          </div>
+        </section>
+
+        <!-- Nav -->
+        <div class="d-flex justify-content-between mt-4 pt-3 border-top">
+          <button type="button" class="btn btn-outline-secondary" id="wiz-back" disabled><i class="fas fa-chevron-left"></i> Back</button>
+          <button type="button" class="btn btn-primary" id="wiz-next">Next <i class="fas fa-chevron-right"></i></button>
+        </div>
+      </form>
+    </div>
+  </div>
   <%- include("../../admin/_footer.ejs") %>
-</div><!-- /#wpcontent -->
+</div>
 
 <style>
-/* ── Minecraft colour toolbar ──────────────────────────────────── */
+.wiz-steps .wiz-step { padding:6px 12px; border-radius:20px; background:#eee; color:#666; font-size:13px; }
+.wiz-steps .wiz-step.active { background:#2271b1; color:#fff; }
+.wiz-steps .wiz-step.done { background:#c5e5c8; color:#13611b; }
+.wiz-num { display:inline-block; width:18px; height:18px; line-height:18px; text-align:center; border-radius:50%; background:rgba(0,0,0,.15); font-size:11px; margin-right:4px; }
 .mc-toolbar { display:flex; flex-wrap:wrap; gap:3px; align-items:center; }
-.mc-code-btn {
-    min-width:26px; height:24px; padding:0 5px;
-    border:1px solid #ccc; border-radius:3px;
-    cursor:pointer; font-size:11px; font-family:monospace; line-height:22px;
-    background:#eee; color:#000; transition:opacity .1s;
-}
+.mc-code-btn { min-width:26px; height:24px; padding:0 5px; border:1px solid #ccc; border-radius:3px; cursor:pointer; font-size:11px; font-family:monospace; line-height:22px; background:#eee; color:#000; }
 .mc-code-btn:hover { opacity:.75; }
 .mc-fmt-btn { background:#555; color:#eee; border-color:#333; }
-.mc-toolbar-sep { display:inline-block; width:1px; background:#ccc; height:20px; align-self:center; }
-
-/* ── Minecraft preview panel ────────────────────────────────────── */
-.mc-preview {
-    background:#1d1d1d; border:1px solid #3a3a3a; border-radius:4px;
-    padding:8px 10px; font-family:'Courier New',Courier,monospace; font-size:13px;
-}
-.mc-preview-label {
-    font-size:10px; color:#666; text-transform:uppercase;
-    letter-spacing:.5px; margin-bottom:6px; font-family:sans-serif;
-}
-.mc-server-list-row { display:flex; align-items:flex-start; gap:8px; }
-.mc-icon-placeholder {
-    width:56px; height:56px; background:#2a2a2a; border:1px solid #444;
-    border-radius:2px; display:flex; align-items:center; justify-content:center;
-    color:#555; font-size:20px; flex-shrink:0;
-}
-.mc-server-details { flex:1; min-width:0; }
-.mc-server-name-bar { color:#fff; font-size:13px; margin-bottom:2px; }
-.mc-motd-text { color:#aaa; min-height:17px; line-height:1.35; word-break:break-all; }
-.mc-server-status { text-align:right; font-size:11px; flex-shrink:0; padding-top:2px; }
-.mc-player-count { color:#aaa; white-space:nowrap; }
-.mc-chat-area { padding:2px 0; }
-.mc-chat-line { color:#fff; min-height:18px; line-height:1.4; word-break:break-all; }
+.mc-toolbar-sep { display:inline-block; width:1px; background:#ccc; height:20px; align-self:center; margin:0 4px; }
+.mc-preview { background:#1d1d1d; border:1px solid #3a3a3a; border-radius:4px; padding:8px 10px; font-family:'Courier New',monospace; font-size:13px; color:#fff; margin-top:8px; min-height:28px; word-break:break-all; }
+.len-warn { color:#b32d2e; }
+.platform-card { cursor:pointer; border:1px solid #ddd; border-radius:6px; padding:12px; height:100%; }
+.platform-card.selected { border-color:#2271b1; background:#eef6fc; }
 </style>
 
 <script>
-    const toLocalDateTimeInput = (isoString) => {
-        if (!isoString) return "";
-        const date = new Date(isoString);
-        if (Number.isNaN(date.getTime())) return "";
-        const offset = date.getTimezoneOffset();
-        const local = new Date(date.getTime() - offset * 60000);
-        return local.toISOString().slice(0, 16);
-    };
+(function () {
+  const STATE = <%- JSON.stringify(wizardState) %>;
+  const HOLOGRAMS_ENABLED = <%= hologramsEnabled ? 'true' : 'false' %>;
 
-    document.querySelectorAll("input[data-iso]").forEach((input) => {
-        const value = toLocalDateTimeInput(input.dataset.iso);
-        if (value) {
-            input.value = value;
+  const COLOURS = [
+    ['&0','#000000','#fff'],['&1','#0000AA','#fff'],['&2','#00AA00','#fff'],['&3','#00AAAA','#fff'],
+    ['&4','#AA0000','#fff'],['&5','#AA00AA','#fff'],['&6','#FFAA00','#000'],['&7','#AAAAAA','#000'],
+    ['&8','#555555','#fff'],['&9','#5555FF','#fff'],['&a','#55FF55','#000'],['&b','#55FFFF','#000'],
+    ['&c','#FF5555','#fff'],['&d','#FF55FF','#000'],['&e','#FFFF55','#000'],['&f','#FFFFFF','#000'],
+  ];
+  const FORMATS = [['&l','Bold'],['&o','Italic'],['&n','Underline'],['&m','Strike'],['&k','Obf'],['&r','Reset']];
+  const MC_COLORS = Object.fromEntries(COLOURS.map(([c,hex]) => [c[1], hex]));
+
+  const PLATFORM_META = {
+    web:      { label: 'Website banner',  icon: 'fa-bullhorn',        colour: false },
+    popup:    { label: 'Website popup',   icon: 'fa-window-restore',  colour: false },
+    tip:      { label: 'In-game tip',     icon: 'fa-comment-dots',    colour: true  },
+    motd:     { label: 'Server-list MOTD', icon: 'fa-server',         colour: true, maxLines: 2 },
+    hologram: { label: 'Hologram',        icon: 'fa-cube',            colour: true  },
+  };
+  const ORDER = ['web', 'popup', 'tip', 'motd', 'hologram'];
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // ── date helpers ──────────────────────────────────────────────────────────
+  function isoToLocalInput(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+  function localInputToIso(val) {
+    if (!val) return null;
+    const d = new Date(val);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+
+  // ── Minecraft colour preview ────────────────────────────────────────────────
+  function parseMc(text) {
+    if (!text) return '&nbsp;';
+    const parts = String(text).split(/([&§][0-9a-fk-or])/i);
+    let color = '#FFFFFF', bold = false, italic = false, uline = false, strike = false, html = '';
+    for (const part of parts) {
+      const m = part.match(/^[&§]([0-9a-fk-or])$/i);
+      if (m) {
+        const code = ('&' + m[1]).toLowerCase();
+        const hex = MC_COLORS[code];
+        if (hex) { color = hex; bold = italic = uline = strike = false; }
+        else if (code === '&r') { color = '#FFFFFF'; bold = italic = uline = strike = false; }
+        else if (code === '&l') bold = true;
+        else if (code === '&o') italic = true;
+        else if (code === '&n') uline = true;
+        else if (code === '&m') strike = true;
+      } else if (part) {
+        let style = 'color:' + color + ';';
+        if (bold) style += 'font-weight:bold;';
+        if (italic) style += 'font-style:italic;';
+        const deco = [uline ? 'underline' : '', strike ? 'line-through' : ''].filter(Boolean).join(' ');
+        if (deco) style += 'text-decoration:' + deco + ';';
+        html += '<span style="' + style + '">' + esc(part) + '</span>';
+      }
+    }
+    return html || '&nbsp;';
+  }
+
+  function insertAtCursor(el, text) {
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? el.value.length;
+    el.value = el.value.slice(0, start) + text + el.value.slice(end);
+    const pos = start + text.length;
+    el.setSelectionRange(pos, pos);
+    el.focus();
+    el.dispatchEvent(new Event('input'));
+  }
+
+  function colourToolbar(targetId) {
+    let html = '<div class="mc-toolbar mb-1">';
+    for (const [code, bg, fg] of COLOURS) {
+      html += `<button type="button" class="mc-code-btn" data-ins="${code}" data-target="${targetId}" title="${code}" style="background:${bg};color:${fg};">${esc(code)}</button>`;
+    }
+    html += '<span class="mc-toolbar-sep"></span>';
+    for (const [code, name] of FORMATS) {
+      html += `<button type="button" class="mc-code-btn mc-fmt-btn" data-ins="${code}" data-target="${targetId}" title="${name} (${code})">${esc(code)}</button>`;
+    }
+    html += '</div>';
+    return html;
+  }
+
+  // ── Platform choice cards (step 2) ──────────────────────────────────────────
+  function renderPlatformChoices() {
+    const wrap = $('platform-choices');
+    wrap.innerHTML = '';
+    for (const p of ORDER) {
+      if (p === 'hologram' && !HOLOGRAMS_ENABLED) continue;
+      const meta = PLATFORM_META[p];
+      const sel = STATE.platforms[p].selected;
+      const col = document.createElement('div');
+      col.className = 'col-md-4 col-sm-6';
+      col.innerHTML = `
+        <label class="platform-card d-block ${sel ? 'selected' : ''}" data-platform="${p}">
+          <input type="checkbox" class="form-check-input me-2" ${sel ? 'checked' : ''}>
+          <i class="fas ${meta.icon} me-1"></i> ${meta.label}
+        </label>`;
+      const cb = col.querySelector('input');
+      cb.addEventListener('change', () => {
+        STATE.platforms[p].selected = cb.checked;
+        col.querySelector('.platform-card').classList.toggle('selected', cb.checked);
+        $('hologram-group-wrap').classList.toggle('d-none', !STATE.platforms.hologram.selected);
+      });
+      wrap.appendChild(col);
+    }
+    $('hologram-group-wrap').classList.toggle('d-none', !STATE.platforms.hologram.selected);
+    $('wiz-hologram-group').value = STATE.platforms.hologram.hologramGroup || '';
+  }
+
+  function selectedPlatforms() {
+    return ORDER.filter((p) => STATE.platforms[p].selected && (p !== 'hologram' || HOLOGRAMS_ENABLED));
+  }
+
+  // ── Per-platform tabs (step 3) ──────────────────────────────────────────────
+  function renderPlatformTabs() {
+    const tabs = $('platform-tabs');
+    const panes = $('platform-tab-panes');
+    tabs.innerHTML = '';
+    panes.innerHTML = '';
+    const sel = selectedPlatforms();
+    sel.forEach((p, i) => {
+      const meta = PLATFORM_META[p];
+      const tab = document.createElement('li');
+      tab.className = 'nav-item';
+      tab.innerHTML = `<a class="nav-link ${i === 0 ? 'active' : ''}" href="#" data-tab="${p}"><i class="fas ${meta.icon} me-1"></i>${meta.label}</a>`;
+      tab.querySelector('a').addEventListener('click', (e) => {
+        e.preventDefault();
+        tabs.querySelectorAll('.nav-link').forEach((n) => n.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        panes.querySelectorAll('[data-pane]').forEach((n) => n.classList.toggle('d-none', n.dataset.pane !== p));
+      });
+      tabs.appendChild(tab);
+      panes.appendChild(buildPane(p, i === 0));
+    });
+  }
+
+  function field(label, html, hint) {
+    return `<div class="mb-3"><label class="form-label">${label}</label>${html}${hint ? `<small class="text-muted d-block">${hint}</small>` : ''}</div>`;
+  }
+
+  function buildPane(p, visible) {
+    const meta = PLATFORM_META[p];
+    const st = STATE.platforms[p];
+    const pane = document.createElement('div');
+    pane.dataset.pane = p;
+    if (!visible) pane.classList.add('d-none');
+
+    let html = '';
+    const msgId = `fld-${p}-msg`;
+    const prevId = `prev-${p}`;
+    const warnId = `warn-${p}`;
+
+    if (meta.colour) {
+      html += `<div class="mb-3"><label class="form-label">Message (colour codes)</label>${colourToolbar(msgId)}
+        <textarea id="${msgId}" class="form-control" rows="3" style="font-family:monospace;">${esc(st.colourMessageFormat || '')}</textarea>
+        <small class="text-muted d-block"><span id="${warnId}" ></span></small>
+        <div class="mc-preview" id="${prevId}"></div></div>`;
+    } else {
+      html += field('Message', `<textarea id="${msgId}" class="form-control" rows="3">${esc(st.body || '')}</textarea>`,
+        `<span id="${warnId}"></span>`);
+    }
+
+    if (p === 'web' || p === 'popup' || p === 'tip' || p === 'hologram') {
+      html += field('Link (optional)', `<input type="text" id="fld-${p}-link" class="form-control" value="${esc(st.link || '')}" placeholder="/store, https://...">`);
+    }
+    if (p === 'popup') {
+      html += field('Button text (optional)', `<input type="text" id="fld-popup-btn" class="form-control" maxlength="60" value="${esc(st.popupButtonText || '')}">`, '60 characters max.');
+      html += field('Image URL (optional)', `<input type="url" id="fld-popup-img" class="form-control" value="${esc(st.popupImageUrl || '')}" placeholder="https://...">`);
+    }
+    if (p === 'hologram') {
+      html += `<div class="row"><div class="col-md-6">${field('Group', `<input type="text" id="fld-holo-group" class="form-control" list="hologram-groups" maxlength="64" value="${esc(st.hologramGroup || 'default')}">`)}</div>
+        <div class="col-md-6">${field('Sort order', `<input type="number" id="fld-holo-sort" class="form-control" value="${Number.isFinite(st.sortOrder) ? st.sortOrder : 0}">`, 'Lower shows first.')}</div></div>`;
+      const cdOn = !!st.countdownTo;
+      html += `<div class="card mb-3"><div class="card-body">
+        <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="fld-holo-cd-on" ${cdOn ? 'checked' : ''}>
+          <label class="form-check-label" for="fld-holo-cd-on">Count down to a date &amp; time</label></div>
+        <div id="fld-holo-cd-wrap" class="${cdOn ? '' : 'd-none'}">
+          <div class="row"><div class="col-md-6">${field('Target (local)', `<input type="datetime-local" id="fld-holo-cd" class="form-control" value="${isoToLocalInput(st.countdownTo)}">`)}</div>
+          <div class="col-md-6">${field('Finished text (optional)', `<input type="text" id="fld-holo-cdtext" class="form-control" maxlength="512" value="${esc(st.countdownFinishedText || '')}">`)}</div></div>
+          <div><span class="text-muted small me-1">Insert:</span>
+          ${['{countdown}','{days}','{hours}','{minutes}','{seconds}'].map((t) => `<button type="button" class="btn btn-sm btn-outline-secondary" data-ins="${t}" data-target="${msgId}">${t}</button>`).join(' ')}</div>
+        </div></div></div>`;
+    }
+
+    pane.innerHTML = html;
+
+    // wire message + preview + warnings
+    const msg = pane.querySelector('#' + msgId);
+    const prev = pane.querySelector('#' + prevId);
+    const warn = pane.querySelector('#' + warnId);
+    function update() {
+      if (prev) {
+        const lines = msg.value.split('\n').map(parseMc).join('<br>');
+        prev.innerHTML = lines;
+      }
+      if (warn) {
+        const len = msg.value.length;
+        let w = `${len} chars`;
+        if (meta.maxLines && msg.value.split(/\r\n|\r|\n/).length > meta.maxLines) {
+          w = `<span class="len-warn">A ${meta.label} is ${meta.maxLines} lines at most.</span>`;
         }
+        warn.innerHTML = w;
+      }
+    }
+    msg.addEventListener('input', update);
+    update();
+
+    // countdown toggle
+    const cdOn = pane.querySelector('#fld-holo-cd-on');
+    if (cdOn) cdOn.addEventListener('change', () => pane.querySelector('#fld-holo-cd-wrap').classList.toggle('d-none', !cdOn.checked));
+
+    // insert buttons (colour + placeholder)
+    pane.querySelectorAll('[data-ins]').forEach((btn) => btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.target);
+      if (target) insertAtCursor(target, btn.dataset.ins);
+    }));
+
+    // popup button length warning
+    const btnText = pane.querySelector('#fld-popup-btn');
+    if (btnText) btnText.addEventListener('input', () => {
+      btnText.classList.toggle('is-invalid', btnText.value.length > 60);
     });
 
-    window.addEventListener("load", function() {
-        const announcementTypeSelect = document.querySelector("select[name='announcementType']");
-        const fieldGroups = document.querySelectorAll("[data-announcement-field]");
+    return pane;
+  }
 
-        const bodyLabel = document.getElementById("label-body");
-        const bodyLabelMap = {
-            motd: "Server Ping Message",
-            tip: "In-Game Tip Text",
-            web: "Banner Body",
-            popup: "Popup Message",
-        };
+  function readPaneInto(p) {
+    const st = STATE.platforms[p];
+    const g = (id) => { const el = document.getElementById(id); return el ? el.value : undefined; };
+    const meta = PLATFORM_META[p];
+    if (meta.colour) st.colourMessageFormat = g(`fld-${p}-msg`) ?? st.colourMessageFormat;
+    else st.body = g(`fld-${p}-msg`) ?? st.body;
+    const link = g(`fld-${p}-link`); if (link !== undefined) st.link = link;
+    if (p === 'popup') { st.popupButtonText = g('fld-popup-btn') ?? ''; st.popupImageUrl = g('fld-popup-img') ?? ''; }
+    if (p === 'hologram') {
+      st.hologramGroup = g('fld-holo-group') ?? 'default';
+      st.sortOrder = Number(g('fld-holo-sort')) || 0;
+      const cdOn = document.getElementById('fld-holo-cd-on');
+      st.countdownTo = (cdOn && cdOn.checked) ? localInputToIso(g('fld-holo-cd')) : null;
+      st.countdownFinishedText = st.countdownTo ? (g('fld-holo-cdtext') || '') : '';
+    }
+  }
+  function readAllPanes() { selectedPlatforms().forEach(readPaneInto); }
 
-        const updateAnnouncementFields = () => {
-            const type = announcementTypeSelect?.value || "";
-
-            if (bodyLabel) bodyLabel.textContent = bodyLabelMap[type] || "Message";
-
-            fieldGroups.forEach((group) => {
-                const field = group.dataset.announcementField;
-                let visible = true;
-
-                if (field === "popupButtonText" || field === "popupImageUrl") {
-                    visible = type === "popup";
-                }
-
-                if (field === "colourMessageFormat") {
-                    visible = type === "motd" || type === "tip";
-                }
-
-                if (field === "link") {
-                    visible = type === "web" || type === "popup" || type === "tip";
-                }
-
-                group.classList.toggle("d-none", !visible);
-            });
-        };
-
-        if (announcementTypeSelect) {
-            announcementTypeSelect.addEventListener("change", updateAnnouncementFields);
-            announcementTypeSelect.addEventListener("input", updateAnnouncementFields);
-            updateAnnouncementFields();
-        }
-    }, false);
-
-    const setDateInputMinimums = () => {
-        const now = new Date();
-        const offset = now.getTimezoneOffset();
-        const local = new Date(now.getTime() - offset * 60000).toISOString().slice(0, 16);
-        document.querySelectorAll("input[type='datetime-local']").forEach((input) => {
-            input.min = local;
-        });
-    };
-
-    setDateInputMinimums();
-
-    document.querySelectorAll("input[name='timezoneOffset']").forEach((input) => {
-        input.value = String(new Date().getTimezoneOffset());
+  // ── Step 4: per-platform schedule overrides ─────────────────────────────────
+  function renderPerPlatformSchedule() {
+    const wrap = $('per-platform-schedule-fields');
+    wrap.innerHTML = '';
+    selectedPlatforms().forEach((p) => {
+      const st = STATE.platforms[p];
+      const div = document.createElement('div');
+      div.className = 'border rounded p-2 mb-2';
+      div.innerHTML = `<strong>${PLATFORM_META[p].label}</strong>
+        <div class="row mt-1">
+          <div class="col-md-6"><label class="form-label small">Start</label><input type="datetime-local" class="form-control form-control-sm" id="sch-${p}-start" value="${isoToLocalInput(st.startDate)}"></div>
+          <div class="col-md-6"><label class="form-label small">End</label><input type="datetime-local" class="form-control form-control-sm" id="sch-${p}-end" value="${isoToLocalInput(st.endDate)}"></div>
+        </div>`;
+      wrap.appendChild(div);
     });
+  }
 
-    // ── MOTD / Tip live previewer ─────────────────────────────────────────
-    (function () {
-        var MC_COLORS = {
-            '0':'#000000','1':'#0000AA','2':'#00AA00','3':'#00AAAA',
-            '4':'#AA0000','5':'#AA00AA','6':'#FFAA00','7':'#AAAAAA',
-            '8':'#555555','9':'#5555FF','a':'#55FF55','b':'#55FFFF',
-            'c':'#FF5555','d':'#FF55FF','e':'#FFFF55','f':'#FFFFFF'
-        };
+  // ── Step 5: review ──────────────────────────────────────────────────────────
+  function fmt(iso) { return iso ? new Date(iso).toLocaleString() : 'always'; }
+  function renderReview() {
+    const perPlatform = $('per-platform-schedule').checked;
+    const rows = selectedPlatforms().map((p) => {
+      const st = STATE.platforms[p];
+      const text = PLATFORM_META[p].colour ? (st.colourMessageFormat || '') : (st.body || '');
+      const start = perPlatform ? st.startDate : STATE._sharedStart;
+      const end = perPlatform ? st.endDate : STATE._sharedEnd;
+      return `<tr><td><i class="fas ${PLATFORM_META[p].icon} me-1"></i>${PLATFORM_META[p].label}</td>
+        <td style="max-width:320px;word-break:break-word;">${esc(text.slice(0, 160))}</td>
+        <td>${fmt(start)}</td><td>${fmt(end)}</td></tr>`;
+    }).join('');
+    $('review-summary').innerHTML = rows
+      ? `<table class="table table-sm table-bordered"><thead><tr><th>Platform</th><th>Message</th><th>Start</th><th>End</th></tr></thead><tbody>${rows}</tbody></table>`
+      : '<div class="alert alert-warning">No platforms selected.</div>';
+  }
 
-        function escHtml(s) {
-            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        }
+  // ── Submit ──────────────────────────────────────────────────────────────────
+  function buildPayload(draft) {
+    readAllPanes();
+    const perPlatform = $('per-platform-schedule').checked;
+    const sharedStart = localInputToIso($('wiz-start').value);
+    const sharedEnd = localInputToIso($('wiz-end').value);
+    const platforms = selectedPlatforms().map((p) => {
+      const st = STATE.platforms[p];
+      let start = sharedStart, end = sharedEnd;
+      if (perPlatform) {
+        start = localInputToIso((document.getElementById(`sch-${p}-start`) || {}).value);
+        end = localInputToIso((document.getElementById(`sch-${p}-end`) || {}).value);
+      }
+      const row = { platform: p, startDate: start, endDate: end, link: st.link || null };
+      if (PLATFORM_META[p].colour) row.colourMessageFormat = st.colourMessageFormat || '';
+      else row.body = st.body || '';
+      if (p === 'popup') { row.popupButtonText = st.popupButtonText || null; row.popupImageUrl = st.popupImageUrl || null; }
+      if (p === 'hologram') {
+        row.hologramGroup = st.hologramGroup || 'default';
+        row.sortOrder = Number.isFinite(st.sortOrder) ? st.sortOrder : 0;
+        row.countdownTo = st.countdownTo || null;
+        row.countdownFinishedText = st.countdownFinishedText || null;
+      }
+      return row;
+    });
+    return {
+      postId: STATE.postId || null,
+      title: $('wiz-title').value || null,
+      shared: { enabled: !draft },
+      platforms,
+    };
+  }
 
-        function parseMcText(text) {
-            if (!text) return '';
-            var parts = text.split(/([&§][0-9a-fk-or])/i);
-            var color = '#FFFFFF', bold = false, italic = false, uline = false, strike = false;
-            var html = '';
-            for (var i = 0; i < parts.length; i++) {
-                var part = parts[i];
-                var m = part.match(/^[&§]([0-9a-fk-or])$/i);
-                if (m) {
-                    var code = m[1].toLowerCase();
-                    if (code in MC_COLORS) {
-                        color = MC_COLORS[code];
-                        bold = italic = uline = strike = false;
-                    } else if (code === 'r') {
-                        color = '#FFFFFF'; bold = italic = uline = strike = false;
-                    } else if (code === 'l') bold = true;
-                    else if (code === 'o') italic = true;
-                    else if (code === 'n') uline = true;
-                    else if (code === 'm') strike = true;
-                    // &k obfuscated — not rendered
-                } else if (part) {
-                    var deco = (uline && strike) ? 'underline line-through'
-                             : uline ? 'underline' : strike ? 'line-through' : '';
-                    var style = 'color:' + color + ';';
-                    if (bold)  style += 'font-weight:bold;';
-                    if (italic) style += 'font-style:italic;';
-                    if (deco)  style += 'text-decoration:' + deco + ';';
-                    html += '<span style="' + style + '">' + escHtml(part) + '</span>';
-                }
-            }
-            return html;
-        }
+  function submit(draft) {
+    const payload = buildPayload(draft);
+    if (payload.platforms.length === 0) { alert('Choose at least one platform.'); return; }
+    $('wizard-payload').value = JSON.stringify(payload);
+    $('wizard-form').submit();
+  }
 
-        function updateMcPreview() {
-            var typeEl   = document.querySelector("select[name='announcementType']");
-            var textarea = document.getElementById('colourMessageFormat');
-            var motdEl   = document.getElementById('mc-motd-preview');
-            var tipEl    = document.getElementById('mc-tip-preview');
-            if (!textarea || !motdEl || !tipEl) return;
+  // ── Step navigation ─────────────────────────────────────────────────────────
+  let step = 1;
+  function showStep(n) {
+    step = n;
+    document.querySelectorAll('.wiz-panel').forEach((pnl) => pnl.classList.toggle('d-none', Number(pnl.dataset.step) !== n));
+    document.querySelectorAll('.wiz-step').forEach((li) => {
+      const s = Number(li.dataset.step);
+      li.classList.toggle('active', s === n);
+      li.classList.toggle('done', s < n);
+    });
+    $('wiz-back').disabled = n === 1;
+    $('wiz-next').classList.toggle('d-none', n === 5);
+    if (n === 3) renderPlatformTabs();
+    if (n === 4) {
+      STATE.platforms.hologram.hologramGroup = $('wiz-hologram-group').value || STATE.platforms.hologram.hologramGroup;
+      renderPerPlatformSchedule();
+      $('per-platform-schedule-fields').classList.toggle('d-none', !$('per-platform-schedule').checked);
+    }
+    if (n === 5) { readAllPanes(); renderReview(); }
+  }
 
-            var type  = typeEl ? typeEl.value : '';
-            var lines = (textarea.value || '').split('\n');
+  function next() {
+    if (step === 1) {
+      STATE.title = $('wiz-title').value;
+      STATE.shared = { body: $('wiz-body').value, link: $('wiz-link').value };
+      // seed unedited platform bodies from the shared message
+      for (const p of ORDER) {
+        const st = STATE.platforms[p];
+        if (PLATFORM_META[p].colour) { if (!st.colourMessageFormat) st.colourMessageFormat = $('wiz-body').value; }
+        else if (!st.body) st.body = $('wiz-body').value;
+        if (!st.link) st.link = $('wiz-link').value;
+      }
+    }
+    if (step === 2) {
+      if (selectedPlatforms().length === 0) { alert('Choose at least one platform.'); return; }
+      STATE.platforms.hologram.hologramGroup = $('wiz-hologram-group').value || 'default';
+    }
+    if (step === 3) readAllPanes();
+    if (step === 4) { STATE._sharedStart = localInputToIso($('wiz-start').value); STATE._sharedEnd = localInputToIso($('wiz-end').value); }
+    showStep(Math.min(5, step + 1));
+  }
+  function back() { if (step > 1) { if (step === 3) readAllPanes(); showStep(step - 1); } }
 
-            if (type === 'motd') {
-                document.getElementById('mc-motd-line1').innerHTML = parseMcText(lines[0]) || '&nbsp;';
-                document.getElementById('mc-motd-line2').innerHTML = parseMcText(lines[1] || '') || '&nbsp;';
-                motdEl.classList.remove('d-none');
-                tipEl.classList.add('d-none');
-            } else if (type === 'tip') {
-                document.getElementById('mc-tip-text').innerHTML = parseMcText(lines[0]) || '&nbsp;';
-                tipEl.classList.remove('d-none');
-                motdEl.classList.add('d-none');
-            } else {
-                motdEl.classList.add('d-none');
-                tipEl.classList.add('d-none');
-            }
-        }
-
-        var textarea = document.getElementById('colourMessageFormat');
-        if (textarea) {
-            textarea.addEventListener('input', updateMcPreview);
-            var typeSelect = document.querySelector("select[name='announcementType']");
-            if (typeSelect) typeSelect.addEventListener('change', updateMcPreview);
-            // inputSelect.ejs sets the select value via its own window.load listener,
-            // registered earlier in the DOM. By the time this listener fires, the
-            // correct type is already set, so updateMcPreview reads the right value.
-            window.addEventListener('load', updateMcPreview);
-        }
-
-        // Toolbar: insert colour/format code at cursor position
-        document.querySelectorAll('.mc-code-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                var code = btn.dataset.code;
-                if (!code || !textarea) return;
-                var start = textarea.selectionStart;
-                var end   = textarea.selectionEnd;
-                textarea.value = textarea.value.substring(0, start) + code + textarea.value.substring(end);
-                var pos = start + code.length;
-                textarea.setSelectionRange(pos, pos);
-                textarea.focus();
-                textarea.dispatchEvent(new Event('input'));
-            });
-        });
-    }());
-
-    // ── Popup image upload widget ─────────────────────────────────────────
-    (function () {
-        const fileInput   = document.getElementById("popup-img-file");
-        const urlInput    = document.getElementById("popupImageUrl");
-        const preview     = document.getElementById("popup-img-preview");
-        const thumb       = document.getElementById("popup-img-thumb");
-        const removeBtn   = document.getElementById("popup-img-remove");
-        const statusEl    = document.getElementById("popup-img-status");
-        if (!fileInput || !urlInput) return;
-
-        function showPreview(url) {
-            if (url) {
-                thumb.src = url;
-                preview.classList.remove("d-none");
-            } else {
-                preview.classList.add("d-none");
-                thumb.src = "";
-            }
-        }
-
-        // Show existing image on page load (edit mode)
-        showPreview(urlInput.value.trim());
-
-        urlInput.addEventListener("input", () => showPreview(urlInput.value.trim()));
-
-        removeBtn.addEventListener("click", () => {
-            urlInput.value = "";
-            showPreview("");
-            statusEl.textContent = "";
-            statusEl.className = "small";
-        });
-
-        fileInput.addEventListener("change", async () => {
-            const file = fileInput.files[0];
-            if (!file) return;
-            fileInput.value = "";
-
-            statusEl.textContent = "Uploading…";
-            statusEl.className = "small text-muted";
-
-            const fd = new FormData();
-            fd.append("file", file, file.name);
-            fd.append("folder", "announcements");
-
-            try {
-                const res  = await fetch("/dashboard/upload/image", { method: "POST", body: fd });
-                const data = await res.json();
-                if (data.success) {
-                    urlInput.value = data.data.url;
-                    showPreview(data.data.url);
-                    statusEl.textContent = "Uploaded ✓";
-                    statusEl.className = "small text-success";
-                } else {
-                    statusEl.textContent = data.message || "Upload failed.";
-                    statusEl.className = "small text-danger";
-                }
-            } catch {
-                statusEl.textContent = "Upload failed.";
-                statusEl.className = "small text-danger";
-            }
-        });
-    })();
+  // ── Init ────────────────────────────────────────────────────────────────────
+  function init() {
+    $('wiz-title').value = STATE.title || '';
+    $('wiz-body').value = (STATE.shared && STATE.shared.body) || '';
+    $('wiz-link').value = (STATE.shared && STATE.shared.link) || '';
+    $('wiz-start').value = isoToLocalInput(STATE._sharedStart);
+    $('wiz-end').value = isoToLocalInput(STATE._sharedEnd);
+    if (STATE._perPlatform) $('per-platform-schedule').checked = true;
+    renderPlatformChoices();
+    $('wiz-next').addEventListener('click', next);
+    $('wiz-back').addEventListener('click', back);
+    $('btn-publish').addEventListener('click', () => submit(false));
+    $('btn-draft').addEventListener('click', () => submit(true));
+    $('per-platform-schedule').addEventListener('change', (e) => {
+      $('per-platform-schedule-fields').classList.toggle('d-none', !e.target.checked);
+      if (e.target.checked) renderPerPlatformSchedule();
+    });
+    document.querySelectorAll('.wiz-step').forEach((li) => li.addEventListener('click', () => {
+      const target = Number(li.dataset.step);
+      if (target < step) { if (step === 3) readAllPanes(); showStep(target); }
+    }));
+    showStep(1);
+  }
+  document.addEventListener('DOMContentLoaded', init);
+})();
 </script>
