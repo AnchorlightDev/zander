@@ -117,7 +117,7 @@ public class UserChatEvent {
         }
 
         return builder
-                .append(Component.text(player.getUsername()))
+                .append(dev.anchorlight.zander.velocity.util.nickname.NicknameCache.displayName(player))
                 .append(Component.text(": "))
                 .append(originalMessage)
                 .build();

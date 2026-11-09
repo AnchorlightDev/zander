@@ -1,6 +1,7 @@
 package dev.anchorlight.zander.velocity.util.messaging;
 
 import com.velocitypowered.api.proxy.Player;
+import dev.anchorlight.zander.velocity.util.nickname.NicknameCache;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
@@ -13,15 +14,14 @@ public class MessageDisplayNameResolver {
     }
 
     public static Component resolve(Player player) {
+        // Nickname-aware name (with ~ marker and a hover revealing the real
+        // username); falls back to the real username when there is no nickname.
+        Component name = NicknameCache.displayName(player);
         Component prefix = resolveLuckPermsPrefix(player);
         if (prefix != null) {
-            return prefix.append(Component.text(player.getUsername()));
+            return prefix.append(name);
         }
-        Component displayName = resolveVelocityDisplayName(player);
-        if (displayName != null) {
-            return displayName;
-        }
-        return Component.text(player.getUsername());
+        return name;
     }
 
     private static Component resolveVelocityDisplayName(Player player) {

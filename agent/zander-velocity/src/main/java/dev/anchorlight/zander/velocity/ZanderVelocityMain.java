@@ -75,6 +75,7 @@ public class ZanderVelocityMain {
         proxy.getEventManager().register(this, new UserOnSwitch());
         proxy.getEventManager().register(this, new UserSocialSpyEvent());
         proxy.getEventManager().register(this, new FreezeChatListener());
+        proxy.getEventManager().register(this, new NicknameListener());
 
         proxy.getChannelRegistrar().register(HubBridgeListener.CHANNEL);
         proxy.getEventManager().register(this, new HubBridgeListener(proxy, logger, config));
@@ -89,6 +90,8 @@ public class ZanderVelocityMain {
         commandManager.register(commandManager.metaBuilder("link").build(), new link());
         commandManager.register(commandManager.metaBuilder("ping").build(), new ping());
         commandManager.register(commandManager.metaBuilder("report").build(), new report());
+        commandManager.register(commandManager.metaBuilder("nick").build(), new nick());
+        commandManager.register(commandManager.metaBuilder("realname").build(), new realname());
         commandManager.register(commandManager.metaBuilder("clearchat").build(), new clearchat());
         commandManager.register(commandManager.metaBuilder("freezechat").build(), new freezechat());
         alert alertCommand = new alert();
