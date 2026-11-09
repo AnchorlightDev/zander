@@ -49,6 +49,7 @@ enum announcements_type {
   tip
   web
   popup
+  hologram
 }
 
 enum scheduledDiscordMessages_status {
@@ -341,8 +342,18 @@ model gameSessions {
   @@index([userId], map: "gameSessions_userId_idx")
 }
 
+model announcement_posts {
+  postId        Int             @id @default(autoincrement())
+  title         String?         @db.VarChar(120)
+  createdBy     Int?
+  createdAt     DateTime        @default(now()) @db.DateTime(3)
+  updatedAt     DateTime        @default(now()) @db.DateTime(3)
+  announcements announcements[]
+}
+
 model announcements {
   announcementId     Int                  @id @default(autoincrement())
+  postId             Int
   /// NULL for rows that predate 0057_announcement_created_at; see that migration.
   createdAt          DateTime?
   enabled            Boolean              @default(true)
@@ -352,9 +363,18 @@ model announcements {
   link               String?              @db.Text
   popupButtonText    String?              @db.VarChar(60)
   popupImageUrl      String?              @db.Text
+  // Hologram-platform columns (type = hologram). Hologram text lives in
+  // colourMessageFormat; body holds a colour-code-stripped copy. Expiry reuses endDate.
+  hologramGroup         String?           @db.VarChar(64)
+  sortOrder             Int?
+  countdownTo           DateTime?         @db.DateTime(3)
+  countdownFinishedText String?           @db.VarChar(512)
   startDate          DateTime?
   endDate            DateTime?
   updatedDate        DateTime?
+  post               announcement_posts   @relation(fields: [postId], references: [postId], onDelete: Cascade)
+
+  @@index([postId], map: "announcements_postId_idx")
 }
 
 model scheduledDiscordMessages {
@@ -675,22 +695,6 @@ model creator_content_notifications {
 }
 
 /// Dashboard-managed frames for the in-game rotating holograms (zander-hub).
-model hologram_messages {
-  id              Int      @id @default(autoincrement())
-  hologram_group  String   @default("default") @db.VarChar(64)
-  message         String   @db.Text
-  link            String?  @db.VarChar(512)
-  countdown_to            DateTime? @db.DateTime(3)
-  countdown_finished_text String?   @db.VarChar(512)
-  expires_at              DateTime? @db.DateTime(3)
-  sort_order      Int      @default(0)
-  enabled         Int      @default(1) @db.TinyInt
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-
-  @@index([hologram_group, enabled, sort_order], map: "hologram_messages_group_idx")
-}
-
 /// Session store table used by @quixo3/prisma-session-store
 model session {
   id        String   @id @db.VarChar(128)
