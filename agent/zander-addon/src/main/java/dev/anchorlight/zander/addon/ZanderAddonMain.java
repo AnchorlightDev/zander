@@ -11,8 +11,10 @@ import dev.anchorlight.zander.addon.events.StoreCommandEvents;
 import dev.anchorlight.zander.addon.gui.PolicyGUI;
 import dev.anchorlight.zander.addon.gui.SocialGUI;
 import dev.anchorlight.zander.addon.hologram.HologramManager;
+import dev.anchorlight.zander.addon.nickname.NametagManager;
 import dev.anchorlight.zander.addon.service.BridgeService;
 import dev.anchorlight.zander.addon.service.FreezeService;
+import dev.anchorlight.zander.addon.service.NicknameService;
 import dev.anchorlight.zander.addon.service.PolicyService;
 import dev.anchorlight.zander.addon.service.StoreCommandService;
 
@@ -28,6 +30,7 @@ public class ZanderAddonMain extends JavaPlugin {
     @Getter
     private BridgeService bridgeService;
     private HologramManager hologramManager;
+    private NametagManager nametagManager;
 
     @Override
     public void onEnable() {
@@ -64,6 +67,15 @@ public class ZanderAddonMain extends JavaPlugin {
             getLogger().info("Bridge processor enabled for server: " + getConfig().getString("server-name", "survival"));
         }
 
+        // Above-head nicknames. Operational switch only; the release is gated by
+        // the zander.nickname permission on the API side, not by this flag.
+        if (getConfig().getBoolean("nicknames.nametags-enabled", true)) {
+            this.nametagManager = new NametagManager(this, new NicknameService(this));
+            getServer().getPluginManager().registerEvents(nametagManager, this);
+            nametagManager.start();
+            getLogger().info("Nickname nametags enabled for server: " + getConfig().getString("server-name", "survival"));
+        }
+
         getCommand("policy").setExecutor(new PolicyCommand(this, policyService));
         getCommand("social").setExecutor(new SocialCommand(socialGUI));
         getCommand("freeze").setExecutor(new FreezeCommand(freezeService));
@@ -76,6 +88,7 @@ public class ZanderAddonMain extends JavaPlugin {
     @Override
     public void onDisable() {
         if (hologramManager != null) hologramManager.stop();
+        if (nametagManager != null) nametagManager.stop();
         getLogger().info("Zander Addon has been disabled.");
     }
 }

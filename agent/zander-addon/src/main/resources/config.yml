@@ -24,6 +24,23 @@ holograms:
 # Matches the serverName / slug used when commands are queued on the web side.
 server-name: "survival"
 
+# --- Nicknames (above-head nametags) ---
+# Shows a supporter's nickname (~Name) above their head, with their real
+# nametag hidden, by reading GET /api/nickname/effective. The api-key above
+# must include the `nickname` scope.
+#
+# nametags-enabled is an OPERATIONAL switch only: whether a player may have a
+# nickname is controlled by the zander.nickname permission on the API, never by
+# this flag. Turn it off only if the above-head display misbehaves on a server.
+nicknames:
+  nametags-enabled: true
+  # Blocks above the player's feet to float the nickname. Tune on the live
+  # server if it sits too high or low.
+  nametag-y-offset: 1.0
+  # How often (seconds) to re-poll the API so web/staff changes show without a
+  # relog. Minimum 5.
+  nametag-refresh-seconds: 15
+
 # --- Command Bridge ---
 # Claims and executes pending reward commands for players on join
 # (POST /api/command-bridge/claim, then /complete and /fail)
