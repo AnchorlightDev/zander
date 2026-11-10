@@ -10,7 +10,8 @@ const payload = {
     tenure: { firstSeen: "2021-03-14T09:00:00.000Z" },
     discordMessages: { value: 412 },
     voiceMinutes: { display: "3h 56m", value: 236 },
-    reputation: { level: 7 },
+    reputationMinecraft: { level: 7 },
+    reputationDiscord: { level: 4 },
     topCommand: { command: "spawn" },
     minecraft: {
       blocksMined: 128455, mobsKilled: 4210, distanceCm: 61_500_000,

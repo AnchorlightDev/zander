@@ -26,7 +26,7 @@ import { resolveAvatarUrl } from "../../lib/wrapped/pageAssets.js";
 
 // Bump when the cached leaderboard context shape changes so stale caches
 // (missing `avatars`, `uuids`, …) are rebuilt instead of served.
-const LEADERBOARD_CONTEXT_VERSION = 3;
+const LEADERBOARD_CONTEXT_VERSION = 4;
 
 /**
  * Resolve the active Wrapped period from the editable `wrappedSettings` row
@@ -100,7 +100,9 @@ export async function buildLeaderboardContext(period, { rebuild = false } = {}) 
     discordMessages: [],
     discordReactions: [],
     voiceMinutes: [],
-    reputationLifetime: [],
+    // Two independent reputation systems, ranked separately.
+    reputationMinecraft: [],
+    reputationDiscord: [],
     shopPurchases: [],
     version: LEADERBOARD_CONTEXT_VERSION,
     // Per-user display data for leaderboard-neighbourhood slides — name + the
@@ -133,11 +135,12 @@ export async function buildLeaderboardContext(period, { rebuild = false } = {}) 
   // know one, else keep a synthetic "d:<id>" key so ranks stay correct even for
   // members without a website account.
   if (isMineMonitorConfigured()) {
-    const [msgs, reacts, voice, rep, shops] = await Promise.all([
+    const [msgs, reacts, voice, repMc, repDiscord, shops] = await Promise.all([
       fetchWrappedLeaderboard("messages", start, end),
       fetchWrappedLeaderboard("reactions", start, end),
       fetchWrappedLeaderboard("voiceSeconds", start, end),
-      fetchWrappedLeaderboard("reputation", start, end),
+      fetchWrappedLeaderboard("reputationMinecraft", start, end),
+      fetchWrappedLeaderboard("reputationDiscord", start, end),
       fetchWrappedLeaderboard("shopPurchases", start, end),
     ]);
 
@@ -158,13 +161,20 @@ export async function buildLeaderboardContext(period, { rebuild = false } = {}) 
         if (ctx.names[key] == null) {
           ctx.names[key] = mapped ? mapped.username : e.displayName || "Someone";
         }
+        // Unlinked (synthetic d:/u:) members won't get a resolved Zander profile
+        // picture below, so keep MineMonitor's Discord avatar for their face.
+        // Real Zander users keep their own profile picture (set later).
+        if (!mapped && e.avatarUrl && ctx.avatars[key] == null) {
+          ctx.avatars[key] = e.avatarUrl;
+        }
       }
     };
 
     ingest(msgs, ctx.discordMessages);
     ingest(reacts, ctx.discordReactions);
     ingest(voice, ctx.voiceMinutes, (sec) => Math.round((sec || 0) / 60));
-    ingest(rep, ctx.reputationLifetime);
+    ingest(repMc, ctx.reputationMinecraft);
+    ingest(repDiscord, ctx.reputationDiscord);
     ingest(shops, ctx.shopPurchases);
   }
 
@@ -172,7 +182,8 @@ export async function buildLeaderboardContext(period, { rebuild = false } = {}) 
   const referencedIds = new Set();
   for (const arr of [
     ctx.playtime, ctx.sessions, ctx.discordMessages,
-    ctx.discordReactions, ctx.voiceMinutes, ctx.reputationLifetime,
+    ctx.discordReactions, ctx.voiceMinutes,
+    ctx.reputationMinecraft, ctx.reputationDiscord,
   ]) {
     for (const e of arr) {
       if (/^\d+$/.test(String(e.userId))) referencedIds.add(Number(e.userId));
@@ -368,12 +379,22 @@ export async function buildWrappedPayload(user, opts = {}) {
             neighbors: neighborhood(context.voiceMinutes, user.userId, nameById, 2, avatarById),
           })
         : null,
-      reputation:
-        mm && mm.reputationLevel !== null && mm.reputationLevel !== undefined
-          ? statBlock(mm.lifetimeReputation || 0, context.reputationLifetime, user.userId, {
-              neighbors: neighborhood(context.reputationLifetime, user.userId, nameById, 2, avatarById),
-              level: mm.reputationLevel,
-              lifetime: mm.lifetimeReputation || 0,
+      // Two independent reputation systems, reported separately. Either can be
+      // null — a player with no Discord account still has Minecraft reputation.
+      reputationMinecraft:
+        mm && mm.reputationMinecraft
+          ? statBlock(mm.reputationMinecraft.lifetime || 0, context.reputationMinecraft, user.userId, {
+              neighbors: neighborhood(context.reputationMinecraft, user.userId, nameById, 2, avatarById),
+              level: mm.reputationMinecraft.level,
+              lifetime: mm.reputationMinecraft.lifetime || 0,
+            })
+          : null,
+      reputationDiscord:
+        mm && mm.reputationDiscord
+          ? statBlock(mm.reputationDiscord.lifetime || 0, context.reputationDiscord, user.userId, {
+              neighbors: neighborhood(context.reputationDiscord, user.userId, nameById, 2, avatarById),
+              level: mm.reputationDiscord.level,
+              lifetime: mm.reputationDiscord.lifetime || 0,
             })
           : null,
       topCommand: mm?.topCommand || null,

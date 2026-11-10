@@ -129,6 +129,11 @@ export async function fetchWrappedStats(uuid, start, end, opts = {}) {
         0,
       reputationLevel: pick("reputationLevel", "reputation_level", "repLevel") ?? null,
       lifetimeReputation: pick("lifetimeReputation", "lifetime_reputation", "reputation", "rep") ?? null,
+      // The two independent reputation systems, reported separately. Each is
+      // `{ level, lifetime }` or null; a player without Discord has only the
+      // Minecraft one. Older MineMonitor builds omit these — callers fall back.
+      reputationMinecraft: pick("reputationMinecraft", "reputation_minecraft") ?? null,
+      reputationDiscord: pick("reputationDiscord", "reputation_discord") ?? null,
       topCommand: pick("topCommand", "top_command") ?? null,
       topVoiceCompanion: pick("topVoiceCompanion", "top_voice_companion") ?? null,
       topVoiceChannel: pick("topVoiceChannel", "top_voice_channel") ?? null,
@@ -154,10 +159,10 @@ export async function fetchWrappedStats(uuid, start, end, opts = {}) {
  * (`GET /api/wrapped/leaderboard/:stat`). One call replaces a per-user fan-out
  * of `/stats` requests when building the leaderboard cache.
  *
- * @param {"messages"|"reactions"|"voiceSeconds"|"reputation"} stat
+ * @param {"messages"|"reactions"|"voiceSeconds"|"reputationMinecraft"|"reputationDiscord"|"shopPurchases"} stat
  * @param {Date} start
  * @param {Date} end
- * @returns {Promise<null | Array<{ discordUserId: string, displayName: string|null, value: number, rank: number }>>}
+ * @returns {Promise<null | Array<{ discordUserId: string, minecraftUuid: string|null, displayName: string|null, avatarUrl: string|null, value: number, rank: number }>>}
  */
 export async function fetchWrappedLeaderboard(stat, start, end, opts = {}) {
   const { baseUrl, token, dateFormat } = getConfig();
@@ -187,6 +192,9 @@ export async function fetchWrappedLeaderboard(stat, start, end, opts = {}) {
         discordUserId: String(e.discordUserId ?? e.discord_user_id ?? e.userId ?? ""),
         minecraftUuid: e.minecraftUuid ?? e.minecraft_uuid ?? null,
         displayName: e.displayName ?? e.display_name ?? null,
+        // Discord avatar URL, when MineMonitor knows one — used to show a real
+        // profile photo for ranked members who have no linked website account.
+        avatarUrl: e.avatarUrl ?? e.avatar_url ?? null,
         value: Number(e.value ?? 0) || 0,
         rank: Number(e.rank ?? 0) || 0,
       }))

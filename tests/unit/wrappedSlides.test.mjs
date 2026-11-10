@@ -35,7 +35,8 @@ const richPayload = {
     },
     discordReactions: { value: 88, rank: 4, total: 15 },
     voiceMinutes: { value: 120, display: "2h", rank: 2, total: 10, channelName: "General VC" },
-    reputation: { value: 900, level: 7, lifetime: 3120, rank: 6, total: 30 },
+    reputationMinecraft: { value: 900, level: 7, lifetime: 3120, rank: 6, total: 30 },
+    reputationDiscord: { value: 400, level: 4, lifetime: 1400, rank: 9, total: 22 },
     shopPurchases: {
       value: 42, rank: 3, total: 40,
       totalSpent: 1234.5,
@@ -83,7 +84,8 @@ describe("buildWrappedslides", () => {
       "discordMessages", "messagesBoard",
       "discordReactions",
       "voiceMinutes",
-      "reputation",
+      "reputationMinecraft",
+      "reputationDiscord",
       "shopPurchases", "shopOwner",
       "topCommand",
       "friend",
@@ -120,7 +122,7 @@ describe("buildWrappedslides", () => {
         { rank: 3, name: "Sam", value: 90, avatar: null, you: false },
       ],
     };
-    p.stats.reputation.neighbors = {
+    p.stats.reputationMinecraft.neighbors = {
       rank: 6, total: 30,
       rows: [
         { rank: 5, name: "Jo", value: 1000, avatar: null, you: false },
@@ -131,14 +133,14 @@ describe("buildWrappedslides", () => {
     const slides = buildWrappedSlides(p);
     expect(slides.find((s) => s.key === "voiceMinutes").sub).toBe("most of it in General VC");
     const voiceBoard = slides.find((s) => s.key === "voiceBoard");
-    const repBoard = slides.find((s) => s.key === "reputationBoard");
+    const repBoard = slides.find((s) => s.key === "reputationMinecraftBoard");
     expect(voiceBoard.neighbors.rows.map((r) => r.displayValue)).toEqual(["3h 20m", "2h", "1h 30m"]);
     expect(voiceBoard.neighbors.rows[0].avatar).toBe("https://cdn/a.png");
     expect(repBoard.neighbors.rows.map((r) => r.displayValue)).toEqual(["1,000 rep", "900 rep", "800 rep"]);
     // each board sits right after its stat slide
     const keys = slides.map((s) => s.key);
     expect(keys.indexOf("voiceBoard")).toBe(keys.indexOf("voiceMinutes") + 1);
-    expect(keys.indexOf("reputationBoard")).toBe(keys.indexOf("reputation") + 1);
+    expect(keys.indexOf("reputationMinecraftBoard")).toBe(keys.indexOf("reputationMinecraft") + 1);
   });
 
   it("builds the vanilla MC-stat slides from the minecraft block", () => {
