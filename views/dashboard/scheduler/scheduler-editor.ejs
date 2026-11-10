@@ -99,6 +99,7 @@
                 <option value="forum_publish">Publish forum draft</option>
                 <option value="announcement_post">Enable/disable announcement</option>
                 <option value="broadcast">In-game broadcast</option>
+                <option value="webstore_visibility">Show/hide webstore product</option>
               </select>
               <button type="button" class="btn btn-sm btn-primary" id="btn-add-action"><i class="fas fa-plus"></i> Add</button>
             </div>
@@ -145,6 +146,7 @@
     forum_publish: [ { k: "discussionId", label: "Forum draft", type: "forum" } ],
     announcement_post: [ { k: "postId", label: "Announcement post", type: "post" }, { k: "mode", label: "Mode", type: "mode" } ],
     broadcast: [ { k: "message", label: "Message (& colour codes)", type: "text", ph: true } ],
+    webstore_visibility: [ { k: "stripePriceId", label: "Product", type: "product" }, { k: "mode", label: "Mode", type: "mode" } ],
   };
 
   let actionsState = (JOB && JOB.actions ? JOB.actions : []).map((a) => ({ actionType: a.actionType, payload: { ...(a.payload || {}) }, continueOnError: !!a.continueOnError }));
@@ -166,6 +168,7 @@
     else if (def.type === "channel") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}">${options(PICKERS.channels, "id", (x) => "#" + x.name, value)}</select>`;
     else if (def.type === "forum") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}">${options(PICKERS.forumDrafts, "discussionId", (x) => `#${x.discussionId} ${x.title} (${x.status})`, value)}</select>`;
     else if (def.type === "post") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}">${options(PICKERS.posts, "postId", (x) => `#${x.postId} ${x.title || "(untitled)"}`, value)}</select>`;
+    else if (def.type === "product") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}">${options(PICKERS.products || [], "stripePriceId", (x) => x.displayName || x.stripePriceId, value)}</select>`;
     else if (def.type === "mode") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}"><option value="enable" ${value === "enable" ? "selected" : ""}>Enable</option><option value="disable" ${value === "disable" ? "selected" : ""}>Disable</option></select>`;
     else input = `<input class="form-control act-field" id="${id}" data-k="${def.k}" value="${esc(value)}">`;
     return `<div class="mb-2"><label class="form-label small">${def.label}</label>${input}${phBtns}</div>`;

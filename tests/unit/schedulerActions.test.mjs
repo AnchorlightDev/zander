@@ -14,9 +14,9 @@ const {
 } = await import("../../lib/scheduler/actions/index.mjs");
 
 describe("action registry", () => {
-  it("registers the six action types", () => {
+  it("registers the seven action types", () => {
     expect(ACTION_TYPES.sort()).toEqual(
-      ["announcement_post", "broadcast", "command", "discord_message", "forum_publish", "routine"].sort()
+      ["announcement_post", "broadcast", "command", "discord_message", "forum_publish", "routine", "webstore_visibility"].sort()
     );
   });
   it("rejects an unknown action type", () => {
@@ -99,5 +99,19 @@ describe("broadcast", () => {
   it("describes and previews", () => {
     expect(mod.describe({ message: "hi" })).toMatch(/hi/);
     expect(mod.preview({ message: "hi" }).sideEffects.join(" ")).toMatch(/alert hi/);
+  });
+});
+
+describe("webstore_visibility", () => {
+  const mod = getActionModule("webstore_visibility");
+  it("requires a stripePriceId and a valid mode", () => {
+    expect(mod.validate({ stripePriceId: "price_123", mode: "enable" })).toEqual([]);
+    expect(mod.validate({ stripePriceId: "price_123", mode: "x" }).join(" ")).toMatch(/enable.*disable/);
+    expect(mod.validate({ mode: "enable" }).join(" ")).toMatch(/stripePriceId/);
+  });
+  it("describes show/hide and previews the visible flag", () => {
+    expect(mod.describe({ stripePriceId: "price_123", mode: "enable" })).toMatch(/Show/);
+    expect(mod.describe({ stripePriceId: "price_123", mode: "disable" })).toMatch(/Hide/);
+    expect(mod.preview({ stripePriceId: "price_123", mode: "enable" }).sideEffects.join(" ")).toMatch(/visible=true/);
   });
 });

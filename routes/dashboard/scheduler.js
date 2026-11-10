@@ -15,6 +15,7 @@ import { adminViewData } from "../../admin/adminHelpers.js";
 import { prisma } from "../../controllers/databaseController.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { listPosts } from "../../services/announcementPostService.js";
+import { getWebstoreItems } from "../../controllers/webstoreController.js";
 import {
   createJob,
   updateJob,
@@ -53,7 +54,7 @@ export default function dashboardSchedulerSiteRoute(app, client, fetch, config, 
   }
 
   async function pickerData() {
-    const [channels, forumDrafts, posts, routines, slugs] = await Promise.all([
+    const [channels, forumDrafts, posts, routines, slugs, products] = await Promise.all([
       discordChannels(),
       prisma.forumDiscussions.findMany({
         where: { status: { in: ["draft", "scheduled"] } },
@@ -64,6 +65,10 @@ export default function dashboardSchedulerSiteRoute(app, client, fetch, config, 
       listPosts().catch(() => []),
       prisma.executorRoutines.findMany({ select: { routineSlug: true, displayName: true }, orderBy: { routineSlug: "asc" } }).catch(() => []),
       prisma.$queryRawUnsafe("SELECT DISTINCT slug FROM executorTasks ORDER BY slug ASC LIMIT 100").catch(() => []),
+      // Live storefront products, so a webstore_visibility action can be built by
+      // picking a product rather than pasting a Stripe price id. Stripe may be
+      // down; the picker just comes back empty then.
+      getWebstoreItems().catch(() => []),
     ]);
     return {
       channels,
@@ -71,6 +76,7 @@ export default function dashboardSchedulerSiteRoute(app, client, fetch, config, 
       posts: posts.map((p) => ({ postId: p.postId, title: p.title, status: p.status })),
       routines,
       serverSlugs: ["any", ...slugs.map((r) => r.slug).filter((s) => s && s !== "any")],
+      products: products.map((p) => ({ stripePriceId: p.stripePriceId, displayName: p.displayName })),
     };
   }
 
