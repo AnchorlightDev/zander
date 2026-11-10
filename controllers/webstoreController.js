@@ -30,6 +30,9 @@
 import db from "./databaseController.js";
 import fetch from "node-fetch";
 import { publicGifterName } from "../lib/webstore/giftPrivacy.mjs";
+import { planStripeCategorySync } from "../lib/webstore/stripeCategorySync.mjs";
+import { ensureCategoriesForStripeKeys } from "./webstoreCategoryController.js";
+import { getAllItemSettings, setStripeCategory } from "./webstoreItemSettingsController.js";
 
 // ---------------------------------------------------------------------------
 // Internal DB helper
@@ -299,6 +302,13 @@ export async function getWebstoreItems(preferredCurrency = null) {
         typeof p.product?.metadata?.sortOrder === "string"
           ? Number(p.product.metadata.sortOrder) || 0
           : 0;
+      // Stripe has no native categories; a product opts into one by setting
+      // `metadata.category`. The storefront seeds a local category from this
+      // (see lib/webstore/stripeCategorySync).
+      const stripeCategory =
+        typeof p.product?.metadata?.category === "string" && p.product.metadata.category.trim()
+          ? p.product.metadata.category.trim()
+          : null;
       return {
         slug: p.id,
         stripePriceId: p.id,
@@ -309,6 +319,7 @@ export async function getWebstoreItems(preferredCurrency = null) {
         currency,
         purchaseType: p.type === "recurring" || p.recurring ? "subscription" : "one_time",
         sortKey,
+        stripeCategory,
       };
     })
     .sort((a, b) => a.sortKey - b.sortKey || a.displayName.localeCompare(b.displayName));
@@ -342,6 +353,39 @@ export async function getWebstoreItems(preferredCurrency = null) {
     grantCommands: grantByPrice[item.stripePriceId] || [],
     revokeCommands: revokeByPrice[item.stripePriceId] || [],
   }));
+}
+
+/**
+ * Seed storefront categories from Stripe product metadata.
+ *
+ * For each product carrying `metadata.category`, make sure a matching local
+ * category exists and point the product at it -- unless an admin has already
+ * categorised it in the dashboard, which always wins. Runs through the existing
+ * webstoreItemSettings.categoryId plumbing, so grouping, counts, the delete
+ * guard and visibility all keep working unchanged.
+ *
+ * Read-mostly: it only writes the handful of products whose category actually
+ * needs to change, so a storefront in a steady state issues no writes. Called
+ * on the way into the storefront and its dashboard; safe to run concurrently
+ * (every write is an idempotent upsert).
+ *
+ * @param {Array<object>} items  from getWebstoreItems()
+ * @returns {Promise<number>} how many products were (re)assigned
+ */
+export async function syncStripeStorefrontCategories(items) {
+  const list = Array.isArray(items) ? items : [];
+  const keyToCategoryId = await ensureCategoriesForStripeKeys(
+    list.map((i) => i.stripeCategory).filter(Boolean)
+  );
+
+  const settings = await getAllItemSettings();
+  const settingsByPrice = new Map(settings.map((s) => [String(s.stripePriceId), s]));
+
+  const changes = planStripeCategorySync(list, settingsByPrice, keyToCategoryId);
+  for (const change of changes) {
+    await setStripeCategory(change.stripePriceId, change.categoryId);
+  }
+  return changes.length;
 }
 
 /** Find a single webstore item by its slug (= Stripe price ID). */

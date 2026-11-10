@@ -45,7 +45,7 @@ function rowToCategory(r) {
 /** Every category, in the order the store presents them. */
 export async function getAllCategories() {
   const rows = await query(
-    `SELECT id, name, sortOrder, visible, createdAt, updatedAt
+    `SELECT id, name, stripeKey, sortOrder, visible, createdAt, updatedAt
        FROM webstoreCategories
       ORDER BY sortOrder ASC, name ASC`
   );
@@ -58,7 +58,7 @@ export async function getAllCategoriesWithCounts() {
   // and storefront products (/webstore). Counted separately rather than in one
   // join, which would multiply the rows together.
   const rows = await query(
-    `SELECT c.id, c.name, c.sortOrder, c.visible, c.createdAt, c.updatedAt,
+    `SELECT c.id, c.name, c.stripeKey, c.sortOrder, c.visible, c.createdAt, c.updatedAt,
             (SELECT COUNT(*) FROM rankCatalog rc WHERE rc.categoryId = c.id)
               AS rankCount,
             (SELECT COUNT(*) FROM rankCatalog rc WHERE rc.categoryId = c.id AND rc.visible = 1)
@@ -85,7 +85,7 @@ export async function getAllCategoriesWithCounts() {
 
 export async function getCategory(id) {
   const rows = await query(
-    `SELECT id, name, sortOrder, visible, createdAt, updatedAt
+    `SELECT id, name, stripeKey, sortOrder, visible, createdAt, updatedAt
        FROM webstoreCategories WHERE id = ?`,
     [id]
   );
@@ -148,6 +148,70 @@ export async function deleteCategory(id) {
 }
 
 /**
+ * Ensure a category row exists for every Stripe metadata category handle, and
+ * return a Map of `stripeKey -> categoryId` for the ones requested.
+ *
+ * Categories are matched by `stripeKey`, not by name, so an admin can rename a
+ * Stripe-seeded category in the dashboard without the next sync recreating it.
+ * Read-mostly: it only INSERTs handles that do not exist yet, so a steady-state
+ * store issues no writes. New rows default to visible, lowest sort order, and a
+ * name copied from the handle (admins can rename afterwards).
+ *
+ * @param {string[]} keys  raw `product.metadata.category` values
+ * @returns {Promise<Map<string, number>>}
+ */
+export async function ensureCategoriesForStripeKeys(keys) {
+  const wanted = [
+    ...new Set(
+      (Array.isArray(keys) ? keys : [])
+        .map((k) => String(k ?? "").trim())
+        .filter(Boolean)
+    ),
+  ];
+  const map = new Map();
+  if (!wanted.length) return map;
+
+  const placeholders = wanted.map(() => "?").join(",");
+  const existing = await query(
+    `SELECT id, stripeKey FROM webstoreCategories WHERE stripeKey IN (${placeholders})`,
+    wanted
+  );
+  for (const r of existing) map.set(r.stripeKey, r.id);
+
+  const missing = wanted.filter((k) => !map.has(k));
+  for (const key of missing) {
+    // name is VARCHAR(64); the handle may be longer, so clamp the display name
+    // while keeping the full handle for matching.
+    const name = key.slice(0, 64);
+    try {
+      const result = await query(
+        `INSERT INTO webstoreCategories (name, stripeKey, sortOrder, visible) VALUES (?, ?, 0, 1)`,
+        [name, key]
+      );
+      map.set(key, result.insertId);
+    } catch (err) {
+      // A concurrent request may have created it (unique on stripeKey, or a
+      // name collision with an existing hand-made category). Re-read the id.
+      if (err?.code !== "ER_DUP_ENTRY") throw err;
+      const [row] = await query(
+        `SELECT id FROM webstoreCategories WHERE stripeKey = ? OR name = ? LIMIT 1`,
+        [key, name]
+      );
+      if (row) {
+        map.set(key, row.id);
+        // Adopt a same-named hand-made category as this handle's home so the
+        // two don't fork into duplicates on the next sync.
+        await query(
+          `UPDATE webstoreCategories SET stripeKey = ? WHERE id = ? AND stripeKey IS NULL`,
+          [key, row.id]
+        ).catch(() => {});
+      }
+    }
+  }
+  return map;
+}
+
+/**
  * Move everything in one category to another, so the first can be deleted.
  * Covers both rank catalog entries and storefront products.
  */
@@ -156,8 +220,10 @@ export async function reassignProducts(fromCategoryId, toCategoryId) {
     `UPDATE rankCatalog SET categoryId = ?, updatedAt = NOW() WHERE categoryId = ?`,
     [toCategoryId, fromCategoryId]
   );
+  // Moving a storefront product by hand is a manual choice: mark it so, or the
+  // next Stripe-metadata sync would pull it back to its seeded category.
   const items = await query(
-    `UPDATE webstoreItemSettings SET categoryId = ?, updatedAt = NOW() WHERE categoryId = ?`,
+    `UPDATE webstoreItemSettings SET categoryId = ?, categoryManual = 1, updatedAt = NOW() WHERE categoryId = ?`,
     [toCategoryId, fromCategoryId]
   );
   return (ranks.affectedRows || 0) + (items.affectedRows || 0);

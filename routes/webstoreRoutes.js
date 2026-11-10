@@ -32,6 +32,7 @@ import {
   getUserSubscriptions,
   getWebstoreItems,
   preferredCurrencyFromLocale,
+  syncStripeStorefrontCategories,
 } from "../controllers/webstoreController.js";
 import { getAllCategories } from "../controllers/webstoreCategoryController.js";
 import { getAllItemSettings } from "../controllers/webstoreItemSettingsController.js";
@@ -114,8 +115,16 @@ export default function webstoreRoutes(app, config, features) {
     try {
       // getWebstoreItems() deliberately returns everything -- it also serves
       // checkout and renewal. Hiding happens here, on the way to the page.
-      const [rawItems, settings, categories] = await Promise.all([
-        getWebstoreItems(preferredCurrency),
+      const rawItems = await getWebstoreItems(preferredCurrency);
+
+      // Seed categories from each product's Stripe `metadata.category` before
+      // grouping, so a product categorised in Stripe shows up grouped without
+      // any dashboard step. A dashboard assignment still wins (see the sync).
+      await syncStripeStorefrontCategories(rawItems).catch((err) =>
+        console.warn("[webstore] Stripe category sync skipped:", err.message)
+      );
+
+      const [settings, categories] = await Promise.all([
         getAllItemSettings().catch(() => []),
         getAllCategories().catch(() => []),
       ]);

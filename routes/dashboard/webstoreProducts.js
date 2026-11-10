@@ -14,7 +14,7 @@
 
 import { hasPermission, isFeatureWebRouteEnabled, setBannerCookie } from "../../api/common.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
-import { getWebstoreItems } from "../../controllers/webstoreController.js";
+import { getWebstoreItems, syncStripeStorefrontCategories } from "../../controllers/webstoreController.js";
 import { getAllCategories } from "../../controllers/webstoreCategoryController.js";
 import {
   getAllItemSettings,
@@ -46,20 +46,28 @@ export default function dashboardWebstoreProductsRoute(app, config, db, features
 
     // Categories and the announcement are wanted even when Stripe is down, so
     // the page can still explain itself; only the product list is conditional.
-    const [categories, announcementWeb] = await Promise.all([
-      getAllCategories().catch(() => []),
+    const [announcementWeb, existingCategories] = await Promise.all([
       getWebAnnouncement(),
+      getAllCategories().catch(() => []),
     ]);
 
     let products = [];
     let groups = [];
+    let categories = existingCategories;
     let stripeError = false;
 
     try {
-      const [items, settings] = await Promise.all([
-        getWebstoreItems(),
+      const items = await getWebstoreItems();
+      // Seed categories from Stripe metadata first, so this page reflects what
+      // the public store will show (a dashboard assignment still overrides it).
+      await syncStripeStorefrontCategories(items).catch((err) =>
+        console.warn("[webstore-products] Stripe category sync skipped:", err.message)
+      );
+      const [settings, cats] = await Promise.all([
         getAllItemSettings(),
+        getAllCategories(),
       ]);
+      categories = cats;
       products = applyItemSettings(items, settings, categories);
       // Not publicOnly -- this page exists to show what is hidden.
       groups = groupByCategory(products);

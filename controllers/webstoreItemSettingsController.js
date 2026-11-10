@@ -29,22 +29,26 @@ function rowToSetting(r) {
   return { ...r, visible: r.visible === 1 || r.visible === true };
 }
 
+function rowToSettingFull(r) {
+  return { ...rowToSetting(r), categoryManual: r.categoryManual === 1 || r.categoryManual === true };
+}
+
 /** Every settings row. Callers index these by stripePriceId themselves. */
 export async function getAllItemSettings() {
   const rows = await query(
-    `SELECT stripePriceId, categoryId, visible, sortOrder, createdAt, updatedAt
+    `SELECT stripePriceId, categoryId, categoryManual, visible, sortOrder, createdAt, updatedAt
        FROM webstoreItemSettings`
   );
-  return rows.map(rowToSetting);
+  return rows.map(rowToSettingFull);
 }
 
 export async function getItemSettings(stripePriceId) {
   const rows = await query(
-    `SELECT stripePriceId, categoryId, visible, sortOrder, createdAt, updatedAt
+    `SELECT stripePriceId, categoryId, categoryManual, visible, sortOrder, createdAt, updatedAt
        FROM webstoreItemSettings WHERE stripePriceId = ?`,
     [stripePriceId]
   );
-  return rows.length ? rowToSetting(rows[0]) : null;
+  return rows.length ? rowToSettingFull(rows[0]) : null;
 }
 
 /**
@@ -53,22 +57,48 @@ export async function getItemSettings(stripePriceId) {
  * Upsert rather than insert-then-update: the row only comes into existence the
  * first time somebody categorises or hides a product, so almost every call for
  * a given price is the first one.
+ *
+ * This is the dashboard path, so the chosen category is a MANUAL one
+ * (`categoryManual = 1`): a later Stripe-metadata sync must never overwrite it,
+ * even when the admin explicitly chose "no category".
  */
 export async function upsertItemSettings(stripePriceId, { categoryId, visible = true, sortOrder = 0 }) {
   await query(
-    `INSERT INTO webstoreItemSettings (stripePriceId, categoryId, visible, sortOrder)
-     VALUES (?, ?, ?, ?)
+    `INSERT INTO webstoreItemSettings (stripePriceId, categoryId, categoryManual, visible, sortOrder)
+     VALUES (?, ?, 1, ?, ?)
      ON DUPLICATE KEY UPDATE
-       categoryId = VALUES(categoryId),
-       visible    = VALUES(visible),
-       sortOrder  = VALUES(sortOrder),
-       updatedAt  = NOW()`,
+       categoryId     = VALUES(categoryId),
+       categoryManual = 1,
+       visible        = VALUES(visible),
+       sortOrder      = VALUES(sortOrder),
+       updatedAt      = NOW()`,
     [
       String(stripePriceId),
       categoryId === null || categoryId === undefined || categoryId === "" ? null : Number(categoryId),
       visible ? 1 : 0,
       Number(sortOrder) || 0,
     ]
+  );
+}
+
+/**
+ * Point a product at the category its Stripe `metadata.category` seeded.
+ *
+ * Only touches `categoryId` (+ marks the assignment Stripe-sourced), leaving
+ * `visible` / `sortOrder` alone. A sync calls this only for products the admin
+ * has NOT categorised by hand, so a manual choice is never clobbered. Passing
+ * `null` clears a previously Stripe-seeded category (its metadata was removed).
+ */
+export async function setStripeCategory(stripePriceId, categoryId) {
+  const id = categoryId === null || categoryId === undefined || categoryId === "" ? null : Number(categoryId);
+  await query(
+    `INSERT INTO webstoreItemSettings (stripePriceId, categoryId, categoryManual, visible)
+     VALUES (?, ?, 0, 1)
+     ON DUPLICATE KEY UPDATE
+       categoryId     = VALUES(categoryId),
+       categoryManual = 0,
+       updatedAt      = NOW()`,
+    [String(stripePriceId), id]
   );
 }
 
@@ -93,8 +123,10 @@ export async function countItemsInCategory(categoryId) {
 
 /** Move every storefront product in one category to another. */
 export async function reassignItems(fromCategoryId, toCategoryId) {
+  // A deliberate move counts as a manual choice, so a later Stripe sync leaves
+  // it alone rather than seeding the product back to its metadata category.
   const result = await query(
-    `UPDATE webstoreItemSettings SET categoryId = ?, updatedAt = NOW() WHERE categoryId = ?`,
+    `UPDATE webstoreItemSettings SET categoryId = ?, categoryManual = 1, updatedAt = NOW() WHERE categoryId = ?`,
     [toCategoryId, fromCategoryId]
   );
   return result.affectedRows || 0;
