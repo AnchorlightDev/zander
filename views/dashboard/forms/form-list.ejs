@@ -40,6 +40,12 @@
             <form method="post" action="/dashboard/forms/defaults">
               <div class="row">
                 <div class="mb-3 col-md-4">
+                  <label class="form-label" for="g_minAccountAgeDays">Account age (days)</label>
+                  <input type="number" min="1" class="form-control" id="g_minAccountAgeDays"
+                         name="req_minAccountAgeDays"
+                         value="<%= defaultRequirements.minAccountAgeDays || '' %>">
+                </div>
+                <div class="mb-3 col-md-4">
                   <label class="form-label" for="g_minPlaytimeHours">Minimum playtime (hours)</label>
                   <input type="number" min="1" class="form-control" id="g_minPlaytimeHours"
                          name="req_minPlaytimeHours"

@@ -50,6 +50,11 @@ describe("normaliseRequirements", () => {
     expect(normaliseRequirements({ noPunishmentsDays: 99999 })).toEqual({ noPunishmentsDays: 3650 });
   });
 
+  it("recognises and clamps the account-age rule", () => {
+    expect(normaliseRequirements({ minAccountAgeDays: 90 })).toEqual({ minAccountAgeDays: 90 });
+    expect(normaliseRequirements({ minAccountAgeDays: 99999 })).toEqual({ minAccountAgeDays: 3650 });
+  });
+
   it("fills in a default window for a rule that needs one", () => {
     expect(normaliseRequirements({ minMinecraftActiveDays: 12 })).toEqual({
       minMinecraftActiveDays: 12,
@@ -145,6 +150,26 @@ describe("evaluateRequirements", () => {
   it("passes a form with no rules", () => {
     expect(evaluateRequirements(null, {}, { now: NOW })).toEqual(ungated);
     expect(evaluateRequirements({}, {}, { now: NOW })).toEqual(ungated);
+  });
+
+  describe("account age", () => {
+    const rules = { minAccountAgeDays: 90 };
+
+    it("passes on exactly the threshold", () => {
+      expect(evaluateRequirements(rules, { accountAgeDays: 90 }, { now: NOW }).ok).toBe(true);
+    });
+
+    it("fails below it and quotes both numbers", () => {
+      const result = evaluateRequirements(rules, { accountAgeDays: 11 }, { now: NOW });
+      expect(result.ok).toBe(false);
+      expect(result.checks[0].message).toBe(
+        "Your account must be at least 90 days old; yours is 11 days old."
+      );
+    });
+
+    it("fails a member we have no join date for (reads as brand new)", () => {
+      expect(evaluateRequirements(rules, {}, { now: NOW }).ok).toBe(false);
+    });
   });
 
   describe("playtime", () => {

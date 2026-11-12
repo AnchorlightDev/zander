@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### New
+
+- **Application forms can require a minimum account age.** A new "Account age (days)" eligibility rule gates applications on how long ago the member joined the community, independent of how active they have been. Set it per form or as a site-wide default at **Dashboard → Forms**, the same place as the playtime, clean-record and activity rules.
+
 ### Changed
 
 - **`/forcelink` and `/lp-audit` permissions** (`zander.discord.forcelink`, `zander.discord.lpaudit`) can now be ticked in the ranks dashboard.

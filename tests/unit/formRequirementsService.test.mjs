@@ -142,6 +142,29 @@ describe("skip Discord when it is not linked", () => {
   });
 });
 
+describe("account age", () => {
+  it("measures tenure from users.joined without any extra query", async () => {
+    mockUserFindUnique.mockResolvedValue({ ...LINKED, joined: new Date(NOW.getTime() - 120 * DAY) });
+
+    const measured = await measureUser(7, { minAccountAgeDays: 90 }, NOW);
+
+    expect(measured.accountAgeDays).toBe(120);
+    expect(mockMainQuery).not.toHaveBeenCalled();
+    expect(mockPunishmentsQuery).not.toHaveBeenCalled();
+
+    // joined has to be selected, or there is nothing to date them by.
+    const [args] = mockUserFindUnique.mock.calls[0];
+    expect(args.select.joined).toBe(true);
+  });
+
+  it("reads a member with no join date as brand new (fails closed)", async () => {
+    mockUserFindUnique.mockResolvedValue({ ...LINKED, joined: null });
+
+    const measured = await measureUser(7, { minAccountAgeDays: 90 }, NOW);
+    expect(measured.accountAgeDays).toBe(0);
+  });
+});
+
 describe("only what the rules need is queried", () => {
   it("never touches LiteBans for a form with no punishment rule", async () => {
     await measureUser(7, { minPlaytimeHours: 20 }, NOW);

@@ -123,12 +123,27 @@ export async function countMinecraftActiveDays(userId, since) {
   return Number(rows?.[0]?.activeDays ?? 0) || 0;
 }
 
-/** uuid and discordId for a user, read fresh rather than trusted from session. */
+/** uuid, discordId and join date for a user, read fresh rather than trusted from session. */
 async function getIdentity(userId) {
   return prisma.users.findUnique({
     where: { userId: Number(userId) },
-    select: { userId: true, uuid: true, discordId: true },
+    select: { userId: true, uuid: true, discordId: true, joined: true },
   });
+}
+
+const MS_PER_DAY = 86400000;
+
+/**
+ * Whole days between a member's join date and now.
+ *
+ * A missing or unparseable date reads as 0 days -- a brand-new member -- so a
+ * tenure rule fails closed rather than waving through a user we cannot date.
+ */
+function accountAgeInDays(joined, now) {
+  if (!joined) return 0;
+  const at = joined instanceof Date ? joined : new Date(joined);
+  if (Number.isNaN(at.getTime())) return 0;
+  return Math.max(0, Math.floor((now.getTime() - at.getTime()) / MS_PER_DAY));
 }
 
 /**
@@ -143,6 +158,12 @@ export async function measureUser(userId, requirements, now = new Date()) {
 
   const identity = await getIdentity(userId);
   const measured = { discordLinked: Boolean(identity?.discordId) };
+
+  // Account age comes straight off the identity row already fetched, so it needs
+  // no job of its own.
+  if (rules.minAccountAgeDays !== undefined) {
+    measured.accountAgeDays = accountAgeInDays(identity?.joined, now);
+  }
 
   const jobs = [];
 

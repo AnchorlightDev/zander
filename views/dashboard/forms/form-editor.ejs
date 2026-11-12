@@ -253,6 +253,15 @@
 
               <div class="row">
                 <div class="mb-3 col-md-4">
+                  <label class="form-label" for="req_minAccountAgeDays">Account age (days)</label>
+                  <input type="number" min="1" class="form-control"
+                         id="req_minAccountAgeDays" name="req_minAccountAgeDays"
+                         value="<%= requirements.minAccountAgeDays || '' %>">
+                  <small class="form-text text-muted">
+                    How long ago they joined the community, regardless of how active they have been.
+                  </small>
+                </div>
+                <div class="mb-3 col-md-4">
                   <label class="form-label" for="req_minPlaytimeHours">Minimum playtime (hours)</label>
                   <input type="number" min="1" class="form-control"
                          id="req_minPlaytimeHours" name="req_minPlaytimeHours"

@@ -169,6 +169,11 @@
                       <% } %>
                   </div>
                   <div class="forums-post-actions-secondary">
+                      <button type="button" class="forums-post-action forums-permalink-button"
+                              data-permalink="<%= discussionBasePath %>#post-<%= post.postId %>"
+                              title="Copy a link to this post">
+                        <i class="fa-solid fa-link"></i> <span class="forums-permalink-label">Link</span>
+                      </button>
                       <% if (canModerate && post.revisions && post.revisions.length) { %>
                         <a class="forums-post-action" href="/forums/post/<%= post.postId %>/revisions"><i class="fa-solid fa-clock-rotate-left"></i> History (<%= post.revisions.length %>)</a>
                       <% } %>
@@ -783,6 +788,44 @@
     });
 
     document.getElementById('forum-reply-target-clear')?.addEventListener('click', clearReplyTarget);
+
+    document.querySelectorAll('.forums-permalink-button').forEach((button) => {
+      const label = button.querySelector('.forums-permalink-label');
+      const defaultLabel = label?.textContent || 'Link';
+      button.addEventListener('click', async () => {
+        let url = button.dataset.permalink || '';
+        try {
+          url = new URL(url, window.location.origin).toString();
+        } catch (error) {
+          console.warn('Unable to resolve permalink', error);
+        }
+
+        const showCopied = () => {
+          if (label) label.textContent = 'Copied!';
+          setTimeout(() => { if (label) label.textContent = defaultLabel; }, 1500);
+        };
+
+        try {
+          if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(url);
+          } else {
+            const temp = document.createElement('textarea');
+            temp.value = url;
+            temp.setAttribute('readonly', '');
+            temp.style.position = 'absolute';
+            temp.style.left = '-9999px';
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+          }
+          showCopied();
+        } catch (error) {
+          console.error('Failed to copy permalink', error);
+          window.prompt('Copy this link:', url);
+        }
+      });
+    });
 
     document.querySelectorAll('form[method="post"]:not([data-async])').forEach(form => {
       form.addEventListener('submit', () => {
