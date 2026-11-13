@@ -32,6 +32,8 @@ import {
   ensureUncategorisedCategory,
 } from "../controllers/supportTicketController.js";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
+import { isAppealTitleFor } from "../lib/appealTitle.mjs";
+import { clipEmbedText, EMBED_TITLE_MAX, EMBED_DESCRIPTION_MAX } from "../lib/discord/embedText.mjs";
 
 export default function supportRoutes(
   app,
@@ -57,7 +59,13 @@ export default function supportRoutes(
     });
   };
 
+  // Every route here checks the module switch: turning Support tickets off in
+  // /dashboard/modules must stop ticket creation, replies and appeals too.
+  const supportEnabled = (req, res) =>
+    isFeatureWebRouteEnabled(app, features.support, req, res, features);
+
   app.get("/support", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
           res.header("content-type", "text/html; charset=utf-8").send(
@@ -106,6 +114,7 @@ export default function supportRoutes(
   });
 
   app.post("/appeal", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         const returnTo = encodeURIComponent(req.url);
@@ -158,7 +167,7 @@ export default function supportRoutes(
       );
       const existingTicket = (tickets || []).find((ticket) => {
         if (ticket.status === "closed") return false;
-        return String(ticket.title || "").includes(`Appeal #${punishmentKey}`);
+        return isAppealTitleFor(ticket.title, punishmentKey);
       });
       if (existingTicket) {
         setBannerCookie(
@@ -250,28 +259,30 @@ export default function supportRoutes(
           : siteBaseUrl;
         const ticketUrl = `${normalizedSiteUrl}/support/ticket/${ticketRecord.ticketId}`;
 
-        const ticketEmbed = new EmbedBuilder()
-          .setTitle(`Appeal Ticket #${ticketRecord.ticketId}`)
-          .setDescription(message)
-          .addFields(
-            { name: "Opened by", value: `${req.session.user.username || "Web user"}` },
-            { name: "Punished by", value: `${punishedBy}` },
-            { name: "Category", value: categoryName || "Uncategorized" }
-          )
-          .setTimestamp(new Date())
-          .setColor(0x2b6cb0);
-
-        const closeButton = new ButtonBuilder()
-          .setCustomId("support_ticket_close")
-          .setLabel("Close Ticket")
-          .setStyle(ButtonStyle.Danger);
-
-        const viewOnlineButton = new ButtonBuilder()
-          .setStyle(ButtonStyle.Link)
-          .setLabel("View Ticket Online")
-          .setURL(ticketUrl);
-
+        // Built inside the try: the ticket already exists, so a builder
+        // validation error must not read to the user as a failed appeal.
         try {
+          const ticketEmbed = new EmbedBuilder()
+            .setTitle(`Appeal Ticket #${ticketRecord.ticketId}`)
+            .setDescription(clipEmbedText(message, EMBED_DESCRIPTION_MAX))
+            .addFields(
+              { name: "Opened by", value: `${req.session.user.username || "Web user"}` },
+              { name: "Punished by", value: clipEmbedText(punishedBy, 1024) },
+              { name: "Category", value: categoryName || "Uncategorized" }
+            )
+            .setTimestamp(new Date())
+            .setColor(0x2b6cb0);
+
+          const closeButton = new ButtonBuilder()
+            .setCustomId("support_ticket_close")
+            .setLabel("Close Ticket")
+            .setStyle(ButtonStyle.Danger);
+
+          const viewOnlineButton = new ButtonBuilder()
+            .setStyle(ButtonStyle.Link)
+            .setLabel("View Ticket Online")
+            .setURL(ticketUrl);
+
           const createdMessage = await ticketRecord.channel.send({
             content: req.session.user.discordId
               ? `<@${req.session.user.discordId}> your appeal ticket has been created.`
@@ -300,6 +311,7 @@ export default function supportRoutes(
   });
 
   app.get("/support/ticket/:id", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         const returnTo = encodeURIComponent(req.url);
@@ -332,6 +344,8 @@ export default function supportRoutes(
       );
       const isAppeal = /Appeal #/i.test(ticket.title || "");
       const canManageParticipants = userHasPermissionNode(permissions, "zander.web.tickets.manageparticipants") || !isAppeal;
+      // Mirrors the remove-group route: members may not remove groups.
+      const canRemoveGroups = isStaff || userHasPermissionNode(permissions, "zander.web.tickets.manageparticipants");
       const canManageTicket = isOwner || isStaff || isParticipantUser || isParticipantRank;
 
       if (!canManageTicket) {
@@ -358,6 +372,7 @@ export default function supportRoutes(
         isMinecraftLinked,
         canManageTicket,
         canManageParticipants,
+        canRemoveGroups,
         isAppeal,
         canEscalate,
         canReplyDuringEscalation,
@@ -385,6 +400,7 @@ export default function supportRoutes(
   });
 
   app.post("/support/ticket/:id", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         const returnTo = encodeURIComponent(req.url);
@@ -424,6 +440,19 @@ export default function supportRoutes(
 
       if (ticket.isEscalated && !isOwner && !canEscalate) {
         setBannerCookie("warning", "This ticket is escalated. Only the opener and escalation staff may reply.", res);
+        return res.redirect(`/support/ticket/${req.params.id}`);
+      }
+
+      // The page hides the reply box on closed tickets; enforce it here too, or
+      // a direct POST would get round a lock (only staff may reopen a locked one).
+      if (ticket.status === "closed") {
+        setBannerCookie(
+          "warning",
+          ticket.isLocked && !isStaff
+            ? "This ticket is closed and locked. Only staff can reopen it."
+            : "This ticket is closed. Reopen it to add a new reply.",
+          res
+        );
         return res.redirect(`/support/ticket/${req.params.id}`);
       }
 
@@ -504,6 +533,7 @@ export default function supportRoutes(
   });
 
   app.post("/support/ticket/:id/status", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         const returnTo = encodeURIComponent(req.url);
@@ -613,6 +643,7 @@ export default function supportRoutes(
   });
 
   app.post("/support/ticket/:id/category", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         const returnTo = encodeURIComponent("/appeal");
@@ -688,6 +719,7 @@ export default function supportRoutes(
   });
 
   app.post("/support/ticket/:id/escalation", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         return res.redirect("/login");
@@ -754,6 +786,7 @@ export default function supportRoutes(
   });
 
   app.post("/support/ticket/:id/lock", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         return res.redirect("/login");
@@ -818,6 +851,7 @@ export default function supportRoutes(
   });
 
   app.post("/support/ticket/:id/add-user", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         return res.redirect("/login");
@@ -915,6 +949,7 @@ export default function supportRoutes(
   });
 
   app.post("/support/ticket/:id/add-group", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         return res.redirect("/login");
@@ -1005,6 +1040,7 @@ export default function supportRoutes(
   });
 
   app.post("/support/ticket/:id/remove-user", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         return res.redirect("/login");
@@ -1100,6 +1136,7 @@ export default function supportRoutes(
   });
 
   app.post("/support/ticket/:id/remove-group", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         return res.redirect("/login");
@@ -1134,6 +1171,13 @@ export default function supportRoutes(
       const group = participants.groups.find((participant) => participant.roleId === roleId);
       if (!group) {
         setBannerCookie("warning", "Select a valid group to remove.", res);
+        return res.redirect(`/support/ticket/${req.params.id}`);
+      }
+
+      // As with remove-user, members cannot take staff-added groups off a
+      // ticket: removing a group revokes that role's Discord channel access.
+      if (!isStaff && !hasMgParticipantsPermRemoveGroup) {
+        setBannerCookie("danger", "Only staff can remove groups from a ticket.", res);
         return res.redirect(`/support/ticket/${req.params.id}`);
       }
 
@@ -1175,6 +1219,7 @@ export default function supportRoutes(
   });
 
   app.get("/support/users/search", async function (req, res) {
+    if (!features.support) return res.status(404).send({ results: [] });
     try {
       if (!req.session.user) {
         return res.status(401).send({ results: [] });
@@ -1196,6 +1241,7 @@ export default function supportRoutes(
   });
 
   app.get("/support/create", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         return res.redirect("/login");
@@ -1235,6 +1281,7 @@ export default function supportRoutes(
   });
 
   app.post("/support/create", async function (req, res) {
+    if (!(await supportEnabled(req, res))) return;
     try {
       if (!req.session.user) {
         return res.redirect("/login");
@@ -1333,30 +1380,33 @@ export default function supportRoutes(
           : siteBaseUrl;
         const ticketUrl = `${normalizedSiteUrl}/support/ticket/${ticketId}`;
 
-        const ticketEmbed = new EmbedBuilder()
-          .setTitle(`Ticket #${ticketId}: ${title}`)
-          .setDescription(message)
-          .addFields(
-            { name: "Opened by", value: `${req.session.user.username || "Web user"}` },
-            ...(manualUser
-              ? [{ name: "Added user", value: manualUser.username || `User ${manualUser.userId}` }]
-              : []),
-            { name: "Category", value: categoryName || "Uncategorized" }
-          )
-          .setTimestamp(new Date())
-          .setColor(0x2b6cb0);
-
-        const closeButton = new ButtonBuilder()
-          .setCustomId("support_ticket_close")
-          .setLabel("Close Ticket")
-          .setStyle(ButtonStyle.Danger);
-
-        const viewOnlineButton = new ButtonBuilder()
-          .setStyle(ButtonStyle.Link)
-          .setLabel("View Ticket Online")
-          .setURL(ticketUrl);
-
+        // Built inside the try: the ticket already exists, so a builder
+        // validation error must not send the user to an error page (and a retry
+        // would open a duplicate ticket).
         try {
+          const ticketEmbed = new EmbedBuilder()
+            .setTitle(clipEmbedText(`Ticket #${ticketId}: ${title}`, EMBED_TITLE_MAX))
+            .setDescription(clipEmbedText(message, EMBED_DESCRIPTION_MAX))
+            .addFields(
+              { name: "Opened by", value: `${req.session.user.username || "Web user"}` },
+              ...(manualUser
+                ? [{ name: "Added user", value: manualUser.username || `User ${manualUser.userId}` }]
+                : []),
+              { name: "Category", value: categoryName || "Uncategorized" }
+            )
+            .setTimestamp(new Date())
+            .setColor(0x2b6cb0);
+
+          const closeButton = new ButtonBuilder()
+            .setCustomId("support_ticket_close")
+            .setLabel("Close Ticket")
+            .setStyle(ButtonStyle.Danger);
+
+          const viewOnlineButton = new ButtonBuilder()
+            .setStyle(ButtonStyle.Link)
+            .setLabel("View Ticket Online")
+            .setURL(ticketUrl);
+
           const createdMessage = await channel.send({
             content: manualUser?.discordId
               ? `<@${manualUser.discordId}> a ticket has been created for you.`

@@ -8,7 +8,7 @@ const require = createRequire(import.meta.url);
  *
  * Config (either source works for the base URL):
  *   - .env        → `MINEMONITOR_BASE_URL`           (preferred)
- *   - config.json → `wrapped.minemonitor.baseUrl`
+ *   - site settings (/dashboard/settings) → `wrapped.minemonitor.baseUrl`
  *   - .env        → `MINEMONITOR_CONNECTION_TOKEN`   (a MineMonitor "Connections"
  *                                                     token with the `wrapped.read` scope)
  *
@@ -23,14 +23,10 @@ function getConfig() {
   let baseUrl =
     process.env.MINEMONITOR_BASE_URL || process.env.MINEMONITOR_URL || null;
   let dateFormat = process.env.MINEMONITOR_DATE_FORMAT || "date"; // date | iso | epoch | epochms
-  try {
-    const config = require("../../config.json");
-    baseUrl = baseUrl || config?.wrapped?.minemonitor?.baseUrl || null;
-    if (!process.env.MINEMONITOR_DATE_FORMAT) {
-      dateFormat = config?.wrapped?.minemonitor?.dateFormat ?? dateFormat;
-    }
-  } catch {
-    /* config.json absent */
+  const config = require("../../lib/config/config.cjs");
+  baseUrl = baseUrl || config?.wrapped?.minemonitor?.baseUrl || null;
+  if (!process.env.MINEMONITOR_DATE_FORMAT) {
+    dateFormat = config?.wrapped?.minemonitor?.dateFormat || dateFormat;
   }
   const token =
     process.env.MINEMONITOR_CONNECTION_TOKEN || process.env.MINEMONITOR_API_KEY || null;

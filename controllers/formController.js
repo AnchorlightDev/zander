@@ -349,14 +349,28 @@ export async function deleteDraft(formId, userId) {
   }
 }
 
-export async function createSubmission({ formId, userId, answers }) {
-  return prisma.formSubmissions.create({
-    data: {
-      formId: Number(formId),
-      userId: Number(userId),
-      answers,
-      status: "pending",
-    },
+/**
+ * Store a submission. With `singlePerUser`, the "already submitted" check and
+ * the insert run under a row lock on the form, so two concurrent submits (a
+ * double-click, two tabs) cannot both pass the check. Returns null when the
+ * user already has a submission for a one-per-person form.
+ */
+export async function createSubmission({ formId, userId, answers, singlePerUser = false }) {
+  const data = {
+    formId: Number(formId),
+    userId: Number(userId),
+    answers,
+    status: "pending",
+  };
+  if (!singlePerUser) return prisma.formSubmissions.create({ data });
+
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT formId FROM forms WHERE formId = ${data.formId} FOR UPDATE`;
+    const existing = await tx.formSubmissions.count({
+      where: { formId: data.formId, userId: data.userId },
+    });
+    if (existing > 0) return null;
+    return tx.formSubmissions.create({ data });
   });
 }
 

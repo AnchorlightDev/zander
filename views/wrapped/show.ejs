@@ -147,19 +147,21 @@
 
 <script>
 (function () {
-  var P = <%- payloadJson %>;
+  // Every raw JSON insertion escapes "<": the payload carries Discord display
+  // names and other user-controlled strings that could otherwise close the tag.
+  var P = <%- String(payloadJson).replace(/</g, '\\u003c') %>;
   var SHARED = <%= shared ? 'true' : 'false' %>;
   var PREVIEW = <%= (typeof preview !== 'undefined' && preview) ? 'true' : 'false' %>;
-  var SHARE_URL = <%- JSON.stringify(typeof shareUrl !== 'undefined' ? shareUrl : null) %>;
-  var CARD_URL = <%- JSON.stringify(cardUrl) %>;
+  var SHARE_URL = <%- JSON.stringify(typeof shareUrl !== 'undefined' ? shareUrl : null).replace(/</g, '\\u003c') %>;
+  var CARD_URL = <%- String(JSON.stringify(cardUrl)).replace(/</g, '\\u003c') %>;
   // Base for per-slide story cards: CARD_BASE + "/s/" + slide.key + ".svg"
-  var CARD_BASE = <%- JSON.stringify(typeof cardBase !== 'undefined' ? cardBase : null) %>;
+  var CARD_BASE = <%- JSON.stringify(typeof cardBase !== 'undefined' ? cardBase : null).replace(/</g, '\\u003c') %>;
   // Slide descriptors, built server-side (lib/wrapped/slides.js) so the deck and
   // the downloadable per-slide cards always match.
-  var SLIDES = <%- typeof slidesJson !== 'undefined' ? slidesJson : '[]' %>;
-  var SITE = <%- JSON.stringify(siteName) %>;
-  var BG = <%- JSON.stringify(typeof bgImage !== 'undefined' ? bgImage : null) %>;
-  var BGS = <%- JSON.stringify(typeof bgImages !== 'undefined' && bgImages ? bgImages : []) %>;
+  var SLIDES = <%- String(typeof slidesJson !== 'undefined' ? slidesJson : '[]').replace(/</g, '\\u003c') %>;
+  var SITE = <%- String(JSON.stringify(siteName)).replace(/</g, '\\u003c') %>;
+  var BG = <%- JSON.stringify(typeof bgImage !== 'undefined' ? bgImage : null).replace(/</g, '\\u003c') %>;
+  var BGS = <%- JSON.stringify(typeof bgImages !== 'undefined' && bgImages ? bgImages : []).replace(/</g, '\\u003c') %>;
   if (!BGS.length && BG) BGS = [BG];
 
   // Swap the shared backdrop to a different global image on each slide.
@@ -182,7 +184,7 @@
   var s = P.stats || {};
   // Honour the user's profile-picture preference (resolved server-side); fall
   // back to their skin head.
-  var AVATAR = <%- JSON.stringify(typeof avatarUrl !== 'undefined' && avatarUrl ? avatarUrl : null) %>
+  var AVATAR = <%- JSON.stringify(typeof avatarUrl !== 'undefined' && avatarUrl ? avatarUrl : null).replace(/</g, '\\u003c') %>
     || (P.user && P.user.uuid
       ? "https://crafthead.net/avatar/" + encodeURIComponent(P.user.uuid)
       : null);

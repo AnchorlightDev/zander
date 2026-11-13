@@ -369,10 +369,16 @@ export default function formSiteRoutes(app, config, features) {
         formId: form.formId,
         userId: user.userId,
         answers,
+        singlePerUser: !form.allowMultiple,
       });
     } catch (error) {
       console.error("[forms] submission failed:", error);
       setBannerCookie("danger", "Your submission could not be saved. Please try again.", res);
+      return res.redirect(`/forms/${form.slug}`);
+    }
+    // A concurrent submit for this one-per-person form got in first.
+    if (!submission) {
+      setBannerCookie("danger", "You have already submitted this form.", res);
       return res.redirect(`/forms/${form.slug}`);
     }
 

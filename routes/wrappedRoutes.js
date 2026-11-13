@@ -34,12 +34,13 @@ import {
 } from "../lib/wrapped/pageAssets.js";
 
 const require = createRequire(import.meta.url);
-const config = require("../config.json");
+const config = require("../lib/config/config.cjs");
 
 const SITE = () => process.env.siteAddress || config?.siteConfiguration?.siteUrl || "";
 
 export default function wrappedSiteRoutes(app, client, fetch, moment, cfg, db, features, lang) {
-  const siteName = config?.siteConfiguration?.siteName || "Crafting For Christ";
+  // Read at render time so /dashboard/settings edits apply without a restart.
+  const currentSiteName = () => config?.siteConfiguration?.siteName || "Crafting For Christ";
 
   function requireLogin(req, res) {
     if (req.session?.user?.userId) return true;
@@ -76,7 +77,7 @@ export default function wrappedSiteRoutes(app, client, fetch, moment, cfg, db, f
       bgImages: pickGlobalBackgrounds(24),
       musicUrl: musicUrl(trackUrl),
       avatarUrl: avatarUrl || null,
-      siteName,
+      siteName: currentSiteName(),
     };
   }
 
@@ -94,7 +95,7 @@ export default function wrappedSiteRoutes(app, client, fetch, moment, cfg, db, f
       const pending = await shouldPromptForWrapped(user);
       if (pending) {
         return renderHtml(res, "wrapped/intro", {
-          siteName,
+          siteName: currentSiteName(),
           year: period.label,
           bgImage: pickGlobalBackground(),
         });
@@ -155,7 +156,7 @@ export default function wrappedSiteRoutes(app, client, fetch, moment, cfg, db, f
         renderWrappedSlideCard(slide, {
           user: run.payload?.user,
           period: run.payload?.period,
-          siteName,
+          siteName: currentSiteName(),
           logoDataUri: logoDataUri(),
           avatarDataUri: avatar,
           backgroundDataUri: globalBackgroundDataUri(),
@@ -173,7 +174,7 @@ export default function wrappedSiteRoutes(app, client, fetch, moment, cfg, db, f
       .header("cache-control", "public, max-age=3600")
       .send(
         renderWrappedCard(run.payload, {
-          siteName,
+          siteName: currentSiteName(),
           logoDataUri: logoDataUri(),
           avatarDataUri: avatar,
           backgroundDataUri: globalBackgroundDataUri(),

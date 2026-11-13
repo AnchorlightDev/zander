@@ -45,7 +45,7 @@ export default function eventsRoutes(app, config, features) {
     if (!await isFeatureWebRouteEnabled(app, features.events, req, res, features)) return;
 
     try {
-      const page = Math.max(parseInt(req.query.page || "1"), 1);
+      const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
       const viewerRanks = viewerRankSlugs(req);
       const isStaff = Boolean(req.session?.user?.isStaff);
       const isLoggedIn = Boolean(req.session?.user);

@@ -9,6 +9,8 @@ import {
 } from "../lib/seo/jsonLd.js";
 
 export default function policySiteRoute(app, config, features) {
+  // Built per request: /dashboard/settings edits the shared config object live.
+  const rulesContent = () => {
   const siteName = config.siteConfiguration.siteName;
   const siteUrl = config.siteConfiguration.siteUrl;
   const discordUrl = config.siteConfiguration.platforms?.discord;
@@ -36,6 +38,9 @@ export default function policySiteRoute(app, config, features) {
       a: `Depending on severity, staff may warn, mute, kick or ban. Punishments can be appealed at ${siteUrl}/appeal.`,
     },
   ];
+  return { siteName, rulesSummary, rulesFaq };
+  };
+
   app.get("/terms", async function (req, res) {
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("policy/termsOfService", {
@@ -51,6 +56,7 @@ export default function policySiteRoute(app, config, features) {
   });
 
   app.get("/rules", async function (req, res) {
+    const { siteName, rulesSummary, rulesFaq } = rulesContent();
     const rulesDescription = `Read the community rules for ${siteName}. Everyone playing on the server, using the website or in the Discord is expected to follow these guidelines.`;
     const pageJsonLd = buildGraph(config, [
       webPageNode(config, req, { title: "Network Rules", description: rulesDescription, hasBreadcrumb: true }),

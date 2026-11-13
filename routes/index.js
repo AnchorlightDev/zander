@@ -7,6 +7,7 @@ import {
 } from "../controllers/announcementController.js";
 import { isFeatureWebRouteEnabled, getGlobalImage, getJumboVideo, hasPermission, isLoggedIn, internalApiHeaders} from "../api/common.js";
 import { getTicketsAccessibleByUser } from "../controllers/supportTicketController.js";
+import { isAppealTitleFor } from "../lib/appealTitle.mjs";
 import { getStaffPageData } from "../controllers/staffController.js";
 import {
   getDiscordPunishmentsForProfile,
@@ -484,6 +485,8 @@ export default function applicationSiteRoutes(
   });
 
   app.get("/appeal/start", async function (req, res) {
+    // An appeal is a support ticket, so it follows the support module switch.
+    if (!(await isFeatureWebRouteEnabled(app, features.support, req, res, features))) return;
     try {
       if (!req.session.user) {
         const returnTo = encodeURIComponent(req.url);
@@ -525,7 +528,7 @@ export default function applicationSiteRoutes(
       );
       const existingTicket = (tickets || []).find((ticket) => {
         if (ticket.status === "closed") return false;
-        return String(ticket.title || "").includes(`Appeal #${punishmentKey}`);
+        return isAppealTitleFor(ticket.title, punishmentKey);
       });
       if (existingTicket) {
         return res.redirect(`/support/ticket/${existingTicket.ticketId}`);

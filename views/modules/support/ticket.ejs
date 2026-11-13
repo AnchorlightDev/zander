@@ -154,7 +154,7 @@
                                     <% if (participants.users.length) { %>
                                         <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#removeUserModal">Remove user</button></li>
                                     <% } %>
-                                    <% if (participants.groups.length) { %>
+                                    <% if (participants.groups.length && typeof canRemoveGroups !== 'undefined' && canRemoveGroups) { %>
                                         <li><button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#removeGroupModal">Remove group</button></li>
                                     <% } %>
                                 <% } %>

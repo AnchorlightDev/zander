@@ -104,17 +104,24 @@ export function staticSitemapPages(features = {}) {
 }
 
 export default function sitemapRoutes(app, config, features) {
-  const rawUrl = config?.siteConfiguration?.siteUrl;
-  if (!rawUrl) {
-    console.warn("[sitemapRoutes] config.siteConfiguration.siteUrl is not set — sitemap, robots.txt and llms.txt routes will be skipped.");
-    return;
+  // Read per request: /dashboard/settings edits the shared config object live,
+  // so a site URL set (or changed) after boot applies without a restart.
+  // Returns null while no site URL is configured; the routes then 404.
+  const siteSettings = () => {
+    const sc = config?.siteConfiguration || {};
+    const rawUrl = sc.siteUrl;
+    if (!rawUrl) return null;
+    return { baseUrl: String(rawUrl).replace(/\/$/, ""), sc, platforms: sc.platforms || {} };
+  };
+  if (!siteSettings()) {
+    console.warn("[sitemapRoutes] config.siteConfiguration.siteUrl is not set — sitemap, robots.txt and llms.txt return 404 until it is.");
   }
-  const baseUrl = rawUrl.replace(/\/$/, "");
-  const sc = config.siteConfiguration || {};
-  const platforms = sc.platforms || {};
   const today = () => new Date().toISOString().slice(0, 10);
 
   app.get("/robots.txt", function (req, res) {
+    const site = siteSettings();
+    if (!site) return res.callNotFound();
+    const { baseUrl } = site;
     const ruleBlock = (agent) =>
       [`User-agent: ${agent}`, "Allow: /", ...DISALLOW.map((p) => `Disallow: ${p}`)].join("\n");
 
@@ -133,6 +140,9 @@ export default function sitemapRoutes(app, config, features) {
   // site's canonical pages, so generative engines can ground answers on the
   // right URLs instead of guessing.
   app.get("/llms.txt", async function (req, res) {
+    const site = siteSettings();
+    if (!site) return res.callNotFound();
+    const { baseUrl, sc, platforms } = site;
     const L = [];
     L.push(`# ${sc.siteName || "Website"}`);
     L.push("");
@@ -191,6 +201,9 @@ export default function sitemapRoutes(app, config, features) {
   });
 
   app.get("/sitemap.xml", async function (req, res) {
+    const site = siteSettings();
+    if (!site) return res.callNotFound();
+    const { baseUrl } = site;
     const day = today();
 
     const staticPages = staticSitemapPages(features).map((p) => ({ lastmod: day, ...p }));
