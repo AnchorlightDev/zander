@@ -310,8 +310,16 @@ export default function webstoreRoutes(app, config, features) {
       });
       console.log(`[webstore] pending purchase recorded | sessionId=${session.id} user=${req.session.user.userId} item=${item.slug}`);
     } catch (err) {
-      // Log but don't block — the webhook can still look up the session ID
-      console.error("[webstore] createPendingPurchase error:", err.message);
+      // Fail closed: the webhook fulfils from this row, so a customer who paid
+      // without it would be charged and granted nothing. The unused Stripe
+      // session simply expires.
+      console.error(`[webstore] createPendingPurchase error | sessionId=${session.id}:`, err.message);
+      setBannerCookie(
+        "danger",
+        "We could not start checkout right now. Please try again shortly.",
+        res
+      );
+      return res.redirect("/webstore");
     }
 
     if (!session.url) {

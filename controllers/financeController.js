@@ -7,8 +7,9 @@
 
 import { prisma } from "./databaseController.js";
 import db from "./databaseController.js";
-import { getMonthlyPurchaseTotals } from "./webstoreController.js";
+import { getWebstoreRevenueByCurrency } from "./webstoreController.js";
 import { budgetItemAppliesToMonth, hasHistoryBefore } from "../lib/finance/budgetPeriod.mjs";
+import { dollarsToCents, pickSupportTotal } from "../lib/finance/money.mjs";
 
 // ---------------------------------------------------------------------------
 // Internal helper: wrap mysql2 pool query in a Promise
@@ -148,15 +149,8 @@ function normaliseAccountType(value) {
   return ACCOUNT_TYPES.has(v) ? v : "bank";
 }
 
-function toCents(value) {
-  if (value === null || value === undefined || value === "") return 0;
-  // Accept either a plain integer cents value or a decimal currency string.
-  const str = String(value).trim().replace(/[$,\s]/g, "");
-  if (/^-?\d+$/.test(str) && !String(value).includes(".")) return parseInt(str, 10);
-  const num = Number(str);
-  if (Number.isNaN(num)) return 0;
-  return Math.round(num * 100);
-}
+// The account forms post dollars ("1500" is $1,500.00), never cents.
+const toCents = dollarsToCents;
 
 /** All accounts, most recently created first is not useful here — order by name. */
 export async function getAccounts({ activeOnly = false } = {}) {
@@ -412,24 +406,34 @@ export async function getTransactionById(id) {
 export async function createTransaction({
   type, amountCents, currency,
   accountId, categoryId, description, notes,
-  transactionDate, createdByUserId,
+  transactionDate, createdByUserId, externalRef = null,
 }) {
   if (!type) throw new Error("Transaction type is required.");
   if (!transactionDate) throw new Error("Transaction date is required.");
 
-  return prisma.financeTransactions.create({
-    data: {
-      type,
-      amountCents: parseAmountCents(amountCents),
-      currency: (currency || "USD").toUpperCase().trim(),
-      accountId: accountId ? parseInt(accountId, 10) : null,
-      categoryId: categoryId ? parseInt(categoryId, 10) : null,
-      description: description?.trim() || "",
-      notes: notes?.trim() || null,
-      transactionDate: new Date(transactionDate),
-      createdByUserId: parseInt(createdByUserId, 10) || 0,
-    },
-  });
+  const data = {
+    type,
+    amountCents: parseAmountCents(amountCents),
+    currency: (currency || "USD").toUpperCase().trim(),
+    accountId: accountId ? parseInt(accountId, 10) : null,
+    categoryId: categoryId ? parseInt(categoryId, 10) : null,
+    description: description?.trim() || "",
+    notes: notes?.trim() || null,
+    transactionDate: new Date(transactionDate),
+    createdByUserId: parseInt(createdByUserId, 10) || 0,
+  };
+  if (externalRef) data.externalRef = String(externalRef).slice(0, 191);
+
+  try {
+    return await prisma.financeTransactions.create({ data });
+  } catch (error) {
+    // An automated row (externalRef set) that already exists was written by an
+    // earlier attempt of the same webhook; return it instead of duplicating.
+    if (externalRef && error?.code === "P2002") {
+      return prisma.financeTransactions.findUnique({ where: { externalRef: data.externalRef } });
+    }
+    throw error;
+  }
 }
 
 export async function updateTransaction(id, data) {
@@ -840,10 +844,19 @@ export async function buildPublicFinanceSnapshot({
   publicNote = null,
 }) {
   const { startDate, endDate } = getMonthRange(year, month);
-  const [communitySupportCents, budgetBreakdown] = await Promise.all([
-    getMonthlyPurchaseTotals(startDate, endDate),
+  const [revenueByCurrency, budgetBreakdown] = await Promise.all([
+    getWebstoreRevenueByCurrency(startDate, endDate),
     getPublicOperationsBudgetBreakdown(year, month),
   ]);
+
+  // Support is compared against the budget, so count it in the budget's
+  // currency. With no budget rows yet there is nothing to compare against, so
+  // use whichever currency took the most. Other currencies are reported
+  // alongside rather than summed in as if they were the same unit.
+  const hasBudget = budgetBreakdown.categories.length > 0;
+  const support = pickSupportTotal(revenueByCurrency, hasBudget ? budgetBreakdown.currency : null);
+  const communitySupportCents = support.cents;
+  const snapshotCurrency = hasBudget ? budgetBreakdown.currency : (support.currency || budgetBreakdown.currency);
 
   // The funding goal is what it actually costs to keep the servers running this
   // month. Fall back to the configured goal only when no public operating costs
@@ -870,11 +883,12 @@ export async function buildPublicFinanceSnapshot({
       year: "numeric",
     }),
     fundingGoalCents,
-    fundingGoalCurrency: budgetBreakdown.currency,
+    fundingGoalCurrency: snapshotCurrency,
     communitySupportCents,
+    communitySupportOtherCurrencies: support.otherCurrencies,
     fundingProgressPercent,
     operatingCostsCents: budgetBreakdown.totalOperatingCostsCents,
-    operatingCostsCurrency: budgetBreakdown.currency,
+    operatingCostsCurrency: snapshotCurrency,
     remainingFundedByCfcCents,
     aboveOperatingCostsCents,
     netPositionCents,
@@ -1034,7 +1048,10 @@ export async function getFinanceDashboardData() {
   const startOfMonth = new Date(currentYear, currentMonth - 1, 1);
   const startOfNextMonth = new Date(currentYear, currentMonth, 1);
 
-  const [incomeRows, expenseRows, webstoreIncomeCents, financeTransactions, recentPurchases, budgetSummary] = await Promise.all([
+  // Webstore checkouts and renewals are written to financeTransactions by the
+  // Stripe webhook, so the ledger alone is the income source; adding
+  // webstorePurchases on top counted every purchase twice.
+  const [incomeRows, expenseRows, financeTransactions, budgetSummary] = await Promise.all([
     queryDb(
       `SELECT COALESCE(SUM(amountCents), 0) AS total
          FROM financeTransactions
@@ -1047,50 +1064,17 @@ export async function getFinanceDashboardData() {
         WHERE type = 'expense' AND transactionDate >= ? AND transactionDate < ?`,
       [startOfMonth, startOfNextMonth]
     ),
-    getMonthlyPurchaseTotals(startOfMonth, startOfNextMonth),
     getTransactions({ limit: 10, offset: 0 }),
-    queryDb(
-      `SELECT purchaseId, itemName, purchaseType, amountCents, currency, createdAt,
-              purchaserMinecraftUsername, recipientMinecraftUsername, isGift
-         FROM webstorePurchases
-        WHERE status IN ('paid', 'fulfilled')
-          AND createdAt >= ? AND createdAt < ?
-        ORDER BY createdAt DESC
-        LIMIT 10`,
-      [startOfMonth, startOfNextMonth]
-    ),
     getBudgetVsActual(currentYear, currentMonth),
   ]);
 
-  const financeIncomeCents = Number(incomeRows[0]?.total || 0);
-  const totalIncomeCents = financeIncomeCents + Number(webstoreIncomeCents || 0);
-  const totalExpensesCents = expenseRows[0]?.total || 0;
+  const totalIncomeCents = Number(incomeRows[0]?.total || 0);
+  const totalExpensesCents = Number(expenseRows[0]?.total || 0);
   const netAmountCents = totalIncomeCents - totalExpensesCents;
-  const recentTransactions = [
-    ...(financeTransactions || []).map((tx) => ({
-      ...tx,
-      activityDate: tx.transactionDate || tx.createdAt,
-    })),
-    ...(recentPurchases || []).map((purchase) => ({
-      transactionId: `webstore-${purchase.purchaseId}`,
-      type: "income",
-      amountCents: purchase.amountCents,
-      currency: purchase.currency,
-      description: purchase.itemName || "Webstore purchase",
-      notes: purchase.isGift
-        ? `Gift purchase for ${purchase.recipientMinecraftUsername}`
-        : `Purchased by ${purchase.purchaserMinecraftUsername}`,
-      transactionDate: purchase.createdAt,
-      createdAt: purchase.createdAt,
-      category: { categoryId: null, name: "Stripe / Webstore", color: "#198754" },
-      activityDate: purchase.createdAt,
-      source: "webstore",
-      purchaseType: purchase.purchaseType,
-      isGift: purchase.isGift,
-    })),
-  ]
-    .sort((a, b) => new Date(b.activityDate) - new Date(a.activityDate))
-    .slice(0, 10);
+  const recentTransactions = (financeTransactions || []).map((tx) => ({
+    ...tx,
+    activityDate: tx.transactionDate || tx.createdAt,
+  }));
 
   return {
     totalIncomeCents,

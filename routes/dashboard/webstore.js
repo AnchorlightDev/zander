@@ -9,7 +9,7 @@ import {
   getAllPurchases,
   getAllPurchasesCount,
   getActiveSubscriptionsCount,
-  getTotalRevenueCents,
+  getWebstoreRevenueByCurrency,
   getWebstoreItems,
   getCommandById,
   createCommand,
@@ -51,13 +51,13 @@ export default function dashboardWebstoreRoute(app, fetch, config, db, features,
     const limit  = 20;
     const offset = (page - 1) * limit;
 
-    let purchases = [], totalCount = 0, activeSubscriptions = 0, totalRevenueCents = 0;
+    let purchases = [], totalCount = 0, activeSubscriptions = 0, revenueByCurrency = [];
     try {
-      [purchases, totalCount, activeSubscriptions, totalRevenueCents] = await Promise.all([
+      [purchases, totalCount, activeSubscriptions, revenueByCurrency] = await Promise.all([
         getAllPurchases(limit, offset),
         getAllPurchasesCount(),
         getActiveSubscriptionsCount(),
-        getTotalRevenueCents(),
+        getWebstoreRevenueByCurrency(),
       ]);
     } catch (err) {
       console.error("[dashboard/webstore] failed to load data:", err.message);
@@ -71,7 +71,7 @@ export default function dashboardWebstoreRoute(app, fetch, config, db, features,
         pageTitle: "Webstore",
         config, features, req, announcementWeb,
         purchases, totalCount, totalPages, page,
-        activeSubscriptions, totalRevenueCents,
+        activeSubscriptions, revenueByCurrency,
         formatPrice,
         ...adminViewData(req, features),
       })

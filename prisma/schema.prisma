@@ -1222,6 +1222,8 @@ model webstoreSubscriptions {
   currentPeriodEnd             DateTime?
   cancelAtPeriodEnd            Int                           @default(0) @db.TinyInt
   cancelledAt                  DateTime?
+  /// `created` (unix seconds) of the last Stripe event applied, to drop out-of-order updates.
+  lastStripeEventAt            Int?
   createdAt                    DateTime                      @default(now())
   updatedAt                    DateTime                      @updatedAt
 
@@ -1238,6 +1240,8 @@ model webstoreWebhookEvents {
   eventType       String   @db.VarChar(80)
   payload         Json?
   processedAt     DateTime @default(now())
+  /// Null while the event is claimed but not yet fully processed.
+  completedAt     DateTime?
 
   @@index([purchaseId])
 }
@@ -1284,6 +1288,8 @@ model webstoreTransactions {
   counterpartyMinecraftUsername  String   @db.VarChar(16)
   amountCents                    Int
   currency                       String   @db.VarChar(10)
+  /// Stripe object the row came from (checkout:, invoice:, refund:, dispute:); unique so webhook retries cannot double-count.
+  stripeRef                      String?  @unique(map: "uq_webstoreTransactions_stripeRef") @db.VarChar(191)
   createdAt                      DateTime @default(now())
 
   @@index([userId])
@@ -1463,6 +1469,8 @@ model financeTransactions {
   vendorId         Int?
   description      String                    @default("") @db.VarChar(500)
   notes            String?                   @db.Text
+  /// Set on rows written automatically (e.g. "webstore:checkout:cs_..."), unique so a retry cannot duplicate them.
+  externalRef      String?                   @unique(map: "uq_financeTransactions_externalRef") @db.VarChar(191)
   transactionDate  DateTime                  @db.Date
   isLocked         Int                       @default(0) @db.TinyInt
   createdByUserId  Int
