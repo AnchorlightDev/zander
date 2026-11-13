@@ -33,60 +33,61 @@
         <% if (!categories || !categories.length) { %>
           <div class="card-body text-muted small">No categories yet, add one below.</div>
         <% } else { %>
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th style="width:90px">Order</th>
-                  <th>Name</th>
-                  <th style="width:150px">Products</th>
-                  <th style="width:96px">Visible</th>
-                  <th style="width:150px"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <% categories.forEach(function(cat) { %>
-                  <tr class="<%= cat.visible === false ? 'opacity-50' : '' %>">
-                    <td>
-                      <input form="editCategory<%= cat.id %>" type="number" class="form-control form-control-sm"
-                             name="sortOrder" value="<%= cat.sortOrder %>" min="0" style="width:74px">
-                    </td>
-                    <td>
-                      <input form="editCategory<%= cat.id %>" type="text" class="form-control form-control-sm"
-                             name="name" value="<%= cat.name %>" maxlength="64" required>
-                    </td>
-                    <td class="text-muted small">
-                      <%= cat.productCount %> total
-                      <% if (cat.productCount) { %>
-                        <span class="d-block"><%= cat.visibleProductCount %> shown</span>
-                      <% } %>
-                    </td>
-                    <td>
-                      <div class="form-check form-switch mb-0">
-                        <input form="editCategory<%= cat.id %>" class="form-check-input" type="checkbox" role="switch"
-                               name="visible" value="on" <%= cat.visible === false ? '' : 'checked' %>
-                               title="Show this category on the ranks page">
-                      </div>
-                    </td>
-                    <td class="text-end">
-                      <%# The form element sits here, empty, and the inputs above point at it by
-                          id. That keeps the delete button from being nested inside the edit form,
-                          which HTML does not allow. %>
-                      <form id="editCategory<%= cat.id %>" method="post"
-                            action="/dashboard/webstore/categories/<%= cat.id %>/edit" class="d-none"></form>
-                      <button form="editCategory<%= cat.id %>" type="submit"
-                              class="btn btn-sm btn-outline-primary me-1" title="Save">
-                        <i class="fa-solid fa-floppy-disk fa-fw"></i>
-                      </button>
-                      <button type="button" class="btn btn-sm btn-outline-danger"
-                              data-bs-toggle="modal" data-bs-target="#deleteCategory<%= cat.id %>" title="Delete">
-                        <i class="fa-solid fa-trash fa-fw"></i>
-                      </button>
-                    </td>
-                  </tr>
-                <% }) %>
-              </tbody>
-            </table>
+          <%# A grid rather than a table, so on a phone each category stacks into its own
+              block instead of squeezing the name field to a few characters. %>
+          <div class="list-group list-group-flush">
+            <div class="list-group-item bg-light small fw-semibold text-muted d-none d-md-block">
+              <div class="row g-2">
+                <div class="col-md-5">Name</div>
+                <div class="col-md-2">Order</div>
+                <div class="col-md-2">Products</div>
+                <div class="col-md-1">Visible</div>
+                <div class="col-md-2"></div>
+              </div>
+            </div>
+            <% categories.forEach(function(cat) { %>
+              <div class="list-group-item py-3 py-md-2 <%= cat.visible === false ? 'opacity-50' : '' %>">
+                <%# The form element sits here, empty, and the inputs point at it by id. That
+                    keeps the delete button from being nested inside the edit form, which HTML
+                    does not allow. %>
+                <form id="editCategory<%= cat.id %>" method="post"
+                      action="/dashboard/webstore/categories/<%= cat.id %>/edit" class="d-none"></form>
+                <div class="row g-2 align-items-center">
+                  <div class="col-12 col-md-5">
+                    <label for="catName<%= cat.id %>" class="form-label small fw-semibold mb-1 d-md-none">Name</label>
+                    <input form="editCategory<%= cat.id %>" id="catName<%= cat.id %>" type="text"
+                           class="form-control form-control-sm" name="name" value="<%= cat.name %>" maxlength="64" required>
+                  </div>
+                  <div class="col-4 col-md-2">
+                    <label for="catOrder<%= cat.id %>" class="form-label small fw-semibold mb-1 d-md-none">Order</label>
+                    <input form="editCategory<%= cat.id %>" id="catOrder<%= cat.id %>" type="number"
+                           class="form-control form-control-sm" name="sortOrder" value="<%= cat.sortOrder %>" min="0">
+                  </div>
+                  <div class="col-8 col-md-2 text-muted small">
+                    <span class="d-md-none fw-semibold text-body d-block mb-1">Products</span>
+                    <%= cat.productCount %> total<% if (cat.productCount) { %>, <%= cat.visibleProductCount %> shown<% } %>
+                  </div>
+                  <div class="col-6 col-md-1">
+                    <div class="form-check form-switch mb-0">
+                      <input form="editCategory<%= cat.id %>" class="form-check-input" type="checkbox" role="switch"
+                             id="catVisible<%= cat.id %>" name="visible" value="on" <%= cat.visible === false ? '' : 'checked' %>
+                             title="Show this category on the ranks page">
+                      <label class="form-check-label small d-md-none" for="catVisible<%= cat.id %>">Visible</label>
+                    </div>
+                  </div>
+                  <div class="col-6 col-md-2 text-end text-nowrap">
+                    <button form="editCategory<%= cat.id %>" type="submit"
+                            class="btn btn-sm btn-outline-primary me-1" title="Save">
+                      <i class="fa-solid fa-floppy-disk fa-fw"></i><span class="d-md-none ms-1">Save</span>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger"
+                            data-bs-toggle="modal" data-bs-target="#deleteCategory<%= cat.id %>" title="Delete">
+                      <i class="fa-solid fa-trash fa-fw"></i><span class="visually-hidden">Delete</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            <% }) %>
           </div>
         <% } %>
       </div>
@@ -107,14 +108,14 @@
                      value="0" min="0">
               <div class="form-text">Lower numbers appear first.</div>
             </div>
-            <div class="col-md-2">
-              <div class="form-check form-switch">
+            <div class="col-6 col-md-2">
+              <div class="form-check form-switch mb-md-1">
                 <input class="form-check-input" type="checkbox" role="switch"
                        id="newVisible" name="visible" value="on" checked>
                 <label class="form-check-label small" for="newVisible">Visible</label>
               </div>
             </div>
-            <div class="col-md-2 d-grid">
+            <div class="col-6 col-md-2 d-grid">
               <button type="submit" class="btn btn-sm btn-primary">
                 <i class="fa-solid fa-plus me-1"></i>Add
               </button>
