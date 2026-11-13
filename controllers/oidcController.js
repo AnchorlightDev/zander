@@ -19,6 +19,7 @@ import { loadJwks } from "../lib/oidc/jwks.mjs";
 import { findAccount } from "../lib/oidc/accounts.mjs";
 import { seedCompassClient, seedMcpClient } from "../lib/oidc/clientStore.mjs";
 import { issueRefreshToken, resourceIndicators } from "../lib/mcp/oidcConfig.mjs";
+import { buildInteractionPolicy } from "../lib/oidc/policy.mjs";
 
 const TEN_MINUTES = 10 * 60; // brief: access tokens last 10 minutes
 const FOURTEEN_DAYS = 14 * 24 * 60 * 60;
@@ -98,6 +99,9 @@ async function build() {
 
     // Send the browser to our own interaction page (routes/oidcRoutes.js).
     interactions: {
+      // Always go through the interaction so it re-checks the Zander login
+      // (see lib/oidc/policy.mjs).
+      policy: buildInteractionPolicy(),
       url(ctx, interaction) {
         return `/oidc/interaction/${interaction.uid}`;
       },

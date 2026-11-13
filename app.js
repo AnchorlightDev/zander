@@ -31,6 +31,7 @@ import {
   isCrossSiteRequest,
 } from "./lib/securityConfig.js";
 import { checkRateLimit } from "./lib/rateLimiter.mjs";
+import { resolveTrustProxy } from "./lib/trustProxy.mjs";
 import { registerReturnReplyGuard, wrapAsyncHandler } from "./lib/returnReplyGuard.mjs";
 import { serveCustomPage } from "./routes/customPageRoutes.js";
 import { getRegion } from "./lib/region.mjs";
@@ -88,7 +89,10 @@ import("./cron/punishmentExpiryCron.js");
 import("./cron/watchTwitchCron.js");
 import("./cron/watchYoutubeCron.js");
 import("./cron/unverifiedReminderCron.js");
-// eventAnnouncementCron removed — event announcements now use scheduledDiscordMessages via schedulerCron
+// Sends due Discord event announcements (event_announcements rows left pending
+// with a scheduledFor time); the general scheduler does not handle these.
+import("./cron/eventAnnouncementCron.js");
+import("./cron/resourceReviewCron.js");
 import("./cron/eventTemplateCron.js");
 import("./cron/announcementExpiryCron.js");
 import("./cron/forumScheduledCron.js");
@@ -155,18 +159,16 @@ const buildApp = async () => {
   // production via [login-debug]: xForwardedProto=https, protocol=http,
   // hadSessionCookie=false.
   //
-  // So on an https deployment we trust the platform proxy outright: req.protocol
-  // then follows X-Forwarded-Proto (→ https, cookie is written) and req.ip
-  // becomes the real client instead of the proxy address (per-IP rate limiting
-  // was already broken — every request looked like it came from the proxy).
-  // Set TRUST_PROXY_HOPS to an exact integer to override this with a fixed hop
-  // count (only if your proxy chain is static and you've verified it yields
-  // protocol=https); otherwise leave it UNSET.
-  const parsedTrustProxyHops = Number.parseInt(process.env.TRUST_PROXY_HOPS ?? "", 10);
-  const trustProxy =
-    Number.isInteger(parsedTrustProxyHops) && parsedTrustProxyHops >= 0
-      ? parsedTrustProxyHops
-      : isHttpsDeployment;
+  // That is Fastify 5 failing closed on a numeric trustProxy. `true` fixed the
+  // cookie but trusted every X-Forwarded-For hop, making req.ip the
+  // client-written leftmost entry (every per-IP rate limit was bypassable).
+  // resolveTrustProxy passes a hop-count *function* instead: the socket peer is
+  // trusted (protocol → https) and only the last TRUST_PROXY_HOPS entries are
+  // walked (default 1 on https). See lib/trustProxy.mjs.
+  const { trustProxy, hops: trustProxyHops } = resolveTrustProxy(
+    process.env.TRUST_PROXY_HOPS,
+    isHttpsDeployment
+  );
 
   const app = fastify({
     // Without a logger the error handler's app.log.error() calls are no-ops
@@ -184,9 +186,21 @@ const buildApp = async () => {
   // Surface the resolved proxy/scheme at boot so a protocol/cookie mismatch is
   // diagnosable from the logs rather than only as mysterious "login expired".
   app.log.warn(
-    { trustProxy, httpsDeployment: isHttpsDeployment, siteAddress: process.env.siteAddress },
-    "[boot] session cookie security: secure=" + isHttpsDeployment + ", trustProxy=" + trustProxy
+    { trustProxyHops, httpsDeployment: isHttpsDeployment, siteAddress: process.env.siteAddress },
+    "[boot] session cookie security: secure=" + isHttpsDeployment + ", trustProxyHops=" + trustProxyHops
   );
+
+  // One-off diagnostic so the hop count can be checked against the real proxy
+  // chain: req.ip should be the visitor's address, not a proxy's.
+  let loggedProxyChain = false;
+  app.addHook("onRequest", async (req) => {
+    if (loggedProxyChain || !req.headers["x-forwarded-for"]) return;
+    loggedProxyChain = true;
+    app.log.warn(
+      { ip: req.ip, ips: req.ips, protocol: req.protocol, trustProxyHops },
+      "[boot] first proxied request: check ip is the visitor (raise TRUST_PROXY_HOPS if it is a proxy)"
+    );
+  });
 
   if (process.env.SENTRY_DSN) {
     Sentry.setupFastifyErrorHandler(app, {

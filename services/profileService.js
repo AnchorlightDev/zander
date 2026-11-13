@@ -41,7 +41,9 @@ function mapRankRow(row) {
 export function getUserByUsername(username) {
   return new Promise((resolve, reject) => {
     db.query(
-      `SELECT * FROM users WHERE username = ?`,
+      // username is not unique: a support-bot ghost row may carry the same
+      // name as a real player. Always prefer the real account.
+      `SELECT * FROM users WHERE username = ? ORDER BY COALESCE(is_placeholder, 0) ASC, userId ASC LIMIT 1`,
       [username],
       (error, results) => {
         if (error) {

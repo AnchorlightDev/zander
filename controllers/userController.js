@@ -1,6 +1,8 @@
 import { hashEmail } from "../api/common.js";
 import db, { luckpermsDb } from "./databaseController.js";
 import { sanitizeForumHtml } from "../lib/htmlSanitize.js";
+import { resolveEffectiveNodes } from "../lib/permissions/resolveNodes.mjs";
+import { listAllNodes } from "../lib/permissions/zanderNodes.mjs";
 
 export function UserGetter() {
   this.byUsername = function (username) {
@@ -120,8 +122,10 @@ export function UserGetter() {
 
   this.byDiscordId = function (discordId) {
     return new Promise((resolve, reject) => {
+      // discordId is not unique: a support-bot ghost row can share it with
+      // the real account once that is linked. Prefer the real account.
       db.query(
-        `SELECT * FROM users WHERE discordId=?;`,
+        `SELECT * FROM users WHERE discordId=? ORDER BY COALESCE(is_placeholder, 0) ASC, userId ASC LIMIT 1;`,
         [discordId],
         function (error, results, fields) {
           if (error) {
@@ -138,9 +142,10 @@ export function UserGetter() {
     });
   };
 
-  this.hasJoined = async function (username, uuid = null) {
+  this.hasJoined = async function (username, uuid = null, { includePlaceholders = true } = {}) {
     const trimmedUsername = username ? username.trim() : null;
     const trimmedUuid = uuid ? uuid.trim() : null;
+    const placeholderFilter = includePlaceholders ? "" : " AND COALESCE(is_placeholder, 0) = 0";
 
     const runQuery = (sql, params) =>
       new Promise((resolve, reject) => {
@@ -155,7 +160,7 @@ export function UserGetter() {
 
     if (trimmedUsername) {
       const usernameMatch = await runQuery(
-        `SELECT 1 FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1`,
+        `SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)${placeholderFilter} LIMIT 1`,
         [trimmedUsername]
       );
 
@@ -166,7 +171,7 @@ export function UserGetter() {
 
     if (trimmedUuid) {
       const uuidMatch = await runQuery(
-        `SELECT 1 FROM users WHERE uuid = ? LIMIT 1`,
+        `SELECT 1 FROM users WHERE uuid = ?${placeholderFilter} LIMIT 1`,
         [trimmedUuid]
       );
 
@@ -592,6 +597,9 @@ export function updateUserPassword(userId, passwordHash) {
 const LUCKPERMS_USER_PERMISSIONS_TABLE = "luckperms_user_permissions";
 const LUCKPERMS_GROUP_PERMISSIONS_TABLE = "luckperms_group_permissions";
 const LUCKPERMS_PLAYERS_TABLE = "luckperms_players";
+// Active (not expired) and in the global context; value is left to the caller.
+const LUCKPERMS_GLOBAL_ACTIVE_ANY_VALUE =
+  "(expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP()) AND server = 'global' AND world = 'global'";
 
 function normaliseUuid(uuid) {
   if (!uuid) return null;
@@ -621,7 +629,6 @@ function runLuckPermsQuery(query, params = []) {
 }
 
 export async function getUserPermissions(userData = {}) {
-  const permissionSet = new Set();
   const directRankOrder = [];
   const seenDirectRanks = new Set();
   const queuedRanks = [];
@@ -677,11 +684,6 @@ export async function getUserPermissions(userData = {}) {
     return emptyPermissions;
   }
 
-  const pushPermission = (value) => {
-    if (!value) return;
-    permissionSet.add(value);
-  };
-
   const queueRank = (slug, { direct = false } = {}) => {
     if (!slug) {
       return;
@@ -698,19 +700,24 @@ export async function getUserPermissions(userData = {}) {
     }
   };
 
+  // Negations (value = 0) are loaded too and resolved by
+  // resolveEffectiveNodes. Only global-context rows count: a node granted on
+  // server=lobby is not a website permission (same scope as effectiveGroups).
+  const userNodeRows = [];
+  const groupNodeRows = [];
+
   if (uuidHex) {
     try {
       const directPermissions = await runLuckPermsQuery(
-        `SELECT permission
+        `SELECT permission, value
            FROM ${LUCKPERMS_USER_PERMISSIONS_TABLE}
           WHERE uuid = ?
             AND permission NOT LIKE 'group.%'
-            AND value = 1
-            AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
+            AND ${LUCKPERMS_GLOBAL_ACTIVE_ANY_VALUE}`,
         [rawUuid]
       );
 
-      directPermissions.forEach(({ permission }) => pushPermission(permission));
+      directPermissions.forEach((row) => userNodeRows.push(row));
     } catch (error) {
       console.error("[PERMISSIONS] Failed to fetch direct user permissions:", error);
     }
@@ -722,7 +729,7 @@ export async function getUserPermissions(userData = {}) {
           WHERE uuid = ?
             AND permission LIKE 'group.%'
             AND value = 1
-            AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())
+            AND ${LUCKPERMS_GLOBAL_ACTIVE_ANY_VALUE}
           ORDER BY permission`,
         [rawUuid]
       );
@@ -762,20 +769,21 @@ export async function getUserPermissions(userData = {}) {
 
     try {
       const groupPermissions = await runLuckPermsQuery(
-        `SELECT name, permission
+        `SELECT name, permission, value
            FROM ${LUCKPERMS_GROUP_PERMISSIONS_TABLE}
           WHERE name IN (${placeholders})
-            AND value = 1
-            AND (expiry IS NULL OR expiry = 0 OR expiry > UNIX_TIMESTAMP())`,
+            AND ${LUCKPERMS_GLOBAL_ACTIVE_ANY_VALUE}`,
         currentBatch
       );
 
-      groupPermissions.forEach(({ name, permission }) => {
+      groupPermissions.forEach(({ name, permission, value }) => {
         if (!permission) {
           return;
         }
 
         if (permission.startsWith("group.")) {
+          // A negated parent is "do not inherit", not a parent.
+          if (Number(value) !== 1) return;
           const inherited = permission.substring("group.".length).trim();
           if (inherited && inherited !== name) {
             queueRank(inherited);
@@ -783,7 +791,7 @@ export async function getUserPermissions(userData = {}) {
           return;
         }
 
-        pushPermission(permission);
+        groupNodeRows.push({ permission, value });
       });
     } catch (error) {
       console.error(
@@ -803,7 +811,11 @@ export async function getUserPermissions(userData = {}) {
   // lives on a separate MySQL server from the main app DB, so those views
   // couldn't be joined cross-server reliably anyway.
 
-  const permissions = Array.from(permissionSet);
+  const permissions = resolveEffectiveNodes({
+    userNodes: userNodeRows,
+    groupNodes: groupNodeRows,
+    knownNodes: listAllNodes(),
+  });
   permissions.userRanks = directRankOrder;
 
   return permissions;

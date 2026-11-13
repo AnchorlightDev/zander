@@ -50,65 +50,65 @@ export async function createEmailVerification(userId, code, expiresAt) {
   });
 }
 
-export async function verifyEmailCode(userId, code) {
+function runQuery(sql, params) {
   return new Promise((resolve, reject) => {
-    db.query(
-      `SELECT * FROM userEmailVerifications WHERE userId = ? ORDER BY createdAt DESC LIMIT 1`,
-      [userId],
-      async function (error, results) {
-        if (error) {
-          return reject(error);
-        }
-
-        if (!results || !results.length) {
-          return resolve({ valid: false });
-        }
-
-        const verification = results[0];
-
-        if (verification.consumed) {
-          return resolve({ valid: false, reason: "consumed" });
-        }
-
-        const expiryDate = new Date(verification.expiresAt);
-        if (expiryDate < new Date()) {
-          return resolve({ valid: false, reason: "expired" });
-        }
-
-        const match = await bcrypt.compare(code, verification.codeHash);
-
-        if (!match) {
-          // A 6-digit code is only safe while guesses are bounded. Count the
-          // miss and burn the code after MAX_CODE_ATTEMPTS so a per-IP rate
-          // limit is not the only thing standing between a guesser and the
-          // account.
-          db.query(
-            `UPDATE userEmailVerifications
-                SET attempts = attempts + 1,
-                    consumed = IF(attempts + 1 >= ?, 1, consumed)
-              WHERE verificationId = ?`,
-            [MAX_CODE_ATTEMPTS, verification.verificationId],
-            (attemptError) => {
-              if (attemptError) console.error("[session] failed to record code attempt:", attemptError);
-            }
-          );
-          return resolve({ valid: false, reason: "mismatch" });
-        }
-
-        db.query(
-          `UPDATE userEmailVerifications SET consumed = 1, consumedAt = NOW() WHERE verificationId = ?`,
-          [verification.verificationId],
-          function (updateError) {
-            if (updateError) {
-              return reject(updateError);
-            }
-
-            resolve({ valid: true });
-          }
-        );
-      }
-    );
+    db.query(sql, params, (error, results) => (error ? reject(error) : resolve(results)));
   });
+}
+
+/**
+ * Check an emailed code against the latest row for a user.
+ *
+ * A 6-digit code is only safe while guesses are bounded, and the bound must
+ * hold under concurrency: each guess first claims an attempt with a
+ * conditional UPDATE (only one request can take the last slot), and only then
+ * spends time in bcrypt. A read-then-increment let parallel requests all see
+ * attempts = 0 and guess without limit. Consuming a matched code is likewise
+ * conditional, so a code is single-use even if two correct guesses race.
+ *
+ * `table` and `idColumn` are fixed identifiers from this module, never input.
+ */
+export async function verifyStoredCode(table, idColumn, userId, code) {
+  const rows = await runQuery(
+    `SELECT * FROM ${table} WHERE userId = ? ORDER BY createdAt DESC LIMIT 1`,
+    [userId]
+  );
+  if (!rows || !rows.length) return { valid: false };
+
+  const row = rows[0];
+  if (row.consumed) return { valid: false, reason: "consumed" };
+  if (new Date(row.expiresAt) < new Date()) return { valid: false, reason: "expired" };
+
+  const claim = await runQuery(
+    `UPDATE ${table} SET attempts = attempts + 1
+      WHERE ${idColumn} = ? AND consumed = 0 AND attempts < ?`,
+    [row[idColumn], MAX_CODE_ATTEMPTS]
+  );
+  if (!claim || claim.affectedRows !== 1) {
+    // Out of attempts (or consumed meanwhile): burn it so the UI says so.
+    await runQuery(`UPDATE ${table} SET consumed = 1 WHERE ${idColumn} = ?`, [row[idColumn]]);
+    return { valid: false, reason: "consumed" };
+  }
+
+  const match = await bcrypt.compare(String(code), row.codeHash);
+  if (!match) {
+    await runQuery(
+      `UPDATE ${table} SET consumed = 1 WHERE ${idColumn} = ? AND attempts >= ?`,
+      [row[idColumn], MAX_CODE_ATTEMPTS]
+    );
+    return { valid: false, reason: "mismatch" };
+  }
+
+  const consume = await runQuery(
+    `UPDATE ${table} SET consumed = 1, consumedAt = NOW() WHERE ${idColumn} = ? AND consumed = 0`,
+    [row[idColumn]]
+  );
+  if (!consume || consume.affectedRows !== 1) return { valid: false, reason: "consumed" };
+  return { valid: true };
+}
+
+export async function verifyEmailCode(userId, code) {
+  return verifyStoredCode("userEmailVerifications", "verificationId", userId, code);
 }
 
 export async function createPasswordResetRequest(userId, code, expiresAt) {
@@ -140,62 +140,5 @@ export async function createPasswordResetRequest(userId, code, expiresAt) {
 }
 
 export async function verifyPasswordResetCode(userId, code) {
-  return new Promise((resolve, reject) => {
-    db.query(
-      `SELECT * FROM userPasswordResets WHERE userId = ? ORDER BY createdAt DESC LIMIT 1`,
-      [userId],
-      async function (error, results) {
-        if (error) {
-          return reject(error);
-        }
-
-        if (!results || !results.length) {
-          return resolve({ valid: false });
-        }
-
-        const resetRequest = results[0];
-
-        if (resetRequest.consumed) {
-          return resolve({ valid: false, reason: "consumed" });
-        }
-
-        const expiryDate = new Date(resetRequest.expiresAt);
-        if (expiryDate < new Date()) {
-          return resolve({ valid: false, reason: "expired" });
-        }
-
-        const match = await bcrypt.compare(code, resetRequest.codeHash);
-
-        if (!match) {
-          // A 6-digit code is only safe while guesses are bounded. Count the
-          // miss and burn the code after MAX_CODE_ATTEMPTS so a per-IP rate
-          // limit is not the only thing standing between a guesser and the
-          // account.
-          db.query(
-            `UPDATE userPasswordResets
-                SET attempts = attempts + 1,
-                    consumed = IF(attempts + 1 >= ?, 1, consumed)
-              WHERE resetId = ?`,
-            [MAX_CODE_ATTEMPTS, resetRequest.resetId],
-            (attemptError) => {
-              if (attemptError) console.error("[session] failed to record code attempt:", attemptError);
-            }
-          );
-          return resolve({ valid: false, reason: "mismatch" });
-        }
-
-        db.query(
-          `UPDATE userPasswordResets SET consumed = 1, consumedAt = NOW() WHERE resetId = ?`,
-          [resetRequest.resetId],
-          function (updateError) {
-            if (updateError) {
-              return reject(updateError);
-            }
-
-            resolve({ valid: true });
-          }
-        );
-      }
-    );
-  });
+  return verifyStoredCode("userPasswordResets", "resetId", userId, code);
 }

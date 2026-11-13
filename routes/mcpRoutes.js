@@ -73,16 +73,18 @@ export default function mcpRoutes(app, root, features) {
   const authServerMetadata = async (req, res) => {
     if (!isOn()) return res.callNotFound();
     // oidc-provider builds every endpoint URL from the request's host and
-    // scheme (it trusts X-Forwarded-*), so pass the caller's through --
-    // otherwise the document advertises http://localhost/oidc/... endpoints.
-    const forwardedHost = req.headers["x-forwarded-host"] || req.headers.host;
+    // scheme (it trusts X-Forwarded-*). Use the configured issuer's, never the
+    // caller's: this response is publicly cacheable, so a client-supplied
+    // X-Forwarded-Host would otherwise point every MCP client's authorize and
+    // token endpoints at the attacker's host.
+    const issuer = new URL(getIssuer());
     const discovery = await root.inject({
       method: "GET",
       url: "/oidc/.well-known/openid-configuration",
       headers: {
-        host: req.headers.host,
-        ...(forwardedHost ? { "x-forwarded-host": forwardedHost } : {}),
-        "x-forwarded-proto": req.headers["x-forwarded-proto"] || req.protocol,
+        host: issuer.host,
+        "x-forwarded-host": issuer.host,
+        "x-forwarded-proto": issuer.protocol.replace(/:$/, ""),
       },
     });
     if (discovery.statusCode !== 200) {

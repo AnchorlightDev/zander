@@ -17,8 +17,6 @@ import {
   updateUserPassword,
   markEmailVerified,
   markAccountRegistered,
-  mergePlaceholderUser,
-  clearPlaceholderFlag,
   UserLinkGetter,
 } from "../controllers/userController.js";
 import { updateAudit_lastWebsiteLogin } from "../controllers/auditController.js";
@@ -35,7 +33,15 @@ import { hasStaffFlag } from "../lib/permissions/staffFlag.mjs";
 import { isSafeLocalPath } from "../lib/safeLocalPath.mjs";
 import crypto from "crypto";
 import { destroySessionsForUser } from "../lib/fastifyPrismaSessionStore.js";
+import {
+  isPublicPasswordResetEligible,
+  webLoginBlockReason,
+} from "../controllers/userAccountState.js";
 import { shouldPromptForWrapped } from "../services/wrapped/wrappedService.js";
+
+// A real cost-12 hash (same cost as registration) of a throwaway string, used
+// to equalise login timing for unknown identifiers.
+const DUMMY_PASSWORD_HASH = "$2b$12$VOlHTZIGWtehT0xcwCqgg.TjQ9cu1qRRtjQ.4qxLizvzRy0r8WseC";
 
 /**
  * After login, nudge the user into their Wrapped once per period (mid-Nov to
@@ -288,6 +294,9 @@ export default function sessionSiteRoute(
       const user = await userGetter.byUsernameOrEmail(identifier);
 
       if (!user || !user.password_hash) {
+        // Spend the same bcrypt time as a real check so response timing does
+        // not reveal whether the account exists.
+        await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
         setBannerCookie("danger", "Invalid credentials.", res);
         return res.redirect(`/login`);
       }
@@ -485,9 +494,21 @@ export default function sessionSiteRoute(
 
       const userData = await userResponse.json();
       const userGetData = new UserGetter();
-      const userIsRegistered = await userGetData.isRegistered(userData.id);
+      const userLoginData = await userGetData.byDiscordId(userData.id);
+      const blockReason = webLoginBlockReason(userLoginData);
 
-      if (!userIsRegistered) {
+      if (blockReason === "disabled") {
+        setBannerCookie(
+          "danger",
+          "Your account is disabled. Please contact the team for assistance.",
+          res
+        );
+        return res.redirect(`/login`);
+      }
+
+      // A placeholder (support-bot ghost) row is not a registered account:
+      // send its owner through the normal Minecraft link flow instead.
+      if (blockReason) {
         // Signed: this value decides which Discord account gets linked to
         // the Minecraft code the visitor enters next, so the browser must not
         // be able to edit it.
@@ -502,7 +523,6 @@ export default function sessionSiteRoute(
         return res.redirect(`/unregistered`);
       }
 
-      const userLoginData = await userGetData.byDiscordId(userData.id);
       await hydrateUserSession(req, userLoginData);
       delete req.session.passwordReset;
 
@@ -566,7 +586,9 @@ export default function sessionSiteRoute(
       const userGetter = new UserGetter();
       const user = await userGetter.byUsernameOrEmail(identifier);
 
-      if (user && user.email && user.password_hash) {
+      // Same gate as the staff-triggered reset: never mail a code to an
+      // unverified (e.g. staff-changed) address or for a disabled account.
+      if (isPublicPasswordResetEligible(user)) {
         const code = await generateVerificationCode();
         const expiresAt = new Date(
           Date.now() + passwordResetExpiryMinutes * 60 * 1000
@@ -637,7 +659,9 @@ export default function sessionSiteRoute(
       features: features,
       globalImage: await getGlobalImage(),
       announcementWeb: await getWebAnnouncement(),
-      username: passwordReset.username,
+      // Never name the account: it is only known when one matched, so
+      // showing it would confirm the account exists.
+      username: null,
       expiryMinutes: passwordResetExpiryMinutes,
     }));
     return;
@@ -897,21 +921,28 @@ export default function sessionSiteRoute(
 
       const existingUuidUserRaw = await userGetter.byUUID(formattedUuid);
 
-      // Placeholder ("ghost") rows are created by createUnlinkedUser when a
-      // Discord user opens a support ticket before linking a Minecraft
-      // account. They must not block a genuine registration for the same
-      // person — instead we merge them into the real account further down.
-      // A ghost can collide by UUID (rare) or, far more often, by a
-      // case-insensitive username match (the Thylakin bug).
+      // Placeholder ("ghost") rows are created when a Discord user opens a
+      // support ticket before linking a Minecraft account. They must not
+      // block a genuine registration, but they are NOT merged here: a ghost's
+      // username is just a self-chosen Discord handle, so a name match proves
+      // nothing about who owns that Discord account. The ghost is absorbed
+      // later when its owner links Discord via OAuth (profile link flow).
       const existingUuidUser =
         existingUuidUserRaw && !existingUuidUserRaw.is_placeholder
           ? existingUuidUserRaw
           : null;
 
-      let placeholderUser =
-        existingUuidUserRaw && existingUuidUserRaw.is_placeholder
-          ? existingUuidUserRaw
-          : await userGetter.placeholderMatch(username, formattedUuid);
+      // Ghost UUIDs come from MySQL UUID(), so this should never happen; if
+      // it does, a new row would hit users.uuid UNIQUE and promoting the
+      // ghost would hand its Discord link to the registrant.
+      if (existingUuidUserRaw && existingUuidUserRaw.is_placeholder) {
+        setBannerCookie(
+          "danger",
+          "This Minecraft account can't be registered automatically. Please contact the team.",
+          res
+        );
+        return res.redirect(`/register`);
+      }
 
       // A real (non-placeholder) username row still blocks registration.
       const blockingUsername =
@@ -944,9 +975,12 @@ export default function sessionSiteRoute(
       }
 
       if (!existingUuidUser) {
+        // Ghost rows carry a Discord handle as username, so they must not
+        // satisfy the "has joined the server" check.
         const hasJoinedServer = await userGetter.hasJoined(
           username,
-          formattedUuid
+          formattedUuid,
+          { includePlaceholders: false }
         );
 
         if (!hasJoinedServer) {
@@ -981,18 +1015,6 @@ export default function sessionSiteRoute(
           username,
         });
         userId = existingUuidUser.userId;
-      } else if (placeholderUser && placeholderUser.uuid === formattedUuid) {
-        // The ghost row already occupies this Minecraft UUID — promote it in
-        // place rather than creating a second row (which would hit the
-        // users.uuid UNIQUE constraint).
-        await updateLocalUserCredentials(placeholderUser.userId, {
-          email,
-          passwordHash,
-          username,
-        });
-        await clearPlaceholderFlag(placeholderUser.userId);
-        userId = placeholderUser.userId;
-        placeholderUser = null;
       } else {
         const newUser = await createLocalUser({
           uuid: formattedUuid,
@@ -1001,15 +1023,6 @@ export default function sessionSiteRoute(
           passwordHash,
         });
         userId = newUser.userId;
-      }
-
-      if (placeholderUser && placeholderUser.userId !== userId) {
-        try {
-          const mergeSummary = await mergePlaceholderUser(placeholderUser.userId, userId);
-          console.info("[SESSION] Merged placeholder user during registration", mergeSummary);
-        } catch (mergeError) {
-          logRouteError("merge placeholder user during registration", mergeError);
-        }
       }
 
       const verificationCode = await generateVerificationCode();
@@ -1198,6 +1211,13 @@ export default function sessionSiteRoute(
       return res.redirect(`/register`);
     }
 
+    // The email step must be finished first, or an unproven address would
+    // end up on a completed account.
+    if (pendingRegistration.stage !== "MINECRAFT") {
+      setBannerCookie("warning", "Please verify your email to continue.", res);
+      return res.redirect(`/register/verify-email`);
+    }
+
     const code = [
       req.body.first,
       req.body.second,
@@ -1225,6 +1245,16 @@ export default function sessionSiteRoute(
           res
         );
         return res.redirect(`/register/minecraft`);
+      }
+
+      if (webLoginBlockReason(linkUser)) {
+        delete req.session.pendingRegistration;
+        setBannerCookie(
+          "danger",
+          "Your account is disabled. Please contact the team for assistance.",
+          res
+        );
+        return res.redirect(`/login`);
       }
 
       await userLinkData.markWebsiteRegistrationComplete(linkUser.uuid);
@@ -1281,6 +1311,12 @@ export default function sessionSiteRoute(
       if (!userData) {
         setBannerCookie("error", "Could not refresh session: user not found.", res);
         return res.redirect("/dashboard");
+      }
+
+      if (webLoginBlockReason(userData)) {
+        await req.session.destroy();
+        setBannerCookie("danger", "Your account is disabled. Please contact the team for assistance.", res);
+        return res.redirect("/login");
       }
 
       await hydrateUserSession(req, userData);

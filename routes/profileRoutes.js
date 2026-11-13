@@ -183,8 +183,9 @@ export default function profileSiteRoutes(
         //
         let profilePunishmentsApiData = { success: true, data: [] };
         let discordPunishmentsData = [];
-        const isViewingOwnProfile =
-          req.session.user && req.session.user.username === username;
+        const isViewingOwnProfile = Boolean(
+          req.session.user && profileData && req.session.user.userId === profileData.userId
+        );
         if (
           isViewingOwnProfile ||
           (contextPermissions &&
@@ -328,7 +329,8 @@ export default function profileSiteRoutes(
         //
         // Grab user profile data (direct DB query, no HTTP self-call)
         //
-        const profileData = await getUserByUsername(req.session.user.username);
+        // Keyed on the session's userId: usernames are not unique.
+        const profileData = await userData.byUserId(req.session.user.userId);
         if (!profileData) {
           res.header("content-type", "text/html; charset=utf-8").send(
             await app.view("session/notFound", {
@@ -535,7 +537,9 @@ export default function profileSiteRoutes(
         buildDiscordDisplayName(discordUser)
       );
 
+      // Both spellings are read (ticket creation reads discordId).
       req.session.user.discordID = discordUser.id;
+      req.session.user.discordId = discordUser.id;
 
       await syncMemberRankRoles(req.session.user.userId);
       await syncLinkedRoleForDiscordId(discordUser.id);
@@ -628,9 +632,10 @@ export default function profileSiteRoutes(
     }
 
     try {
-      const discordIdBeingUnlinked = req.session.user.discordID;
+      const discordIdBeingUnlinked = req.session.user.discordID || req.session.user.discordId;
       await unlinkDiscordAccount(req.session.user.userId);
       req.session.user.discordID = null;
+      req.session.user.discordId = null;
       if (discordIdBeingUnlinked) {
         await stripAllTrackedRankRoles(discordIdBeingUnlinked);
         await syncLinkedRoleForDiscordId(discordIdBeingUnlinked);

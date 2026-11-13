@@ -1,5 +1,6 @@
 import { getMenuGroups } from "../../admin/pageRegistry.js";
-import { getUserPermissions } from "../../controllers/userController.js";
+import { getUserPermissions, UserGetter } from "../../controllers/userController.js";
+import { webLoginBlockReason } from "../../controllers/userAccountState.js";
 import { isSessionPermissionsInvalidated } from "../../controllers/rankSyncController.js";
 
 import dashboardSiteRoute from "./dashboard.js";
@@ -94,6 +95,15 @@ export default function dashboardSiteRoutes(
       || (Date.now() - lastRefreshedAt) > PERMISSION_REFRESH_INTERVAL_MS
       || isSessionPermissionsInvalidated(req.session.user.uuid, lastRefreshedAt);
     if (!isStale) {
+      return;
+    }
+
+    // Disabling an account must also end sessions that already exist; this
+    // re-check runs on the same interval as the permission refresh.
+    const account = await new UserGetter().byUserId(req.session.user.userId);
+    if (webLoginBlockReason(account)) {
+      delete req.session.user;
+      req.session.authenticated = false;
       return;
     }
 

@@ -84,6 +84,30 @@ export function isPasswordResetEligible(user) {
 }
 
 /**
+ * Whether the public /forgot-password form may mail a reset code. On top of
+ * isPasswordResetEligible the address must be verified: a staff-changed email
+ * is reset to unverified because it has not been proven to belong to the
+ * account holder (same rule as the staff reset in api/routes/adminUsers.js).
+ */
+export function isPublicPasswordResetEligible(user) {
+  return isPasswordResetEligible(user) && Boolean(Number(user?.email_verified) === 1 || user?.email_verified === true);
+}
+
+/**
+ * Why a users row must not be given a web session, or null when it may.
+ *   "missing"     no row
+ *   "placeholder" a support-bot ghost row: its username is just a Discord
+ *                 handle, so a session on it could impersonate a real player
+ *   "disabled"    account_disabled is set
+ */
+export function webLoginBlockReason(user) {
+  if (!user) return "missing";
+  if (Number(user.is_placeholder) === 1 || user.is_placeholder === true) return "placeholder";
+  if (Number(user.account_disabled) === 1 || user.account_disabled === true) return "disabled";
+  return null;
+}
+
+/**
  * Silent permission check (no side effects, no DB/session dependency beyond
  * the array of node strings) for view-conditional UI — e.g. deciding whether
  * to show a "Reveal email" button. Mirrors hasSpecificPermission in
