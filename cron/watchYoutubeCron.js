@@ -13,6 +13,7 @@ import cron from "node-cron";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const config = require("../lib/config/config.cjs");
+const features = require("../lib/config/features.cjs");
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import { client } from "../controllers/discordController.js";
@@ -110,7 +111,7 @@ async function fetchYoutubeVideoDetails(videoIds, apiKey, fetchFn) {
   if (!res.ok) {
     const body = await res.text();
     console.error(`[WatchYouTube] videos.list API error (${res.status}):`, body);
-    return [];
+    throw new Error(`videos.list failed (${res.status})`);
   }
 
   const data = await res.json();
@@ -133,7 +134,9 @@ async function resolveChannelId(rawId, apiKey, fetchFn) {
     if (!res.ok) {
       const body = await res.text();
       console.error(`[WatchYouTube] channels.list resolve error (${res.status}):`, body);
-      return rawId;
+      // Throw rather than fall back to the raw value: a failed lookup must not
+      // look like "this creator has no live streams" to the offline sweep.
+      throw new Error(`channels.list resolve failed (${res.status})`);
     }
     const data = await res.json();
     const resolved = data?.items?.[0]?.id;
@@ -141,6 +144,7 @@ async function resolveChannelId(rawId, apiKey, fetchFn) {
     console.warn(`[WatchYouTube] Could not resolve channel "${rawId}" — no items returned. Using raw value.`);
   } catch (err) {
     console.error("[WatchYouTube] Channel ID resolution failed:", err);
+    throw err;
   }
   return rawId;
 }
@@ -163,7 +167,7 @@ async function getUploadsPlaylistId(channelId, apiKey, fetchFn) {
   if (!res.ok) {
     const body = await res.text();
     console.error(`[WatchYouTube] channels.list (contentDetails) error (${res.status}):`, body);
-    return null;
+    throw new Error(`channels.list (contentDetails) failed (${res.status})`);
   }
 
   const data = await res.json();
@@ -192,7 +196,7 @@ async function fetchRecentChannelItems(channelId, apiKey, fetchFn) {
   if (!res.ok) {
     const body = await res.text();
     console.error(`[WatchYouTube] playlistItems.list error (${res.status}):`, body);
-    return [];
+    throw new Error(`playlistItems.list failed (${res.status})`);
   }
 
   const data = await res.json();
@@ -211,10 +215,10 @@ async function syncYoutubeCreator(creator, apiKey, fetchFn) {
     return [];
   }
 
-  const channelId = await resolveChannelId(rawChannelId, apiKey, fetchFn);
   const liveIds = [];
 
   try {
+    const channelId = await resolveChannelId(rawChannelId, apiKey, fetchFn);
     const searchItems = await fetchRecentChannelItems(channelId, apiKey, fetchFn);
     if (searchItems.length === 0) {
       await updateSyncStatus(creator.user_id, "youtube", { success: true });
@@ -365,6 +369,8 @@ async function syncYoutubeCreator(creator, apiKey, fetchFn) {
   } catch (err) {
     console.error(`[WatchYouTube] Sync failed for user ${creator.user_id}:`, err);
     await updateSyncStatus(creator.user_id, "youtube", { success: false, error: err.message });
+    // Rethrow so the cron skips the offline sweep for this tick.
+    throw err;
   }
 
   return liveIds;
@@ -377,6 +383,7 @@ async function syncYoutubeCreator(creator, apiKey, fetchFn) {
 let isYoutubeSyncRunning = false;
 
 const youtubeSyncTask = cron.schedule("*/15 * * * *", async () => {
+  if (!features.watch) return;
   const apiKey = process.env.youtubeApiKey;
   if (!apiKey) {
     console.warn("[WatchYouTube] youtubeApiKey env var is not set — skipping sync.");

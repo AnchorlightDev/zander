@@ -13,6 +13,7 @@ import cron from "node-cron";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const config = require("../lib/config/config.cjs");
+const features = require("../lib/config/features.cjs");
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import { client } from "../controllers/discordController.js";
@@ -234,6 +235,7 @@ async function syncTwitchCreator(creator, stream) {
 let isTwitchSyncRunning = false;
 
 const twitchSyncTask = cron.schedule("*/5 * * * *", async () => {
+  if (!features.watch) return;
   if (!process.env.twitchClientId || !process.env.twitchClientSecret) {
     console.warn("[WatchTwitch] twitchClientId or twitchClientSecret env vars not set — skipping sync.");
     return;

@@ -65,6 +65,23 @@ function computeNextRunAt(jobLike, now) {
   return nextOccurrence({ ...jobLike, createdAt: jobLike.createdAt || now }, now);
 }
 
+/**
+ * Errors when an enabled job's next run is sooner than minLeadMinutes from now.
+ * The MCP tools pass a lead time so an assistant cannot get a "run now" by
+ * scheduling a job a minute out: a human has time to see and disable it.
+ */
+export function leadTimeErrors(nextRunAt, now, minLeadMinutes = 0) {
+  if (!minLeadMinutes || !nextRunAt) return [];
+  if (new Date(nextRunAt).getTime() < now.getTime() + minLeadMinutes * 60000) {
+    return [`The next run must be at least ${minLeadMinutes} minutes from now; enable or run it from the dashboard for anything sooner.`];
+  }
+  return [];
+}
+
+function throwIfErrors(errors) {
+  if (errors.length) { const e = new Error(errors.join(" ")); e.errors = errors; throw e; }
+}
+
 function actionRows(actions) {
   return actions.map((a, i) => ({
     sortOrder: Number.isFinite(a.sortOrder) ? a.sortOrder : i,
@@ -74,13 +91,14 @@ function actionRows(actions) {
   }));
 }
 
-export async function createJob(input, createdBy = null) {
+export async function createJob(input, createdBy = null, { minLeadMinutes = 0 } = {}) {
   const errors = validateJob(input);
   if (errors.length) { const e = new Error(errors.join(" ")); e.errors = errors; throw e; }
 
   const now = new Date();
   const data = jobData(input, now);
   const nextRunAt = computeNextRunAt({ ...data, createdAt: now }, now);
+  if (data.enabled) throwIfErrors(leadTimeErrors(nextRunAt, now, minLeadMinutes));
 
   const id = await withDeadlockRetry(() => prisma.$transaction(async (tx) => {
     const job = await tx.scheduled_jobs.create({ data: { ...data, nextRunAt, createdBy, updatedBy: createdBy, createdAt: now } });
@@ -93,7 +111,7 @@ export async function createJob(input, createdBy = null) {
   return id;
 }
 
-export async function updateJob(id, input, updatedBy = null) {
+export async function updateJob(id, input, updatedBy = null, { minLeadMinutes = 0 } = {}) {
   const errors = validateJob(input);
   if (errors.length) { const e = new Error(errors.join(" ")); e.errors = errors; throw e; }
 
@@ -102,6 +120,7 @@ export async function updateJob(id, input, updatedBy = null) {
   const existing = await prisma.scheduled_jobs.findUnique({ where: { id: Number(id) } });
   if (!existing) throw new Error(`Job ${id} not found.`);
   const nextRunAt = data.enabled ? computeNextRunAt({ ...data, createdAt: existing.createdAt }, now) : null;
+  throwIfErrors(leadTimeErrors(nextRunAt, now, minLeadMinutes));
 
   await withDeadlockRetry(() => prisma.$transaction(async (tx) => {
     await tx.scheduled_jobs.update({ where: { id: Number(id) }, data: { ...data, nextRunAt, updatedBy } });
@@ -128,11 +147,12 @@ export async function listJobs() {
   return jobs.map((j) => ({ ...j, lastRun: j.runs[0] || null }));
 }
 
-export async function setJobEnabled(id, enabled) {
+export async function setJobEnabled(id, enabled, { minLeadMinutes = 0 } = {}) {
   const job = await prisma.scheduled_jobs.findUnique({ where: { id: Number(id) } });
   if (!job) return;
   const now = new Date();
   const nextRunAt = enabled ? computeNextRunAt(job, now) : null;
+  throwIfErrors(leadTimeErrors(nextRunAt, now, minLeadMinutes));
   await prisma.scheduled_jobs.update({ where: { id: Number(id) }, data: { enabled: !!enabled, nextRunAt, updatedAt: now } });
 }
 

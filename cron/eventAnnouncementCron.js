@@ -4,9 +4,14 @@
  */
 
 import cron from "node-cron";
+import { createRequire } from "module";
 import { processDueAnnouncements } from "../services/eventAnnouncementService.js";
 
+const require = createRequire(import.meta.url);
+const features = require("../lib/config/features.cjs");
+
 const eventAnnouncementTask = cron.schedule("*/1 * * * *", async () => {
+  if (!features.events) return;
   try {
     const results = await processDueAnnouncements();
     if (results.sent > 0 || results.failed > 0) {

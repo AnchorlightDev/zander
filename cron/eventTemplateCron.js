@@ -8,7 +8,7 @@ import cron from "node-cron";
 import {
   getTemplatesDueForGeneration,
   generateDraftFromTemplate,
-  computeNextEventDate,
+  computeTargetEventDate,
   markTemplateGenerated,
   cleanupStaleTemplateEvents,
 } from "../services/eventTemplateService.js";
@@ -23,7 +23,7 @@ const eventTemplateCronTask = cron.schedule("0 * * * *", async () => {
 
       for (const template of templates) {
         try {
-          const nextEventDate = computeNextEventDate(template);
+          const nextEventDate = computeTargetEventDate(template);
 
           if (!nextEventDate) {
             console.warn(`[EventTemplateCron] Could not compute next event date for template #${template.templateId}`);

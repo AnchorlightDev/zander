@@ -33,6 +33,7 @@ import { publicGifterName } from "../lib/webstore/giftPrivacy.mjs";
 import { planStripeCategorySync } from "../lib/webstore/stripeCategorySync.mjs";
 import { ensureCategoriesForStripeKeys } from "./webstoreCategoryController.js";
 import { getAllItemSettings, setStripeCategory } from "./webstoreItemSettingsController.js";
+import { planDeferredRoleRuns } from "../lib/webstore/deferredRoles.mjs";
 
 // ---------------------------------------------------------------------------
 // Internal DB helper
@@ -150,6 +151,40 @@ export async function fetchStripeSubscription(subscriptionId) {
   } catch {
     return null;
   }
+}
+
+/**
+ * GET a Stripe object (e.g. "invoices/in_123"). Throws on failure so a webhook
+ * that needs it is retried rather than silently skipping work.
+ */
+async function fetchStripeObject(path) {
+  const apiKey = process.env.STRIPE_SECRET_KEY;
+  if (!apiKey) throw new Error("STRIPE_SECRET_KEY is not configured");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), STRIPE_FETCH_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(`https://api.stripe.com/v1/${path}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Stripe API error ${response.status}: ${text}`);
+  }
+  return response.json();
+}
+
+export async function fetchStripeInvoice(invoiceId) {
+  return fetchStripeObject(`invoices/${encodeURIComponent(invoiceId)}`);
+}
+
+export async function fetchStripeCharge(chargeId) {
+  return fetchStripeObject(`charges/${encodeURIComponent(chargeId)}`);
 }
 
 /**
@@ -470,8 +505,19 @@ export async function getPurchaseById(purchaseId) {
   return rows[0] || null;
 }
 
+export async function getPurchaseByPaymentIntentId(paymentIntentId) {
+  if (!paymentIntentId) return null;
+  const rows = await query(
+    "SELECT * FROM webstorePurchases WHERE stripePaymentIntentId = ? LIMIT 1",
+    [paymentIntentId]
+  );
+  return rows[0] || null;
+}
+
 /**
  * Update Stripe identifiers on a purchase and transition its status.
+ * amountCents/currency, when given, replace the catalogue price captured at
+ * checkout with what Stripe actually charged (currency_options, discounts, tax).
  */
 export async function updatePurchasePayment({
   purchaseId,
@@ -479,14 +525,35 @@ export async function updatePurchasePayment({
   paymentIntentId,
   subscriptionId,
   customerId,
+  amountCents = null,
+  currency = null,
 }) {
   return query(
     `UPDATE webstorePurchases
      SET status = ?, stripePaymentIntentId = ?,
-         stripeSubscriptionId = ?, stripeCustomerId = ?, updatedAt = NOW()
+         stripeSubscriptionId = ?, stripeCustomerId = ?,
+         amountCents = COALESCE(?, amountCents), currency = COALESCE(?, currency),
+         updatedAt = NOW()
      WHERE purchaseId = ?`,
-    [status, paymentIntentId || null, subscriptionId || null, customerId || null, purchaseId]
+    [
+      status,
+      paymentIntentId || null,
+      subscriptionId || null,
+      customerId || null,
+      Number.isInteger(amountCents) ? amountCents : null,
+      currency || null,
+      purchaseId,
+    ]
   );
+}
+
+/** Number of command runs (any status) already recorded for a purchase and action. */
+export async function countPurchaseCommandRuns(purchaseId, action) {
+  const rows = await query(
+    "SELECT COUNT(*) AS total FROM webstoreCommandRuns WHERE purchaseId = ? AND action = ?",
+    [purchaseId, action]
+  );
+  return Number(rows[0]?.total || 0);
 }
 
 export async function updatePurchaseStatus(purchaseId, status) {
@@ -571,6 +638,7 @@ export async function upsertSubscription({
   currentPeriodStart,
   currentPeriodEnd,
   cancelAtPeriodEnd,
+  lastStripeEventAt = null,
 }) {
   // isAnonymous is only written on insert: it is fixed at checkout and a
   // renewal event must never flip it.
@@ -578,14 +646,16 @@ export async function upsertSubscription({
     `INSERT INTO webstoreSubscriptions
        (purchaseId, stripeSubscriptionId, stripeCustomerId, stripePriceId,
         recipientMinecraftUsername, purchaserMinecraftUsername, purchaserUserId,
-        isAnonymous, status, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        isAnonymous, status, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd,
+        lastStripeEventAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        status             = VALUES(status),
        currentPeriodStart = VALUES(currentPeriodStart),
        currentPeriodEnd   = VALUES(currentPeriodEnd),
        cancelAtPeriodEnd  = VALUES(cancelAtPeriodEnd),
        stripeCustomerId   = VALUES(stripeCustomerId),
+       lastStripeEventAt  = COALESCE(VALUES(lastStripeEventAt), lastStripeEventAt),
        updatedAt          = NOW()`,
     [
       purchaseId,
@@ -600,6 +670,7 @@ export async function upsertSubscription({
       currentPeriodStart ? new Date(currentPeriodStart * 1000) : null,
       currentPeriodEnd ? new Date(currentPeriodEnd * 1000) : null,
       cancelAtPeriodEnd ? 1 : 0,
+      Number.isInteger(Number(lastStripeEventAt)) && lastStripeEventAt !== null ? Number(lastStripeEventAt) : null,
     ]
   );
 }
@@ -716,19 +787,27 @@ export async function updateSubscriptionPeriod(stripeSubscriptionId, currentPeri
 // Webhook event idempotency
 // ---------------------------------------------------------------------------
 
-/** Returns true if this Stripe event ID has already been processed. */
+/**
+ * A claim with no completedAt older than this is assumed to belong to a
+ * process that died mid-event, and may be taken over by a Stripe retry.
+ */
+const WEBHOOK_CLAIM_STALE_MINUTES = 5;
+
 /**
  * Claim a Stripe event for processing, atomically.
  *
  * hasWebhookEvent() followed by processing is check-then-act: Stripe retries
- * events, and a retry can arrive while the first delivery is still working
- * (the HTTP response is sent before processing begins). Both deliveries would
- * see "not processed" and both would credit the purchase.
+ * events, and a retry can arrive while the first delivery is still working.
+ * Both deliveries would see "not processed" and both would credit the purchase.
  *
  * Inserting first makes the stripeEventId UNIQUE index the arbiter — exactly
  * one caller can win, and the loser is told to stand down before any money
  * moves. Handlers then fill in the detail via recordWebhookEvent(), which
- * upserts onto the claimed row.
+ * upserts onto the claimed row, and completeWebhookEvent() marks it done.
+ *
+ * A claim that was never completed and has gone stale (the process died while
+ * handling it) is taken over with a conditional UPDATE, so the event is not
+ * lost for good.
  *
  * @returns {Promise<boolean>} true if this caller now owns the event
  */
@@ -741,12 +820,46 @@ export async function claimWebhookEvent(stripeEventId, eventType) {
     );
     return true;
   } catch (error) {
-    // Someone else already claimed it.
-    if (error?.code === "ER_DUP_ENTRY" || error?.errno === 1062) {
-      return false;
-    }
-    throw error;
+    if (!(error?.code === "ER_DUP_ENTRY" || error?.errno === 1062)) throw error;
   }
+
+  // Someone else claimed it. Take it over only if that claim is stale.
+  const result = await query(
+    `UPDATE webstoreWebhookEvents
+        SET processedAt = NOW()
+      WHERE stripeEventId = ?
+        AND completedAt IS NULL
+        AND processedAt < NOW() - INTERVAL ${WEBHOOK_CLAIM_STALE_MINUTES} MINUTE`,
+    [stripeEventId]
+  );
+  return Number(result?.affectedRows || 0) === 1;
+}
+
+/** True once a claimed event has been fully processed. */
+export async function isWebhookEventCompleted(stripeEventId) {
+  const rows = await query(
+    "SELECT completedAt FROM webstoreWebhookEvents WHERE stripeEventId = ? LIMIT 1",
+    [stripeEventId]
+  );
+  return Boolean(rows[0]?.completedAt);
+}
+
+export async function completeWebhookEvent(stripeEventId) {
+  return query(
+    "UPDATE webstoreWebhookEvents SET completedAt = NOW() WHERE stripeEventId = ?",
+    [stripeEventId]
+  );
+}
+
+/**
+ * Drop an unfinished claim after processing failed, so Stripe's retry (or a
+ * manual resend from the dashboard) can run the event again.
+ */
+export async function releaseWebhookEvent(stripeEventId) {
+  return query(
+    "DELETE FROM webstoreWebhookEvents WHERE stripeEventId = ? AND completedAt IS NULL",
+    [stripeEventId]
+  );
 }
 
 export async function recordWebhookEvent({ stripeEventId, purchaseId, eventType, payload }) {
@@ -956,16 +1069,40 @@ export async function retryDeferredDiscordRoles({ userId, discordClient, guildId
   if (!user?.discordId || !user?.username) return result;
 
   // Deferred discord_role runs for purchases whose *recipient* is this user.
+  // Ordered, and with the purchase/subscription state, so a grant that was
+  // later revoked (or whose subscription has ended) is not re-applied.
   const runs = await query(
-    `SELECT cr.commandRunId, cr.action, cr.commandTemplate
+    `SELECT cr.commandRunId, cr.purchaseId, cr.action, cr.commandTemplate,
+            p.status AS purchaseStatus, p.purchaseType,
+            (SELECT s.status FROM webstoreSubscriptions s
+              WHERE s.purchaseId = cr.purchaseId
+              ORDER BY s.subscriptionId DESC LIMIT 1) AS subscriptionStatus
        FROM webstoreCommandRuns cr
        JOIN webstorePurchases p ON p.purchaseId = cr.purchaseId
       WHERE cr.status = 'deferred'
         AND cr.resolvedCommand LIKE 'discord_role:%'
-        AND LOWER(p.recipientMinecraftUsername) = LOWER(?)`,
+        AND LOWER(p.recipientMinecraftUsername) = LOWER(?)
+      ORDER BY cr.commandRunId ASC`,
     [user.username]
   );
   if (!runs.length) return result;
+
+  const plan = planDeferredRoleRuns(runs);
+  const toApply = [];
+  for (const { run, decision } of plan) {
+    if (decision === "superseded" || decision === "inactive") {
+      await updateCommandRunStatus(
+        run.commandRunId,
+        "completed",
+        decision === "superseded"
+          ? "Skipped: superseded by a later deferred run for the same role"
+          : "Skipped: purchase no longer entitles the recipient to this role"
+      );
+      continue;
+    }
+    toApply.push(run);
+  }
+  if (!toApply.length) return result;
 
   let member = null;
   try {
@@ -975,7 +1112,7 @@ export async function retryDeferredDiscordRoles({ userId, discordClient, guildId
     member = null;
   }
 
-  for (const run of runs) {
+  for (const run of toApply) {
     result.processed++;
     const roleId = String(run.commandTemplate || "").trim();
     let status = "completed";
@@ -1138,6 +1275,38 @@ export async function revokeSubscription(subscription, revokeCommands, discord =
   }
 }
 
+/**
+ * Run revoke commands for a one-time purchase that was refunded or lost to a
+ * chargeback.
+ *
+ * @param {object} purchase
+ * @param {Array<{commandTemplate,commandType}>} revokeCommands
+ * @param {{ discordClient, guildId }} [discord]
+ */
+export async function revokePurchase(purchase, revokeCommands, discord = {}) {
+  if (!revokeCommands.length) return;
+
+  const metadata = buildCommandMetadata(purchase);
+  await enqueueCommands({
+    purchaseId: purchase.purchaseId,
+    stripeSubscriptionId: purchase.stripeSubscriptionId || null,
+    action: "revoke",
+    commands: revokeCommands,
+    metadata,
+  });
+  if (discord.discordClient) {
+    await executeDiscordRoleCommands({
+      purchaseId: purchase.purchaseId,
+      stripeSubscriptionId: purchase.stripeSubscriptionId || null,
+      action: "revoke",
+      commands: revokeCommands,
+      recipientMinecraftUsername: purchase.recipientMinecraftUsername,
+      discordClient: discord.discordClient,
+      guildId: discord.guildId,
+    });
+  }
+}
+
 function buildCommandMetadata(purchase) {
   return {
     username: purchase.recipientMinecraftUsername,
@@ -1155,8 +1324,23 @@ function buildCommandMetadata(purchase) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Insert one webstoreTransactions row. A row with a stripeRef is written at
+ * most once (UNIQUE index), so a retried webhook cannot record a payment twice.
+ */
+function insertWebstoreTransaction({ purchaseId, userId, direction, counterparty, amountCents, currency, stripeRef }) {
+  return query(
+    `INSERT INTO webstoreTransactions
+       (purchaseId, userId, direction, counterpartyMinecraftUsername, amountCents, currency, stripeRef)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE transactionId = transactionId`,
+    [purchaseId, userId, direction, counterparty, amountCents, currency, stripeRef || null]
+  );
+}
+
+/**
  * Record an outgoing transaction for the purchaser, plus an incoming
  * transaction for the recipient if they have a registered account (gift case).
+ * `stripeRef` identifies the payment (e.g. "checkout:cs_...", "invoice:in_...").
  */
 export async function createTransactionsForPurchase({
   purchaseId,
@@ -1165,14 +1349,18 @@ export async function createTransactionsForPurchase({
   recipientMinecraftUsername,
   amountCents,
   currency,
+  stripeRef = null,
 }) {
   // Outgoing for the payer
-  await query(
-    `INSERT INTO webstoreTransactions
-       (purchaseId, userId, direction, counterpartyMinecraftUsername, amountCents, currency)
-     VALUES (?, ?, 'outgoing', ?, ?, ?)`,
-    [purchaseId, payerUserId, recipientMinecraftUsername, amountCents, currency]
-  );
+  await insertWebstoreTransaction({
+    purchaseId,
+    userId: payerUserId,
+    direction: "outgoing",
+    counterparty: recipientMinecraftUsername,
+    amountCents,
+    currency,
+    stripeRef,
+  });
 
   // Incoming for the recipient — only if it's a gift to a registered user
   if (payerMinecraftUsername !== recipientMinecraftUsername) {
@@ -1182,29 +1370,73 @@ export async function createTransactionsForPurchase({
     );
     const recipientUserId = rows?.[0]?.userId;
     if (recipientUserId) {
-      await query(
-        `INSERT INTO webstoreTransactions
-           (purchaseId, userId, direction, counterpartyMinecraftUsername, amountCents, currency)
-         VALUES (?, ?, 'incoming', ?, ?, ?)`,
-        [purchaseId, recipientUserId, payerMinecraftUsername, amountCents, currency]
-      );
+      await insertWebstoreTransaction({
+        purchaseId,
+        userId: recipientUserId,
+        direction: "incoming",
+        counterparty: payerMinecraftUsername,
+        amountCents,
+        currency,
+        stripeRef: stripeRef ? `${stripeRef}:incoming` : null,
+      });
     }
   }
 }
 
+/**
+ * Record money given back for a purchase (refund or lost dispute) against the
+ * payer. Revenue totals subtract these rows.
+ */
+export async function createRefundTransaction({ purchase, amountCents, currency, stripeRef }) {
+  return insertWebstoreTransaction({
+    purchaseId: purchase.purchaseId,
+    userId: purchase.userId,
+    direction: "refund",
+    counterparty: purchase.recipientMinecraftUsername,
+    amountCents,
+    currency,
+    stripeRef,
+  });
+}
+
+/** Total already recorded as refunded for one Stripe charge (refund:<chargeId>:... rows). */
+export async function getRecordedRefundCentsForCharge(chargeId) {
+  const rows = await query(
+    `SELECT COALESCE(SUM(amountCents), 0) AS total
+       FROM webstoreTransactions
+      WHERE direction = 'refund' AND stripeRef LIKE ?`,
+    [`refund:${String(chargeId).replace(/[%_\\]/g, "\\$&")}:%`]
+  );
+  return Number(rows[0]?.total || 0);
+}
+
 // ---------------------------------------------------------------------------
-// Monthly totals (for the Give / Support page goal bar)
+// Revenue totals (Finance Centre support figure, dashboard revenue card)
 // ---------------------------------------------------------------------------
 
-export async function getMonthlyPurchaseTotals(startDate, endDate) {
-  const results = await query(
-    `SELECT COALESCE(SUM(amountCents), 0) AS totalCents
-     FROM webstorePurchases
-     WHERE status IN ('paid', 'fulfilled')
-       AND createdAt >= ? AND createdAt < ?`,
-    [startDate, endDate]
+/**
+ * Money taken through the webstore, net of refunds, per currency. Built from
+ * webstoreTransactions (one 'outgoing' row per payment: first purchase and
+ * every renewal), so subscription renewals count and currencies never mix.
+ * Both bounds are optional; endDate is exclusive.
+ *
+ * @returns {Promise<Array<{currency: string, totalCents: number}>>}
+ */
+export async function getWebstoreRevenueByCurrency(startDate = null, endDate = null) {
+  const where = ["direction IN ('outgoing', 'refund')"];
+  const params = [];
+  if (startDate) { where.push("createdAt >= ?"); params.push(startDate); }
+  if (endDate) { where.push("createdAt < ?"); params.push(endDate); }
+  const rows = await query(
+    `SELECT UPPER(currency) AS currency,
+            COALESCE(SUM(CASE WHEN direction = 'refund' THEN -amountCents ELSE amountCents END), 0) AS totalCents
+       FROM webstoreTransactions
+      WHERE ${where.join(" AND ")}
+      GROUP BY UPPER(currency)
+      ORDER BY totalCents DESC`,
+    params
   );
-  return Number(results[0]?.totalCents || 0);
+  return rows.map((r) => ({ currency: r.currency, totalCents: Number(r.totalCents || 0) }));
 }
 
 // ---------------------------------------------------------------------------
@@ -1222,6 +1454,11 @@ export async function getCommandRunsNeedingSync(limit = 100) {
      FROM webstoreCommandRuns cr
      JOIN executorTasks et ON cr.executorTaskId = et.executorTaskId
      WHERE cr.status IN ('queued', 'processing')
+       -- Only rows the cron will act on: a run still waiting on a pending task
+       -- (e.g. its server is offline) is never touched, so including it would let
+       -- 100+ such rows hold the head of the list and starve everything else.
+       AND (et.status IN ('completed', 'failed')
+            OR (et.status = 'processing' AND cr.status <> 'processing'))
      ORDER BY cr.updatedAt ASC
      LIMIT ?`,
     [limit]
@@ -1293,15 +1530,6 @@ export async function getAllPurchasesCount() {
 export async function getActiveSubscriptionsCount() {
   const rows = await query(
     "SELECT COUNT(*) AS total FROM webstoreSubscriptions WHERE status = 'active'"
-  );
-  return Number(rows[0]?.total || 0);
-}
-
-export async function getTotalRevenueCents() {
-  const rows = await query(
-    `SELECT COALESCE(SUM(amountCents), 0) AS total
-     FROM webstorePurchases
-     WHERE status IN ('paid', 'fulfilled')`
   );
   return Number(rows[0]?.total || 0);
 }

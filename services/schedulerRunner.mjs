@@ -10,6 +10,7 @@ import { prisma } from "../controllers/databaseController.js";
 import { nextOccurrence } from "../lib/scheduler/recurrence.mjs";
 import { getActionModule } from "../lib/scheduler/actions/index.mjs";
 import { applyActionPlaceholders, computeRunNumber } from "../lib/scheduler/placeholders.mjs";
+import { resolveAvatarUrl } from "../lib/avatarHelpers.js";
 
 const EXECUTED_STATUSES = ["succeeded", "partial", "failed"];
 
@@ -110,6 +111,26 @@ async function claimScheduledRun(job, dueAt, { missed, now, runNumber }) {
   }
 }
 
+/**
+ * The job creator's username and avatar for "Scheduled by" footers.
+ * scheduled_jobs stores only createdBy (a user id). Best effort: a lookup
+ * failure falls back to the default footer rather than failing the run.
+ */
+async function resolveActor(userId) {
+  if (!userId) return { actorUsername: null, actorAvatarUrl: null };
+  try {
+    const user = await prisma.users.findUnique({
+      where: { userId: Number(userId) },
+      select: { userId: true, uuid: true, username: true, profilePicture_type: true, profilePicture_email: true },
+    });
+    if (!user) return { actorUsername: null, actorAvatarUrl: null };
+    return { actorUsername: user.username || null, actorAvatarUrl: await resolveAvatarUrl(user) };
+  } catch (e) {
+    console.error("[schedulerRunner] creator lookup failed:", e?.message || e);
+    return { actorUsername: null, actorAvatarUrl: null };
+  }
+}
+
 /** Process one due job: claim, apply the missed rule, execute, record results. */
 export async function processDueJob(job, { now = new Date(), client, config, graceMs }) {
   const dueAt = job.nextRunAt ? new Date(job.nextRunAt) : null;
@@ -133,7 +154,7 @@ export async function processDueJob(job, { now = new Date(), client, config, gra
     dueAt,
     runNumber,
     timezone: job.timezone,
-    actorUsername: job.createdByUsername || null,
+    ...(await resolveActor(job.createdBy)),
   };
   const { status, results } = await executeActions(job, ctx);
 
@@ -180,7 +201,7 @@ export async function runJobNow(jobId, triggeredBy, { client, config, now = new 
     data: { jobId: job.id, dueAt: now, status: "running", startedAt: now, triggerType: "manual", triggeredBy: triggeredBy ?? null, runNumber: null },
   });
 
-  const ctx = { client, config, dueAt: now, runNumber, timezone: job.timezone, actorUsername: null };
+  const ctx = { client, config, dueAt: now, runNumber, timezone: job.timezone, ...(await resolveActor(job.createdBy)) };
   const { status, results } = await executeActions(job, ctx);
 
   await prisma.scheduled_job_runs.update({ where: { id: run.id }, data: { status, finishedAt: new Date(), results } });

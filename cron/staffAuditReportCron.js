@@ -153,16 +153,18 @@ export async function runStaffAuditReport() {
     return { sent: false, reason: "Staff audit report is not enabled in config." };
   }
 
-  // Support both flat channelId and legacy delivery.channelId
+  // Support both flat channelId and legacy delivery.channelId; fall back to the
+  // webhook, which is what the settings page has always offered.
   const channelId = auditConfig.channelId || auditConfig.delivery?.channelId;
-  if (!channelId) {
-    console.warn("Staff audit report skipped: no channelId configured.");
-    return { sent: false, reason: "No `channelId` is configured for the staff audit report." };
+  const webhookUrl = String(auditConfig.webhookUrl || "").trim();
+  if (!channelId && !webhookUrl) {
+    console.warn("Staff audit report skipped: no channel or webhook configured.");
+    return { sent: false, reason: "No channel or webhook is configured for the staff audit report (Settings > Automation)." };
   }
 
   const staffGroups = auditConfig.staffGroups;
   if (!staffGroups?.length) {
-    return { sent: false, reason: "No `staffGroups` are configured. Add a list of LP group names e.g. `\"staffGroups\": [\"mod\", \"admin\"]`." };
+    return { sent: false, reason: "No staff groups are configured. Add the LuckPerms group names under Settings > Automation > Staff audit report groups." };
   }
 
   // Fetch staff data
@@ -205,9 +207,20 @@ export async function runStaffAuditReport() {
   currentEmbed.setFooter({ text: `${staffMembers.length} active staff members` });
   embeds.push(currentEmbed);
 
-  const channel = await client.channels.fetch(channelId);
-  for (const embed of embeds) {
-    await channel.send({ embeds: [embed] });
+  if (channelId) {
+    const channel = await client.channels.fetch(channelId);
+    for (const embed of embeds) {
+      await channel.send({ embeds: [embed] });
+    }
+  } else {
+    for (const embed of embeds) {
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ embeds: [embed.toJSON()] }),
+      });
+      if (!res.ok) throw new Error(`Staff audit report webhook returned HTTP ${res.status}`);
+    }
   }
 
   console.log(
