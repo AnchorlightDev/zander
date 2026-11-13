@@ -6,6 +6,7 @@ import {
     createUnlinkedUser,
     syncParticipantsForMessage,
 } from "../controllers/supportTicketController.js";
+import { messageTextWithAttachments } from "../lib/discord/embedText.mjs";
 export class SupportTicketMessageListener extends Listener {
   constructor(context, options) {
     super(context, {
@@ -21,6 +22,9 @@ export class SupportTicketMessageListener extends Listener {
       const ticket = await getTicketByChannelId(message.channel.id);
       if (!ticket) return;
 
+      const text = messageTextWithAttachments(message.content, message.attachments);
+      if (!text) return; // e.g. a sticker-only message: nothing to record
+
       let userId = await getUserIdByDiscordId(message.author.id);
       if (!userId) {
         userId = await createUnlinkedUser(message.author.id, message.author.username);
@@ -30,7 +34,7 @@ export class SupportTicketMessageListener extends Listener {
         this.container.client,
         ticket.ticketId,
         userId,
-        message.content,
+        text,
         "discord"
       );
 

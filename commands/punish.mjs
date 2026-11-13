@@ -372,11 +372,16 @@ export async function sendPunishmentWebhook({
   }
 }
 
+// Longer than this should be a permanent ban/mute. It also keeps the expiry a
+// valid Date: an unbounded value overflows to Invalid Date after the Discord
+// action has already been applied.
+export const MAX_TEMP_DURATION_MS = 365 * 24 * 60 * 60 * 1000;
+
 /**
  * Parse a duration string like "1h", "7d", "30m", "2w" into milliseconds.
- * Returns null if invalid.
+ * Returns null if invalid, zero, or longer than MAX_TEMP_DURATION_MS.
  */
-function parseDuration(input) {
+export function parseDuration(input) {
   if (!input) return null;
   const match = String(input).trim().match(/^(\d+)\s*(m|h|d|w)$/i);
   if (!match) return null;
@@ -391,7 +396,54 @@ function parseDuration(input) {
     w: 7 * 24 * 60 * 60 * 1000,
   };
 
-  return value * multipliers[unit];
+  const durationMs = value * multipliers[unit];
+  if (!Number.isFinite(durationMs) || durationMs <= 0 || durationMs > MAX_TEMP_DURATION_MS) {
+    return null;
+  }
+  return durationMs;
+}
+
+/**
+ * Insert the punishment row. The Discord action has usually already been
+ * applied by now, so a failure must be reported to the actor rather than
+ * escaping to the generic error handler (which leaves the reply on "thinking").
+ * Returns the new id, or null after replying with an error.
+ */
+async function recordPunishment(interaction, data) {
+  try {
+    return await createPunishment(data);
+  } catch (error) {
+    console.error("Failed to record punishment:", error);
+    await interaction
+      .editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("Punishment Not Recorded")
+            .setDescription(
+              `The action was applied in Discord, but saving the punishment record failed. Record it manually or reverse it (for example with \`/punish unban\` or \`/punish unmute\`).`
+            )
+            .setColor(Colors.Red),
+        ],
+      })
+      .catch(() => {});
+    return null;
+  }
+}
+
+/**
+ * A permanent ban/mute replaces any running temporary one of the same kind;
+ * otherwise the temp row's expiry would unban/unmute the user.
+ */
+async function supersedeTemporary(targetDiscordUserId, tempType) {
+  try {
+    const rows = await getActivePunishments(targetDiscordUserId, tempType);
+    for (const row of rows) {
+      await liftPunishment(row.id);
+    }
+  } catch (error) {
+    // The expiry cron also skips lifting while a permanent row is active.
+    console.warn("Failed to supersede temporary punishments:", error.message);
+  }
 }
 
 /**
@@ -801,7 +853,7 @@ export class PunishCommand extends Command {
     const dmBlock = requiredDmFailedEmbed(dmStatus);
     if (dmBlock) return interaction.editReply({ embeds: [dmBlock] });
 
-    const punishmentId = await createPunishment({
+    const punishmentId = await recordPunishment(interaction, {
       type: "WARN",
       targetDiscordUserId: targetUser.id,
       targetDiscordTag: getTargetTag(targetUser),
@@ -813,6 +865,7 @@ export class PunishCommand extends Command {
       context: this.buildContext(interaction, evidence),
       dmStatus,
     });
+    if (punishmentId === null) return;
 
     if (!silent) {
       await sendLogEmbed(interaction.client, {
@@ -889,7 +942,7 @@ export class PunishCommand extends Command {
       });
     }
 
-    const punishmentId = await createPunishment({
+    const punishmentId = await recordPunishment(interaction, {
       type: "DISCORD_KICK",
       targetDiscordUserId: targetUser.id,
       targetDiscordTag: getTargetTag(targetUser),
@@ -901,6 +954,7 @@ export class PunishCommand extends Command {
       context: this.buildContext(interaction, evidence),
       dmStatus,
     });
+    if (punishmentId === null) return;
 
     if (!silent) {
       await sendLogEmbed(interaction.client, {
@@ -949,7 +1003,7 @@ export class PunishCommand extends Command {
     const durationMs = parseDuration(durationStr);
     if (!durationMs) {
       return interaction.editReply({
-        content: "Invalid duration. Use formats like `30m`, `1h`, `7d`, `2w`.",
+        content: "Invalid duration. Use formats like `30m`, `1h`, `7d`, `2w` (at most 365 days; use `/punish ban` for longer).",
       });
     }
 
@@ -984,7 +1038,7 @@ export class PunishCommand extends Command {
       });
     }
 
-    const punishmentId = await createPunishment({
+    const punishmentId = await recordPunishment(interaction, {
       type: "TEMP_BAN",
       targetDiscordUserId: targetUser.id,
       targetDiscordTag: getTargetTag(targetUser),
@@ -996,6 +1050,7 @@ export class PunishCommand extends Command {
       context: this.buildContext(interaction, evidence),
       dmStatus,
     });
+    if (punishmentId === null) return;
 
     if (!silent) {
       await sendLogEmbed(interaction.client, {
@@ -1072,7 +1127,7 @@ export class PunishCommand extends Command {
       });
     }
 
-    const punishmentId = await createPunishment({
+    const punishmentId = await recordPunishment(interaction, {
       type: "PERM_BAN",
       targetDiscordUserId: targetUser.id,
       targetDiscordTag: getTargetTag(targetUser),
@@ -1084,6 +1139,8 @@ export class PunishCommand extends Command {
       context: this.buildContext(interaction, evidence),
       dmStatus,
     });
+    if (punishmentId === null) return;
+    await supersedeTemporary(targetUser.id, "TEMP_BAN");
 
     if (!silent) {
       await sendLogEmbed(interaction.client, {
@@ -1132,7 +1189,7 @@ export class PunishCommand extends Command {
     const durationMs = parseDuration(durationStr);
     if (!durationMs) {
       return interaction.editReply({
-        content: "Invalid duration. Use formats like `30m`, `1h`, `7d`, `2w`.",
+        content: "Invalid duration. Use formats like `30m`, `1h`, `7d`, `2w` (at most 365 days; use `/punish mute` for longer).",
       });
     }
 
@@ -1177,7 +1234,7 @@ export class PunishCommand extends Command {
       });
     }
 
-    const punishmentId = await createPunishment({
+    const punishmentId = await recordPunishment(interaction, {
       type: "TEMP_MUTE",
       targetDiscordUserId: targetUser.id,
       targetDiscordTag: getTargetTag(targetUser),
@@ -1189,6 +1246,7 @@ export class PunishCommand extends Command {
       context: this.buildContext(interaction, evidence),
       dmStatus,
     });
+    if (punishmentId === null) return;
 
     if (!silent) {
       await sendLogEmbed(interaction.client, {
@@ -1275,7 +1333,7 @@ export class PunishCommand extends Command {
       });
     }
 
-    const punishmentId = await createPunishment({
+    const punishmentId = await recordPunishment(interaction, {
       type: "PERM_MUTE",
       targetDiscordUserId: targetUser.id,
       targetDiscordTag: getTargetTag(targetUser),
@@ -1287,6 +1345,8 @@ export class PunishCommand extends Command {
       context: this.buildContext(interaction, evidence),
       dmStatus,
     });
+    if (punishmentId === null) return;
+    await supersedeTemporary(targetUser.id, "TEMP_MUTE");
 
     if (!silent) {
       await sendLogEmbed(interaction.client, {
@@ -1331,7 +1391,7 @@ export class PunishCommand extends Command {
     const targetLinked = await new UserGetter().byDiscordId(targetUser.id);
 
     // Find active ban punishments for this user
-    const activeBans = await getActivePunishments(targetUser.id);
+    const activeBans = await getActivePunishments(targetUser.id, null, { includeAppeals: true });
     const banRecords = activeBans.filter(
       (p) => p.type === "TEMP_BAN" || p.type === "PERM_BAN"
     );
@@ -1415,11 +1475,24 @@ export class PunishCommand extends Command {
       try {
         await targetMember.roles.remove(MUTED_ROLE_ID, `[Punish] ${reason}`);
       } catch (error) {
-        console.warn("Failed to remove muted role:", error.message);
+        // 10007 Unknown Member / 10011 Unknown Role: nothing left to remove, so
+        // the records are stale and may be lifted. Any other failure must keep
+        // them ACTIVE, matching handleUnban, or the role stays with no record.
+        if (error?.code !== 10007 && error?.code !== 10011) {
+          console.warn("Failed to remove muted role:", error.message);
+          return interaction.editReply({
+            embeds: [
+              new EmbedBuilder()
+                .setTitle("Unmute Failed")
+                .setDescription("Discord refused to remove the muted role, so the punishment record was left active. Check the bot's permissions and role position, then try again.")
+                .setColor(Colors.Red),
+            ],
+          });
+        }
       }
     }
 
-    const activeMutes = await getActivePunishments(targetUser.id);
+    const activeMutes = await getActivePunishments(targetUser.id, null, { includeAppeals: true });
     const muteRecords = activeMutes.filter(
       (p) => p.type === "TEMP_MUTE" || p.type === "PERM_MUTE"
     );

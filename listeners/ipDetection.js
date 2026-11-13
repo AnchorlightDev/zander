@@ -23,6 +23,11 @@ const IP_PHRASES = [
   "what ip",
 ];
 
+// One server-list reply per channel per window, so a conversation about
+// joining does not get the embed on every message.
+const CHANNEL_COOLDOWN_MS = 60 * 1000;
+const lastReplyAt = new Map();
+
 export class IpDetectionListener extends Listener {
   constructor(context, options) {
     super(context, {
@@ -39,6 +44,14 @@ export class IpDetectionListener extends Listener {
     const content = message.content.toLowerCase();
     const matched = IP_PHRASES.some((phrase) => content.includes(phrase));
     if (!matched) return;
+
+    const now = Date.now();
+    const channelId = message.channelId;
+    if (now - (lastReplyAt.get(channelId) || 0) < CHANNEL_COOLDOWN_MS) return;
+    lastReplyAt.set(channelId, now);
+    for (const [id, at] of lastReplyAt) {
+      if (now - at >= CHANNEL_COOLDOWN_MS) lastReplyAt.delete(id);
+    }
 
     try {
       const fetchURL = `${process.env.siteAddress}/api/server/get?type=EXTERNAL`;

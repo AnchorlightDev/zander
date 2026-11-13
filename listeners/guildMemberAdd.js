@@ -7,6 +7,7 @@ import { checkAndReportNickname } from "../lib/discord/nicknameCheck.mjs";
 import { syncMemberRankRoles } from "../lib/discord/rankRoleSync.mjs";
 import { syncLinkedRoleForDiscordId } from "../lib/discord/linkedRoleSync.mjs";
 import { UserGetter } from "../controllers/userController.js";
+import { hasOtherEnforcedPunishment } from "../controllers/discordPunishmentController.js";
 
 export class GuildMemberAddListener extends Listener {
   constructor(context, options) {
@@ -30,6 +31,20 @@ export class GuildMemberAddListener extends Listener {
       }
     } catch (error) {
       console.error("[guildMemberAdd] Failed to sync rank roles for rejoining member:", error.message);
+    }
+
+    // Mutes are a role, which Discord drops when a member leaves, so leaving
+    // and rejoining would otherwise shed an active mute.
+    const mutedRoleId = config.discord?.roles?.muted;
+    const guildId = config.discord?.guildId;
+    if (mutedRoleId && (!guildId || member.guild?.id === guildId)) {
+      try {
+        if (await hasOtherEnforcedPunishment(member.user.id, ["TEMP_MUTE", "PERM_MUTE"], 0)) {
+          await member.roles.add(mutedRoleId, "[Punish] Reapplying active mute on rejoin");
+        }
+      } catch (error) {
+        console.error("[guildMemberAdd] Failed to reapply muted role:", error.message);
+      }
     }
 
     if (!features.discord?.events?.nicknameCheck) return;

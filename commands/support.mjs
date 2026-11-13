@@ -506,12 +506,14 @@ export class SupportCommand extends Command {
     if (subcommand === "status") {
       const state = interaction.options.getString("state", true);
 
+      // Acknowledge before the ticket lookup and member fetch below.
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
       const ticketDetails = await getTicketDetailsByChannel(interaction.channel.id);
 
       if (!ticketDetails) {
-        return interaction.reply({
+        return interaction.editReply({
           content: "This channel is not linked to a ticket.",
-          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -522,13 +524,10 @@ export class SupportCommand extends Command {
         member.roles.cache.some((role) => categoryStaffRoles.includes(role.id));
 
       if (!hasPermission) {
-        return interaction.reply({
+        return interaction.editReply({
           content: "You need support staff permissions to update ticket status.",
-          flags: MessageFlags.Ephemeral,
         });
       }
-
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const username = interaction.user.tag;
       const staffUserId = await getUserIdByDiscordId(interaction.user.id);
@@ -592,12 +591,14 @@ export class SupportCommand extends Command {
     }
 
     if (subcommand === "close") {
+      // Acknowledge before the ticket lookup and member fetch below.
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
       const ticketDetails = await getTicketDetailsByChannel(interaction.channel.id);
 
       if (!ticketDetails) {
-        return interaction.reply({
+        return interaction.editReply({
           content: "This channel is not linked to a ticket.",
-          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -609,13 +610,10 @@ export class SupportCommand extends Command {
       const isOwner = ticketDetails.discordId && ticketDetails.discordId === interaction.user.id;
 
       if (!isStaff && !isOwner) {
-        return interaction.reply({
+        return interaction.editReply({
           content: "Only ticket staff or the ticket owner can close this ticket.",
-          flags: MessageFlags.Ephemeral,
         });
       }
-
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const username = interaction.user.tag;
       const actorUserId = await getUserIdByDiscordId(interaction.user.id);

@@ -43,6 +43,21 @@ const responses = [
     },
 ];
 
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Whole words only, so "sand" does not fire on "thousand" or "sandwich".
+const matchers = responses.map(({ triggers, response }) => ({
+    pattern: new RegExp(`\\b(?:${triggers.map(escapeRegExp).join("|")})\\b`, "i"),
+    response,
+}));
+
+/** The May 4th reply for a message, or null when nothing matches. */
+export function findMayFourthResponse(content) {
+    const text = String(content || "");
+    const match = matchers.find(({ pattern }) => pattern.test(text));
+    return match ? match.response : null;
+}
+
 export class GuildMessageListener extends Listener {
     constructor(context, options) {
         super(context, {
@@ -60,13 +75,11 @@ export class GuildMessageListener extends Listener {
 
         if (!isMayFourth) return;
 
-        const content = message.content.toLowerCase();
-
-        for (const { triggers, response } of responses) {
-            if (triggers.some((t) => content.includes(t))) {
-                message.channel.send(response);
-                break;
-            }
+        const response = findMayFourthResponse(message.content);
+        if (response) {
+            message.channel.send(response).catch((error) => {
+                console.warn("[may4th] Failed to reply:", error.message);
+            });
         }
     }
 }

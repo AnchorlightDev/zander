@@ -24,8 +24,12 @@ const require = createRequire(import.meta.url);
 const config = require("../lib/config/config.cjs");
 const features = require("../lib/config/features.cjs");
 
-/** Absent means on: activity must accumulate before anyone asks for it. */
-const ENABLED = features?.discord?.activityTracking !== false;
+/**
+ * Absent means on: activity must accumulate before anyone asks for it.
+ * Read per message, not copied at import, so the dashboard switch applies
+ * without a restart.
+ */
+const isEnabled = () => features?.discord?.activityTracking !== false;
 
 const buffer = createActivityBuffer({
   write: addMessageCounts,
@@ -39,12 +43,21 @@ export class DiscordActivityListener extends Listener {
       once: false,
       event: "messageCreate",
     });
-
-    if (ENABLED) buffer.start();
   }
 
   async run(message) {
-    if (!ENABLED) return;
+    if (!isEnabled()) {
+      // Turned off: write what was counted while it was on, then stop the
+      // timer. start() below resumes it if the switch is turned back on.
+      if (buffer.size) {
+        buffer.flush().catch((error) => {
+          console.error("[discordActivity] Flush failed:", error.message);
+        });
+      }
+      buffer.stop();
+      return;
+    }
+    buffer.start(); // no-op once running
 
     // Bots would swamp the counts, and a bot cannot apply for anything.
     if (message.author?.bot) return;

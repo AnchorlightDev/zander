@@ -180,7 +180,10 @@ export class ReportCommand extends Command {
     // Resolve the reporter user to a User ID in database.
     const userData = await new UserGetter().byDiscordId(interaction.user.id);
 
-    if (!userData?.discordId) {
+    // A placeholder row (created when an unlinked user posts in a ticket) has
+    // a discordId but a username taken from their Discord handle, so it is
+    // not a linked account and must not name the reporter.
+    if (!userData?.discordId || Number(userData.is_placeholder) === 1) {
       return interaction.editReply({
         embeds: [
           errorEmbed(

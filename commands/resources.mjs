@@ -98,7 +98,8 @@ export class ResourcesCommand extends Command {
 
     // Suggestions come from signed-in members only, so every one is traceable.
     const account = await new UserGetter().byDiscordId(interaction.user.id);
-    if (!account) {
+    // Placeholder rows (unlinked ticket posters) carry a self-chosen username.
+    if (!account || Number(account.is_placeholder) === 1) {
       return interaction.editReply({
         embeds: [embed("Link Your Account", `Link your Discord to your site account to suggest resources: ${process.env.siteAddress}/login`, Colors.Red)],
       });

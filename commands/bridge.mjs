@@ -212,6 +212,20 @@ export class BridgeCommand extends Command {
       });
     }
 
+    // Acknowledge before the account and LuckPerms lookups below, which can
+    // take longer than Discord's 3-second window. Every reply here is ephemeral.
+    const ensureDeferred = async () => {
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      }
+    };
+    try {
+      await ensureDeferred();
+    } catch (error) {
+      console.error("Failed to defer bridge command reply:", error);
+      return;
+    }
+
     // Resolve the user to a User ID in the database
     const userData = new UserGetter();
     const userGetData = await userData.byDiscordId(interaction.user.id);
@@ -224,10 +238,7 @@ export class BridgeCommand extends Command {
         )
         .setColor(Colors.Red);
 
-      return interaction.reply({
-        embeds: [errorEmbed],
-        flags: MessageFlags.Ephemeral,
-      });
+      return interaction.editReply({ embeds: [errorEmbed] });
     }
 
     const userPermissions = await getUserPermissions(userGetData);
@@ -239,10 +250,7 @@ export class BridgeCommand extends Command {
         .setDescription(`You do not have access to use this command.`)
         .setColor(Colors.Red);
 
-      return interaction.reply({
-        embeds: [errorEmbed],
-        flags: MessageFlags.Ephemeral,
-      });
+      return interaction.editReply({ embeds: [errorEmbed] });
     }
 
     const subcommand = interaction.options.getSubcommand();
@@ -282,7 +290,7 @@ export class BridgeCommand extends Command {
       const limit = interaction.options.getInteger("limit") || 10;
       const claim = interaction.options.getBoolean("claim") || false;
 
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      await ensureDeferred();
 
       const statusMap = {
         pending: { label: "Pending", color: Colors.Blurple },
@@ -475,7 +483,7 @@ export class BridgeCommand extends Command {
           actioningUser: userGetData.userId,
         };
 
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await ensureDeferred();
 
         const response = await postBridge(
           "/api/bridge/processor/command/add",
@@ -516,7 +524,7 @@ export class BridgeCommand extends Command {
           return interaction.editReply({ embeds: [errorEmbed] });
         }
 
-        return interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ embeds: [errorEmbed] });
       }
     }
 
@@ -526,7 +534,7 @@ export class BridgeCommand extends Command {
       try {
         const metadata = metadataFromOption("metadata");
 
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await ensureDeferred();
 
         const payload = {
           routineSlug,
@@ -579,7 +587,7 @@ export class BridgeCommand extends Command {
           return interaction.editReply({ embeds: [errorEmbed] });
         }
 
-        return interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ embeds: [errorEmbed] });
       }
     }
 
@@ -592,7 +600,7 @@ export class BridgeCommand extends Command {
       try {
         const metadata = metadataFromOption("metadata");
 
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await ensureDeferred();
 
         const payload = {
           status,
@@ -639,7 +647,7 @@ export class BridgeCommand extends Command {
           return interaction.editReply({ embeds: [errorEmbed] });
         }
 
-        return interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ embeds: [errorEmbed] });
       }
     }
 
@@ -647,7 +655,7 @@ export class BridgeCommand extends Command {
       const taskId = interaction.options.getInteger("taskid");
 
       try {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await ensureDeferred();
 
         const payload = {
           actioningUser: userGetData.userId,
@@ -679,7 +687,7 @@ export class BridgeCommand extends Command {
           return interaction.editReply({ embeds: [errorEmbed] });
         }
 
-        return interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ embeds: [errorEmbed] });
       }
     }
 
@@ -721,17 +729,18 @@ export class BridgeCommand extends Command {
           noButton
         );
 
-        await interaction.reply({
+        const promptMessage = await interaction.editReply({
           embeds: [confirmationEmbed],
           components: [actionRow],
-          flags: MessageFlags.Ephemeral,
         });
 
         const filter = (i) =>
           i.user.id === interaction.user.id &&
           ["clear_bridge_yes", "clear_bridge_no"].includes(i.customId);
 
-        const collector = interaction.channel?.createMessageComponentCollector({
+        // Collect on this prompt only: a channel-wide collector would also
+        // fire for another open clear prompt with the same button ids.
+        const collector = promptMessage?.createMessageComponentCollector({
           filter,
           time: 15000,
         });
@@ -798,10 +807,12 @@ export class BridgeCommand extends Command {
 
         collector.on("end", (collected, reason) => {
           if (reason === "time") {
-            interaction.editReply({
-              content: "No response received. Action has been canceled.",
-              components: [],
-            });
+            interaction
+              .editReply({
+                content: "No response received. Action has been canceled.",
+                components: [],
+              })
+              .catch(() => {});
           }
         });
       } catch (error) {
@@ -812,7 +823,7 @@ export class BridgeCommand extends Command {
           )
           .setColor(Colors.Red);
 
-        return interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+        return interaction.editReply({ embeds: [errorEmbed] });
       }
     }
   }

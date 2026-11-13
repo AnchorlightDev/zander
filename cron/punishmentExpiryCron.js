@@ -5,6 +5,7 @@ import {
   getExpiredActivePunishments,
   expirePunishment,
   getAllActivePunishments,
+  hasOtherEnforcedPunishment,
 } from "../controllers/discordPunishmentController.js";
 
 const require = createRequire(import.meta.url);
@@ -37,6 +38,27 @@ async function liftInDiscord(punishment) {
     return false;
   }
   if (!guild) return false;
+
+  // Another ban/mute still in force (a permanent one, or a longer temp one)
+  // keeps the user banned/muted: expire this row without touching Discord.
+  const stillEnforcedTypes =
+    punishment.type === "TEMP_BAN" ? ["TEMP_BAN", "PERM_BAN"]
+      : punishment.type === "TEMP_MUTE" ? ["TEMP_MUTE", "PERM_MUTE"]
+        : null;
+  if (stillEnforcedTypes) {
+    try {
+      if (await hasOtherEnforcedPunishment(
+        punishment.target_discord_user_id,
+        stillEnforcedTypes,
+        punishment.id
+      )) {
+        return true;
+      }
+    } catch (error) {
+      console.warn("punishmentExpiryCron: overlap check failed", punishment.id, error.message);
+      return false;
+    }
+  }
 
   if (punishment.type === "TEMP_BAN") {
     try {

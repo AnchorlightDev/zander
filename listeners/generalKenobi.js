@@ -17,7 +17,9 @@ export class GuildMessageListener extends Listener {
 
     if (features.discord.events.generalKenobi) {
       if (message.content.toLowerCase().includes("hello there")) {
-        message.channel.send("General Kenobi");
+        message.channel.send("General Kenobi").catch((error) => {
+          console.warn("[generalKenobi] Failed to reply:", error.message);
+        });
         return;
       }
     }

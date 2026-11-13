@@ -88,8 +88,13 @@ export async function getPunishmentById(id) {
 /**
  * Get all active punishments for a Discord user.
  */
-export async function getActivePunishments(targetDiscordUserId, type = null) {
-  let query = `SELECT * FROM discord_punishments WHERE target_discord_user_id = ? AND status = 'ACTIVE'`;
+export async function getActivePunishments(targetDiscordUserId, type = null, { includeAppeals = false } = {}) {
+  // includeAppeals: rows under appeal are still enforced (see
+  // hasOtherEnforcedPunishment), so a manual unban/unmute must lift them too.
+  const statuses = includeAppeals
+    ? `status IN ('ACTIVE', 'APPEAL_PENDING', 'APPEAL_REJECTED')`
+    : `status = 'ACTIVE'`;
+  let query = `SELECT * FROM discord_punishments WHERE target_discord_user_id = ? AND ${statuses}`;
   const params = [targetDiscordUserId];
 
   if (type) {
@@ -258,7 +263,9 @@ export async function reviewAppeal({ appealId, status, reviewerDiscordUserId, re
     );
   } else if (status === "REJECTED") {
     await executeQuery(
-      `UPDATE discord_punishments SET status = 'APPEAL_REJECTED' WHERE id = ?`,
+      // Only from APPEAL_PENDING: a row lifted while the appeal was open must
+      // not flip back to an enforced state.
+      `UPDATE discord_punishments SET status = 'APPEAL_REJECTED' WHERE id = ? AND status = 'APPEAL_PENDING'`,
       [appeal.punishment_id]
     );
   }
@@ -273,6 +280,27 @@ export async function hasActivePunishment(targetDiscordUserId, type) {
      WHERE target_discord_user_id = ? AND type = ? AND status = 'ACTIVE'
      LIMIT 1`,
     [targetDiscordUserId, type]
+  );
+  return rows.length > 0;
+}
+
+/**
+ * Whether another punishment of one of the given types is still in force for
+ * this user (permanent, or not yet expired). Used by the expiry cron so an
+ * expiring temp ban/mute does not lift a longer or permanent one. Rows under
+ * appeal are still being enforced, so they count too.
+ */
+export async function hasOtherEnforcedPunishment(targetDiscordUserId, types, excludeId) {
+  if (!types?.length) return false;
+  const rows = await executeQuery(
+    `SELECT id FROM discord_punishments
+     WHERE target_discord_user_id = ?
+       AND type IN (${types.map(() => "?").join(", ")})
+       AND status IN ('ACTIVE', 'APPEAL_PENDING', 'APPEAL_REJECTED')
+       AND id <> ?
+       AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
+     LIMIT 1`,
+    [targetDiscordUserId, ...types, excludeId]
   );
   return rows.length > 0;
 }

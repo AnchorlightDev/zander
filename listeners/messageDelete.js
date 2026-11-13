@@ -4,6 +4,7 @@ const require = createRequire(import.meta.url);
 const config = require("../lib/config/config.cjs");
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, Colors, EmbedBuilder, WebhookClient } from "discord.js";
 import { sendWebhookMessage } from "../lib/discord/webhooks.mjs";
+import { chunkIntoFields } from "../lib/discord/embedText.mjs";
 
 export class GuildMessageDeleteListener extends Listener {
   constructor(context, options) {
@@ -33,9 +34,7 @@ export class GuildMessageDeleteListener extends Listener {
       .setDescription(
         `Message deleted from \`${message.author.username}\` in \`#${message.channel.name}\``
       )
-      .addFields(
-        { name: "Deleted Message", value: message.content || "[empty]", inline: false }
-      );
+      .addFields(chunkIntoFields(message.content, "Deleted Message"));
 
     const channelUrl = `https://discord.com/channels/${message.guild.id}/${message.channel.id}`;
     const jumpButton = new ActionRowBuilder().addComponents(
