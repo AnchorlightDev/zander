@@ -81,10 +81,25 @@ describe("forum events", () => {
 
 describe("bridge state", () => {
   it("remembers the bridge's own thread changes briefly", () => {
-    markSelfChange("t1", 1000);
-    expect(isSelfChange("t1", 2000)).toBe(true);
-    expect(isSelfChange("t1", 1000 + 31_000)).toBe(false);
-    expect(isSelfChange("t2", 2000)).toBe(false);
+    markSelfChange("t1", { locked: true }, 1000);
+    expect(isSelfChange("t1", "locked", true, 2000)).toBe(true);
+    markSelfChange("t1", { locked: true }, 1000);
+    expect(isSelfChange("t1", "locked", true, 1000 + 31_000)).toBe(false);
+    expect(isSelfChange("t2", "locked", true, 2000)).toBe(false);
+  });
+
+  it("only swallows the change the bridge itself made, once", () => {
+    markSelfChange("t3", { locked: false }, 1000);
+    markSelfChange("t3", { name: "Website title" }, 1500);
+    // A moderator locking inside the window is not the bridge's change.
+    expect(isSelfChange("t3", "locked", true, 2000)).toBe(false);
+    // A rename to another name is a real change; the bridge's own is not.
+    expect(isSelfChange("t3", "name", "Mod title", 2000)).toBe(false);
+    expect(isSelfChange("t3", "name", "Website title", 2000)).toBe(true);
+    // Consumed: the same value again later is a real change.
+    expect(isSelfChange("t3", "name", "Website title", 2500)).toBe(false);
+    expect(isSelfChange("t3", "locked", false, 2500)).toBe(true);
+    expect(isSelfChange("t3", "locked", false, 2600)).toBe(false);
   });
 
   it("caches bridges by category and channel", () => {
