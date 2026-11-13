@@ -16,6 +16,12 @@
   .menu-item-head .menu-label { font-weight: 600; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .menu-item-head .menu-type { font-size: .75rem; }
   .menu-item-body { border-top: 1px solid var(--bs-border-color); padding: .75rem; }
+  /* Phones: the tool buttons drop onto their own line instead of running off the card. */
+  @media (max-width: 575.98px) {
+    .menu-item-head { flex-wrap: wrap; }
+    .menu-item-head .btn-group { margin-left: auto; }
+    .menu-item.is-child, .menu-item.drop-indent { margin-left: 1rem; }
+  }
   .menu-add-list { max-height: 240px; overflow-y: auto; }
 </style>
 

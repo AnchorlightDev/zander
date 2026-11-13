@@ -62,14 +62,19 @@ const STATUS_COLORS = {
 document.addEventListener('DOMContentLoaded', function () {
     const calendarEl = document.getElementById('events-calendar');
 
+    // A week grid is unreadable on a phone: start phones on the month list.
+    const isPhone = window.matchMedia('(max-width: 575.98px)').matches;
+
     const calendar = new FullCalendar.Calendar(calendarEl, {
         timeZone: 'local',
-        initialView: 'timeGridWeek',
-        headerToolbar: {
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,listMonth',
-        },
+        initialView: isPhone ? 'listMonth' : 'timeGridWeek',
+        headerToolbar: isPhone
+            ? { left: 'prev,next', center: 'title', right: 'listMonth,dayGridMonth' }
+            : {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,listMonth',
+            },
         height: 'auto',
         events: async function (fetchInfo, successCallback, failureCallback) {
             try {

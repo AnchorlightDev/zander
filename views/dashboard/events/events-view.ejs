@@ -6,15 +6,15 @@
   <div id="wpbody-content">
     <div class="wrap">
             <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                <div>
-                    <h1 class="h2 mb-0"><%= ev.title %></h1>
+                <div style="min-width:0">
+                    <h1 class="h2 mb-0 text-break"><%= ev.title %></h1>
                     <span class="badge bg-<%= badgeClass %> <%= badgeClass === 'warning' || badgeClass === 'info' ? 'text-dark' : '' %> mt-1">
                         <%= ev.status.replace(/_/g,' ') %>
                     </span>
                     <span class="badge bg-secondary ms-1"><%= ev.eventType %></span>
                     <% if (ev.featured) { %><span class="badge bg-warning text-dark ms-1"><i class="fas fa-star me-1"></i>Featured</span><% } %>
                     <% if (ev.visibility === 'rank') { %>
-                    <span class="badge bg-info text-dark ms-1">
+                    <span class="badge bg-info text-dark ms-1 text-wrap text-start">
                         <i class="fas fa-lock me-1"></i>Rank-locked:
                         <%= (ev.rankAccess || []).map(r => r.rankSlug).join(', ') || 'no ranks chosen' %>
                     </span>
@@ -348,6 +348,8 @@
                 </div>
                 <div class="card-body p-0" style="max-height:300px;overflow-y:auto;">
                     <table class="table table-sm table-hover mb-0">
+                        <%# Hidden headings label each cell when the table stacks on phones (adminTables.js). %>
+                        <thead class="visually-hidden"><tr><th>When</th><th>Action</th><th>By</th><th>Details</th></tr></thead>
                         <tbody>
                             <% ev.auditLogs.forEach(log => { %>
                             <tr>
