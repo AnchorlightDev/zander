@@ -4,6 +4,10 @@
 
 ### New
 
+- **Forum ↔ Discord forum channel bridge.** A forum category can be bridged to a Discord forum channel (e.g. Shopping District ↔ #shopping-district). New discussions become Discord forum posts and new Discord posts become discussions; replies (including who they reply to), edits, deletes, locks, renames and reactions sync both ways. Website posts appear in Discord under the player's Minecraft name and head. Deleting a Discord post archives the website discussion instead of deleting it. Only members whose Discord is linked to a website account can post or react in a bridged channel; anything else is removed and the member is DMed how to link. Only content created after a channel is bridged syncs. Turn on **Forum ↔ Discord bridge** under **Dashboard → Modules**, set the new **Linked account role** under **Settings → Discord**, then pick the channel on the category under **Forums → Categories**. Website changes are queued and retried, so a Discord outage loses nothing; posts made in Discord while the bot was offline are picked up when it reconnects.
+- **Reactions on forum posts.** Each post has a reaction bar; reactions made in Discord on a bridged post show here too.
+- **Linked account Discord role.** `discord.roles.linked` is given to members whose Discord is linked to a website account and removed when they unlink, with a 30-minute reconcile.
+
 - **Application forms can require a minimum account age.** A new "Account age (days)" eligibility rule gates applications on how long ago the member joined the community, independent of how active they have been. Set it per form or as a site-wide default at **Dashboard → Forms**, the same place as the playtime, clean-record and activity rules.
 
 ### Changed

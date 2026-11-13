@@ -29,6 +29,9 @@
     <td>
       <div class="forums-admin-category-name" style="padding-left: <%= depth * 20 %>px;">
         <strong><%= row.name %></strong>
+        <% if (typeof bridgedCategoryIds !== 'undefined' && bridgedCategoryIds.includes(row.categoryId)) { %>
+          <span class="badge ms-1" style="background-color:#5865f2;" title="Bridged to a Discord forum channel"><i class="fa-brands fa-discord"></i> Bridged</span>
+        <% } %>
         <% if (row.description) { %>
           <div class="text-muted small"><%= row.description %></div>
         <% } %>
@@ -126,6 +129,74 @@
               </div>
             </div>
           </form>
+        </div>
+      </div>
+
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light d-flex align-items-center gap-2">
+          <i class="fa-brands fa-discord" style="color:#5865f2;"></i>
+          <strong>Discord forum bridge</strong>
+          <% if (bridge && bridge.enabled) { %><span class="badge bg-success ms-auto">On</span><% } else { %><span class="badge bg-secondary ms-auto">Off</span><% } %>
+        </div>
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            Sync this category with a Discord forum channel. New discussions become Discord forum posts and new Discord posts become discussions;
+            replies, edits, deletes, locks, renames and reactions sync both ways. Deleting a Discord post archives the discussion here.
+            Only members whose Discord is linked to a website account can post or react in the channel. Existing content isn't copied.
+          </p>
+
+          <% if (!bridgeEnabled) { %>
+            <div class="alert alert-secondary mb-0">
+              The bridge module is off. Turn on <strong>Forum ↔ Discord bridge</strong> under <a href="/dashboard/modules">Modules</a>.
+            </div>
+          <% } else { %>
+            <% if (!linkedRoleConfigured) { %>
+              <div class="alert alert-warning small">
+                No <strong>Linked account role</strong> is set under <a href="/dashboard/settings">Settings → Discord</a>.
+                Set it before bridging, or only staff will be able to post in the Discord channel.
+              </div>
+            <% } %>
+
+            <% if (bridge && bridge.enabled) { %>
+              <% const currentChannel = (forumChannels.channels || []).find(function (c) { return c.id === bridge.channelId; }); %>
+              <p class="mb-2">
+                Bridged to <strong>#<%= currentChannel ? currentChannel.name : bridge.channelId %></strong>
+                <% if (!currentChannel && forumChannels.available) { %><span class="text-danger small">(channel not found in Discord)</span><% } %>
+              </p>
+              <% if (bridgeStats) { %>
+                <p class="text-muted small mb-3">
+                  Website → Discord queue: <%= bridgeStats.pending %> waiting, <%= bridgeStats.failed %> failed<% if (bridge.lastSyncedAt) { %>, last post sent <span data-relative-time="<%= new Date(bridge.lastSyncedAt).toISOString() %>"></span><% } %>.
+                </p>
+              <% } %>
+              <form action="/dashboard/forums/categories/<%= categoryToEdit.categoryId %>/bridge" method="post" class="d-inline" onsubmit="return confirm('Stop syncing this category with Discord? Nothing is deleted on either side.');">
+                <input type="hidden" name="action" value="disconnect">
+                <button type="submit" class="btn btn-outline-danger btn-sm">Turn off bridge</button>
+              </form>
+            <% } else if (!forumChannels.available) { %>
+              <div class="alert alert-warning mb-0">The Discord bot isn't connected, or no Discord server is set in Settings, so forum channels can't be listed.</div>
+            <% } else if (!forumChannels.channels.length) { %>
+              <div class="alert alert-info mb-0">The Discord server has no forum channels. Create one (e.g. #<%= categoryToEdit.slug %>) and reload this page.</div>
+            <% } else { %>
+              <form action="/dashboard/forums/categories/<%= categoryToEdit.categoryId %>/bridge" method="post" class="row g-2 align-items-end">
+                <input type="hidden" name="action" value="connect">
+                <div class="col-md-8">
+                  <label class="form-label" for="bridgeChannelId">Discord forum channel</label>
+                  <select class="form-select" id="bridgeChannelId" name="channelId" required>
+                    <option value="">Choose a forum channel…</option>
+                    <% forumChannels.channels.forEach(function (c) { %>
+                      <option value="<%= c.id %>" <%= bridge && bridge.channelId === c.id ? 'selected' : '' %>>#<%= c.name %><%= c.parentName ? ' (' + c.parentName + ')' : '' %></option>
+                    <% }); %>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <button type="submit" class="btn btn-primary w-100"><i class="fa-brands fa-discord me-1"></i> Bridge channel</button>
+                </div>
+                <div class="col-12">
+                  <div class="form-text">This sets the channel's permissions: @everyone can read but not post or react, the Linked account role can post and react.</div>
+                </div>
+              </form>
+            <% } %>
+          <% } %>
         </div>
       </div>
     <% } else { %>

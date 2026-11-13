@@ -11,6 +11,7 @@ import {
   deleteCategory,
   getCategoryById,
 } from "../../controllers/forumController.js";
+import { getBridgeByCategoryId, getOutboxStats, listBridges } from "../../controllers/forumBridgeController.js";
 
 const MANAGE_PERMISSION = "zander.forums.category.manage";
 
@@ -41,6 +42,28 @@ export default function dashboardForumsRoutes(
       getWebAnnouncement(),
     ]);
 
+    // Discord forum bridge: the edited category's bridge, the forum channels
+    // to pick from, and which categories are bridged (for the table badges).
+    const bridgeEnabled = Boolean(features.discord?.forumBridge);
+    let bridge = null;
+    let bridgeStats = null;
+    let forumChannels = { available: false, channels: [] };
+    let bridgedCategoryIds = [];
+    try {
+      const bridges = await listBridges({ enabledOnly: true });
+      bridgedCategoryIds = bridges.map((b) => b.categoryId);
+      if (categoryToEdit) {
+        bridge = await getBridgeByCategoryId(categoryToEdit.categoryId, { enabledOnly: false });
+        if (bridge) bridgeStats = await getOutboxStats(categoryToEdit.categoryId);
+        if (bridgeEnabled) {
+          const { listForumChannels } = await import("../../lib/forums/forumBridgeSetup.mjs");
+          forumChannels = await listForumChannels();
+        }
+      }
+    } catch (error) {
+      console.error("[DASHBOARD] Failed to load forum bridge info", error);
+    }
+
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/forums/categories", {
       pageTitle: `Dashboard - Forum Categories`,
@@ -53,6 +76,12 @@ export default function dashboardForumsRoutes(
       createUnderId,
       globalImage,
       announcementWeb,
+      bridgeEnabled,
+      bridge,
+      bridgeStats,
+      forumChannels,
+      bridgedCategoryIds,
+      linkedRoleConfigured: Boolean(config.discord?.roles?.linked),
     }));
     return;
   });
@@ -157,6 +186,57 @@ export default function dashboardForumsRoutes(
       }
 
       return res.redirect(`/dashboard/forums/categories?edit=${categoryId}`);
+    }
+  );
+
+  // Connect / disconnect a category and a Discord forum channel.
+  app.post(
+    "/dashboard/forums/categories/:categoryId/bridge",
+    async function (req, res) {
+      const hasAccess = await hasPermission(MANAGE_PERMISSION, req, res, features);
+      if (!hasAccess) return;
+
+      const categoryId = Number.parseInt(req.params.categoryId, 10);
+      const back = `/dashboard/forums/categories?edit=${categoryId}`;
+      const existing = await getCategoryById(categoryId);
+      if (!existing) {
+        setBannerCookie("danger", "Category not found.", res);
+        return res.redirect("/dashboard/forums/categories");
+      }
+
+      if (!features.discord?.forumBridge) {
+        setBannerCookie("warning", "Turn on the Forum ↔ Discord bridge under Modules first.", res);
+        return res.redirect(back);
+      }
+
+      const action = String(req.body.action || "");
+      try {
+        const setup = await import("../../lib/forums/forumBridgeSetup.mjs");
+        if (action === "disconnect") {
+          await setup.disconnectCategory(categoryId);
+          setBannerCookie("success", "Discord bridge turned off for this category. Nothing is deleted.", res);
+          return res.redirect(back);
+        }
+
+        const channelId = String(req.body.channelId || "").trim();
+        if (!/^\d{15,25}$/.test(channelId)) {
+          setBannerCookie("danger", "Pick a Discord forum channel.", res);
+          return res.redirect(back);
+        }
+
+        const result = await setup.connectCategoryToChannel(categoryId, channelId);
+        if (!result.ok) {
+          setBannerCookie("danger", result.error || "Couldn't connect the Discord channel.", res);
+        } else if (result.warnings.length) {
+          setBannerCookie("warning", `Bridged, with warnings: ${result.warnings.join(" ")}`, res);
+        } else {
+          setBannerCookie("success", "Bridged. New posts in this category and the Discord channel now sync both ways.", res);
+        }
+      } catch (error) {
+        console.error("[DASHBOARD] Failed to update forum bridge", error);
+        setBannerCookie("danger", "Couldn't update the Discord bridge.", res);
+      }
+      return res.redirect(back);
     }
   );
 

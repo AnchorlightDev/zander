@@ -1,5 +1,5 @@
 import { SapphireClient, ApplicationCommandRegistries, RegisterBehavior } from "@sapphire/framework";
-import { GatewayIntentBits } from "discord.js";
+import { GatewayIntentBits, Partials } from "discord.js";
 
 // Use BulkOverwrite instead of the default per-command Overwrite.
 // The default behavior makes one Discord API call per command on every startup
@@ -20,7 +20,12 @@ export const client = new SapphireClient({
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildModeration,
     GatewayIntentBits.MessageContent,
+    // Forum bridge: reactions in bridged Discord forum channels sync to the website.
+    GatewayIntentBits.GuildMessageReactions,
   ],
+  // Forum bridge: edits, deletes and reactions on messages sent before the
+  // bot's last restart arrive as partials; without these they are dropped.
+  partials: [Partials.Message, Partials.Reaction, Partials.User],
   presence: {
     status: "online",
     activities: [
@@ -42,6 +47,17 @@ client.once("ready", async () => {
     await cleanupOrphanTicketChannels(client);
   } catch (error) {
     console.error("Startup orphan ticket channel sweep failed:", error);
+  }
+
+  // Forum bridge: pick up Discord forum posts made while the bot was offline,
+  // then flush anything the website queued for Discord meanwhile.
+  try {
+    const { catchUpBridgedChannels } = await import("../lib/forums/forumBridgeDiscord.mjs");
+    await catchUpBridgedChannels(client);
+    const { processForumOutbox } = await import("../lib/forums/forumBridgeSync.mjs");
+    await processForumOutbox();
+  } catch (error) {
+    console.error("Forum bridge startup catch-up failed:", error);
   }
 });
 

@@ -1,6 +1,7 @@
 import db, { luckpermsDb } from "./databaseController.js";
 import { hashEmail, isLoggedIn } from "../api/common.js";
 import { plainTextExcerpt, sanitizeForumHtml } from "../lib/htmlSanitize.js";
+import { emitForumEvent, FORUM_EVENTS, ORIGIN } from "../lib/forums/forumEvents.mjs";
 
 function query(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -387,12 +388,15 @@ function mapDiscussionRow(row) {
     status: row.status || "published",
     publishAt: row.publishAt || null,
     viewCount: Number(row.viewCount ?? 0),
+    discordThreadId: row.discordThreadId || null,
+    discordStarterMessageId: row.discordStarterMessageId || null,
   };
 }
 
 async function getDiscussionRow(discussionId) {
   const [row] = await query(
-    `SELECT discussionId, categoryId, title, slug, createdBy, createdAt, updatedAt, lastPostAt, lastPostBy, isLocked, isSticky, isArchived, status, publishAt, viewCount
+    `SELECT discussionId, categoryId, title, slug, createdBy, createdAt, updatedAt, lastPostAt, lastPostBy, isLocked, isSticky, isArchived, status, publishAt, viewCount,
+            discordThreadId, discordStarterMessageId
        FROM forumDiscussions
       WHERE discussionId = ?
       LIMIT 1`,
@@ -419,6 +423,8 @@ export async function getDiscussionWithCategory(discussionId) {
             d.status,
             d.publishAt,
             d.viewCount,
+            d.discordThreadId,
+            d.discordStarterMessageId,
             c.name       AS categoryName,
             c.slug       AS categorySlug,
             c.description AS categoryDescription,
@@ -528,38 +534,50 @@ export async function createDiscussion({
   content,
   status = "published",
   publishAt = null,
+  origin = ORIGIN.WEB,
+  discordThreadId = null,
+  discordStarterMessageId = null,
 }) {
   content = sanitizeForumHtml(content);
   const slug = await ensureUniqueDiscussionSlug(categoryId, title, null);
+  const source = origin === ORIGIN.DISCORD ? "discord" : "web";
 
   const result = await query(
     `INSERT INTO forumDiscussions
-      (categoryId, title, slug, createdBy, lastPostBy, status, publishAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [categoryId, title, slug, userId, userId, status, publishAt]
+      (categoryId, title, slug, createdBy, lastPostBy, status, publishAt, discordThreadId, discordStarterMessageId)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [categoryId, title, slug, userId, userId, status, publishAt, discordThreadId, discordStarterMessageId]
   );
 
   const discussionId = result.insertId || result?.[0]?.insertId;
 
   await query(
     `INSERT INTO forumPosts
-      (discussionId, userId, content, isOriginal)
-    VALUES (?, ?, ?, 1)`,
-    [discussionId, userId, content]
+      (discussionId, userId, content, isOriginal, discordMessageId, source)
+    VALUES (?, ?, ?, 1, ?, ?)`,
+    [discussionId, userId, content, discordStarterMessageId, source]
   );
 
   await recalculateDiscussionMeta(discussionId);
 
+  if (status === "published") {
+    emitForumEvent(FORUM_EVENTS.DISCUSSION_CREATED, { discussionId, categoryId, origin });
+  }
+
   return getDiscussionRow(discussionId);
 }
 
-export async function updateDiscussion(discussionId, { title, content, editorUserId }) {
+export async function updateDiscussion(discussionId, { title, content, editorUserId, origin = ORIGIN.WEB }) {
   const discussion = await getDiscussionRow(discussionId);
   if (!discussion) {
     return null;
   }
 
+  let titleChanged = false;
+  let contentChanged = false;
+
   if (title && title !== discussion.title) {
+    titleChanged = true;
     await query(
       `UPDATE forumDiscussions
           SET title = ?,
@@ -573,6 +591,7 @@ export async function updateDiscussion(discussionId, { title, content, editorUse
     content = sanitizeForumHtml(content);
     const originalPost = await getOriginalPost(discussionId);
     if (originalPost && originalPost.content !== content) {
+      contentChanged = true;
       await recordPostRevision(originalPost.postId, editorUserId, originalPost.content);
 
       await query(
@@ -592,26 +611,63 @@ export async function updateDiscussion(discussionId, { title, content, editorUse
     [discussionId]
   );
 
+  if ((titleChanged || contentChanged) && discussion.status === "published") {
+    emitForumEvent(FORUM_EVENTS.DISCUSSION_UPDATED, {
+      discussionId,
+      categoryId: discussion.categoryId,
+      titleChanged,
+      contentChanged,
+      origin,
+    });
+  }
+
   return getDiscussionRow(discussionId);
 }
 
-export async function deleteDiscussion(discussionId) {
+export async function deleteDiscussion(discussionId, { origin = ORIGIN.WEB } = {}) {
+  const discussion = await getDiscussionRow(discussionId);
   await query(`DELETE FROM forumDiscussions WHERE discussionId = ?`, [discussionId]);
+  if (discussion) {
+    emitForumEvent(FORUM_EVENTS.DISCUSSION_DELETED, {
+      discussionId,
+      categoryId: discussion.categoryId,
+      discordThreadId: discussion.discordThreadId,
+      origin,
+    });
+  }
 }
 
-export async function moveDiscussion(discussionId, newCategoryId) {
+export async function moveDiscussion(discussionId, newCategoryId, { origin = ORIGIN.WEB } = {}) {
+  const discussion = await getDiscussionRow(discussionId);
   await query(
     `UPDATE forumDiscussions SET categoryId = ?, updatedAt = NOW() WHERE discussionId = ?`,
     [newCategoryId, discussionId]
   );
+  if (discussion && discussion.categoryId !== newCategoryId) {
+    emitForumEvent(FORUM_EVENTS.DISCUSSION_MOVED, {
+      discussionId,
+      fromCategoryId: discussion.categoryId,
+      toCategoryId: newCategoryId,
+      discordThreadId: discussion.discordThreadId,
+      origin,
+    });
+  }
 }
 
-export async function createReply({ discussionId, userId, content, replyToPostId = null }) {
+export async function createReply({
+  discussionId,
+  userId,
+  content,
+  replyToPostId = null,
+  origin = ORIGIN.WEB,
+  discordMessageId = null,
+}) {
   content = sanitizeForumHtml(content);
+  const source = origin === ORIGIN.DISCORD ? "discord" : "web";
   const result = await query(
-    `INSERT INTO forumPosts (discussionId, userId, replyToPostId, content, isOriginal)
-     VALUES (?, ?, ?, ?, 0)`,
-    [discussionId, userId, replyToPostId || null, content]
+    `INSERT INTO forumPosts (discussionId, userId, replyToPostId, content, isOriginal, discordMessageId, source)
+     VALUES (?, ?, ?, ?, 0, ?, ?)`,
+    [discussionId, userId, replyToPostId || null, content, discordMessageId, source]
   );
 
   const postId = result.insertId || result?.[0]?.insertId;
@@ -625,12 +681,15 @@ export async function createReply({ discussionId, userId, content, replyToPostId
     [userId, discussionId]
   );
 
+  emitForumEvent(FORUM_EVENTS.POST_CREATED, { postId, discussionId, origin });
+
   return postId;
 }
 
 export async function getPostById(postId) {
   const [row] = await query(
-    `SELECT postId, discussionId, userId, replyToPostId, content, isOriginal, createdAt, updatedAt
+    `SELECT postId, discussionId, userId, replyToPostId, content, isOriginal, createdAt, updatedAt,
+            discordMessageId, source
        FROM forumPosts
       WHERE postId = ?
       LIMIT 1`,
@@ -640,7 +699,7 @@ export async function getPostById(postId) {
   return row || null;
 }
 
-export async function updatePost(postId, { content, editorUserId }) {
+export async function updatePost(postId, { content, editorUserId, origin = ORIGIN.WEB }) {
   content = sanitizeForumHtml(content);
   const post = await getPostById(postId);
   if (!post) {
@@ -672,10 +731,17 @@ export async function updatePost(postId, { content, editorUserId }) {
     await recalculateDiscussionMeta(post.discussionId);
   }
 
+  emitForumEvent(FORUM_EVENTS.POST_UPDATED, {
+    postId,
+    discussionId: post.discussionId,
+    isOriginal: !!post.isOriginal,
+    origin,
+  });
+
   return getPostById(postId);
 }
 
-export async function deletePost(postId) {
+export async function deletePost(postId, { origin = ORIGIN.WEB } = {}) {
   const post = await getPostById(postId);
   if (!post) {
     return;
@@ -684,6 +750,13 @@ export async function deletePost(postId) {
   await query(`DELETE FROM forumPosts WHERE postId = ?`, [postId]);
 
   await recalculateDiscussionMeta(post.discussionId);
+
+  emitForumEvent(FORUM_EVENTS.POST_DELETED, {
+    postId,
+    discussionId: post.discussionId,
+    discordMessageId: post.discordMessageId || null,
+    origin,
+  });
 }
 
 async function fetchUserSummaries(userIds) {
@@ -891,7 +964,7 @@ async function fetchUserSummaries(userIds) {
 
 export async function getDiscussionPosts(discussionId) {
   const rows = await query(
-    `SELECT postId, discussionId, userId, replyToPostId, content, isOriginal, createdAt, updatedAt
+    `SELECT postId, discussionId, userId, replyToPostId, content, isOriginal, createdAt, updatedAt, source
        FROM forumPosts
       WHERE discussionId = ?
       ORDER BY createdAt ASC, postId ASC`,
@@ -1153,7 +1226,7 @@ export async function getCategoryDiscussions({
   });
 }
 
-export async function setDiscussionFlags(discussionId, flags = {}) {
+export async function setDiscussionFlags(discussionId, flags = {}, { origin = ORIGIN.WEB } = {}) {
   const updates = [];
   const params = [];
 
@@ -1186,7 +1259,17 @@ export async function setDiscussionFlags(discussionId, flags = {}) {
     params
   );
 
-  return getDiscussionRow(discussionId);
+  const updated = await getDiscussionRow(discussionId);
+  if (updated && (flags.isLocked !== undefined || flags.isArchived !== undefined)) {
+    emitForumEvent(FORUM_EVENTS.DISCUSSION_FLAGS, {
+      discussionId,
+      categoryId: updated.categoryId,
+      isLocked: updated.isLocked,
+      isArchived: updated.isArchived,
+      origin,
+    });
+  }
+  return updated;
 }
 
 /**
@@ -1242,7 +1325,7 @@ export async function publishDiscussion(discussionId) {
   const id = Number.parseInt(discussionId, 10);
   if (!Number.isFinite(id) || id <= 0) return null;
 
-  await query(
+  const publishResult = await query(
     `UPDATE forumDiscussions
         SET status = 'published',
             publishAt = NULL,
@@ -1263,7 +1346,16 @@ export async function publishDiscussion(discussionId) {
     [id]
   );
 
-  return getDiscussionRow(id);
+  const published = await getDiscussionRow(id);
+  const didPublish = Number(publishResult?.affectedRows ?? 0) > 0;
+  if (published && didPublish) {
+    emitForumEvent(FORUM_EVENTS.DISCUSSION_CREATED, {
+      discussionId: id,
+      categoryId: published.categoryId,
+      origin: ORIGIN.WEB,
+    });
+  }
+  return published;
 }
 
 /**

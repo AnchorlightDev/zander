@@ -15,6 +15,9 @@ export class GuildMessageDeleteListener extends Listener {
   }
 
   async run(message) {
+    // Uncached messages arrive as partials (the client enables message
+    // partials for the forum bridge); there is no content to log for them.
+    if (message.partial || !message.author) return;
     // Check if the author of the deleted message is a bot and stop if true.
     if (message.author.bot) return;
 

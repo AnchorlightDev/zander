@@ -5,6 +5,7 @@ const config = require("../lib/config/config.cjs");
 const features = require("../lib/config/features.cjs");
 import { checkAndReportNickname } from "../lib/discord/nicknameCheck.mjs";
 import { syncMemberRankRoles } from "../lib/discord/rankRoleSync.mjs";
+import { syncLinkedRoleForDiscordId } from "../lib/discord/linkedRoleSync.mjs";
 import { UserGetter } from "../controllers/userController.js";
 
 export class GuildMemberAddListener extends Listener {
@@ -25,6 +26,7 @@ export class GuildMemberAddListener extends Listener {
       const linkedAccount = await new UserGetter().byDiscordId(member.user.id);
       if (linkedAccount) {
         await syncMemberRankRoles(linkedAccount.userId);
+        await syncLinkedRoleForDiscordId(member.user.id);
       }
     } catch (error) {
       console.error("[guildMemberAdd] Failed to sync rank roles for rejoining member:", error.message);

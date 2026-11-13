@@ -232,6 +232,51 @@ model forumCategories {
   parent           forumCategories?  @relation("CategoryChildren", fields: [parentCategoryId], references: [categoryId], onDelete: SetNull)
   children         forumCategories[] @relation("CategoryChildren")
   discussions      forumDiscussions[]
+  discordBridge    forumBridgeChannels?
+}
+
+model forumBridgeChannels {
+  bridgeId     Int             @id @default(autoincrement())
+  categoryId   Int             @unique
+  guildId      String          @db.VarChar(32)
+  channelId    String          @unique @db.VarChar(32)
+  webhookId    String?         @db.VarChar(32)
+  enabled      Int             @default(1) @db.TinyInt
+  lastSyncedAt DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  category     forumCategories @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
+}
+
+model forumPostReactions {
+  reactionId Int        @id @default(autoincrement())
+  postId     Int
+  userId     Int
+  emoji      String     @db.VarChar(100)
+  source     String     @default("web") @db.VarChar(16)
+  createdAt  DateTime   @default(now())
+
+  post       forumPosts @relation(fields: [postId], references: [postId], onDelete: Cascade)
+
+  @@unique([postId, userId, emoji])
+  @@index([postId])
+}
+
+model forumSyncOutbox {
+  taskId        Int       @id @default(autoincrement())
+  action        String    @db.VarChar(32)
+  discussionId  Int?
+  postId        Int?
+  payload       String?   @db.Text
+  status        String    @default("pending") @db.VarChar(16)
+  attempts      Int       @default(0)
+  lastError     String?   @db.Text
+  nextAttemptAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status, nextAttemptAt])
 }
 
 model forumDiscussions {
@@ -250,6 +295,8 @@ model forumDiscussions {
   status       String          @default("published") @db.VarChar(16)
   publishAt    DateTime?
   viewCount    Int             @default(0)
+  discordThreadId         String? @unique @db.VarChar(32)
+  discordStarterMessageId String? @db.VarChar(32)
 
   category     forumCategories @relation(fields: [categoryId], references: [categoryId])
   posts        forumPosts[]
@@ -269,11 +316,14 @@ model forumPosts {
   isOriginal   Int                  @default(0) @db.TinyInt
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
+  discordMessageId String?          @unique @db.VarChar(32)
+  source       String               @default("web") @db.VarChar(16)
 
   discussion   forumDiscussions     @relation(fields: [discussionId], references: [discussionId])
   parentPost   forumPosts?          @relation("PostReplies", fields: [parentPostId], references: [postId])
   replies      forumPosts[]         @relation("PostReplies")
   revisions    forumPostRevisions[]
+  reactions    forumPostReactions[]
   replyToPost  forumPosts?          @relation("ForumPostReplies", fields: [replyToPostId], references: [postId], onDelete: SetNull)
   replyToReplies forumPosts[]       @relation("ForumPostReplies")
 

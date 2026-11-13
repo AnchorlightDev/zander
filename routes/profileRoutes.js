@@ -36,6 +36,7 @@ import {
 } from "../controllers/watchController.js";
 import { checkAndReportNickname } from "../lib/discord/nicknameCheck.mjs";
 import { syncMemberRankRoles, stripAllTrackedRankRoles } from "../lib/discord/rankRoleSync.mjs";
+import { syncLinkedRoleForDiscordId } from "../lib/discord/linkedRoleSync.mjs";
 import { syncBoosterRewardsForDiscordId } from "../controllers/boosterRewardController.js";
 
 export default function profileSiteRoutes(
@@ -537,6 +538,7 @@ export default function profileSiteRoutes(
       req.session.user.discordID = discordUser.id;
 
       await syncMemberRankRoles(req.session.user.userId);
+      await syncLinkedRoleForDiscordId(discordUser.id);
 
       // Grant any Discord roles from past webstore purchases that were deferred
       // because this account wasn't linked yet.
@@ -631,6 +633,7 @@ export default function profileSiteRoutes(
       req.session.user.discordID = null;
       if (discordIdBeingUnlinked) {
         await stripAllTrackedRankRoles(discordIdBeingUnlinked);
+        await syncLinkedRoleForDiscordId(discordIdBeingUnlinked);
         // No longer linked, so no longer eligible for booster reward ranks.
         await syncBoosterRewardsForDiscordId(discordIdBeingUnlinked).catch((boostErr) =>
           console.error("[PROFILE] Booster reward sync after Discord unlink failed:", boostErr.message)

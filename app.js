@@ -92,6 +92,8 @@ import("./cron/unverifiedReminderCron.js");
 import("./cron/eventTemplateCron.js");
 import("./cron/announcementExpiryCron.js");
 import("./cron/forumScheduledCron.js");
+import("./cron/forumBridgeCron.js");
+import("./cron/linkedRoleSyncCron.js");
 import("./cron/webstoreCommandSyncCron.js");
 import("./cron/badgeLuckpermsSyncCron.js");
 import("./cron/rankDiscordRoleSyncCron.js");

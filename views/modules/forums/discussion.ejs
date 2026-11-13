@@ -111,6 +111,14 @@
         </div>
       <% } %>
 
+      <% if (typeof discordPostUrl !== 'undefined' && discordPostUrl) { %>
+        <div class="forums-discord-bridge mb-3">
+          <i class="fa-brands fa-discord" aria-hidden="true"></i>
+          This discussion is also a post in our Discord. Replies and reactions sync both ways.
+          <a href="<%= discordPostUrl %>" target="_blank" rel="noopener">Open in Discord</a>
+        </div>
+      <% } %>
+
       <div class="forums-thread">
         <% posts.forEach(function(post) { %>
           <% const isAuthor = currentUserId && post.user && currentUserId === post.user.userId; %>
@@ -133,6 +141,9 @@
                       </div>
                       <div class="forums-post-date">
                         Posted <span data-relative-time="<%= new Date(post.createdAt).toISOString() %>"></span>
+                        <% if (post.source === 'discord') { %>
+                          · <span class="text-muted" title="Posted from Discord"><i class="fa-brands fa-discord" style="color:#5865f2;"></i> via Discord</span>
+                        <% } %>
                         <% if (post.updatedAt && new Date(post.updatedAt).getTime() !== new Date(post.createdAt).getTime()) { %>
                           · <span class="edited-indicator" data-edited-time="<%= new Date(post.updatedAt).toISOString() %>">edited</span>
                         <% } %>
@@ -154,6 +165,12 @@
                 <div class="forums-post-body">
                   <%- post.content %>
                 </div>
+
+                <%- include("./partials/reactions.ejs", {
+                  post: post,
+                  canReact: typeof canReact !== 'undefined' && canReact,
+                  reactionPalette: typeof reactionPalette !== 'undefined' ? reactionPalette : []
+                }) %>
 
                 <div class="forums-post-actions" aria-label="Post actions">
                   <div class="forums-post-actions-primary">
@@ -871,6 +888,73 @@
     if (!trigger) return;
     document.getElementById('pollImageModalImg').src = trigger.dataset.imgSrc || '';
     document.getElementById('pollImageModalImg').alt = trigger.dataset.imgAlt || '';
+  });
+})();
+</script>
+
+<script>
+(function () {
+  // Reaction toggling. The server returns the post's updated reactions, which
+  // are re-rendered in place (textContent / attributes only, never innerHTML).
+  function render(container, reactions) {
+    var list = container.querySelector('.forums-reactions-list');
+    var canReact = container.getAttribute('data-can-react') === '1';
+    while (list.firstChild) list.removeChild(list.firstChild);
+    reactions.forEach(function (r) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'forums-reaction' + (r.reacted ? ' is-mine' : '');
+      btn.setAttribute('data-emoji', r.emoji.key);
+      btn.title = (r.users || []).join(', ');
+      if (!canReact) btn.disabled = true;
+      if (r.emoji.type === 'custom') {
+        var img = document.createElement('img');
+        img.src = r.emoji.imageUrl;
+        img.alt = ':' + r.emoji.name + ':';
+        img.className = 'forums-reaction-img';
+        btn.appendChild(img);
+      } else {
+        var span = document.createElement('span');
+        span.className = 'forums-reaction-emoji';
+        span.textContent = r.emoji.key;
+        btn.appendChild(span);
+      }
+      var count = document.createElement('span');
+      count.className = 'forums-reaction-count';
+      count.textContent = String(r.count);
+      btn.appendChild(count);
+      list.appendChild(btn);
+    });
+  }
+
+  function toggle(container, emoji) {
+    var postId = container.getAttribute('data-post-id');
+    container.classList.add('is-busy');
+    fetch('/forums/post/' + encodeURIComponent(postId) + '/react', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ emoji: emoji })
+    })
+      .then(function (res) { return res.json().catch(function () { return { success: false }; }); })
+      .then(function (data) {
+        if (data && data.success) {
+          render(container, data.reactions || []);
+        } else if (data && data.message) {
+          window.alert(data.message);
+        }
+      })
+      .catch(function () { window.alert('Could not save your reaction. Please try again.'); })
+      .finally(function () { container.classList.remove('is-busy'); });
+  }
+
+  document.addEventListener('click', function (event) {
+    var target = event.target.closest('.forums-reactions .forums-reaction[data-emoji], .forums-reactions .forums-reaction-option');
+    if (!target) return;
+    var container = target.closest('.forums-reactions');
+    if (!container || container.getAttribute('data-can-react') !== '1' || container.classList.contains('is-busy')) return;
+    event.preventDefault();
+    toggle(container, target.getAttribute('data-emoji'));
   });
 })();
 </script>

@@ -48,6 +48,15 @@ import { getWebAnnouncement } from "../controllers/announcementController.js";
 import { MessageBuilder, Webhook } from "discord-webhook-node";
 import { sendWebhookMessage } from "../lib/discord/webhooks.mjs";
 import { hasActiveWebBan } from "../controllers/discordPunishmentController.js";
+import {
+  addReaction,
+  getPostEmojiKeys,
+  getReactionSummaries,
+  hasReaction,
+  removeReaction,
+} from "../controllers/forumReactionController.js";
+import { getBridgeByCategoryId } from "../controllers/forumBridgeController.js";
+import { WEB_REACTION_PALETTE, isAllowedWebReaction, parseEmojiKey } from "../lib/forums/reactionEmoji.mjs";
 
 const PERMISSIONS = {
   MODERATE: "zander.forums.moderate",
@@ -855,6 +864,26 @@ export default function forumRoutes(
         return null;
       });
 
+      // Reactions, and the Discord post this discussion is bridged to (if any).
+      try {
+        const reactionMap = await getReactionSummaries(posts.map((p) => p.postId), viewerUserId);
+        posts.forEach((p) => {
+          p.reactions = reactionMap.get(p.postId) || [];
+        });
+      } catch (reactionError) {
+        console.error("[FORUMS] Failed to load reactions", reactionError);
+        posts.forEach((p) => {
+          p.reactions = [];
+        });
+      }
+      let discordPostUrl = null;
+      if (features.discord?.forumBridge && discussion.discordThreadId) {
+        const bridge = await getBridgeByCategoryId(discussion.categoryId).catch(() => null);
+        if (bridge) discordPostUrl = `https://discord.com/channels/${bridge.guildId}/${discussion.discordThreadId}`;
+      }
+      const canReact =
+        isLoggedIn(req) && discussion.status === "published" && !discussion.isArchived;
+
       await renderForumsView(
         app,
         res,
@@ -878,6 +907,9 @@ export default function forumRoutes(
           canDeleteAnyPost: userCanDeleteAnyPost(req),
           moveCategories: allCategories.flat,
           canPublishDiscussion: isOwnThread || canModerateThread,
+          canReact,
+          reactionPalette: WEB_REACTION_PALETTE,
+          discordPostUrl,
         },
         config,
         features
@@ -1021,6 +1053,57 @@ export default function forumRoutes(
   };
 
   app.post("/forums/discussion/:discussionId/reply", discussionReplyHandler);
+
+  // Toggle a reaction on a post (JSON). Website reactions sync to Discord when
+  // the discussion is bridged.
+  app.post("/forums/post/:postId/react", async function (req, res) {
+    if (!features.forums) return res.status(404).send({ success: false, message: "Forums are disabled." });
+
+    const userId = getCurrentUserId(req);
+    if (!userId) return res.status(401).send({ success: false, message: "Sign in to react." });
+    if (await hasActiveWebBan(userId)) {
+      return res.status(403).send({ success: false, message: "You can't react while banned." });
+    }
+
+    const postId = Number.parseInt(req.params.postId, 10);
+    const post = postId ? await getPostById(postId) : null;
+    if (!post) return res.status(404).send({ success: false, message: "Post not found." });
+
+    const result = await getDiscussionWithCategory(post.discussionId);
+    if (!result || !userCanViewCategory(result.category, req)) {
+      return res.status(404).send({ success: false, message: "Post not found." });
+    }
+    if (result.discussion.status !== "published" || result.discussion.isArchived) {
+      return res.status(403).send({ success: false, message: "This discussion can't be reacted to." });
+    }
+
+    const parsed = parseEmojiKey(String(req.body?.emoji || ""));
+    if (!parsed) return res.status(400).send({ success: false, message: "Unknown emoji." });
+
+    try {
+      const existingKeys = await getPostEmojiKeys(postId);
+      if (await hasReaction(postId, userId, parsed.key)) {
+        const removed = await removeReaction(postId, userId, parsed.key, { onlySource: "web" });
+        if (!removed) {
+          return res.status(409).send({
+            success: false,
+            message: "You added this reaction in Discord. Remove it there.",
+          });
+        }
+      } else {
+        if (!isAllowedWebReaction(parsed.key, existingKeys)) {
+          return res.status(400).send({ success: false, message: "That emoji isn't available here." });
+        }
+        await addReaction(postId, userId, parsed.key);
+      }
+
+      const summaries = await getReactionSummaries([postId], userId);
+      return res.send({ success: true, reactions: summaries.get(postId) || [] });
+    } catch (error) {
+      console.error("[FORUMS] Failed to toggle reaction", error);
+      return res.status(500).send({ success: false, message: "Couldn't save your reaction." });
+    }
+  });
   app.post(
     "/forums/discussion/:discussionId/:slug/reply",
     discussionReplyHandler

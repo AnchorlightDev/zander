@@ -15,6 +15,9 @@ export class GuildMessageUpdateListener extends Listener {
   }
 
   async run(oldMessage, newMessage) {
+    // Uncached messages arrive as partials (the client enables message
+    // partials for the forum bridge). There is no "before" to log for them.
+    if (oldMessage.partial || !oldMessage.author) return;
     // Check if the author is a bot and stop if true.
     if (newMessage.author?.bot) return;
     // Discord also fires messageUpdate when an embed resolves; only a real

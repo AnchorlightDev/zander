@@ -2,6 +2,7 @@ import { Command } from "@sapphire/framework";
 import {Colors, EmbedBuilder, MessageFlags, SlashCommandBuilder, InteractionContextType } from "discord.js";
 import { hasPermission } from "../lib/discord/permissions.mjs";
 import { describeRankRoleSync, syncMemberRankRoles, stripAllTrackedRankRoles } from "../lib/discord/rankRoleSync.mjs";
+import { syncLinkedRoleForDiscordId } from "../lib/discord/linkedRoleSync.mjs";
 import { UserGetter, getUserPermissions, linkDiscordAccount, mergePlaceholderUser, resolveDiscordLinkConflict, unlinkDiscordAccount } from "../controllers/userController.js";
 import { retryDeferredDiscordRoles } from "../controllers/webstoreController.js";
 import db from "../controllers/databaseController.js";
@@ -125,6 +126,10 @@ export class ForceLinkCommand extends Command {
     const discordHandle = targetDiscordUser.username;
     await linkDiscordAccount(mcUser.userId, targetDiscordUser.id, discordHandle);
     const syncResult = await syncMemberRankRoles(mcUser.userId);
+    await syncLinkedRoleForDiscordId(targetDiscordUser.id);
+    if (mcUser.discordId && mcUser.discordId !== targetDiscordUser.id) {
+      await syncLinkedRoleForDiscordId(mcUser.discordId);
+    }
 
     // Grant any webstore Discord roles that were deferred while unlinked.
     try {

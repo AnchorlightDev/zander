@@ -14,6 +14,7 @@ import {
 import { normaliseBirthday } from "../../lib/birthday.mjs";
 import { normaliseTimeZone } from "../../lib/timezones.mjs";
 import { syncMemberRankRoles } from "../../lib/discord/rankRoleSync.mjs";
+import { syncLinkedRoleForDiscordId } from "../../lib/discord/linkedRoleSync.mjs";
 import {
   required,
   optional,
@@ -587,6 +588,7 @@ export default function userApiRoute(app, config, db, features, lang) {
           if (linkedWebUser) {
             await syncMemberRankRoles(linkedWebUser.userId);
           }
+          await syncLinkedRoleForDiscordId(discordId);
           return res.send({
             success: true,
             alertType: "success",

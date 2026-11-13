@@ -1,0 +1,35 @@
+<%#
+  Reaction bar for one forum post.
+  Locals: post (with post.reactions from getReactionSummaries), canReact, reactionPalette
+%>
+<% const postReactions = Array.isArray(post.reactions) ? post.reactions : []; %>
+<div class="forums-reactions" data-post-id="<%= post.postId %>" data-can-react="<%= canReact ? '1' : '0' %>">
+  <div class="forums-reactions-list">
+    <% postReactions.forEach(function (r) { %>
+      <button type="button"
+              class="forums-reaction<%= r.reacted ? ' is-mine' : '' %>"
+              data-emoji="<%= r.emoji.key %>"
+              title="<%= r.users.join(', ') %>"
+              <%= canReact ? '' : 'disabled' %>>
+        <% if (r.emoji.type === 'custom') { %>
+          <img src="<%= r.emoji.imageUrl %>" alt=":<%= r.emoji.name %>:" class="forums-reaction-img" loading="lazy">
+        <% } else { %>
+          <span class="forums-reaction-emoji"><%= r.emoji.key %></span>
+        <% } %>
+        <span class="forums-reaction-count"><%= r.count %></span>
+      </button>
+    <% }); %>
+  </div>
+  <% if (canReact) { %>
+    <div class="dropdown forums-reaction-picker">
+      <button type="button" class="forums-reaction forums-reaction-add" data-bs-toggle="dropdown" aria-expanded="false" title="Add a reaction">
+        <i class="fa-regular fa-face-smile" aria-hidden="true"></i><span class="visually-hidden">Add a reaction</span>
+      </button>
+      <div class="dropdown-menu forums-reaction-menu">
+        <% reactionPalette.forEach(function (emoji) { %>
+          <button type="button" class="forums-reaction-option" data-emoji="<%= emoji %>"><%= emoji %></button>
+        <% }); %>
+      </div>
+    </div>
+  <% } %>
+</div>
