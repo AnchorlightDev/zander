@@ -1,6 +1,7 @@
 import {
   hasPermission,
   isFeatureWebRouteEnabled,
+  setBannerCookie,
 } from "../../api/common.js";
 import { adminViewData } from "../../admin/adminHelpers.js";
 import { prisma } from "../../controllers/databaseController.js";
@@ -73,9 +74,15 @@ export default function dashboardServersSiteRoute(
     const id = Number(req.query.id);
 
     const [server, announcementWeb] = await Promise.all([
-      id ? prisma.servers.findUnique({ where: { serverId: id } }) : Promise.resolve(null),
+      Number.isInteger(id) && id > 0 ? prisma.servers.findUnique({ where: { serverId: id } }) : Promise.resolve(null),
       getWebAnnouncement(),
     ]);
+
+    // The editor reads serverApiData unguarded; a stale link would 500.
+    if (!server) {
+      setBannerCookie("danger", "Server not found.", res);
+      return res.redirect("/dashboard/servers");
+    }
 
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/servers/server-editor", {

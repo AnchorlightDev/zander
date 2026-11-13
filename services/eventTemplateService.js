@@ -7,6 +7,7 @@ import { prisma } from "../controllers/databaseController.js";
 import { createEvent, logEventAudit, upsertEventAnnouncements } from "./eventService.js";
 import { EVENT_VISIBILITY, normaliseRankSlugs } from "../lib/eventAccess.js";
 import { missingDefaults, parseOffsetMinutes } from "../lib/eventAnnouncements.js";
+import { sanitizeForumHtml } from "../lib/htmlSanitize.js";
 
 /** Reject anything outside the known set so a bad payload cannot invent a visibility. */
 function coerceVisibility(value, fallback = "public") {
@@ -64,7 +65,7 @@ export async function createTemplate(data, creatorId) {
     data: {
       title: data.title,
       description: data.description || null,
-      teaserDescription: data.teaserDescription || null,
+      teaserDescription: data.teaserDescription ? sanitizeForumHtml(data.teaserDescription) : null,
       defaultStartTime: data.defaultStartTime || null,
       defaultEndTime: data.defaultEndTime || null,
       defaultDurationMins: data.defaultDurationMins || null,
@@ -132,7 +133,8 @@ export async function updateTemplate(templateId, data, actorId) {
 
   if (data.title !== undefined) updateData.title = data.title;
   if (data.description !== undefined) updateData.description = data.description;
-  if (data.teaserDescription !== undefined) updateData.teaserDescription = data.teaserDescription;
+  if (data.teaserDescription !== undefined)
+    updateData.teaserDescription = data.teaserDescription ? sanitizeForumHtml(data.teaserDescription) : null;
   if (data.defaultStartTime !== undefined) updateData.defaultStartTime = data.defaultStartTime;
   if (data.defaultEndTime !== undefined) updateData.defaultEndTime = data.defaultEndTime;
   if (data.defaultDurationMins !== undefined) updateData.defaultDurationMins = data.defaultDurationMins;
@@ -506,29 +508,19 @@ export function computeNextGenerationDate(template, fromDate = null) {
     const days = recurrenceDaysOf(template);
     if (days.length === 0) return null;
 
-    // Find the next occurrence that is at least advanceDays in the future
-    const targetEventDate = new Date(base.getTime() + advanceDays * 86400000);
-    const targetDay = targetEventDate.getUTCDay();
-
-    // Find soonest day-of-week >= targetDay, then wrap
-    for (let offset = 0; offset < 7; offset++) {
-      const checkDay = (targetDay + offset) % 7;
-      if (days.includes(checkDay)) {
-        const result = new Date(targetEventDate);
-        const diff = ((checkDay - targetDay) + 7) % 7;
-        result.setUTCDate(result.getUTCDate() + diff);
-        result.setUTCHours(0, 0, 0, 0);
-        // The draft should be generated now (today), the event is on result
-        // So generate trigger = result - advanceDays
-        const generateOn = new Date(result.getTime() - advanceDays * 86400000);
-        // If generateOn is not strictly in the future, advance by one week
-        if (generateOn <= base) {
-          result.setUTCDate(result.getUTCDate() + 7);
-          return new Date(result.getTime() - advanceDays * 86400000);
-        }
-        return generateOn;
-      }
+    // Walk forward day by day from (base + advanceDays) and stop at the first
+    // recurrence day whose generation time (event day - advanceDays) is still
+    // after base. Every recurrence day gets its own generation, not just one a week.
+    const start = new Date(base.getTime() + advanceDays * 86400000);
+    start.setUTCHours(0, 0, 0, 0);
+    for (let offset = 0; offset < 14; offset++) {
+      const eventDay = new Date(start);
+      eventDay.setUTCDate(eventDay.getUTCDate() + offset);
+      if (!days.includes(eventDay.getUTCDay())) continue;
+      const generateOn = new Date(eventDay.getTime() - advanceDays * 86400000);
+      if (generateOn > base) return generateOn;
     }
+    return null;
   }
 
   if (template.recurrenceType === "daily") {
@@ -605,6 +597,25 @@ export function computeNextEventDate(template, fromDate = null) {
   }
 
   return null;
+}
+
+/**
+ * The event date a due generation is for. A weekly template's nextGenerateAt
+ * is (event day - draftAdvanceDays), so the target is the first recurrence day
+ * on or after nextGenerateAt + draftAdvanceDays, not the nearest one after
+ * today. Other recurrence types keep computeNextEventDate's behaviour.
+ */
+export function computeTargetEventDate(template, now = new Date()) {
+  if (template.recurrenceType === "weekly" && template.nextGenerateAt) {
+    const advanceDays = template.draftAdvanceDays || 7;
+    const dayBefore = new Date(new Date(template.nextGenerateAt).getTime() + (advanceDays - 1) * 86400000);
+    const target = computeNextEventDate(template, dayBefore);
+    const today = new Date(now);
+    today.setUTCHours(0, 0, 0, 0);
+    // A generation missed by a long outage would target a day already past.
+    if (target && target >= today) return target;
+  }
+  return computeNextEventDate(template, now);
 }
 
 /**

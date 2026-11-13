@@ -130,8 +130,8 @@
 
 <script>
 (function () {
-  const JOB = <%- JSON.stringify(job) %>;
-  const PICKERS = <%- JSON.stringify(pickers) %>;
+  const JOB = <%- JSON.stringify(job).replace(/</g, '\\u003c') %>;
+  const PICKERS = <%- JSON.stringify(pickers).replace(/</g, '\\u003c') %>;
   const PH_FIELDS = { command: ["command"], discord_message: ["embedTitle", "embedDescription"], broadcast: ["message"] };
 
   const $ = (id) => document.getElementById(id);

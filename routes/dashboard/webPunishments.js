@@ -12,6 +12,8 @@ import {
   getPunishmentById,
 } from "../../controllers/discordPunishmentController.js";
 import { getUserByUsername } from "../../services/profileService.js";
+import { getUserPermissions } from "../../controllers/userController.js";
+import { hasPermission as holdsNode } from "../../lib/discord/permissions.mjs";
 import { sendPunishmentWebhook } from "../../commands/punish.mjs";
 
 const MANAGE_PERMISSION = "zander.web.punishment.manage";
@@ -82,6 +84,26 @@ export default function dashboardWebPunishmentsRoute(
     const targetUser = await getUserByUsername(username);
     if (!targetUser) {
       setBannerCookie("danger", `User "${username}" not found.`, res);
+      return res.redirect("/dashboard/web-punishments");
+    }
+
+    // Same rule as users.js mayRecoverAccount: never yourself, and never anyone
+    // holding a permission you lack (an admin, or the owner holding `*`).
+    const actorUser = req.session?.user;
+    if (!actorUser || Number(actorUser.userId) === Number(targetUser.userId)) {
+      setBannerCookie("danger", "You cannot punish yourself.", res);
+      return res.redirect("/dashboard/web-punishments");
+    }
+    let outranked = true;
+    try {
+      const targetPermissions = await getUserPermissions(targetUser);
+      const actorPermissions = Array.isArray(actorUser.permissions) ? actorUser.permissions : [];
+      outranked = !(targetPermissions || []).every((node) => holdsNode(actorPermissions, node));
+    } catch (error) {
+      console.error("[web-punishments] Could not load target permissions:", error);
+    }
+    if (outranked) {
+      setBannerCookie("danger", `You cannot punish ${targetUser.username}: they hold permissions you do not.`, res);
       return res.redirect("/dashboard/web-punishments");
     }
 

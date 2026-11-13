@@ -95,7 +95,7 @@ async function fetchJson(fetchFn, url, fallback = null) {
 export default function dashboardEventsSiteRoute(app, fetch, config, db, features, lang) {
   function userCanEditEvent(ev, req) {
     const userPerms = req.session.user?.permissions || [];
-    const isCreator = ev.creatorId && ev.creatorId === req.session.user?.userId;
+    const isCreator = Boolean(ev.creatorId) && Number(ev.creatorId) === Number(req.session.user?.userId);
     const hasReview = hasPermissionNode(userPerms, "zander.web.events.review");
     const hasEdit = hasPermissionNode(userPerms, "zander.web.events.edit");
 
@@ -103,7 +103,9 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     if (["approved", "published", "pending_review"].includes(ev.status)) {
       return hasReview;
     }
-    return hasEdit || hasReview;
+    // Draft/rejected: reviewers, or editors on their own draft. Drafts with no
+    // creator (generated from a recurring template) stay open to any editor.
+    return hasReview || (hasEdit && (isCreator || !ev.creatorId));
   }
 
   function userIsReviewer(req) {
@@ -264,6 +266,8 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
       }
     }
     if (!ev) ev = { announcements: await defaultAnnouncementsOrEmpty("create event") };
+    // The editor renders the teaser raw; template teasers were stored unsanitised.
+    if (ev.teaserDescription) ev.teaserDescription = sanitizeForumHtml(ev.teaserDescription);
 
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-editor", {
@@ -321,6 +325,8 @@ export default function dashboardEventsSiteRoute(app, fetch, config, db, feature
     }
 
     const isPublished = ev.status === "published";
+    // The editor renders the teaser raw; older rows predate save-time sanitising.
+    if (ev.teaserDescription) ev.teaserDescription = sanitizeForumHtml(ev.teaserDescription);
 
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/events/events-editor", {

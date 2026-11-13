@@ -276,7 +276,7 @@ export default function dashboardRanksRoute(
     const wanted = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
 
     try {
-      const { known } = await getRankPermissions(rankSlug);
+      const { known, unmanaged } = await getRankPermissions(rankSlug);
       const diff = diffPermissions(known, wanted);
 
       // Staff may only hand out (or take away) nodes they hold themselves.
@@ -284,6 +284,18 @@ export default function dashboardRanksRoute(
       // own group zander.web.apikeys, zander.web.settings, and so on.
       const actorPermissions = req.session?.user?.permissions ?? [];
       const mayChange = (node) => holdsNode(actorPermissions, node);
+
+      // A rank holding anything the actor lacks (an admin group, or one with
+      // `*`) is above them: refuse changes so staff cannot strip a superior's
+      // access. Same rule as users.js mayRecoverAccount.
+      const outranking = [...known, ...(unmanaged || [])].filter((node) => !mayChange(node));
+      if (outranking.length) {
+        console.warn(
+          `[RANKS] ${req.session?.user?.username ?? "unknown"} tried to change ${rankSlug}, which holds nodes they do not: ${outranking.join(", ")}`
+        );
+        setBannerCookie("danger", `You cannot change ${rankSlug}: it holds permissions you do not (${outranking.join(", ")}).`, res);
+        return res.redirect(`/dashboard/ranks/${encodeURIComponent(rankSlug)}/permissions`);
+      }
       const changes = {
         grant: diff.grant.filter(mayChange),
         revoke: diff.revoke.filter(mayChange),

@@ -10,6 +10,7 @@ import {
   moveHologramFrame,
 } from "../../controllers/announcementController.js";
 import { prisma } from "../../controllers/databaseController.js";
+import { isSafeLocalPath } from "../../lib/safeLocalPath.mjs";
 import {
   createPost,
   updatePost,
@@ -18,6 +19,8 @@ import {
   setPostEnabled,
   listPosts,
 } from "../../services/announcementPostService.js";
+
+const returnPath = (value, fallback) => (isSafeLocalPath(value) ? value : fallback);
 
 const STATUSES = ["active", "scheduled", "ended", "disabled"];
 
@@ -274,7 +277,7 @@ export default function dashboardAnnouncementSiteRoute(app, fetch, config, db, f
         console.error("[dashboard/announcements] delete failed:", error?.message || error);
       }
     }
-    return res.redirect(req.body?.returnTo || "/dashboard/announcements");
+    return res.redirect(returnPath(req.body?.returnTo, "/dashboard/announcements"));
   });
 
   //
@@ -292,7 +295,7 @@ export default function dashboardAnnouncementSiteRoute(app, fetch, config, db, f
         console.error("[dashboard/announcements] toggle failed:", error?.message || error);
       }
     }
-    return res.redirect(req.body?.returnTo || "/dashboard/announcements");
+    return res.redirect(returnPath(req.body?.returnTo, "/dashboard/announcements"));
   });
 
   //
@@ -309,7 +312,7 @@ export default function dashboardAnnouncementSiteRoute(app, fetch, config, db, f
         console.error("[dashboard/announcements] move failed:", error?.message || error);
       }
     }
-    return res.redirect(req.body?.returnTo || "/dashboard/announcements?platform=hologram");
+    return res.redirect(returnPath(req.body?.returnTo, "/dashboard/announcements?platform=hologram"));
   });
 
   //

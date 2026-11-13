@@ -164,6 +164,22 @@ export default function dashboardForumsRoutes(
       const viewPermission = (req.body.viewPermission || "").trim() || null;
       const postPermission = (req.body.postPermission || "").trim() || null;
 
+      // A descendant as parent makes a cycle, and categories in a cycle drop
+      // out of both trees (only parentless rows are roots).
+      if (parentCategoryId) {
+        const seen = new Set();
+        let cursor = parentCategoryId;
+        while (cursor && !seen.has(cursor)) {
+          if (cursor === categoryId) {
+            setBannerCookie("danger", "A category cannot be moved under one of its own subcategories.", res);
+            return res.redirect(`/dashboard/forums/categories?edit=${categoryId}`);
+          }
+          seen.add(cursor);
+          const node = await getCategoryById(cursor);
+          cursor = node?.parentCategoryId ? Number(node.parentCategoryId) : null;
+        }
+      }
+
       try {
         await updateCategory(categoryId, {
           name,

@@ -136,7 +136,7 @@
 
 <script>
 (function () {
-  const STATE = <%- JSON.stringify(wizardState) %>;
+  const STATE = <%- JSON.stringify(wizardState).replace(/</g, '\\u003c') %>;
   const HOLOGRAMS_ENABLED = <%= hologramsEnabled ? 'true' : 'false' %>;
 
   const COLOURS = [

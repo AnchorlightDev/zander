@@ -6,9 +6,7 @@
   function renderParentOptions(categories, depth, selectedId, excludeId) {
     categories.forEach(function (category) {
       if (excludeId && category.categoryId === excludeId) {
-        if (category.children && category.children.length) {
-          renderParentOptions(category.children, depth + 1, selectedId, excludeId);
-        }
+        // Skip the category and its descendants: either as parent would make a cycle.
       } else {
 %>
   <option value="<%= category.categoryId %>" <%= selectedId === category.categoryId ? 'selected' : '' %>>

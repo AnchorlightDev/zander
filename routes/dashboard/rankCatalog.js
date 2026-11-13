@@ -44,6 +44,10 @@ function parsePerkGroups(raw) {
   return [];
 }
 
+// Viewing the list needs zander.web.webstore; any change needs .manage,
+// matching webstoreCategories.js and webstoreProducts.js.
+const MANAGE_NODE = "zander.web.webstore.manage";
+
 export default function dashboardRankCatalogRoute(app, config, db, features, lang) {
 
   // ── List ──────────────────────────────────────────────────────────────────
@@ -81,7 +85,7 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
   // ── Create GET ────────────────────────────────────────────────────────────
   app.get("/dashboard/rank-catalog/create", async (req, res) => {
     if (!await isFeatureWebRouteEnabled(app, features.webstore, req, res, features)) return;
-    if (!await hasPermission("zander.web.webstore", req, res, features)) return;
+    if (!await hasPermission(MANAGE_NODE, req, res, features)) return;
 
     const [stripeOptions, categories, announcementWeb] = await Promise.all([
       getStripeOptions(),
@@ -104,7 +108,7 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
   // ── Create POST ───────────────────────────────────────────────────────────
   app.post("/dashboard/rank-catalog/create", async (req, res) => {
     if (!await isFeatureWebRouteEnabled(app, features.webstore, req, res, features)) return;
-    if (!await hasPermission("zander.web.webstore", req, res, features)) return;
+    if (!await hasPermission(MANAGE_NODE, req, res, features)) return;
 
     const body = req.body || {};
     if (!body.displayName?.trim()) {
@@ -132,7 +136,7 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
   // ── Edit GET ──────────────────────────────────────────────────────────────
   app.get("/dashboard/rank-catalog/:id/edit", async (req, res) => {
     if (!await isFeatureWebRouteEnabled(app, features.webstore, req, res, features)) return;
-    if (!await hasPermission("zander.web.webstore", req, res, features)) return;
+    if (!await hasPermission(MANAGE_NODE, req, res, features)) return;
 
     const [entry, stripeOptions, categories, announcementWeb] = await Promise.all([
       getCatalogEntry(req.params.id),
@@ -141,7 +145,7 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
       getWebAnnouncement(),
     ]);
 
-    if (!entry) return res.status(404).redirect("/dashboard/rank-catalog");
+    if (!entry) return res.redirect("/dashboard/rank-catalog");
 
     return res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/rank-catalog/form", {
@@ -158,7 +162,7 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
   // ── Edit POST ─────────────────────────────────────────────────────────────
   app.post("/dashboard/rank-catalog/:id/edit", async (req, res) => {
     if (!await isFeatureWebRouteEnabled(app, features.webstore, req, res, features)) return;
-    if (!await hasPermission("zander.web.webstore", req, res, features)) return;
+    if (!await hasPermission(MANAGE_NODE, req, res, features)) return;
 
     const body = req.body || {};
     if (!body.displayName?.trim()) {
@@ -188,7 +192,7 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
   // full edit form and re-submitting every field.
   app.post("/dashboard/rank-catalog/:id/visibility", async (req, res) => {
     if (!await isFeatureWebRouteEnabled(app, features.webstore, req, res, features)) return;
-    if (!await hasPermission("zander.web.webstore", req, res, features)) return;
+    if (!await hasPermission(MANAGE_NODE, req, res, features)) return;
 
     try {
       const visible = (req.body || {}).visible;
@@ -205,7 +209,7 @@ export default function dashboardRankCatalogRoute(app, config, db, features, lan
   // ── Delete POST ───────────────────────────────────────────────────────────
   app.post("/dashboard/rank-catalog/:id/delete", async (req, res) => {
     if (!await isFeatureWebRouteEnabled(app, features.webstore, req, res, features)) return;
-    if (!await hasPermission("zander.web.webstore", req, res, features)) return;
+    if (!await hasPermission(MANAGE_NODE, req, res, features)) return;
 
     try {
       await deleteCatalogEntry(req.params.id);

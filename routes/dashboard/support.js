@@ -1,5 +1,6 @@
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { isSafeLocalPath } from "../../lib/safeLocalPath.mjs";
+import { supportPanelRows } from "../../lib/supportPanelLayout.mjs";
 import {
   isFeatureWebRouteEnabled,
   getGlobalImage,
@@ -384,7 +385,7 @@ export default function supportDashboardRoutes(
       const { name, description, discordCategoryId } = req.body;
       await createSupportCategory(name, description, discordCategoryId);
 
-      await updateSupportMessage(client);
+      await refreshSupportPanel(client, res);
 
       return res.redirect("/dashboard/support/categories");
     } catch (error) {
@@ -469,7 +470,7 @@ export default function supportDashboardRoutes(
       const { name, description, discordCategoryId } = req.body;
       await updateSupportCategory(id, name, description, discordCategoryId);
 
-      await updateSupportMessage(client);
+      await refreshSupportPanel(client, res);
 
       return res.redirect("/dashboard/support/categories");
     } catch (error) {
@@ -499,7 +500,7 @@ export default function supportDashboardRoutes(
         const { id } = req.params;
         await deleteSupportCategory(id);
 
-        await updateSupportMessage(client);
+        await refreshSupportPanel(client, res);
 
         return res.redirect("/dashboard/support/categories");
       } catch (error) {
@@ -747,6 +748,31 @@ export default function supportDashboardRoutes(
     });
   }
 
+  // Discord caps a row at 5 buttons; one row per 5 categories (up to 25).
+  function supportPanelComponents(categories) {
+    return supportPanelRows(categories).map((row) =>
+      new ActionRowBuilder().addComponents(
+        row.map((button) =>
+          new ButtonBuilder()
+            .setCustomId(button.customId)
+            .setLabel(button.label)
+            .setStyle(ButtonStyle.Primary)
+        )
+      )
+    );
+  }
+
+  // The category change is already saved when the panel refresh runs, so a
+  // Discord failure is reported as a warning rather than an error page.
+  async function refreshSupportPanel(client, res) {
+    try {
+      await updateSupportMessage(client);
+    } catch (error) {
+      console.error("updateSupportMessage: failed to refresh the support panel", error);
+      setBannerCookie("warning", "Saved, but the Discord support panel could not be refreshed.", res);
+    }
+  }
+
   async function postSupportMessage(client) {
     if (!client) {
       console.warn(
@@ -777,18 +803,9 @@ export default function supportDashboardRoutes(
     }
     const categories = await getSupportCategories();
 
-    const buttons = categories.map((category) =>
-      new ButtonBuilder()
-        .setCustomId(`support_category_${category.categoryId}`)
-        .setLabel(category.name)
-        .setStyle(ButtonStyle.Primary)
-    );
-
-    const row = new ActionRowBuilder().addComponents(buttons);
-
     await channel.send({
       content: "Please select a category to create a support ticket:",
-      components: [row],
+      components: supportPanelComponents(categories),
     });
   }
 
@@ -828,18 +845,9 @@ export default function supportDashboardRoutes(
     if (message) {
       const categories = await getSupportCategories();
 
-      const buttons = categories.map((category) =>
-        new ButtonBuilder()
-          .setCustomId(`support_category_${category.categoryId}`)
-          .setLabel(category.name)
-          .setStyle(ButtonStyle.Primary)
-      );
-
-      const row = new ActionRowBuilder().addComponents(buttons);
-
       await message.edit({
         content: "Please select a category to create a support ticket:",
-        components: [row],
+        components: supportPanelComponents(categories),
       });
     }
   }
