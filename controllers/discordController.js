@@ -1,5 +1,6 @@
 import { SapphireClient, ApplicationCommandRegistries, RegisterBehavior } from "@sapphire/framework";
-import { GatewayIntentBits, Partials } from "discord.js";
+import { Client, GatewayIntentBits, Partials } from "discord.js";
+import { isFatalLoginError, nextLoginDelayMs } from "../lib/discord/loginRetry.mjs";
 
 // Use BulkOverwrite instead of the default per-command Overwrite.
 // The default behavior makes one Discord API call per command on every startup
@@ -68,5 +69,44 @@ client.on("shardError", (error) => {
   console.warn("Discord gateway shard error (auto-reconnecting):", error?.message || error);
 });
 
-client.login(process.env.discordAPIKey);
+// Log in, retrying on transient failures. The gateway sometimes answers the
+// initial websocket handshake with a 503 (seen in Sentry, Nov 2026). client.login()
+// then rejects; unhandled, that surfaced as an error and left the bot offline
+// until the next restart, because discord.js only reconnects sessions that
+// already logged in once.
+async function loginWithRetry(attempt = 1) {
+  try {
+    // Fall back to Sapphire's full login if its stores never got loaded.
+    const storesLoaded = (client.stores?.get("listeners")?.size || 0) > 0;
+    if (attempt === 1 || !storesLoaded) {
+      await client.login(process.env.discordAPIKey);
+    } else {
+      // Sapphire's login() loads every command/listener store before connecting,
+      // and that already happened on the first attempt. Retry with the plain
+      // discord.js login so pieces aren't loaded twice.
+      await Client.prototype.login.call(client, process.env.discordAPIKey);
+    }
+  } catch (error) {
+    if (isFatalLoginError(error)) {
+      console.error("Discord login failed and will not be retried:", error?.message || error);
+      return;
+    }
+    const delay = nextLoginDelayMs(attempt);
+    console.warn(
+      `Discord login failed (attempt ${attempt}): ${error?.message || error}. Retrying in ${Math.round(delay / 1000)}s.`
+    );
+    // A failed login can leave a half-open websocket manager behind; reset it
+    // so the next attempt starts clean.
+    try {
+      await client.destroy();
+    } catch {
+      // nothing to clean up
+    }
+    setTimeout(() => {
+      loginWithRetry(attempt + 1);
+    }, delay).unref?.();
+  }
+}
+
+loginWithRetry();
 
