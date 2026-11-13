@@ -10,3 +10,6 @@ graphify-out
 .idea/
 target/
 .vscode/
+
+# Claude working files
+Claude outputs/
