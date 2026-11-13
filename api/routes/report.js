@@ -8,6 +8,22 @@ import {
 } from "../common.js";
 import { Colors } from "discord.js";
 
+/** Discord rejects the whole webhook (400) when an embed field value or title exceeds these. */
+export const EMBED_FIELD_MAX_LENGTH = 1024;
+export const EMBED_TITLE_MAX_LENGTH = 256;
+
+/**
+ * Truncate text for a Discord embed; the full text stays in the dashboard.
+ * @param {unknown} value
+ * @param {number} max
+ */
+export function fitEmbedText(value, max = EMBED_FIELD_MAX_LENGTH) {
+  const text = value === null || value === undefined || value === "" ? "-" : String(value);
+  if (text.length <= max) return text;
+  const note = "… (truncated, see dashboard)";
+  return text.slice(0, max - note.length) + note;
+}
+
 /** Matches reports.reportReason VARCHAR(100) — see prisma/schema.prisma. */
 export const REPORT_REASON_MAX_LENGTH = 100;
 
@@ -124,7 +140,12 @@ export default function reportApiRoute(app, config, db, features, lang) {
               reportReason,
               reportReasonEvidence,
               reportPlatform
-          ) VALUES ((SELECT userId FROM users WHERE username=?), ?, ?, ?, ?)`,
+          ) VALUES ((
+              -- username is not unique: a placeholder row can share a real
+              -- player's name. Prefer the real row, as UserGetter.byUsername does.
+              SELECT userId FROM users WHERE username=?
+              ORDER BY COALESCE(is_placeholder, 0) ASC, userId ASC LIMIT 1
+          ), ?, ?, ?, ?)`,
           [
             reporterUser,
             reportedUser,
@@ -146,15 +167,15 @@ export default function reportApiRoute(app, config, db, features, lang) {
       );
 
       const embed = new MessageBuilder()
-        .setTitle(`New Report: ${reportedUser}`)
-        .addField("Report Platform", reportPlatform, true)
-        .addField("Report By", reporterUser, true)
-        .addField("Report Reason", reportReason)
+        .setTitle(fitEmbedText(`New Report: ${reportedUser}`, EMBED_TITLE_MAX_LENGTH))
+        .addField("Report Platform", fitEmbedText(reportPlatform), true)
+        .addField("Report By", fitEmbedText(reporterUser), true)
+        .addField("Report Reason", fitEmbedText(reportReason))
         .setColor(Colors.Red)
         .setTimestamp();
 
       if (reportReasonEvidence) {
-        embed.addField("Report Evidence", reportReasonEvidence);
+        embed.addField("Report Evidence", fitEmbedText(reportReasonEvidence));
       }
 
       const webhookSent = await sendWebhookMessage(
@@ -164,10 +185,12 @@ export default function reportApiRoute(app, config, db, features, lang) {
       );
 
       if (!webhookSent) {
+        // The report row is already saved and visible in the dashboard; telling
+        // the reporter to retry would only create duplicates.
+        console.error(`[api/report#create] Staff notification failed for report on ${reportedUser}`);
         return res.send({
-          success: false,
-          message:
-            "Report saved, but we couldn't notify staff. Please try again soon.",
+          success: true,
+          message: `Thanks for your submission: ${reportedUser} for ${reportReason}. Staff will review it shortly.`,
         });
       }
 

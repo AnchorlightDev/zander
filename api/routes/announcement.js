@@ -218,12 +218,9 @@ export default function announcementApiRoute(app, config, db, features, lang) {
 
     const now = new Date();
 
-    if (startDate && startDate.getTime() < now.getTime()) {
-      return res.send({
-        success: false,
-        message: "Start date cannot be in the past.",
-      });
-    }
+    // No past-start check on edit (unlike create): a running announcement's
+    // start date is already in the past, and refusing it made every running
+    // announcement uneditable without clearing its schedule.
 
     if (endDate && endDate.getTime() < now.getTime()) {
       return res.send({

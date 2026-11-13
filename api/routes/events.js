@@ -106,7 +106,17 @@ async function eventChangeRefusal(req, eventId) {
   if (["approved", "published"].includes(existing.status) && !isReviewer(req)) {
     return "Only approvers can change an approved or published event.";
   }
-  return null;
+  return othersDraftRefusal(req, existing);
+}
+
+/**
+ * Drafts and rejected events belong to their creator (and reviewers), matching
+ * the dashboard's userCanEditEvent. Creator-less drafts (generated from a
+ * recurring template) stay open to any editor.
+ */
+function othersDraftRefusal(req, existing) {
+  if (!["draft", "rejected"].includes(existing?.status) || !existing.creatorId || isReviewer(req)) return null;
+  return Number(existing.creatorId) === Number(req.session?.user?.userId) ? null : "You can only edit your own events.";
 }
 
 function isEditor(req) {
@@ -325,10 +335,12 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
       const existing = await getEventById(body.eventId);
       if (!existing) return res.send({ success: false, message: "Event not found" });
 
-      // Approved events may only be modified by reviewers
-      if (existing.status === "approved" && !isReviewer(req)) {
-        return res.status(403).send({ success: false, message: "Only approvers can edit an approved event." });
+      // Approved and published events may only be modified by reviewers
+      if (["approved", "published"].includes(existing.status) && !isReviewer(req)) {
+        return res.status(403).send({ success: false, message: `Only approvers can edit an ${existing.status} event.` });
       }
+      const ownRefusal = othersDraftRefusal(req, existing);
+      if (ownRefusal) return res.status(403).send({ success: false, message: ownRefusal });
 
       const { actorId, actorName } = actorFromReq(req);
       const event = await updateEvent(body.eventId, body, actorId, actorName);
@@ -348,6 +360,9 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
     if (!eventId) return res.send({ success: false, message: "eventId is required" });
 
     try {
+      const ownRefusal = othersDraftRefusal(req, await getEventById(eventId));
+      if (ownRefusal) return res.status(403).send({ success: false, message: ownRefusal });
+
       const { actorId, actorName } = actorFromReq(req);
       const event = await submitForReview(eventId, actorId, actorName);
       if (event.alreadySubmitted) {
@@ -709,6 +724,8 @@ export default function eventsApiRoute(app, _config, _db, features, _lang) {
       if ((existing.status === "approved" || existing.status === "published") && !isReviewer(req)) {
         return res.status(403).send({ success: false, message: "Only approvers can delete an approved or published event." });
       }
+      const ownRefusal = othersDraftRefusal(req, existing);
+      if (ownRefusal) return res.status(403).send({ success: false, message: ownRefusal });
       const { actorId, actorName } = actorFromReq(req);
       const event = await deleteEvent(eventId, actorId, actorName);
       return res.send({ success: true, data: event, message: "Event deleted" });

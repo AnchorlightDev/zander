@@ -7,6 +7,9 @@ import { sendWebhookMessage } from "../../lib/discord/webhooks.mjs";
 import { isFeatureEnabled, required } from "../common.js";
 import { checkRateLimit } from "../../lib/rateLimiter.mjs";
 
+// Every message here carries player-supplied text, so nothing may ping.
+const NO_MENTIONS = Object.freeze({ parse: [] });
+
 export default function discordApiRoute(
   app,
   client,
@@ -32,7 +35,7 @@ export default function discordApiRoute(
       const webhookSent = await sendWebhookMessage(
         networkChatLogHook,
         `:twisted_rightwards_arrows: | \`${username}\` switched to \`${server}\``,
-        { context: "api/discord#switch" }
+        { context: "api/discord#switch", allowedMentions: NO_MENTIONS }
       );
 
       if (!webhookSent) {
@@ -81,7 +84,7 @@ export default function discordApiRoute(
       const webhookSent = await sendWebhookMessage(
         networkChatLogHook,
         `**${server}** | \`${username}\` :: ${content}`,
-        { context: "api/discord#chat" }
+        { context: "api/discord#chat", allowedMentions: NO_MENTIONS }
       );
 
       if (!webhookSent) {
@@ -118,7 +121,7 @@ export default function discordApiRoute(
       const webhookSent = await sendWebhookMessage(
         networkChatLogHook,
         `:ballot_box_with_check: | \`${username}\` has joined the Network.`,
-        { context: "api/discord#join" }
+        { context: "api/discord#join", allowedMentions: NO_MENTIONS }
       );
 
       if (!webhookSent) {
@@ -141,7 +144,9 @@ export default function discordApiRoute(
   });
 
   app.post(baseEndpoint + "/leave", async function (req, res) {
-    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 60 })) return;
+    // Callers are game servers/the proxy, so bucket per player: one shared
+    // per-IP bucket would drop leave audits when many players leave at once.
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 60, key: req.body?.username })) return;
     if (!isFeatureEnabled(features.discord, res, lang)) return;
     const username = required(req.body, "username", res);
     if (res.sent) return;
@@ -160,7 +165,7 @@ export default function discordApiRoute(
       const webhookSent = await sendWebhookMessage(
         networkChatLogHook,
         `:negative_squared_cross_mark: | \`${username}\` has left the Network.`,
-        { context: "api/discord#leave" }
+        { context: "api/discord#leave", allowedMentions: NO_MENTIONS }
       );
 
       if (!webhookSent) {
@@ -185,7 +190,9 @@ export default function discordApiRoute(
   });
 
   app.post(baseEndpoint + "/spy/command", async function (req, res) {
-    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 120 })) return;
+    // No rate limit: this is a staff audit trail from API-key-authenticated game
+    // servers, and a limit (even per player) lets someone spam harmless commands
+    // until their sensitive ones go unlogged.
     if (!isFeatureEnabled(features.discord, res, lang)) return;
     const username = required(req.body, "username", res);
     if (res.sent) return;
@@ -202,7 +209,7 @@ export default function discordApiRoute(
       const webhookSent = await sendWebhookMessage(
         networkChatLogHook,
         `:floppy_disk: | **${server}** | \`${username}\` executed command \`${command}\``,
-        { context: "api/discord#spy-command" }
+        { context: "api/discord#spy-command", allowedMentions: NO_MENTIONS }
       );
 
       if (!webhookSent) {
@@ -245,7 +252,7 @@ export default function discordApiRoute(
       const webhookSent = await sendWebhookMessage(
         networkChatLogHook,
         `:speaking_head: | **${server}** | \`${usernameFrom}\` => \`${usernameTo}\`: \`${directMessage}\``,
-        { context: "api/discord#spy-directMessage" }
+        { context: "api/discord#spy-directMessage", allowedMentions: NO_MENTIONS }
       );
 
       if (!webhookSent) {

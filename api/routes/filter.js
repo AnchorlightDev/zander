@@ -19,7 +19,7 @@
  * through (fail open): a filter outage must not silence all chat.
  */
 
-import { isFeatureEnabled, optional, required } from "../common.js";
+import { optional, required } from "../common.js";
 import { UserGetter } from "../../controllers/userController.js";
 import { MessageBuilder, Webhook } from "discord-webhook-node";
 import { Colors } from "discord.js";
@@ -86,9 +86,8 @@ function relevantFlags(details, features) {
 
 export default function filterApiRoute(app, client, config, db, features, lang) {
   app.post("/api/filter", async function (req, res) {
-    if (!features.filter.phrase && !features.filter.link) {
-      if (!isFeatureEnabled(false, res, lang)) return;
-    }
+    // Callers treat success:false as "blocked", so with both modules off the filter must fail open.
+    if (!features.filter.phrase && !features.filter.link) return res.send(CLEAN);
 
     const content = required(req.body, "content", res);
     if (res.sent) return;

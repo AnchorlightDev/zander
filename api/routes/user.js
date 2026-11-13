@@ -4,6 +4,8 @@ import {
   UserLinkGetter,
   getProfilePicture,
   getUserLastSession,
+  mergePlaceholderUser,
+  resolveDiscordLinkConflict,
   getUserStats,
   setProfileDisplayPreferences,
   setProfileSocialConnections,
@@ -271,7 +273,9 @@ export default function userApiRoute(app, config, db, features, lang) {
   });
 
   app.get(baseEndpoint + "/punishments", async function (req, res) {
-    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 60 })) return;
+    // Only reached via self-calls, so req.ip is this server; bucket per looked-up user.
+    const lookupKey = req.query?.uuid || req.query?.username || req.query?.discordId;
+    if (!checkRateLimit(req, res, { windowMs: 60_000, max: 60, key: lookupKey })) return;
 
     const uuid = optional(req.query, "uuid");
     const username = optional(req.query, "username");
@@ -399,7 +403,8 @@ export default function userApiRoute(app, config, db, features, lang) {
   });
 
   app.post(baseEndpoint + "/verify", async function (req, res) {
-    if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 10 })) return;
+    // Called by the game proxy for every player, so bucket per player, not per proxy IP.
+    if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 10, key: req.body?.uuid })) return;
     const username = required(req.body, "username", res);
     if (res.sent) return;
     const uuid = required(req.body, "uuid", res);
@@ -527,7 +532,9 @@ export default function userApiRoute(app, config, db, features, lang) {
   });
 
   app.post(baseEndpoint + "/link", async function (req, res) {
-    if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 10 })) return;
+    // Reached through the /redirect self-call (which limits per browser IP), so
+    // req.ip is this server; bucket per Discord account instead.
+    if (!checkRateLimit(req, res, { windowMs: 15 * 60_000, max: 10, key: req.body?.discordId })) return;
     const discordId = required(req.body, "discordId", res);
     if (res.sent) return;
     const first = required(req.body, "first", res);
@@ -580,6 +587,27 @@ export default function userApiRoute(app, config, db, features, lang) {
       }
 
       let linkUserUUID = linkUser.uuid;
+
+      // users.discordId is not unique, so apply the same conflict rule as the
+      // profile OAuth link and /forcelink: absorb a placeholder row holding
+      // this Discord ID, refuse one held by a real account.
+      const linkTarget = await new UserGetter().byUUID(linkUserUUID);
+      const existingLink = await new UserGetter().byDiscordId(discordId);
+      const linkConflict = resolveDiscordLinkConflict(existingLink, linkTarget?.userId);
+      if (linkConflict === "refuse" || (linkConflict === "absorb" && !linkTarget)) {
+        return res.send({
+          success: false,
+          alertType: "warning",
+          alertContent: `That Discord account is already linked to another Minecraft account.`,
+        });
+      }
+      if (linkConflict === "absorb") {
+        const mergeSummary = await mergePlaceholderUser(existingLink.userId, linkTarget.userId);
+        console.log(
+          `[API] Absorbed placeholder userId=${existingLink.userId} into userId=${linkTarget.userId} while linking Discord`,
+          mergeSummary
+        );
+      }
 
       try {
         const success = await userLinkData.link(linkUserUUID, discordId);
@@ -732,11 +760,6 @@ export default function userApiRoute(app, config, db, features, lang) {
         }
       } else {
         console.log(`Illegal words detected.`);
-        setBannerCookie(
-          "danger",
-          `Illegal words detected, changes not applied.`,
-          res
-        );
         return res.send({ success: false, message: "Illegal words detected." });
       }
     } catch (error) {
