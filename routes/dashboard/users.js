@@ -49,12 +49,21 @@ const EMAIL_PERMISSION = "zander.web.users.email";
 const MANAGE_PERMISSION = "zander.web.users.manage";
 
 async function proxyToApi(fetch, method, path, body) {
+  // Only declare a JSON body when there is one. Fastify rejects an empty body
+  // sent as application/json (FST_ERR_CTP_EMPTY_JSON_BODY), and because
+  // /admin/* is outside /api/ the error handler answers with an HTML page --
+  // so the body-less POSTs (reset-password, resend-verification) always failed.
   const res = await fetch(`${process.env.siteAddress}${path}`, {
     method,
-    headers: internalApiHeaders({ "Content-Type": "application/json" }),
+    headers: internalApiHeaders(body ? { "Content-Type": "application/json" } : {}),
     body: body ? JSON.stringify(body) : undefined,
   });
-  return res.json();
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`${method} ${path} returned HTTP ${res.status} (non-JSON response)`);
+  }
 }
 
 export default function dashboardUsersRoute(app, fetch, config, db, features, lang) {
