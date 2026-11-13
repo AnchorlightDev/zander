@@ -52,7 +52,12 @@ const WRITE_OPS = new Set([
   "upsert",
   "delete", "deleteMany",
 ]);
-const WRITE_TIMEOUT_MS = 30_000;
+// The timer cannot cancel the statement: a write still running when it fires
+// can commit afterwards. Keep it above InnoDB's default innodb_lock_wait_timeout
+// (50 s) so an ordinary row-lock wait is aborted (and rolled back) by MySQL
+// itself, and this deadline only catches waits MySQL would never end, such as
+// a metadata lock held by a migration.
+const WRITE_TIMEOUT_MS = 60_000;
 
 export const prisma = prismaBase.$extends({
   query: {
@@ -62,10 +67,10 @@ export const prisma = prismaBase.$extends({
         let timer;
         const timeout = new Promise((_, reject) => {
           timer = setTimeout(
-            () => reject(new Error(
-              `Database ${operation} on ${model} timed out after 30 s — ` +
-              "the database may be under heavy load. Please try again."
-            )),
+            () => reject(Object.assign(new Error(
+              `Database ${operation} on ${model} did not finish within ${WRITE_TIMEOUT_MS / 1000} s. ` +
+              "It may still complete, so check whether the change was saved before trying again."
+            ), { code: "ZANDER_WRITE_TIMEOUT" })),
             WRITE_TIMEOUT_MS
           );
         });
@@ -124,6 +129,36 @@ export async function withDeadlockRetry(fn, opts = {}) {
   throw lastErr;
 }
 
+/**
+ * Run `fn` inside one transaction on a single pooled mysql2 connection.
+ * `fn` receives `q(sql, params)`, which resolves to the result rows (or the
+ * OkPacket for writes). Commits when `fn` resolves, rolls back when it throws.
+ *
+ * @param {(q: (sql: string, params?: any[]) => Promise<any>) => Promise<T>} fn
+ * @param {import("mysql2").Pool} [targetPool] Defaults to the primary pool.
+ * @returns {Promise<T>}
+ * @template T
+ */
+export async function withPoolTransaction(fn, targetPool = pool) {
+  const conn = await targetPool.promise().getConnection();
+  try {
+    await conn.beginTransaction();
+    const q = async (sql, params = []) => (await conn.query(sql, params))[0];
+    const result = await fn(q);
+    await conn.commit();
+    return result;
+  } catch (err) {
+    try {
+      await conn.rollback();
+    } catch {
+      // The original error is the useful one.
+    }
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Health tracking
 // ---------------------------------------------------------------------------
@@ -168,6 +203,10 @@ pool.on("connection", function (connection) {
     console.info("[DB] Database is reachable.");
   }
   connection.query("SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_ci'");
+  // `timezone: "Z"` makes mysql2 write and read DATETIMEs as UTC, so NOW(),
+  // CURDATE() and column/trigger defaults must be UTC too, or comparisons such
+  // as `publishAt <= NOW()` drift by the server's offset.
+  connection.query("SET time_zone = '+00:00'");
 });
 
 pool.on("error", (err) => {

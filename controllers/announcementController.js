@@ -1,4 +1,5 @@
-import db from "./databaseController.js";
+import db, { withPoolTransaction } from "./databaseController.js";
+import { moveIdInOrder } from "../lib/hologramOrder.mjs";
 
 function queryDb(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -143,42 +144,49 @@ export async function listHologramGroups() {
 }
 
 /**
- * Nudge a hologram frame up or down within its group by swapping sortOrder with
- * its neighbour. Direction is "up" (earlier) or "down" (later).
+ * Nudge a hologram frame up or down within its group. Direction is "up"
+ * (earlier) or "down" (later). The whole group is renumbered 0..n-1 in its new
+ * order inside one transaction: new frames all default to sortOrder 0, so
+ * swapping the two values alone would leave the order unchanged.
  */
 export async function moveHologramFrame(id, direction) {
-  const rows = await queryDb(
-    `SELECT announcementId, hologramGroup, sortOrder FROM announcements
-      WHERE announcementId = ? AND announcementType = 'hologram' LIMIT 1`,
-    [id]
-  );
-  const current = rows?.[0];
-  if (!current) return false;
+  const moved = await withPoolTransaction(async (q) => {
+    const rows = await q(
+      `SELECT announcementId, hologramGroup FROM announcements
+        WHERE announcementId = ? AND announcementType = 'hologram' LIMIT 1`,
+      [id]
+    );
+    const current = rows?.[0];
+    if (!current) return false;
 
-  const comparator = direction === "up" ? "<" : ">";
-  const order = direction === "up" ? "DESC" : "ASC";
+    const groupRows = await q(
+      `SELECT announcementId, sortOrder FROM announcements
+        WHERE announcementType = 'hologram' AND hologramGroup <=> ?
+        ORDER BY sortOrder ASC, announcementId ASC
+        FOR UPDATE`,
+      [current.hologramGroup]
+    );
+    const nextOrder = moveIdInOrder(
+      groupRows.map((r) => Number(r.announcementId)),
+      Number(current.announcementId),
+      direction
+    );
+    if (!nextOrder) return false;
 
-  const neighbours = await queryDb(
-    `SELECT announcementId, sortOrder FROM announcements
-      WHERE announcementType = 'hologram' AND hologramGroup = ?
-        AND (sortOrder ${comparator} ? OR (sortOrder = ? AND announcementId ${comparator} ?))
-      ORDER BY sortOrder ${order}, announcementId ${order}
-      LIMIT 1`,
-    [current.hologramGroup, current.sortOrder ?? 0, current.sortOrder ?? 0, id]
-  );
-  const neighbour = neighbours?.[0];
-  if (!neighbour) return false;
-
-  await queryDb(
-    `UPDATE announcements SET sortOrder = ?, updatedDate = UTC_TIMESTAMP(3) WHERE announcementId = ?`,
-    [neighbour.sortOrder, current.announcementId]
-  );
-  await queryDb(
-    `UPDATE announcements SET sortOrder = ?, updatedDate = UTC_TIMESTAMP(3) WHERE announcementId = ?`,
-    [current.sortOrder, neighbour.announcementId]
-  );
-  invalidateWebAnnouncementCache();
-  return true;
+    const previous = new Map(groupRows.map((r) => [Number(r.announcementId), r.sortOrder]));
+    for (let index = 0; index < nextOrder.length; index += 1) {
+      const frameId = nextOrder[index];
+      if (previous.get(frameId) === index) continue;
+      // eslint-disable-next-line no-await-in-loop
+      await q(
+        `UPDATE announcements SET sortOrder = ?, updatedDate = UTC_TIMESTAMP(3) WHERE announcementId = ?`,
+        [index, frameId]
+      );
+    }
+    return true;
+  });
+  if (moved) invalidateWebAnnouncementCache();
+  return moved;
 }
 
 /**

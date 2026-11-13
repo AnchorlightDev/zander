@@ -30,8 +30,8 @@ Fastify plugins/routes are registered inside `buildApp()` in `app.js`. Route mod
 ### Database: dual interface, one physical DB (+ external DBs)
 
 `controllers/databaseController.js` exposes two ways to hit the primary database:
-- `prisma` — a wrapped `PrismaClient` (write ops get a 30s hard timeout so a lock never hangs a request indefinitely). Prefer this for new code.
-- `db` — a raw `mysql2` pool shim kept for backward compatibility with older callback-style controllers.
+- `prisma` — a wrapped `PrismaClient` (write ops get a 60s deadline so a lock never hangs a request indefinitely; it does not cancel the statement, so the error says the write may still complete). Prefer this for new code.
+- `db` — a raw `mysql2` pool shim kept for backward compatibility with older callback-style controllers. Multi-statement raw-SQL writes that must be atomic go through `withPoolTransaction(fn)`.
 
 Schema changes always go through Prisma migrations (`prisma/migrations/`), but most controllers query with **raw SQL via the mysql2 pool** rather than Prisma Client models — Prisma here is a migration tool, not the primary query layer. Follow whatever pattern the controller you're editing already uses; don't silently convert raw-SQL controllers to Prisma Client calls.
 

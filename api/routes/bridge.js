@@ -1,4 +1,6 @@
 import { isFeatureEnabled, optional } from "../common.js";
+import { withPoolTransaction } from "../../controllers/databaseController.js";
+import { claimPendingTasks } from "../../lib/bridgeTaskClaim.mjs";
 
 const BASE_ENDPOINT = "/api/bridge";
 const TASK_TABLE = "executorTasks";
@@ -152,21 +154,17 @@ export default function bridgeApiRoute(app, config, db, features, lang) {
       params.push(limit);
 
       const rows = await query(sql, params);
-      const tasks = hydrateTasks(rows);
+      let tasks = hydrateTasks(rows);
 
       if (claim && tasks.length > 0) {
-        const ids = tasks.map((task) => task.executorTaskId);
-        const placeholders = ids.map(() => "?").join(",");
-        await query(
-          `UPDATE ${TASK_TABLE} SET status = 'processing', updatedAt = NOW() WHERE executorTaskId IN (${placeholders}) AND status = 'pending'`,
-          ids
-        );
-
-        tasks.forEach((task) => {
-          if (task.status === "pending") {
-            task.status = "processing";
-            task.updatedAt = new Date();
-          }
+        // Another server may have selected the same rows; only hand back the
+        // ones whose conditional update this request won.
+        tasks = await claimPendingTasks(tasks, async (id) => {
+          const result = await query(
+            `UPDATE ${TASK_TABLE} SET status = 'processing', updatedAt = NOW() WHERE executorTaskId = ? AND status = 'pending'`,
+            [id]
+          );
+          return result?.affectedRows ?? 0;
         });
       }
 
@@ -599,42 +597,35 @@ export default function bridgeApiRoute(app, config, db, features, lang) {
         };
       });
 
-      let routineId = null;
-      const existingRoutine = await query(
-        `SELECT executorRoutineId FROM ${ROUTINE_TABLE} WHERE routineSlug = ?`,
-        [routineSlug]
-      );
+      // One transaction: the upsert takes an exclusive lock on the routine row,
+      // so a concurrent save of the same slug waits instead of interleaving its
+      // DELETE/INSERTs, and a failed step insert leaves the old steps intact.
+      const routineId = await withPoolTransaction(async (q) => {
+        const upsert = await q(
+          `INSERT INTO ${ROUTINE_TABLE} (routineSlug, displayName, description) VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE displayName = ?, description = ?, updatedAt = NOW(),
+               executorRoutineId = LAST_INSERT_ID(executorRoutineId)`,
+          [routineSlug, displayName, description, displayName, description]
+        );
+        const id = upsert.insertId;
 
-      if (existingRoutine.length) {
-        routineId = existingRoutine[0].executorRoutineId;
-        await query(
-          `UPDATE ${ROUTINE_TABLE} SET displayName = ?, description = ?, updatedAt = NOW() WHERE executorRoutineId = ?`,
-          [displayName, description, routineId]
-        );
-        await query(
-          `DELETE FROM ${ROUTINE_STEPS_TABLE} WHERE executorRoutineId = ?`,
-          [routineId]
-        );
-      } else {
-        const insertRoutine = await query(
-          `INSERT INTO ${ROUTINE_TABLE} (routineSlug, displayName, description) VALUES (?, ?, ?)`,
-          [routineSlug, displayName, description]
-        );
-        routineId = insertRoutine.insertId;
-      }
+        await q(`DELETE FROM ${ROUTINE_STEPS_TABLE} WHERE executorRoutineId = ?`, [id]);
 
-      for (const step of normalizedSteps) {
-        await query(
-          `INSERT INTO ${ROUTINE_STEPS_TABLE} (executorRoutineId, stepOrder, slug, command, metadata) VALUES (?, ?, ?, ?, ?)`,
-          [
-            routineId,
-            step.order,
-            step.slug,
-            step.command,
-            step.metadata ? JSON.stringify(step.metadata) : null,
-          ]
-        );
-      }
+        for (const step of normalizedSteps) {
+          // eslint-disable-next-line no-await-in-loop
+          await q(
+            `INSERT INTO ${ROUTINE_STEPS_TABLE} (executorRoutineId, stepOrder, slug, command, metadata) VALUES (?, ?, ?, ?, ?)`,
+            [
+              id,
+              step.order,
+              step.slug,
+              step.command,
+              step.metadata ? JSON.stringify(step.metadata) : null,
+            ]
+          );
+        }
+        return id;
+      }, db);
 
       const routineSteps = await query(
         `SELECT slug, command, metadata, stepOrder FROM ${ROUTINE_STEPS_TABLE} WHERE executorRoutineId = ? ORDER BY stepOrder ASC`,

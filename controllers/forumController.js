@@ -1,4 +1,4 @@
-import db, { luckpermsDb } from "./databaseController.js";
+import db, { luckpermsDb, withPoolTransaction } from "./databaseController.js";
 import { hashEmail, isLoggedIn } from "../api/common.js";
 import { plainTextExcerpt, sanitizeForumHtml } from "../lib/htmlSanitize.js";
 import { emitForumEvent, FORUM_EVENTS, ORIGIN } from "../lib/forums/forumEvents.mjs";
@@ -255,7 +255,7 @@ async function ensureUniqueCategorySlug(baseName, excludeCategoryId = null) {
   }
 }
 
-async function ensureUniqueDiscussionSlug(categoryId, baseName, excludeDiscussionId = null) {
+async function ensureUniqueDiscussionSlug(categoryId, baseName, excludeDiscussionId = null, q = query) {
   const baseSlug = slugify(baseName);
   let candidate = baseSlug;
   let counter = 1;
@@ -271,7 +271,7 @@ async function ensureUniqueDiscussionSlug(categoryId, baseName, excludeDiscussio
       params.push(excludeDiscussionId);
     }
 
-    const rows = await query(`${queryText} LIMIT 1`, params);
+    const rows = await q(`${queryText} LIMIT 1`, params);
     if (!rows.length) {
       return candidate;
     }
@@ -539,24 +539,42 @@ export async function createDiscussion({
   discordStarterMessageId = null,
 }) {
   content = sanitizeForumHtml(content);
-  const slug = await ensureUniqueDiscussionSlug(categoryId, title, null);
   const source = origin === ORIGIN.DISCORD ? "discord" : "web";
 
-  const result = await query(
-    `INSERT INTO forumDiscussions
-      (categoryId, title, slug, createdBy, lastPostBy, status, publishAt, discordThreadId, discordStarterMessageId)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [categoryId, title, slug, userId, userId, status, publishAt, discordThreadId, discordStarterMessageId]
-  );
+  // The discussion and its original post are written together, so a failed
+  // post insert can't leave an empty thread. The slug lookup is check-then-
+  // insert, so a same-title thread created at the same moment can still hit
+  // the (categoryId, slug) unique key: roll back and pick the next free slug.
+  const MAX_SLUG_ATTEMPTS = 3;
+  let discussionId;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      discussionId = await withPoolTransaction(async (q) => {
+        const slug = await ensureUniqueDiscussionSlug(categoryId, title, null, q);
+        const result = await q(
+          `INSERT INTO forumDiscussions
+            (categoryId, title, slug, createdBy, lastPostBy, status, publishAt, discordThreadId, discordStarterMessageId)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [categoryId, title, slug, userId, userId, status, publishAt, discordThreadId, discordStarterMessageId]
+        );
+        const newId = result.insertId;
 
-  const discussionId = result.insertId || result?.[0]?.insertId;
-
-  await query(
-    `INSERT INTO forumPosts
-      (discussionId, userId, content, isOriginal, discordMessageId, source)
-    VALUES (?, ?, ?, 1, ?, ?)`,
-    [discussionId, userId, content, discordStarterMessageId, source]
-  );
+        await q(
+          `INSERT INTO forumPosts
+            (discussionId, userId, content, isOriginal, discordMessageId, source)
+          VALUES (?, ?, ?, 1, ?, ?)`,
+          [newId, userId, content, discordStarterMessageId, source]
+        );
+        return newId;
+      });
+      break;
+    } catch (error) {
+      const slugConflict =
+        error?.code === "ER_DUP_ENTRY" && String(error?.message || "").includes("slug");
+      if (!slugConflict || attempt >= MAX_SLUG_ATTEMPTS) throw error;
+    }
+  }
 
   await recalculateDiscussionMeta(discussionId);
 
@@ -643,6 +661,21 @@ export async function moveDiscussion(discussionId, newCategoryId, { origin = ORI
     `UPDATE forumDiscussions SET categoryId = ?, updatedAt = NOW() WHERE discussionId = ?`,
     [newCategoryId, discussionId]
   );
+  if (discussion?.discordThreadId && Number(discussion.categoryId) !== Number(newCategoryId)) {
+    // A Discord post cannot follow the discussion to another channel; the old
+    // post is closed by the bridge (CLOSE_MOVED_THREAD, which takes the thread
+    // id from the event below). Unmap it now so later website changes are not
+    // sent to the closed post and Discord deletes/edits there no longer touch
+    // the moved discussion.
+    await query(
+      `UPDATE forumDiscussions SET discordThreadId = NULL, discordStarterMessageId = NULL WHERE discussionId = ?`,
+      [discussionId]
+    );
+    await query(
+      `UPDATE forumPosts SET discordMessageId = NULL WHERE discussionId = ? AND discordMessageId IS NOT NULL`,
+      [discussionId]
+    );
+  }
   if (discussion && discussion.categoryId !== newCategoryId) {
     emitForumEvent(FORUM_EVENTS.DISCUSSION_MOVED, {
       discussionId,
@@ -1325,29 +1358,34 @@ export async function publishDiscussion(discussionId) {
   const id = Number.parseInt(discussionId, 10);
   if (!Number.isFinite(id) || id <= 0) return null;
 
-  const publishResult = await query(
-    `UPDATE forumDiscussions
-        SET status = 'published',
-            publishAt = NULL,
-            createdAt = NOW(),
-            lastPostAt = NOW(),
-            updatedAt = NOW()
-      WHERE discussionId = ?
-        AND status IN ('draft','scheduled')`,
-    [id]
-  );
+  // Only the call that actually flips the status re-stamps the original post;
+  // a repeat publish (double submit, cron racing the scheduler) changes nothing.
+  const didPublish = await withPoolTransaction(async (q) => {
+    const publishResult = await q(
+      `UPDATE forumDiscussions
+          SET status = 'published',
+              publishAt = NULL,
+              createdAt = NOW(),
+              lastPostAt = NOW(),
+              updatedAt = NOW()
+        WHERE discussionId = ?
+          AND status IN ('draft','scheduled')`,
+      [id]
+    );
+    if (Number(publishResult?.affectedRows ?? 0) === 0) return false;
 
-  await query(
-    `UPDATE forumPosts
-        SET createdAt = NOW(),
-            updatedAt = NOW()
-      WHERE discussionId = ?
-        AND isOriginal = 1`,
-    [id]
-  );
+    await q(
+      `UPDATE forumPosts
+          SET createdAt = NOW(),
+              updatedAt = NOW()
+        WHERE discussionId = ?
+          AND isOriginal = 1`,
+      [id]
+    );
+    return true;
+  });
 
   const published = await getDiscussionRow(id);
-  const didPublish = Number(publishResult?.affectedRows ?? 0) > 0;
   if (published && didPublish) {
     emitForumEvent(FORUM_EVENTS.DISCUSSION_CREATED, {
       discussionId: id,
