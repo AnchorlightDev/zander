@@ -155,8 +155,16 @@ public class HubBridgeListener {
 
         player.createConnectionRequest(target.get()).connect().whenComplete((result, throwable) -> {
             if (throwable != null || result == null || !result.isSuccessful()) {
-                reply(player, new dev.anchorlight.zander.velocity.bridge.BridgeMessage.ConnectFailed(
-                        request.requestId(), "Failed to connect to " + request.serverId() + "."));
+                // The hub resolves each request on its first reply (ConnectStarted above), so a
+                // ConnectFailed sent now would be discarded. Tell the player directly instead.
+                net.kyori.adventure.text.Component message = net.kyori.adventure.text.Component
+                        .text("Failed to connect to " + request.serverId() + ".",
+                                net.kyori.adventure.text.format.NamedTextColor.RED);
+                if (result != null && result.getReasonComponent().isPresent()) {
+                    message = message.append(net.kyori.adventure.text.Component.space())
+                            .append(result.getReasonComponent().get());
+                }
+                player.sendMessage(message);
             }
         });
     }

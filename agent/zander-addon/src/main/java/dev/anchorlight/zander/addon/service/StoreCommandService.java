@@ -22,7 +22,9 @@ public class StoreCommandService {
     private record FailedCommand(int id, String reason) {}
 
     private final ZanderAddonMain plugin;
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(5))
+            .build();
     private final Gson gson = new Gson();
 
     // Prevents concurrent claim calls for the same player UUID
@@ -124,6 +126,7 @@ public class StoreCommandService {
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(apiBase() + "/api/command-bridge/claim"))
+                .timeout(java.time.Duration.ofSeconds(10))
                 .header("Content-Type", "application/json")
                 .header("x-access-token", token())
                 .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(body)))
@@ -187,6 +190,7 @@ public class StoreCommandService {
     private void post(String url, JsonObject body) throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
+                .timeout(java.time.Duration.ofSeconds(10))
                 .header("Content-Type", "application/json")
                 .header("x-access-token", token())
                 .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(body)))

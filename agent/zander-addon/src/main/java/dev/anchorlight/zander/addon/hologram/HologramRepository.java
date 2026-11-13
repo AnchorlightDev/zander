@@ -9,14 +9,19 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 
 /** Stores placement anchors locally; message content remains managed by the web dashboard. */
 public final class HologramRepository {
     private final File file;
     private final Logger logger;
+    /// Raw sections of entries the last load() skipped (typically a world that loads after
+    /// this plugin enables), keyed by name. save() writes them back so they aren't erased.
+    private final Map<String, ConfigurationSection> unparsed = new LinkedHashMap<>();
 
     public HologramRepository(File file, Logger logger) {
         this.file = file;
@@ -25,6 +30,7 @@ public final class HologramRepository {
 
     public Map<String, PlacedHologram> load() {
         Map<String, PlacedHologram> result = new LinkedHashMap<>();
+        unparsed.clear();
         File source = file.exists() ? file : legacyHubFile();
         if (source == null || !source.exists()) return result;
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(source);
@@ -39,6 +45,7 @@ public final class HologramRepository {
                 String group = entry.getString("group", "default");
                 if (world == null || group.isBlank()) {
                     logger.warning("Skipping hologram '" + name + "': missing world or group");
+                    unparsed.put(name, entry);
                     continue;
                 }
                 Location location = new Location(world, entry.getDouble("x"), entry.getDouble("y"),
@@ -46,6 +53,8 @@ public final class HologramRepository {
                 result.put(name.toLowerCase(java.util.Locale.ROOT), new PlacedHologram(name, group, location));
             } catch (RuntimeException e) {
                 logger.warning("Skipping malformed hologram '" + name + "': " + e.getMessage());
+                ConfigurationSection raw = section.getConfigurationSection(name);
+                if (raw != null) unparsed.put(name, raw);
             }
         }
         if (!file.exists() && !result.isEmpty()) {
@@ -73,6 +82,21 @@ public final class HologramRepository {
             yaml.set(key + ".z", location.getZ());
             yaml.set(key + ".yaw", location.getYaw());
             yaml.set(key + ".pitch", location.getPitch());
+        }
+        Set<String> savedNames = new HashSet<>();
+        for (PlacedHologram hologram : holograms) {
+            savedNames.add(hologram.name().toLowerCase(java.util.Locale.ROOT));
+        }
+        for (Map.Entry<String, ConfigurationSection> entry : unparsed.entrySet()) {
+            // A hologram since created under the same name replaces the skipped one.
+            if (savedNames.contains(entry.getKey().toLowerCase(java.util.Locale.ROOT))) continue;
+            String key = "holograms." + entry.getKey();
+            ConfigurationSection raw = entry.getValue();
+            for (String path : raw.getKeys(true)) {
+                if (!raw.isConfigurationSection(path)) {
+                    yaml.set(key + "." + path, raw.get(path));
+                }
+            }
         }
         try {
             File parent = file.getParentFile();

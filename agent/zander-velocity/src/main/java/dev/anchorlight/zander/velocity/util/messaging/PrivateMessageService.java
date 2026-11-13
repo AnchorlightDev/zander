@@ -2,6 +2,7 @@ package dev.anchorlight.zander.velocity.util.messaging;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonParseException;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
 import org.slf4j.Logger;
@@ -9,8 +10,10 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -212,6 +215,16 @@ public class PrivateMessageService {
                 }
             } catch (IOException e) {
                 logger.error("Failed to load private message storage.", e);
+            } catch (JsonParseException e) {
+                // A corrupt file must not stop the whole proxy plugin from
+                // loading. Keep a copy so the next save doesn't destroy it.
+                Path backup = storagePath.resolveSibling(STORAGE_FILE + ".corrupt-" + System.currentTimeMillis());
+                try {
+                    Files.copy(storagePath, backup, StandardCopyOption.REPLACE_EXISTING);
+                    logger.error("Private message storage is corrupt; starting empty. Backed up to {}", backup, e);
+                } catch (IOException copyError) {
+                    logger.error("Private message storage is corrupt and could not be backed up; starting empty.", e);
+                }
             }
         }
     }
@@ -220,8 +233,16 @@ public class PrivateMessageService {
         synchronized (lock) {
             try {
                 Files.createDirectories(storagePath.getParent());
-                try (Writer writer = Files.newBufferedWriter(storagePath)) {
+                // Write to a temp file and move it into place so a crash
+                // mid-write can never leave a truncated storage file.
+                Path tmp = storagePath.resolveSibling(STORAGE_FILE + ".tmp");
+                try (Writer writer = Files.newBufferedWriter(tmp)) {
                     gson.toJson(data, writer);
+                }
+                try {
+                    Files.move(tmp, storagePath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(tmp, storagePath, StandardCopyOption.REPLACE_EXISTING);
                 }
             } catch (IOException e) {
                 logger.error("Failed to save private message storage.", e);

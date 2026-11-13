@@ -10,14 +10,17 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
 
 /**
  * Loads and saves {@link Portal} definitions to {@code portals.yml}. Malformed entries
- * are skipped with a warning rather than aborting the whole load. Saves go through a
+ * (including ones whose world isn't loaded yet) are skipped with a warning rather than
+ * aborting the whole load, and written back unchanged on save. Saves go through a
  * temporary file that is then moved over the target, so a crash mid-write can't corrupt
  * previously-valid data.
  */
@@ -25,6 +28,9 @@ public class PortalRepository {
     private final File file;
     private final Logger logger;
     private final Predicate<String> worldExists;
+    /// Raw sections of entries the last load() skipped (e.g. their world was not loaded
+    /// yet), keyed by raw id. save() writes them back untouched so they aren't erased.
+    private final Map<String, ConfigurationSection> unparsed = new LinkedHashMap<>();
 
     public PortalRepository(File file, Logger logger, Predicate<String> worldExists) {
         this.file = file;
@@ -34,6 +40,7 @@ public class PortalRepository {
 
     public Map<String, Portal> load() {
         Map<String, Portal> result = new LinkedHashMap<>();
+        unparsed.clear();
         if (!file.exists()) {
             return result;
         }
@@ -55,6 +62,10 @@ public class PortalRepository {
                 result.put(key, portal);
             } catch (IllegalArgumentException e) {
                 logger.warning(() -> "Skipping malformed portal '" + rawId + "': " + e.getMessage());
+                ConfigurationSection rawSection = portalsSection.getConfigurationSection(rawId);
+                if (rawSection != null) {
+                    unparsed.put(rawId, rawSection);
+                }
             }
         }
         return result;
@@ -201,6 +212,24 @@ public class PortalRepository {
             yaml.set(base + ".messages.denied", portal.deniedMessage());
             yaml.set(base + ".appearance.style", portal.appearance().style().name());
             yaml.set(base + ".appearance.colour", ArgbColours.format(portal.appearance().argb()));
+        }
+
+        Set<String> savedKeys = new HashSet<>();
+        for (Portal portal : portals) {
+            savedKeys.add(PortalIdValidator.normalise(portal.id()));
+        }
+        for (Map.Entry<String, ConfigurationSection> entry : unparsed.entrySet()) {
+            // A portal since (re)created under the same id replaces the skipped one.
+            if (savedKeys.contains(PortalIdValidator.normalise(entry.getKey()))) {
+                continue;
+            }
+            String base = "portals." + entry.getKey();
+            ConfigurationSection raw = entry.getValue();
+            for (String key : raw.getKeys(true)) {
+                if (!raw.isConfigurationSection(key)) {
+                    yaml.set(base + "." + key, raw.get(key));
+                }
+            }
         }
 
         try {

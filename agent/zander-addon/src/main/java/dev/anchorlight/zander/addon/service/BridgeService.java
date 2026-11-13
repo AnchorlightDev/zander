@@ -11,17 +11,28 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class BridgeService {
 
     private record BridgeTask(int executorTaskId, String command) {}
 
     private final ZanderAddonMain plugin;
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    // Without timeouts a half-open connection blocks send() forever, which
+    // stalls reward/command delivery and strands async scheduler workers.
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(CONNECT_TIMEOUT)
+            .build();
+    // Bukkit async repeating tasks can overlap; skip a tick while a poll is still running.
+    private final AtomicBoolean polling = new AtomicBoolean(false);
 
     public BridgeService(ZanderAddonMain plugin) {
         this.plugin = plugin;
@@ -31,7 +42,12 @@ public class BridgeService {
         new BukkitRunnable() {
             @Override
             public void run() {
-                pollAndExecute();
+                if (!polling.compareAndSet(false, true)) return;
+                try {
+                    pollAndExecute();
+                } finally {
+                    polling.set(false);
+                }
             }
         }.runTaskTimerAsynchronously(plugin, 0L, pollIntervalSeconds() * 20L);
     }
@@ -72,6 +88,7 @@ public class BridgeService {
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
+                .timeout(REQUEST_TIMEOUT)
                 .header("x-access-token", token())
                 .GET()
                 .build();
@@ -115,6 +132,7 @@ public class BridgeService {
         try {
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
+                    .timeout(REQUEST_TIMEOUT)
                     .header("Content-Type", "application/json")
                     .header("x-access-token", token())
                     .POST(HttpRequest.BodyPublishers.ofString(body.toString()))

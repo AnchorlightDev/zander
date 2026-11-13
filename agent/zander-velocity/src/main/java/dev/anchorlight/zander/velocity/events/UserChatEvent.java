@@ -36,8 +36,14 @@ public class UserChatEvent {
     // deliberate. If SignedVelocity is ever removed from the proxy, every
     // filtered message becomes a kick.
     @SuppressWarnings("deprecation")
-    @Subscribe
+    // Lowest priority: mute/moderation plugins at default priority must get to
+    // deny the message before we broadcast it ourselves.
+    @Subscribe(priority = Short.MIN_VALUE)
     public void onPlayerChat(PlayerChatEvent event) {
+        // Another listener (FreezeChatListener, a mute plugin) already blocked
+        // this message; broadcasting it ourselves would bypass that.
+        if (!event.getResult().isAllowed()) return;
+
         Player player = event.getPlayer();
         String rawMessage = event.getMessage();
         Component originalMessage = Component.text(rawMessage);
@@ -74,10 +80,35 @@ public class UserChatEvent {
                 player.sendMessage(builder);
                 event.setResult(PlayerChatEvent.ChatResult.denied());
                 return;
-            } else {
+            }
+        } catch (Exception e) {
+            Component builder = Component.text("The chat filter could not be reached at this time, there maybe an issue with the API.").color(NamedTextColor.YELLOW);
+            player.sendMessage(builder);
+            event.setResult(PlayerChatEvent.ChatResult.denied());
+            ZanderVelocityMain.getLogger().error("Chat filter error for player {}", player.getUsername(), e);
+            return;
+        }
+
+        // The filter approved the message: deliver it in-game first, then
+        // relay to Discord off the event thread so a slow or failing relay
+        // can neither delay nor drop the chat line.
+        String serverName = player.getCurrentServer()
+                .map(serverConnection -> serverConnection.getServer().getServerInfo().getName())
+                .orElse("unknown");
+        Component formattedMessage = formatChatMessage(player, originalMessage);
+        player.getCurrentServer()
+                .map(serverConnection -> serverConnection.getServer())
+                .ifPresentOrElse(
+                        server -> server.getPlayersConnected().forEach(target -> target.sendMessage(formattedMessage)),
+                        () -> player.sendMessage(formattedMessage)
+                );
+        event.setResult(PlayerChatEvent.ChatResult.denied());
+
+        ZanderVelocityMain.getProxy().getScheduler().buildTask(ZanderVelocityMain.getInstance(), () -> {
+            try {
                 DiscordChat chat = DiscordChat.builder()
                         .username(player.getUsername())
-                        .server(player.getCurrentServer().get().getServer().getServerInfo().getName())
+                        .server(serverName)
                         .content(rawMessage)
                         .build();
 
@@ -89,22 +120,10 @@ public class UserChatEvent {
                         .build();
 
                 discordChatReq.execute();
+            } catch (Exception e) {
+                ZanderVelocityMain.getLogger().warn("Discord chat relay failed for player {}: {}", player.getUsername(), e.getMessage());
             }
-
-            Component formattedMessage = formatChatMessage(player, originalMessage);
-            player.getCurrentServer()
-                    .map(serverConnection -> serverConnection.getServer())
-                    .ifPresentOrElse(
-                            server -> server.getPlayersConnected().forEach(target -> target.sendMessage(formattedMessage)),
-                            () -> player.sendMessage(formattedMessage)
-                    );
-            event.setResult(PlayerChatEvent.ChatResult.denied());
-        } catch (Exception e) {
-            Component builder = Component.text("The chat filter could not be reached at this time, there maybe an issue with the API.").color(NamedTextColor.YELLOW);
-            player.sendMessage(builder);
-            event.setResult(PlayerChatEvent.ChatResult.denied());
-            ZanderVelocityMain.getLogger().error("Chat filter error for player {}", player.getUsername(), e);
-        }
+        }).schedule();
     }
 
     private Component formatChatMessage(Player player, Component originalMessage) {

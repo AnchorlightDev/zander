@@ -144,4 +144,41 @@ class PortalRepositoryTest {
         assertEquals(portal.region(), roundTripped.region());
         assertInstanceOf(LocationPortalDestination.class, roundTripped.destination());
     }
+
+    @Test
+    void saveKeepsPortalSkippedBecauseItsWorldWasNotLoaded(@TempDir Path tempDir) throws Exception {
+        File file = tempDir.resolve("portals.yml").toFile();
+        YamlConfiguration yaml = new YamlConfiguration();
+        yaml.set("portals.ghost.display-name", "Ghost");
+        yaml.set("portals.ghost.enabled", true);
+        yaml.set("portals.ghost.region.world", "late_world");
+        yaml.set("portals.ghost.region.min.x", 0);
+        yaml.set("portals.ghost.region.min.y", 0);
+        yaml.set("portals.ghost.region.min.z", 0);
+        yaml.set("portals.ghost.region.max.x", 1);
+        yaml.set("portals.ghost.region.max.y", 1);
+        yaml.set("portals.ghost.region.max.z", 1);
+        yaml.set("portals.ghost.destination.type", "SERVER");
+        yaml.set("portals.ghost.destination.server", "survival");
+        yaml.set("portals.ghost.messages.success", "s");
+        yaml.set("portals.ghost.messages.denied", "d");
+        yaml.save(file);
+
+        java.util.concurrent.atomic.AtomicBoolean lateWorldLoaded = new java.util.concurrent.atomic.AtomicBoolean(false);
+        PortalRepository repository = new PortalRepository(file, LOGGER,
+                world -> !world.equals("late_world") || lateWorldLoaded.get());
+        assertTrue(repository.load().isEmpty());
+
+        Portal other = new Portal("info", "Info", true,
+                new Cuboid("world", 0, 0, 0, 1, 1, 1),
+                new ServerPortalDestination("lobby"),
+                null, 0L, null, "s", "d");
+        repository.save(java.util.List.of(other));
+
+        lateWorldLoaded.set(true);
+        Map<String, Portal> reloaded = repository.load();
+        assertEquals(2, reloaded.size());
+        assertEquals("Ghost", reloaded.get("ghost").displayName());
+        assertEquals("late_world", reloaded.get("ghost").region().world());
+    }
 }

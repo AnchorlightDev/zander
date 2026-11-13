@@ -45,7 +45,7 @@ public class UserOnLogin {
                 //
                 SessionCreate createSession = SessionCreate.builder()
                         .uuid(player.getUniqueId())
-                        .ipAddress(player.getRemoteAddress().getAddress().toString())
+                        .ipAddress(player.getRemoteAddress().getAddress().getHostAddress())
                         .build();
 
                 Request createSessionReq = Request.builder()

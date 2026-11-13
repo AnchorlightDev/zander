@@ -14,6 +14,13 @@ import dev.anchorlight.zander.velocity.model.session.SessionDestroy;
 public class UserOnDisconnect {
     @Subscribe
     public void UserDisconnectEvent(DisconnectEvent event) {
+        // Connections denied or abandoned before PostLoginEvent never got a
+        // session or a Discord join message, so there is nothing to close.
+        // PRE_SERVER_JOIN is after PostLoginEvent but before reaching a backend.
+        DisconnectEvent.LoginStatus status = event.getLoginStatus();
+        if (status != DisconnectEvent.LoginStatus.SUCCESSFUL_LOGIN
+                && status != DisconnectEvent.LoginStatus.PRE_SERVER_JOIN) return;
+
         Player player = event.getPlayer();
         String BaseAPIURL = ZanderVelocityMain.getConfig().getString(Route.from("BaseAPIURL"));
         String APIKey = ZanderVelocityMain.getConfig().getString(Route.from("APIKey"));

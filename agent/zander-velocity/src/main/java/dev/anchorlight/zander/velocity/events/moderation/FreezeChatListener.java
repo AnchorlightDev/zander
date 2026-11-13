@@ -12,7 +12,9 @@ public class FreezeChatListener {
     // unless SignedVelocity is installed, which this plugin depends on for
     // exactly that reason. Suppressed knowingly — see the note at the call.
     @SuppressWarnings("deprecation")
-    @Subscribe
+    // Highest priority so the freeze denies the event before UserChatEvent
+    // (which skips denied events) gets a chance to broadcast it.
+    @Subscribe(priority = Short.MAX_VALUE)
     public void onPlayerChat(PlayerChatEvent event) {
         Player player = event.getPlayer();
 
