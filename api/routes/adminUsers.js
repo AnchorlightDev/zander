@@ -29,6 +29,7 @@ import {
   classifyAccountState,
   derivePlatform,
   isPasswordResetEligible,
+  maskEmail,
 } from "../../controllers/userAccountState.js";
 import { UserGetter } from "../../controllers/userController.js";
 import {
@@ -118,6 +119,11 @@ export default function adminUsersRoute(app, config, db, features, lang) {
         relatedAccounts: (user.relatedAccounts || []).map(decorate),
       };
 
+      // Always send the masked address so the dashboard can tell "has an
+      // email" from "no email" -- without it every account rendered as
+      // "Email: Missing" and the reset / resend-verification buttons never
+      // appeared. The full address still needs ?revealEmail=true.
+      data.maskedEmail = maskEmail(user.email);
       if (req.query?.revealEmail === "true") {
         data.email = await getUserEmailById(userId);
       } else {

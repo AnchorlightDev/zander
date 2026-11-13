@@ -327,7 +327,7 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <% profileReportsApiData.data.forEach(report => { %>
+                                            <% ((profileReportsApiData && Array.isArray(profileReportsApiData.data)) ? profileReportsApiData.data : []).forEach(report => { %>
                                                 <tr>
                                                     <td class="fw-semibold"><%= report.reportId %></td>
                                                     <td><%= report.reportedUser %></td>

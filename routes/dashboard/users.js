@@ -178,7 +178,7 @@ export default function dashboardUsersRoute(app, fetch, config, db, features, la
         config,
         req,
         features,
-        user: { ...user, maskedEmail: maskEmail(user.email) },
+        user: { ...user, maskedEmail: user.maskedEmail ?? maskEmail(user.email) },
         canRevealEmail,
         canManage,
         globalImage,
@@ -298,7 +298,7 @@ export default function dashboardUsersRoute(app, fetch, config, db, features, la
       // Fetch old (masked) email first for the audit trail.
       let oldMaskedEmail = "none";
       const before = await proxyToApi(fetch, "GET", `/admin/users/${userId}`);
-      if (before.success) oldMaskedEmail = maskEmail(before.data.email) || "none";
+      if (before.success) oldMaskedEmail = before.data.maskedEmail || maskEmail(before.data.email) || "none";
 
       const data = await proxyToApi(fetch, "POST", `/admin/users/${userId}/change-email`, { newEmail });
       if (data.success) {
