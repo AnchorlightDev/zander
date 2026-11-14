@@ -31,7 +31,6 @@ import wrappedSiteRoutes from "./wrappedRoutes.js";
 import formSiteRoutes from "./formRoutes.js";
 import bedrockSiteRoutes from "./bedrockRoutes.js";
 import pagesSiteRoutes from "./pagesRoutes.js";
-import { getRankCatalogForPublicPage } from "../controllers/rankCatalogController.js";
 import { createTranslator } from "../lib/langText.mjs";
 import {
   forumViewerPermissions,
@@ -45,9 +44,7 @@ import {
   breadcrumbNode,
   faqNode,
   howToNode,
-  itemListNode,
 } from "../lib/seo/jsonLd.js";
-import { rankCatalogSchema } from "../lib/seo/rankSchema.js";
 
 /**
  * The homepage's "Latest from the forums" posts for this visitor, or null to
@@ -148,7 +145,7 @@ export default function applicationSiteRoutes(
         },
         {
           q: `Is ${siteName} free to play?`,
-          a: `Yes — the server is free to join. Optional cosmetic and convenience ranks are available at ${config.siteConfiguration.siteUrl}/ranks.`,
+          a: `Yes - the server is free to join. Optional cosmetic and convenience ranks are available at ${config.siteConfiguration.siteUrl}/webstore.`,
         },
       ]),
     ]);
@@ -240,7 +237,7 @@ export default function applicationSiteRoutes(
         },
         {
           q: `Do I need an account or to pay to join ${siteName}?`,
-          a: `You need a legitimate Minecraft account. Joining the server is free; optional ranks are available at ${siteUrl}/ranks.`,
+          a: `You need a legitimate Minecraft account. Joining the server is free; optional ranks are available at ${siteUrl}/webstore.`,
         },
       ]),
     ]);
@@ -288,45 +285,12 @@ export default function applicationSiteRoutes(
   });
 
   //
-  // Ranks
+  // Ranks — folded into the unified /webstore storefront. The old URL is kept
+  // alive as a permanent redirect so inbound links, bookmarks and any saved
+  // menu entries still land on the ranks (now part of the webstore).
   //
-  app.get("/ranks", async function (req, res) {
-    if (!await isFeatureWebRouteEnabled(app, features.ranks, req, res, features)) return;
-
-    let rankCategories = [];
-    let ranksError = null;
-    try {
-      rankCategories = await getRankCatalogForPublicPage();
-    } catch (err) {
-      console.error("[ranks] Failed to load rank catalog:", err.message);
-      ranksError = "Rank information is temporarily unavailable. Please try again shortly.";
-    }
-
-    const rankPageDescription = `Explore the ranks available on ${config.siteConfiguration.siteName} and find out what perks and privileges each one offers.`;
-    const { itemList: rankItemList, faq: rankFaq } = rankCatalogSchema(config, rankCategories);
-    const pageJsonLd = buildGraph(config, [
-      webPageNode(config, req, { title: "Ranks", description: rankPageDescription, hasBreadcrumb: true }),
-      breadcrumbNode(config, req, [{ name: "Home", url: "/" }, { name: "Ranks" }]),
-      rankItemList,
-      faqNode(rankFaq),
-    ]);
-
-    res.header("content-type", "text/html; charset=utf-8").send(
-      await app.view("ranks", {
-        pageTitle: `Ranks`,
-        pageDescription: rankPageDescription,
-        pageJsonLd,
-        rankFaq,
-        config: config,
-        req: req,
-        rankCategories,
-        ranksError,
-        features: features,
-        globalImage: await getGlobalImage(),
-        announcementWeb: await getWebAnnouncement(),
-      })
-    );
-    return;
+  app.get("/ranks", async function (_req, res) {
+    return res.redirect("/webstore", 301);
   });
 
   //

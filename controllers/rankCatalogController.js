@@ -107,7 +107,7 @@ export async function deleteCatalogEntry(id) {
 /**
  * Returns the catalog grouped by category, with Stripe price info merged in.
  * Each package has a `prices` array with one entry per linked Stripe price.
- * Used by the public /ranks page.
+ * Used by the public /webstore page (perk overlay + rank structured data).
  */
 export async function getRankCatalogForPublicPage(preferredCurrency = null) {
   const entries = await getAllCatalogEntries();

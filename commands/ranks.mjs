@@ -36,7 +36,7 @@ export class RanksCommand extends Command {
     const embed = new EmbedBuilder()
       .setTitle(`Ranks`)
       .setDescription(
-        `We are looking always donations to keep this Server running since running this Network isn't free. If you would like to donate to ${config.siteConfiguration.siteName} check out our ranks and perks at ${process.env.siteAddress}/ranks`
+        `We are looking always donations to keep this Server running since running this Network isn't free. If you would like to donate to ${config.siteConfiguration.siteName} check out our ranks and perks at ${process.env.siteAddress}/webstore`
       )
       .setColor(Colors.DarkGold);
 

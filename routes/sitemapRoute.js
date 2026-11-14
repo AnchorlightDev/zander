@@ -79,7 +79,8 @@ export function staticSitemapPages(features = {}) {
     { url: "/", priority: "1.0", changefreq: "daily" },
     features.server && { url: "/play", priority: "0.9", changefreq: "weekly" },
     features.bedrock && { url: "/bedrock", priority: "0.8", changefreq: "monthly" },
-    features.ranks && { url: "/ranks", priority: "0.8", changefreq: "weekly" },
+    // Ranks folded into /webstore; /ranks now 301-redirects there, so it is not
+    // listed on its own (the webstore entry below covers it).
     // The map archive: years of worlds with seeds, dates and downloads. Rare
     // content, and it was missing from here entirely.
     features.vault && { url: "/vault", priority: "0.7", changefreq: "monthly" },
@@ -160,7 +161,6 @@ export default function sitemapRoutes(app, config, features) {
     L.push(`- [Home](${baseUrl}/): what ${sc.siteName || "the network"} is and current player activity`);
     if (features.server) L.push(`- [Play / how to join](${baseUrl}/play): Java and Bedrock server addresses and connection steps`);
     if (features.bedrock) L.push(`- [Bedrock Edition](${baseUrl}/bedrock): how to join on Bedrock - address, port and per-device steps`);
-    if (features.ranks) L.push(`- [Ranks](${baseUrl}/ranks): available ranks, their perks and pricing`);
     L.push(`- [Rules](${baseUrl}/rules): the community rules every player agrees to`);
     if (features.applications) L.push(`- [Apply](${baseUrl}/apply): open staff positions and how to apply`);
     L.push(`- [Staff](${baseUrl}/staff): the volunteer team that runs the community`);
@@ -179,7 +179,7 @@ export default function sitemapRoutes(app, config, features) {
     L.push("## Community");
     if (features.forums) L.push(`- [Forums](${baseUrl}/forums): community discussion boards`);
     if (features.vault) L.push(`- [Map archive](${baseUrl}/vault): every past world with its dates, seed and download`);
-    if (features.webstore) L.push(`- [Store](${baseUrl}/webstore): ranks and perks available to buy`);
+    if (features.webstore) L.push(`- [Store](${baseUrl}/webstore): ranks and perks available to buy, with each rank's perks and pricing`);
     if (features.events) L.push(`- [Events](${baseUrl}/events): upcoming and past community events`);
     if (features.watch) L.push(`- [Watch](${baseUrl}/watch): community creator content and streams`);
     if (features.shopdirectory) L.push(`- [Player shop directory](${baseUrl}/shopdirectory): in-game player-run stores, items and prices`);

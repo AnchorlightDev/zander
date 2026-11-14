@@ -64,7 +64,7 @@
       <div class="row g-4">
         <% group.packages.forEach(function (item) { %>
         <div class="col-lg-4 col-md-6 col-sm-12">
-          <div class="card h-100 shadow-sm" id="ws-<%= item.slug %>">
+          <div class="card h-100 shadow-sm" id="ws-<%= item.stripePriceId || item.slug %>">
             <% if (item.imageUrl) { %>
               <img src="<%= item.imageUrl %>" alt="<%= item.displayName %>" class="card-img-top" style="height:160px; object-fit:contain; padding:16px;">
             <% } %>
@@ -76,8 +76,36 @@
                 </span>
               </div>
               <% if (item.description) { %>
-                <p class="card-text text-muted flex-grow-1"><%= item.description %></p>
+                <p class="card-text text-muted mb-3"><%= item.description %></p>
               <% } %>
+
+              <%# Perk breakdown, when this product is a rank from the catalog -%>
+              <% if (item.perks && item.perks.length) { %>
+                <div class="mb-3 flex-grow-1">
+                  <% item.perks.forEach(function(group) { %>
+                    <% if (group && typeof group === 'object' && group.group) { %>
+                      <p class="small fw-semibold mb-1 mt-2 text-muted text-uppercase" style="font-size:0.7rem; letter-spacing:0.04em;"><%= group.group %></p>
+                      <ul class="list-unstyled mb-0">
+                        <% (group.perks || []).forEach(function(perk) { %>
+                          <li class="small mb-1">
+                            <i class="fa-solid fa-check text-success me-2"></i><%= perk %>
+                          </li>
+                        <% }) %>
+                      </ul>
+                    <% } else if (typeof group === 'string') { %>
+                      <ul class="list-unstyled mb-0">
+                        <li class="small mb-1">
+                          <i class="fa-solid fa-check text-success me-2"></i><%= group %>
+                        </li>
+                      </ul>
+                    <% } %>
+                  <% }) %>
+                </div>
+              <% } else { %>
+                <%# No perk list: keep a spacer so every card's price sits flush -%>
+                <div class="flex-grow-1"></div>
+              <% } %>
+
               <div class="mt-auto">
                 <p class="fs-5 fw-bold mb-3">
                   <%= item.priceDisplay %>
@@ -108,6 +136,17 @@
         <% }) %>
       </div>
     <% }) %>
+
+    <%# Ranks / webstore FAQ (moved here when /ranks folded into the storefront) -%>
+    <% if (typeof rankFaq !== 'undefined' && rankFaq && rankFaq.length) { %>
+    <div class="mt-5">
+      <h2 class="h4 mb-3">Webstore FAQ</h2>
+      <% rankFaq.forEach(function (item) { %>
+      <h3 class="h6 mb-1"><%= item.q %></h3>
+      <p><%= item.a %></p>
+      <% }) %>
+    </div>
+    <% } %>
 
     <%# Purchase / gift modal (shown only when logged in) -%>
     <% if (loggedIn) { %>

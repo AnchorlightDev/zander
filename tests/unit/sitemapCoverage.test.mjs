@@ -37,16 +37,18 @@ describe("feature flags are respected", () => {
   it("lists the gated pages when their features are on", () => {
     const listed = urls(ALL_ON);
 
-    for (const url of ["/play", "/bedrock", "/ranks", "/vault", "/forums", "/webstore",
+    for (const url of ["/play", "/bedrock", "/vault", "/forums", "/webstore",
                        "/apply", "/watch", "/events", "/shopdirectory", "/punishments", "/report", "/finance"]) {
       expect(listed, url).toContain(url);
     }
+    // /ranks folded into /webstore and now 301-redirects, so it is not listed.
+    expect(listed).not.toContain("/ranks");
   });
 
   it("lists none of them when every feature is off", () => {
     const listed = urls({});
 
-    for (const url of ["/play", "/bedrock", "/ranks", "/vault", "/forums", "/webstore",
+    for (const url of ["/play", "/bedrock", "/vault", "/forums", "/webstore",
                        "/apply", "/watch", "/events", "/shopdirectory", "/punishments", "/report", "/finance"]) {
       expect(listed, url).not.toContain(url);
     }
@@ -57,7 +59,7 @@ describe("feature flags are respected", () => {
 
     expect(listed).not.toContain("/vault");
     expect(listed).toContain("/forums");
-    expect(listed).toContain("/ranks");
+    expect(listed).toContain("/webstore");
   });
 
   it("reads the nested punishments flag correctly", () => {

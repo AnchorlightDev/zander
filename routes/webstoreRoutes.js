@@ -36,12 +36,20 @@ import {
 } from "../controllers/webstoreController.js";
 import { getAllCategories } from "../controllers/webstoreCategoryController.js";
 import { getAllItemSettings } from "../controllers/webstoreItemSettingsController.js";
+import { getRankCatalogForPublicPage } from "../controllers/rankCatalogController.js";
 import {
   applyItemSettings,
   groupByCategory,
   isPubliclyVisible,
 } from "../lib/webstore/catalogVisibility.mjs";
 import { describeSubscription } from "../lib/webstore/subscriptionView.mjs";
+import {
+  buildGraph,
+  webPageNode,
+  breadcrumbNode,
+  faqNode,
+} from "../lib/seo/jsonLd.js";
+import { rankCatalogSchema } from "../lib/seo/rankSchema.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -72,6 +80,32 @@ function parseLocale(req) {
 /** Validate a Minecraft username: 1-16 alphanumeric / underscore characters. */
 function isValidMinecraftUsername(name) {
   return typeof name === "string" && /^[A-Za-z0-9_]{1,16}$/.test(name);
+}
+
+/**
+ * Build a lookup from Stripe price ID to the curated rank-catalog content
+ * (perk list, plus a description/image to fall back on). This is what lets the
+ * storefront show the rich perk breakdown the old /ranks page used to, keyed off
+ * the live Stripe product each card already renders.
+ *
+ * @param {Array<{ packages: Array<object> }>} rankCategories  from getRankCatalogForPublicPage()
+ * @returns {Map<string, { perks: Array, description: string|null, imageUrl: string|null }>}
+ */
+function buildPerkOverlay(rankCategories) {
+  const byPrice = new Map();
+  for (const group of Array.isArray(rankCategories) ? rankCategories : []) {
+    for (const pkg of group?.packages || []) {
+      const overlay = {
+        perks: Array.isArray(pkg.perks) ? pkg.perks : [],
+        description: pkg.description || null,
+        imageUrl: pkg.imageUrl || null,
+      };
+      for (const priceId of pkg.stripePriceIds || []) {
+        byPrice.set(String(priceId), overlay);
+      }
+    }
+  }
+  return byPrice;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +146,10 @@ export default function webstoreRoutes(app, config, features) {
     let categoryGroups = [];
     let useCategories = false;
     let itemsError = false;
+    // The curated rank catalog now feeds this page too (it used to drive the
+    // separate /ranks page): its perks overlay the matching Stripe products, and
+    // it still powers the rank structured data for search / generative engines.
+    let rankCategories = [];
     try {
       // getWebstoreItems() deliberately returns everything -- it also serves
       // checkout and renewal. Hiding happens here, on the way to the page.
@@ -124,17 +162,32 @@ export default function webstoreRoutes(app, config, features) {
         console.warn("[webstore] Stripe category sync skipped:", err.message)
       );
 
-      const [settings, categories] = await Promise.all([
+      const [settings, categories, catalog] = await Promise.all([
         getAllItemSettings().catch(() => []),
         getAllCategories().catch(() => []),
+        getRankCatalogForPublicPage(preferredCurrency).catch((err) => {
+          console.warn("[webstore] rank catalog overlay skipped:", err.message);
+          return [];
+        }),
       ]);
+      rankCategories = catalog;
+      const perkOverlay = buildPerkOverlay(rankCategories);
 
-      const decorated = applyItemSettings(rawItems, settings, categories).map((item) => ({
-        ...item,
-        priceDisplay: formatPrice(item.priceCents, item.currency, locale),
-        purchaseLabel: item.purchaseType === "subscription" ? "Subscribe" : "Buy Now",
-        badgeLabel: item.purchaseType === "subscription" ? "Monthly" : "One-time",
-      }));
+      const decorated = applyItemSettings(rawItems, settings, categories).map((item) => {
+        const overlay = perkOverlay.get(String(item.stripePriceId));
+        return {
+          ...item,
+          priceDisplay: formatPrice(item.priceCents, item.currency, locale),
+          purchaseLabel: item.purchaseType === "subscription" ? "Subscribe" : "Buy Now",
+          badgeLabel: item.purchaseType === "subscription" ? "Monthly" : "One-time",
+          // Rich perk breakdown from the rank catalog, when this product is one.
+          perks: overlay?.perks || [],
+          // Stripe stays the source of truth for name and price; the curated
+          // description/image only fill in when Stripe has none of its own.
+          description: item.description || overlay?.description || null,
+          imageUrl: item.imageUrl || overlay?.imageUrl || null,
+        };
+      });
 
       categoryGroups = groupByCategory(decorated, { publicOnly: true });
       // Until somebody actually assigns a category, the page stays the flat
@@ -152,9 +205,22 @@ export default function webstoreRoutes(app, config, features) {
       itemsError = true;
     }
 
+    const pageDescription = `Support ${config.siteConfiguration.siteName} with ranks, perks, and more. Browse every rank, its perks and its price, then check out in a few clicks.`;
+    // Rank structured data (ItemList of products + FAQ) now lives on this page,
+    // since /ranks folded into the storefront and redirects here.
+    const { itemList: rankItemList, faq: rankFaq } = rankCatalogSchema(config, rankCategories);
+    const pageJsonLd = buildGraph(config, [
+      webPageNode(config, req, { title: "Webstore", description: pageDescription, hasBreadcrumb: true }),
+      breadcrumbNode(config, req, [{ name: "Home", url: "/" }, { name: "Webstore" }]),
+      rankItemList,
+      faqNode(rankFaq),
+    ]);
+
     return res.view("modules/webstore/index", {
       pageTitle: "Webstore",
-      pageDescription: `Support ${config.siteConfiguration.siteName} with ranks, perks, and more.`,
+      pageDescription,
+      pageJsonLd,
+      rankFaq,
       config,
       req,
       features,
