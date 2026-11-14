@@ -64,6 +64,15 @@
                         <% } %>
                     </div>
 
+                    <!-- Velocity name (drives server access) -->
+                    <div class="mb-3 col">
+                        <label for="velocityName">Velocity Name <span class="text-muted small">(for access)</span></label>
+                        <input type="text" class="form-control" id="velocityName" name="velocityName" maxlength="64"
+                               pattern="[A-Za-z0-9_.\-]{1,64}" placeholder="e.g. dev"
+                               value="<%= type === 'edit' && serverApiData ? (serverApiData.velocityName || '') : '' %>">
+                        <div class="form-text">This server's name in Velocity's config, exactly. Who may join it is managed on the server's Access page. Leave blank for servers that aren't on the proxy.</div>
+                    </div>
+
                     <!-- Bedrock Address -->
                     <div class="mb-3 col">
                         <label for="bedrockAddress">Bedrock Address <span class="text-muted small">(optional)</span></label>

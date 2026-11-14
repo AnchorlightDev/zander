@@ -100,6 +100,7 @@
                 <option value="announcement_post">Enable/disable announcement</option>
                 <option value="broadcast">In-game broadcast</option>
                 <option value="webstore_visibility">Show/hide webstore product</option>
+                <option value="server_access">Server access (let ranks join / remove them)</option>
               </select>
               <button type="button" class="btn btn-sm btn-primary" id="btn-add-action"><i class="fas fa-plus"></i> Add</button>
             </div>
@@ -147,6 +148,7 @@
     announcement_post: [ { k: "postId", label: "Announcement post", type: "post" }, { k: "mode", label: "Mode", type: "mode" } ],
     broadcast: [ { k: "message", label: "Message (& colour codes)", type: "text", ph: true } ],
     webstore_visibility: [ { k: "stripePriceId", label: "Product", type: "product" }, { k: "mode", label: "Mode", type: "mode" } ],
+    server_access: [ { k: "server", label: "Server", type: "accessServer" }, { k: "mode", label: "Change", type: "accessMode" }, { k: "ranks", label: "Ranks (Ctrl/Cmd-click for several)", type: "ranks" } ],
   };
 
   let actionsState = (JOB && JOB.actions ? JOB.actions : []).map((a) => ({ actionType: a.actionType, payload: { ...(a.payload || {}) }, continueOnError: !!a.continueOnError }));
@@ -169,6 +171,9 @@
     else if (def.type === "forum") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}">${options(PICKERS.forumDrafts, "discussionId", (x) => `#${x.discussionId} ${x.title} (${x.status})`, value)}</select>`;
     else if (def.type === "post") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}">${options(PICKERS.posts, "postId", (x) => `#${x.postId} ${x.title || "(untitled)"}`, value)}</select>`;
     else if (def.type === "product") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}">${options(PICKERS.products || [], "stripePriceId", (x) => x.displayName || x.stripePriceId, value)}</select>`;
+    else if (def.type === "accessServer") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}">${options(PICKERS.accessServers || [], "velocityName", (x) => `${x.displayName || x.velocityName} (${x.velocityName})`, value)}</select>`;
+    else if (def.type === "accessMode") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}"><option value="grant" ${value !== "revoke" ? "selected" : ""}>Let these ranks join</option><option value="revoke" ${value === "revoke" ? "selected" : ""}>Remove these ranks' access</option></select>`;
+    else if (def.type === "ranks") { const sel = new Set((Array.isArray(value) ? value : String(value || "").split(",")).map((r) => String(r).trim().toLowerCase()).filter(Boolean)); input = `<select multiple size="6" class="form-select act-field" id="${id}" data-k="${def.k}">${(PICKERS.ranks || []).map((r) => `<option value="${esc(r)}" ${sel.has(String(r).toLowerCase()) ? "selected" : ""}>${esc(r)}</option>`).join("")}</select>`; }
     else if (def.type === "mode") input = `<select class="form-select act-field" id="${id}" data-k="${def.k}"><option value="enable" ${value === "enable" ? "selected" : ""}>Enable</option><option value="disable" ${value === "disable" ? "selected" : ""}>Disable</option></select>`;
     else input = `<input class="form-control act-field" id="${id}" data-k="${def.k}" value="${esc(value)}">`;
     return `<div class="mb-2"><label class="form-label small">${def.label}</label>${input}${phBtns}</div>`;
@@ -194,7 +199,7 @@
       </div>`;
     }).join("");
 
-    wrap.querySelectorAll(".act-field").forEach((el) => el.addEventListener("input", () => { const idx = +el.closest("[data-idx]").dataset.idx; actionsState[idx].payload[el.dataset.k] = el.value; }));
+    wrap.querySelectorAll(".act-field").forEach((el) => el.addEventListener(el.multiple ? "change" : "input", () => { const idx = +el.closest("[data-idx]").dataset.idx; actionsState[idx].payload[el.dataset.k] = fieldValue(el); }));
     wrap.querySelectorAll(".act-coe").forEach((el) => el.addEventListener("change", () => { const idx = +el.closest("[data-idx]").dataset.idx; actionsState[idx].continueOnError = el.checked; }));
     wrap.querySelectorAll(".act-del").forEach((b) => b.addEventListener("click", () => { readFields(); const idx = +b.closest("[data-idx]").dataset.idx; actionsState.splice(idx, 1); render(); }));
     wrap.querySelectorAll(".act-up").forEach((b) => b.addEventListener("click", () => { readFields(); const idx = +b.closest("[data-idx]").dataset.idx; [actionsState[idx - 1], actionsState[idx]] = [actionsState[idx], actionsState[idx - 1]]; render(); }));
@@ -202,8 +207,12 @@
     wrap.querySelectorAll(".ph-ins").forEach((b) => b.addEventListener("click", () => { const el = document.getElementById(b.dataset.target); const s = el.selectionStart ?? el.value.length; el.value = el.value.slice(0, s) + b.textContent + el.value.slice(el.selectionEnd ?? s); el.dispatchEvent(new Event("input")); el.focus(); }));
   }
 
+  function fieldValue(el) {
+    return el.multiple ? [...el.selectedOptions].map((o) => o.value) : el.value;
+  }
+
   function readFields() {
-    document.querySelectorAll("#action-list .act-field").forEach((el) => { const idx = +el.closest("[data-idx]").dataset.idx; actionsState[idx].payload[el.dataset.k] = el.value; });
+    document.querySelectorAll("#action-list .act-field").forEach((el) => { const idx = +el.closest("[data-idx]").dataset.idx; actionsState[idx].payload[el.dataset.k] = fieldValue(el); });
   }
 
   function buildPayload() {

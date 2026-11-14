@@ -8,6 +8,9 @@
 - **Reactions on forum posts.** Each post has a reaction bar; reactions made in Discord on a bridged post show here too.
 - **Linked account Discord role.** `discord.roles.linked` is given to members whose Discord is linked to a website account and removed when they unlink, with a 30-minute reconcile.
 
+- **Server access from the dashboard.** Each server has a new **Velocity name** (its name in Velocity's config) and an **Access** page listing every LuckPerms rank to tick, plus individual players who can be added permanently or until a date and time. Velocity lets players onto a server when they hold `serverpermissions.server.<name>`; the page shows what LuckPerms really holds and queues `lp group|user … permission set/unset/settemp` commands through the addon, so changes apply within about a minute. Ticking **default** opens a server to everyone. Grants limited to a server/world, denials and wildcard ranks are shown and left alone. New permission `zander.web.server.access`. Migration `0090_server_velocity_name`.
+- **Scheduler: Server access action.** Let ranks join a server, or remove them, at a set time — e.g. open the dev server to supporters when a dev test starts and close it when it ends.
+
 - **Application forms can require a minimum account age.** A new "Account age (days)" eligibility rule gates applications on how long ago the member joined the community, independent of how active they have been. Set it per form or as a site-wide default at **Dashboard → Forms**, the same place as the playtime, clean-record and activity rules.
 
 ### Changed

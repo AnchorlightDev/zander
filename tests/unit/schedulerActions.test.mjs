@@ -16,7 +16,7 @@ const {
 describe("action registry", () => {
   it("registers the seven action types", () => {
     expect(ACTION_TYPES.sort()).toEqual(
-      ["announcement_post", "broadcast", "command", "discord_message", "forum_publish", "routine", "webstore_visibility"].sort()
+      ["announcement_post", "broadcast", "command", "discord_message", "forum_publish", "routine", "server_access", "webstore_visibility"].sort()
     );
   });
   it("rejects an unknown action type", () => {

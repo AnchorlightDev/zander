@@ -1,0 +1,154 @@
+<%- include("../../admin/_head.ejs", { pageTitle }) %>
+<%- include("../../admin/_topbar.ejs") %>
+<%- include("../../admin/_sidebar.ejs") %>
+<%
+  const _name = server.displayName || server.velocityName || ("Server #" + server.serverId);
+  const _held = new Set(access ? access.ranks : []);
+  const _fmt = (d) => d ? new Date(d).toISOString().slice(0, 16).replace("T", " ") + " UTC" : "";
+%>
+
+<div id="wpcontent">
+  <div id="wpbody-content">
+    <div class="wrap">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Access &mdash; <%= _name %></h1>
+        <div class="btn-toolbar mb-2 mb-md-0 gap-2">
+          <a href="/dashboard/servers/edit?id=<%= server.serverId %>" class="btn btn-sm btn-light">Edit server</a>
+          <a href="/dashboard/servers" class="btn btn-sm btn-light">Back to servers</a>
+        </div>
+      </div>
+      <%- include("../../admin/_notices.ejs") %>
+
+      <% if (!server.velocityName) { %>
+        <div class="alert alert-warning">
+          This server has no <strong>Velocity name</strong> yet, so its access can't be managed here.
+          <a href="/dashboard/servers/edit?id=<%= server.serverId %>">Add it on the server</a> &mdash;
+          it must match the server's name in Velocity's config exactly.
+        </div>
+      <% } else if (loadError) { %>
+        <div class="alert alert-danger"><%= loadError %></div>
+      <% } else { %>
+        <p class="text-muted">
+          Players can join <strong><%= _name %></strong> when they hold
+          <code><%= access.node %></code> in LuckPerms. Changes are queued as LuckPerms commands and apply
+          when a server next picks up the queue (usually within a minute), not instantly.
+        </p>
+
+        <% if (access.wildcardRanks.length) { %>
+          <div class="alert alert-info small">
+            These ranks can already join every server through a wildcard, whatever is ticked below:
+            <% access.wildcardRanks.forEach(function (w) { %><code class="me-2"><%= w.name %> (<%= w.permission %>)</code><% }) %>
+          </div>
+        <% } %>
+
+        <div class="row">
+          <div class="col-lg-6">
+            <div class="card mb-4">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Ranks</h5>
+                <% if (_held.has("default")) { %><span class="badge bg-success">Everyone</span><% } %>
+              </div>
+              <div class="card-body">
+                <p class="small text-muted">Tick <strong>default</strong> to let everyone join (hub, survival). Untick a rank to take its access away.</p>
+                <form method="post" action="/dashboard/servers/access">
+                  <input type="hidden" name="serverId" value="<%= server.serverId %>">
+                  <div class="row">
+                    <% ranks.forEach(function (rank) { const id = "rank-" + rank.replace(/[^a-zA-Z0-9]/g, "-"); %>
+                      <div class="col-sm-6">
+                        <div class="form-check mb-2">
+                          <input class="form-check-input" type="checkbox" name="ranks" value="<%= rank %>" id="<%= id %>" <%= _held.has(rank.toLowerCase()) ? "checked" : "" %>>
+                          <label class="form-check-label" for="<%= id %>"><%= rank %><% if (rank.toLowerCase() === "default") { %> <span class="text-muted small">(everyone)</span><% } %></label>
+                        </div>
+                      </div>
+                    <% }) %>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-sm mt-2"><i class="fas fa-save"></i> Save ranks</button>
+                </form>
+                <% if (access.otherRanks.length) { %>
+                  <hr>
+                  <p class="small text-muted mb-1">Also set in LuckPerms and left alone here (a denial, or limited to a server/world):</p>
+                  <% access.otherRanks.forEach(function (r) { %>
+                    <code class="small me-2"><%= r.id %><%= r.denied ? " (denied)" : "" %><%= r.server !== "global" ? " server=" + r.server : "" %><%= r.world !== "global" ? " world=" + r.world : "" %></code>
+                  <% }) %>
+                <% } %>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-lg-6">
+            <div class="card mb-4">
+              <div class="card-header"><h5 class="mb-0">Players</h5></div>
+              <div class="card-body">
+                <p class="small text-muted">For individual testers or helpers. Leave the expiry blank for permanent access; with an expiry, LuckPerms removes it on time by itself.</p>
+                <% if (!access.players.length) { %>
+                  <p class="small text-muted">No individual players.</p>
+                <% } else { %>
+                  <table class="table table-sm align-middle">
+                    <thead><tr><th>Player</th><th>Access</th><th></th></tr></thead>
+                    <tbody>
+                      <% access.players.forEach(function (p) { %>
+                        <tr>
+                          <td><%= p.username || p.id %></td>
+                          <td class="small"><% if (p.expiresAt) { %>Until <time class="js-local-time" datetime="<%= new Date(p.expiresAt).toISOString() %>"><%= _fmt(p.expiresAt) %></time><% } else { %>Permanent<% } %></td>
+                          <td class="text-end">
+                            <% if (p.username) { %>
+                            <form method="post" action="/dashboard/servers/access/player/remove" class="d-inline" onsubmit="return confirm('Remove <%= p.username %>\'s access?')">
+                              <input type="hidden" name="serverId" value="<%= server.serverId %>">
+                              <input type="hidden" name="username" value="<%= p.username %>">
+                              <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                            </form>
+                            <% } %>
+                          </td>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                <% } %>
+
+                <form method="post" action="/dashboard/servers/access/player" class="row g-2 align-items-end mt-1 js-add-player">
+                  <input type="hidden" name="serverId" value="<%= server.serverId %>">
+                  <input type="hidden" name="expiresIso" value="">
+                  <div class="col-sm-5">
+                    <label class="form-label small" for="ap-user">Minecraft username</label>
+                    <input class="form-control form-control-sm" id="ap-user" name="username" maxlength="16" pattern="[A-Za-z0-9_]{1,16}" required autocomplete="off">
+                  </div>
+                  <div class="col-sm-5">
+                    <label class="form-label small" for="ap-exp">Expires <span class="text-muted">(optional)</span></label>
+                    <input class="form-control form-control-sm" id="ap-exp" type="datetime-local" name="expiresAt">
+                  </div>
+                  <div class="col-sm-2"><button type="submit" class="btn btn-sm btn-primary w-100">Add</button></div>
+                </form>
+                <% if (access.otherPlayers.length) { %>
+                  <hr>
+                  <p class="small text-muted mb-1">Also set in LuckPerms and left alone here:</p>
+                  <% access.otherPlayers.forEach(function (p) { %>
+                    <code class="small me-2"><%= p.username || p.id %><%= p.denied ? " (denied)" : "" %><%= p.server !== "global" ? " server=" + p.server : "" %></code>
+                  <% }) %>
+                <% } %>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="small text-muted">To open or close a server at a set time (a dev test release, say), use the scheduler's <a href="/dashboard/scheduler">Server access</a> action.</p>
+      <% } %>
+    </div>
+  </div>
+  <%- include("../../admin/_footer.ejs") %>
+</div>
+<script>
+  (function () {
+    document.querySelectorAll(".js-add-player").forEach(function (form) {
+      form.addEventListener("submit", function () {
+        // datetime-local has no zone: convert the viewer's local time (with the
+        // offset in force on that date) to an exact instant before sending.
+        var local = form.querySelector('[name="expiresAt"]').value;
+        var d = local ? new Date(local) : null;
+        form.querySelector('[name="expiresIso"]').value = d && !isNaN(d) ? d.toISOString() : "";
+      });
+    });
+    document.querySelectorAll(".js-local-time").forEach(function (el) {
+      var d = new Date(el.getAttribute("datetime"));
+      if (!isNaN(d)) el.textContent = d.toLocaleString();
+    });
+  })();
+</script>

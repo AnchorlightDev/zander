@@ -4,6 +4,7 @@ import {
   optional,
   generateLog,
 } from "../common.js";
+import { parseVelocityName } from "../../lib/servers/serverAccess.mjs";
 
 /**
  * Optional Bedrock (Geyser) address: "host" or "host:port". Blank clears it.
@@ -88,6 +89,10 @@ export default function serverApiRoute(app, config, db, features, lang) {
     if (bedrockAddress === undefined) {
       return res.send({ success: false, message: "Bedrock address must look like host or host:port." });
     }
+    const velocityName = parseVelocityName(req.body.velocityName);
+    if (velocityName === undefined) {
+      return res.send({ success: false, message: "The Velocity name can only use letters, numbers, _, - and . (it must match Velocity's config)." });
+    }
 
     const serverCreatedLang = lang.server.serverCreated;
 
@@ -101,10 +106,11 @@ export default function serverApiRoute(app, config, db, features, lang) {
               displayName,
               serverType,
               serverConnectionAddress,
+              velocityName,
               bedrockAddress,
               position
-          ) VALUES (?, ?, ?, ?, ?)`,
-          [displayName, serverType, serverConnectionAddress, bedrockAddress, position],
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
+          [displayName, serverType, serverConnectionAddress, velocityName, bedrockAddress, position],
           (error, results) => {
             if (error) return reject(error);
             resolve(results);
@@ -124,6 +130,9 @@ export default function serverApiRoute(app, config, db, features, lang) {
         message: serverCreatedLang.replace("%NAME%", displayName),
       });
     } catch (error) {
+      if (error?.code === "ER_DUP_ENTRY") {
+        return res.send({ success: false, message: "Another server already uses that Velocity name." });
+      }
       console.error(error);
       if (!res.sent) {
         return res.status(500).send({
@@ -157,6 +166,10 @@ export default function serverApiRoute(app, config, db, features, lang) {
     if (bedrockAddress === undefined) {
       return res.send({ success: false, message: "Bedrock address must look like host or host:port." });
     }
+    const velocityName = parseVelocityName(req.body.velocityName);
+    if (velocityName === undefined) {
+      return res.send({ success: false, message: "The Velocity name can only use letters, numbers, _, - and . (it must match Velocity's config)." });
+    }
 
     try {
       await new Promise((resolve, reject) => {
@@ -168,11 +181,12 @@ export default function serverApiRoute(app, config, db, features, lang) {
                   displayName=?,
                   serverType=?,
                   serverConnectionAddress=?,
+                  velocityName=?,
                   bedrockAddress=?,
                   position=?
               WHERE
                   serverId=?`,
-          [displayName, serverType, serverConnectionAddress, bedrockAddress, position, serverId],
+          [displayName, serverType, serverConnectionAddress, velocityName, bedrockAddress, position, serverId],
           (error, results) => {
             if (error) return reject(error);
             resolve(results);
@@ -192,6 +206,9 @@ export default function serverApiRoute(app, config, db, features, lang) {
         message: lang.server.serverEdited,
       });
     } catch (error) {
+      if (error?.code === "ER_DUP_ENTRY") {
+        return res.send({ success: false, message: "Another server already uses that Velocity name." });
+      }
       console.error(error);
       if (!res.sent) {
         return res.status(500).send({
