@@ -3,29 +3,62 @@ import nodemailer from "nodemailer";
 import ejs from "ejs";
 import fs from "fs";
 import path from "path";
+import { createGraphTransport } from "../lib/graphMail.mjs";
 dotenv.config();
 
-const smtpPort = Number(process.env.smtpPort) || 587;
-const smtpSecure = String(process.env.smtpSecure || "").toLowerCase() === "true";
-const smtpRequireTLS = String(process.env.smtpRequireTLS || "true").toLowerCase() === "true";
+// emailTransport=graph sends through Microsoft Graph with an Entra app
+// registration (works for shared mailboxes, no SMTP AUTH). Anything else, or
+// unset, keeps the SMTP transport.
+const emailTransport = String(process.env.emailTransport || "smtp").toLowerCase();
 
-const transporter = nodemailer.createTransport({
-  host: process.env.smtpHost,
-  port: smtpPort,
-  secure: smtpSecure,
-  requireTLS: !smtpSecure && smtpRequireTLS,
-  auth: {
-    user: process.env.smtpUser,
-    pass: process.env.smtpPass,
-  },
-  tls: {
-    minVersion: process.env.smtpTLSMinVersion || "TLSv1.2",
-  },
-});
+function createSmtpTransport() {
+  const smtpPort = Number(process.env.smtpPort) || 587;
+  const smtpSecure = String(process.env.smtpSecure || "").toLowerCase() === "true";
+  const smtpRequireTLS = String(process.env.smtpRequireTLS || "true").toLowerCase() === "true";
 
-console.info(
-  `[EMAIL] Transport configured for ${process.env.smtpHost}:${smtpPort} secure=${smtpSecure} requireTLS=${!smtpSecure && smtpRequireTLS}`
-);
+  const smtp = nodemailer.createTransport({
+    host: process.env.smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
+    requireTLS: !smtpSecure && smtpRequireTLS,
+    auth: {
+      user: process.env.smtpUser,
+      pass: process.env.smtpPass,
+    },
+    tls: {
+      minVersion: process.env.smtpTLSMinVersion || "TLSv1.2",
+    },
+  });
+  smtp.describe = () =>
+    `SMTP ${process.env.smtpHost}:${smtpPort} secure=${smtpSecure} requireTLS=${!smtpSecure && smtpRequireTLS}`;
+  return smtp;
+}
+
+function createTransport() {
+  if (emailTransport === "graph") {
+    try {
+      return createGraphTransport({
+        tenantId: process.env.graphMailTenantId,
+        clientId: process.env.graphMailClientId,
+        clientSecret: process.env.graphMailClientSecret,
+        sender: process.env.graphMailSender || process.env.smtpIdentityEmailAddress,
+      });
+    } catch (error) {
+      console.error(`${error.message}. Email sending will fail until this is fixed.`);
+      return {
+        describe: () => "Microsoft Graph (misconfigured)",
+        sendMail: async () => {
+          throw error;
+        },
+      };
+    }
+  }
+  return createSmtpTransport();
+}
+
+const transporter = createTransport();
+
+console.info(`[EMAIL] Transport configured: ${transporter.describe()}`);
 
 export async function sendMail(
   recipient,
@@ -52,7 +85,7 @@ export async function sendMail(
 
   try {
     console.info(
-      `[EMAIL] Sending template "${template}" to ${recipient} via ${process.env.smtpHost}:${process.env.smtpPort}`
+      `[EMAIL] Sending template "${template}" to ${recipient} via ${transporter.describe()}`
     );
 
     const info = await transporter.sendMail(mailOptions);
@@ -64,7 +97,7 @@ export async function sendMail(
 
     if (info?.rejected?.length) {
       console.warn(
-        `[EMAIL] SMTP rejected the following recipients: ${info.rejected.join(", ")}`
+        `[EMAIL] Rejected the following recipients: ${info.rejected.join(", ")}`
       );
     }
 
@@ -76,7 +109,7 @@ export async function sendMail(
     );
 
     if (error?.response) {
-      console.error(`[EMAIL] SMTP response: ${error.response}`);
+      console.error(`[EMAIL] Transport response: ${error.response}`);
     }
 
     throw error;
