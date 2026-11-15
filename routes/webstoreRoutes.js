@@ -83,13 +83,19 @@ function isValidMinecraftUsername(name) {
 }
 
 /**
- * Build a lookup from Stripe price ID to the curated rank-catalog content
- * (perk list, plus a description/image to fall back on). This is what lets the
- * storefront show the rich perk breakdown the old /ranks page used to, keyed off
- * the live Stripe product each card already renders.
+ * Build a lookup from Stripe price ID to the curated rank-catalog content: the
+ * perk list, a description/image to fall back on, and the category the rank was
+ * filed under. This is what lets the storefront show the rich perk breakdown and
+ * the category grouping the old /ranks page used to, keyed off the live Stripe
+ * product each card already renders.
+ *
+ * Category matters because the two pages assign categories in different places:
+ * the storefront groups by webstoreItemSettings (per Stripe price), while ranks
+ * were grouped by rankCatalog.categoryId. Without carrying it across, a rank
+ * categorised in the catalog would show up ungrouped on the webstore.
  *
  * @param {Array<{ packages: Array<object> }>} rankCategories  from getRankCatalogForPublicPage()
- * @returns {Map<string, { perks: Array, description: string|null, imageUrl: string|null }>}
+ * @returns {Map<string, object>}  overlay keyed by Stripe price ID
  */
 function buildPerkOverlay(rankCategories) {
   const byPrice = new Map();
@@ -99,6 +105,10 @@ function buildPerkOverlay(rankCategories) {
         perks: Array.isArray(pkg.perks) ? pkg.perks : [],
         description: pkg.description || null,
         imageUrl: pkg.imageUrl || null,
+        categoryId: pkg.categoryId ?? null,
+        categoryName: pkg.categoryName ?? null,
+        categoryVisible: pkg.categoryVisible,
+        categorySortOrder: Number(pkg.categorySortOrder) || 0,
       };
       for (const priceId of pkg.stripePriceIds || []) {
         byPrice.set(String(priceId), overlay);
@@ -175,6 +185,11 @@ export default function webstoreRoutes(app, config, features) {
 
       const decorated = applyItemSettings(rawItems, settings, categories).map((item) => {
         const overlay = perkOverlay.get(String(item.stripePriceId));
+        // A webstore category assignment (webstoreItemSettings) wins; otherwise
+        // fall back to the category the rank was filed under in the catalog, so
+        // ranks stay grouped on the storefront exactly as they were on /ranks.
+        const useCatalogCategory =
+          overlay && item.categoryId == null && overlay.categoryId != null;
         return {
           ...item,
           priceDisplay: formatPrice(item.priceCents, item.currency, locale),
@@ -186,6 +201,14 @@ export default function webstoreRoutes(app, config, features) {
           // description/image only fill in when Stripe has none of its own.
           description: item.description || overlay?.description || null,
           imageUrl: item.imageUrl || overlay?.imageUrl || null,
+          ...(useCatalogCategory
+            ? {
+                categoryId: overlay.categoryId,
+                categoryName: overlay.categoryName,
+                categoryVisible: overlay.categoryVisible,
+                categorySortOrder: overlay.categorySortOrder,
+              }
+            : {}),
         };
       });
 
