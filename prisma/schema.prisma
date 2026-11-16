@@ -439,6 +439,8 @@ model announcements {
   sortOrder             Int?
   countdownTo           DateTime?         @db.DateTime(3)
   countdownFinishedText String?           @db.VarChar(512)
+  /// tip only: JSON array of lower-case Velocity server names; NULL/[] = all servers.
+  targetServers      Json?
   startDate          DateTime?
   endDate            DateTime?
   updatedDate        DateTime?

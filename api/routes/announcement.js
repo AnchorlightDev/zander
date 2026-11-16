@@ -15,6 +15,12 @@ export default function announcementApiRoute(app, config, db, features, lang) {
     const announcementId = optional(req.query, "announcementId");
     const announcementType = optional(req.query, "announcementType");
     const enabled = optional(req.query, "enabled");
+    // Velocity server name the tip is for. Tips with no targetServers go to
+    // every server; targeted tips only to the servers they list. A caller that
+    // sends no server (older proxy builds) only gets untargeted tips, so a
+    // targeted tip never leaks network-wide.
+    const serverRaw = optional(req.query, "server");
+    const server = typeof serverRaw === "string" ? serverRaw.trim().toLowerCase() : "";
 
     try {
       const activeWindowFilter =
@@ -36,7 +42,13 @@ export default function announcementApiRoute(app, config, db, features, lang) {
       } else if (announcementType === "popup") {
         dbQuery = `SELECT * FROM announcements WHERE announcementType='popup' AND enabled=1${activeWindowFilter} ORDER BY COALESCE(startDate, updatedDate, UTC_TIMESTAMP(3)) ASC;`;
       } else if (announcementType === "tip") {
-        dbQuery = `SELECT * FROM announcements WHERE announcementType='tip' AND enabled=1${activeWindowFilter} ORDER BY RAND() LIMIT 1;`;
+        const untargeted = "(targetServers IS NULL OR JSON_LENGTH(targetServers) = 0)";
+        if (server && /^[a-z0-9_.-]{1,64}$/.test(server)) {
+          dbQuery = `SELECT * FROM announcements WHERE announcementType='tip' AND enabled=1 AND (${untargeted} OR JSON_CONTAINS(targetServers, JSON_QUOTE(?)))${activeWindowFilter} ORDER BY RAND() LIMIT 1;`;
+          params = [server];
+        } else {
+          dbQuery = `SELECT * FROM announcements WHERE announcementType='tip' AND enabled=1 AND ${untargeted}${activeWindowFilter} ORDER BY RAND() LIMIT 1;`;
+        }
       } else if (announcementType === "motd") {
         dbQuery = `SELECT * FROM announcements WHERE announcementType='motd' AND enabled=1${activeWindowFilter} ORDER BY RAND() LIMIT 1;`;
       } else if (enabled === "1") {

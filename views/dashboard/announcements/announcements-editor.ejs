@@ -137,6 +137,7 @@
 <script>
 (function () {
   const STATE = <%- JSON.stringify(wizardState).replace(/</g, '\\u003c') %>;
+  const TIP_SERVERS = <%- JSON.stringify(servers || []).replace(/</g, '\\u003c') %>;
   const HOLOGRAMS_ENABLED = <%= hologramsEnabled ? 'true' : 'false' %>;
 
   const COLOURS = [
@@ -307,6 +308,22 @@
     if (p === 'web' || p === 'popup' || p === 'tip' || p === 'hologram') {
       html += field('Link (optional)', `<input type="text" id="fld-${p}-link" class="form-control" value="${esc(st.link || '')}" placeholder="/store, https://...">`);
     }
+    if (p === 'tip') {
+      const chosen = new Set((st.targetServers || []).map((s) => String(s).toLowerCase()));
+      // Keep any saved target that is no longer in the server list, so editing doesn't silently drop it.
+      const options = TIP_SERVERS.slice();
+      chosen.forEach((n) => { if (!options.some((o) => o.name === n)) options.push({ name: n, label: n + ' (not in server list)' }); });
+      const allOn = chosen.size === 0;
+      html += `<div class="mb-3"><label class="form-label">Servers</label>
+        <div class="form-check"><input class="form-check-input" type="checkbox" id="fld-tip-all" ${allOn ? 'checked' : ''}>
+          <label class="form-check-label" for="fld-tip-all">All servers</label></div>
+        <div id="fld-tip-servers" class="ms-3 ${allOn ? 'd-none' : ''}">
+          ${options.length ? options.map((o, i) => `<div class="form-check"><input class="form-check-input" type="checkbox" id="fld-tip-srv-${i}" data-tip-server="${esc(o.name)}" ${chosen.has(o.name) ? 'checked' : ''}>
+            <label class="form-check-label" for="fld-tip-srv-${i}">${esc(o.label)} <code>${esc(o.name)}</code></label></div>`).join('')
+            : '<div class="text-muted small">No servers have a Velocity name set. Add one under Servers to target tips.</div>'}
+        </div>
+        <small class="text-muted d-block">Tick All servers, or pick one or more servers to show this tip only to players on them.</small></div>`;
+    }
     if (p === 'popup') {
       html += field('Button text (optional)', `<input type="text" id="fld-popup-btn" class="form-control" maxlength="60" value="${esc(st.popupButtonText || '')}">`, '60 characters max.');
       html += field('Image URL (optional)', `<input type="url" id="fld-popup-img" class="form-control" value="${esc(st.popupImageUrl || '')}" placeholder="https://...">`);
@@ -359,6 +376,10 @@
       if (target) insertAtCursor(target, btn.dataset.ins);
     }));
 
+    // tip server targeting
+    const tipAll = pane.querySelector('#fld-tip-all');
+    if (tipAll) tipAll.addEventListener('change', () => pane.querySelector('#fld-tip-servers').classList.toggle('d-none', tipAll.checked));
+
     // popup button length warning
     const btnText = pane.querySelector('#fld-popup-btn');
     if (btnText) btnText.addEventListener('input', () => {
@@ -376,6 +397,13 @@
     else st.body = g(`fld-${p}-msg`) ?? st.body;
     const link = g(`fld-${p}-link`); if (link !== undefined) st.link = link;
     if (p === 'popup') { st.popupButtonText = g('fld-popup-btn') ?? ''; st.popupImageUrl = g('fld-popup-img') ?? ''; }
+    if (p === 'tip') {
+      const all = document.getElementById('fld-tip-all');
+      if (all) {
+        st.targetServers = all.checked ? [] :
+          Array.from(document.querySelectorAll('[data-tip-server]')).filter((el) => el.checked).map((el) => el.dataset.tipServer);
+      }
+    }
     if (p === 'hologram') {
       st.hologramGroup = g('fld-holo-group') ?? 'default';
       st.sortOrder = Number(g('fld-holo-sort')) || 0;
@@ -438,6 +466,7 @@
       if (PLATFORM_META[p].colour) row.colourMessageFormat = st.colourMessageFormat || '';
       else row.body = st.body || '';
       if (p === 'popup') { row.popupButtonText = st.popupButtonText || null; row.popupImageUrl = st.popupImageUrl || null; }
+      if (p === 'tip') row.targetServers = (st.targetServers || []).length ? st.targetServers : null;
       if (p === 'hologram') {
         row.hologramGroup = st.hologramGroup || 'default';
         row.sortOrder = Number.isFinite(st.sortOrder) ? st.sortOrder : 0;

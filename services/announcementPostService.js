@@ -12,6 +12,7 @@
  * Writes use Prisma (new code) and run add/update/remove of a post's platform
  * rows inside a single transaction. Every write busts the web-announcement cache.
  */
+import { Prisma } from "@prisma/client";
 import { prisma, withDeadlockRetry } from "../controllers/databaseController.js";
 import { isAllowedUrl } from "../lib/navigation/menus.mjs";
 import {
@@ -24,6 +25,21 @@ import {
 
 export const PLATFORMS = ["web", "popup", "tip", "motd", "hologram"];
 export const COLOUR_PLATFORMS = ["tip", "motd", "hologram"]; // use colourMessageFormat
+
+const SERVER_NAME = /^[a-z0-9_.-]{1,64}$/;
+
+/**
+ * Normalise a tip's server targets to a sorted, de-duplicated array of
+ * lower-case Velocity server names, or null for "every server". Accepts an
+ * array or a comma-separated string; invalid names are dropped.
+ */
+export function normaliseTargetServers(value) {
+  let list = value;
+  if (typeof list === "string") list = list.split(",");
+  if (!Array.isArray(list)) return null;
+  const names = [...new Set(list.map((v) => String(v ?? "").trim().toLowerCase()).filter((v) => SERVER_NAME.test(v)))].sort();
+  return names.length ? names : null;
+}
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -136,6 +152,7 @@ function resolveRow(shared, platform) {
     sortOrder: platform.sortOrder,
     countdownTo: platform.countdownTo ?? null,
     countdownFinishedText: platform.countdownFinishedText ?? null,
+    targetServers: platform.targetServers ?? null,
     startDate: pick("startDate") ?? null,
     endDate: pick("endDate") ?? null,
   };
@@ -160,6 +177,8 @@ function buildRow(resolved, now) {
     sortOrder: null,
     countdownTo: null,
     countdownFinishedText: null,
+    // Json? columns take Prisma.DbNull, not a bare null, to store SQL NULL.
+    targetServers: Prisma.DbNull,
     startDate: normaliseDate(resolved.startDate),
     endDate: normaliseDate(resolved.endDate),
     updatedDate: now,
@@ -167,6 +186,10 @@ function buildRow(resolved, now) {
 
   if (COLOUR_PLATFORMS.includes(platform)) {
     data.colourMessageFormat = cleanHologramText(resolved.colourMessageFormat ?? resolved.body ?? "") || null;
+  }
+
+  if (platform === "tip") {
+    data.targetServers = normaliseTargetServers(resolved.targetServers) ?? Prisma.DbNull;
   }
 
   if (platform === "popup") {

@@ -48,6 +48,7 @@ function emptyState(preselect) {
   platforms.hologram.sortOrder = 0;
   platforms.hologram.countdownTo = null;
   platforms.hologram.countdownFinishedText = "";
+  platforms.tip.targetServers = []; // [] = every server
   return { postId: null, title: "", shared: { body: "", link: "" }, _sharedStart: null, _sharedEnd: null, _perPlatform: false, platforms };
 }
 
@@ -66,6 +67,7 @@ function stateFromPost(post) {
     else st.body = row.body || "";
     if (p !== "motd") st.link = row.link || "";
     if (p === "popup") { st.popupButtonText = row.popupButtonText || ""; st.popupImageUrl = row.popupImageUrl || ""; }
+    if (p === "tip") st.targetServers = Array.isArray(row.targetServers) ? row.targetServers : [];
     if (p === "hologram") {
       st.hologramGroup = row.hologramGroup || "default";
       st.sortOrder = Number.isFinite(row.sortOrder) ? row.sortOrder : 0;
@@ -103,6 +105,7 @@ function stateFromPayload(payload) {
     else st.body = row.body || "";
     if (p !== "motd") st.link = row.link || "";
     if (p === "popup") { st.popupButtonText = row.popupButtonText || ""; st.popupImageUrl = row.popupImageUrl || ""; }
+    if (p === "tip") st.targetServers = Array.isArray(row.targetServers) ? row.targetServers : [];
     if (p === "hologram") {
       st.hologramGroup = row.hologramGroup || "default";
       st.sortOrder = Number.isFinite(row.sortOrder) ? row.sortOrder : 0;
@@ -120,9 +123,22 @@ function stateFromPayload(payload) {
 
 export default function dashboardAnnouncementSiteRoute(app, fetch, config, db, features, lang) {
   async function renderEditor(req, res, { type, wizardState, pageTitle, notices }) {
-    const [groups, announcementWeb] = await Promise.all([
+    const [groups, announcementWeb, servers] = await Promise.all([
       listHologramGroups().catch(() => []),
       getWebAnnouncement(),
+      // Servers a tip can target: anything with a Velocity name.
+      prisma.servers
+        .findMany({
+          where: { velocityName: { not: null } },
+          select: { displayName: true, velocityName: true },
+          orderBy: [{ position: "asc" }, { serverId: "asc" }],
+        })
+        .then((rows) =>
+          rows
+            .map((r) => ({ name: String(r.velocityName || "").trim().toLowerCase(), label: r.displayName || r.velocityName }))
+            .filter((r) => /^[a-z0-9_.-]{1,64}$/.test(r.name))
+        )
+        .catch(() => []),
     ]);
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/announcements/announcements-editor", {
@@ -134,6 +150,7 @@ export default function dashboardAnnouncementSiteRoute(app, fetch, config, db, f
         wizardState,
         hologramsEnabled: !!features.holograms,
         groups,
+        servers,
         announcementWeb,
         ...(notices ? { notices } : {}),
         ...adminViewData(req, features),
