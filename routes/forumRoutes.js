@@ -23,6 +23,7 @@ import {
   publishDiscussion,
 } from "../controllers/forumController.js";
 import { resolvePublishState } from "../lib/forumPublishing.mjs";
+import { linkifyHtml } from "../lib/htmlSanitize.js";
 import {
   validatePollInput,
   createPoll,
@@ -883,6 +884,11 @@ export default function forumRoutes(
       }
       const canReact =
         isLoggedIn(req) && discussion.status === "published" && !discussion.isArchived;
+
+      // Posts saved before auto-linking existed still hold bare URLs.
+      posts.forEach((p) => {
+        if (typeof p.content === "string") p.content = linkifyHtml(p.content);
+      });
 
       await renderForumsView(
         app,

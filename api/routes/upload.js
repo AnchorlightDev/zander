@@ -16,6 +16,9 @@ const ALLOWED_MIME = ["image/png", "image/jpeg", "image/gif", "image/webp"];
  */
 const FOLDER_RULES = [
   { match: /^zander\/forms\/[a-z0-9-]{1,80}$/, nodes: null },
+  // Images pasted or inserted into the shared rich-text editor (forum posts,
+  // profile About Me, etc.) -- any signed-in user who can reach an editor.
+  { match: /^zander\/editor$/, nodes: null },
   { match: /^announcements$/, nodes: ["zander.web.announcements"] },
   { match: /^(zander\/)?events(\/[a-z0-9-]{1,80})?$/, nodes: ["zander.web.events.edit", "zander.web.events.review"] },
   { match: /^finance-budget-icons$/, nodes: ["zander.web.finance.manage"] },

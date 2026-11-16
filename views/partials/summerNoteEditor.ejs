@@ -159,6 +159,34 @@
           ['view', ['fullscreen', 'help']]
         ],
         callbacks: {
+          // Pasted, dropped or picked images would otherwise be inlined as
+          // base64 data: URLs, which the server sanitizer strips. Upload them
+          // and insert the hosted URL instead.
+          onImageUpload: function (files) {
+            var $ed = $('#<%= editorElementName %>');
+            Array.prototype.forEach.call(files, function (file) {
+              if (!/^image\/(png|jpe?g|gif|webp)$/i.test(file.type)) {
+                alert('Only PNG, JPG, GIF and WebP images can be added.');
+                return;
+              }
+              var fd = new FormData();
+              fd.append('folder', 'zander/editor');
+              fd.append('file', file);
+              fetch('/api/upload/image', { method: 'POST', body: fd, credentials: 'same-origin' })
+                .then(function (res) { return res.json(); })
+                .then(function (json) {
+                  if (json && json.success && json.data && json.data.url) {
+                    $ed.summernote('insertImage', json.data.url, function ($img) {
+                      $img.attr('alt', file.name || 'image');
+                      $img.css('max-width', '100%');
+                    });
+                  } else {
+                    alert((json && json.message) || 'Image upload failed.');
+                  }
+                })
+                .catch(function () { alert('Image upload failed. Please try again.'); });
+            });
+          },
           onPaste: function (e) {
             var clipboardData = (e.originalEvent || e).clipboardData || window.clipboardData;
             if (!clipboardData) return;
@@ -197,7 +225,6 @@
         }
     });
 
-    $('div.note-group-select-from-files').remove();
 
   });
 </script>
