@@ -114,7 +114,7 @@
             <tbody>
               <% forumScheduled.forEach(function (d) { %>
                 <tr>
-                  <td><a href="/forum/thread/<%= d.slug %>"><%= d.title %></a></td>
+                  <td><a href="/forums/discussion/<%= d.discussionId %>/<%= d.slug %>"><%= d.title %></a></td>
                   <td class="small"><%= d.status %></td>
                   <td class="small" data-local-date="<%= d.publishAt ? new Date(d.publishAt).toISOString() : "" %>"><%= d.publishAt ? new Date(d.publishAt).toISOString() : "" %></td>
                 </tr>

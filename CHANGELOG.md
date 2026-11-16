@@ -11,10 +11,13 @@
 - **Server access from the dashboard.** Each server has a new **Velocity name** (its name in Velocity's config) and an **Access** page listing every LuckPerms rank to tick, plus individual players who can be added permanently or until a date and time. Velocity lets players onto a server when they hold `serverpermissions.server.<name>`; the page shows what LuckPerms really holds and queues `lp group|user … permission set/unset/settemp` commands through the addon, so changes apply within about a minute. Ticking **default** opens a server to everyone. Grants limited to a server/world, denials and wildcard ranks are shown and left alone. New permission `zander.web.server.access`. Migration `0090_server_velocity_name`.
 - **Scheduler: Server access action.** Let ranks join a server, or remove them, at a set time — e.g. open the dev server to supporters when a dev test starts and close it when it ends.
 
+- **See scheduled forum threads.** Scheduled threads now show in an info box at the top of their board: moderators see every one queued there (with author and publish time), members see their own. Moderators also get an **All Scheduled Threads** list on **My Drafts**. Drafts stay private to their author.
+
 - **Application forms can require a minimum account age.** A new "Account age (days)" eligibility rule gates applications on how long ago the member joined the community, independent of how active they have been. Set it per form or as a site-wide default at **Dashboard → Forms**, the same place as the playtime, clean-record and activity rules.
 
 ### Changed
 
+- **Scheduler → Forum tab links work.** Thread titles now open the thread instead of a dead `/forum/thread/` link.
 - **`/forcelink` and `/lp-audit` permissions** (`zander.discord.forcelink`, `zander.discord.lpaudit`) can now be ticked in the ranks dashboard.
 - **The unused `internal` API scope has been removed** from the API Keys page. No route ever required it; existing keys that have it are unaffected.
 - **Removed unused variables from `.env.example`:** `STRIPE_PRICE_MAP_TOKEN_*`, `STRIPE_PRICE_SUPPORTER_MONTHLY` and `MINEMONITOR_DATE_FORMAT`.

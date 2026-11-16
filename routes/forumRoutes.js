@@ -20,6 +20,7 @@ import {
   forumViewerPermissions,
   incrementDiscussionViews,
   getUserDraftDiscussions,
+  getScheduledDiscussions,
   publishDiscussion,
 } from "../controllers/forumController.js";
 import { resolvePublishState } from "../lib/forumPublishing.mjs";
@@ -438,10 +439,16 @@ export default function forumRoutes(
 
     try {
       const permissions = getUserPermissions(req);
-      const [categoryTree, drafts] = await Promise.all([
+      const canModerate = userCanModerate(req);
+      const currentUserId = getCurrentUserId(req);
+      const [categoryTree, drafts, allScheduled] = await Promise.all([
         getCategoriesForUser(permissions),
-        getUserDraftDiscussions(getCurrentUserId(req)),
+        getUserDraftDiscussions(currentUserId),
+        // Moderators also see everyone else's scheduled threads, so they can
+        // check what is queued to go out. Drafts stay private to their author.
+        canModerate ? getScheduledDiscussions().catch(() => []) : Promise.resolve([]),
       ]);
+      const othersScheduled = allScheduled.filter((d) => d.createdBy !== currentUserId);
 
       await renderForumsView(
         app,
@@ -453,6 +460,8 @@ export default function forumRoutes(
           categories: categoryTree.tree,
           activeCategory: null,
           drafts,
+          othersScheduled,
+          canModerate,
           moment,
         },
         config,
@@ -493,12 +502,24 @@ export default function forumRoutes(
       const page = Number.parseInt(req.query.page, 10) || 1;
       const perPage = 20;
 
-      const { discussions, total } = await getCategoryDiscussions({
-        categoryId: category.categoryId,
-        page,
-        perPage,
-        includeArchived,
-      });
+      const canModerate = userCanModerate(req);
+      const currentUserId = getCurrentUserId(req);
+      const [{ discussions, total }, scheduledDiscussions] = await Promise.all([
+        getCategoryDiscussions({
+          categoryId: category.categoryId,
+          page,
+          perPage,
+          includeArchived,
+        }),
+        // Scheduled threads are not public: moderators see every one queued in
+        // this board, a member sees only their own. Logged-out visitors none.
+        canModerate || currentUserId
+          ? getScheduledDiscussions({
+              categoryId: category.categoryId,
+              createdBy: canModerate ? null : currentUserId,
+            }).catch(() => [])
+          : Promise.resolve([]),
+      ]);
 
       await renderForumsView(
         app,
@@ -511,9 +532,10 @@ export default function forumRoutes(
           activeCategory: category,
           category,
           discussions,
+          scheduledDiscussions,
           pagination: paginate(total, page, perPage),
           moment,
-          canModerate: userCanModerate(req),
+          canModerate,
           canStartDiscussion:
             userCanPostInCategory(category, req) || userCanModerate(req),
         },

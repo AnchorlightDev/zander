@@ -34,6 +34,7 @@ import dev.anchorlight.zander.hub.protection.HubInteractionProtection;
 import dev.anchorlight.zander.hub.protection.HubProtection;
 import dev.anchorlight.zander.hub.protection.PortalBlockProtection;
 import dev.anchorlight.zander.hub.protection.dimension.DimensionProtectionListener;
+import dev.anchorlight.zander.hub.seasonal.SeasonalSnow;
 
 import java.io.File;
 
@@ -105,6 +106,11 @@ public class ZanderHubMain extends JavaPlugin {
         pluginmanager.registerEvents(new HubCreatureSpawnProtection(this), this);
         pluginmanager.registerEvents(new DimensionProtectionListener(this), this);
         pluginmanager.registerEvents(new PortalBlockProtection(), this);
+
+        // Seasonal hub snow (December by default; see seasonal-snow in config.yml)
+        SeasonalSnow seasonalSnow = new SeasonalSnow(this);
+        pluginmanager.registerEvents(seasonalSnow, this);
+        seasonalSnow.start();
 
         // Item Event Registry
         pluginmanager.registerEvents(new HubCompassItem(), this);

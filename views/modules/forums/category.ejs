@@ -42,6 +42,26 @@
             <% } %>
           </div>
 
+          <% if (typeof scheduledDiscussions !== 'undefined' && scheduledDiscussions.length) { %>
+            <div class="alert alert-info mb-3">
+              <div class="fw-semibold mb-2">
+                <i class="fa-regular fa-clock me-1"></i>Scheduled
+                <span class="fw-normal small text-muted">· not public yet<%= canModerate ? '' : ', only you can see these' %></span>
+              </div>
+              <ul class="list-unstyled mb-0">
+                <% scheduledDiscussions.forEach(function(d) { %>
+                  <li class="d-flex flex-wrap justify-content-between gap-2 py-1">
+                    <a href="/forums/discussion/<%= d.discussionId %>/<%= d.slug %>" class="fw-semibold"><%= d.title %></a>
+                    <span class="small text-muted">
+                      <% if (canModerate && d.authorUsername) { %>by <%= d.authorUsername %> · <% } %>
+                      <% if (d.publishAt) { %>publishes <span data-relative-time="<%= new Date(d.publishAt).toISOString() %>" data-relative-format="datetime"></span><% } %>
+                    </span>
+                  </li>
+                <% }); %>
+              </ul>
+            </div>
+          <% } %>
+
           <% if (!discussions.length) { %>
             <div class="text-center py-5 text-muted">
               <i class="fa-regular fa-comments fa-2x mb-3"></i>

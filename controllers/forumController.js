@@ -1349,6 +1349,50 @@ export async function getUserDraftDiscussions(userId) {
 }
 
 /**
+ * Scheduled (not yet published) threads, soonest first, with their category.
+ * Pass `categoryId` to limit to one board and `createdBy` to limit to one
+ * author (a regular member only ever sees their own). Drafts are excluded:
+ * those stay private to their author.
+ */
+export async function getScheduledDiscussions({ categoryId = null, createdBy = null } = {}) {
+  const where = ["d.status = 'scheduled'"];
+  const params = [];
+  if (categoryId != null) {
+    const cid = Number.parseInt(categoryId, 10);
+    if (!Number.isFinite(cid) || cid <= 0) return [];
+    where.push("d.categoryId = ?");
+    params.push(cid);
+  }
+  if (createdBy != null) {
+    const uid = Number.parseInt(createdBy, 10);
+    if (!Number.isFinite(uid) || uid <= 0) return [];
+    where.push("d.createdBy = ?");
+    params.push(uid);
+  }
+
+  const rows = await query(
+    `SELECT d.discussionId, d.categoryId, d.title, d.slug, d.createdBy, d.createdAt,
+            d.updatedAt, d.lastPostAt, d.lastPostBy, d.isLocked, d.isSticky, d.isArchived,
+            d.status, d.publishAt, d.viewCount,
+            c.name AS categoryName, c.slug AS categorySlug,
+            u.username AS authorUsername
+       FROM forumDiscussions d
+       JOIN forumCategories c ON c.categoryId = d.categoryId
+       LEFT JOIN users u ON u.userId = d.createdBy
+      WHERE ${where.join(" AND ")}
+      ORDER BY d.publishAt IS NULL, d.publishAt ASC, d.discussionId ASC`,
+    params
+  );
+
+  return rows.map((row) => ({
+    ...mapDiscussionRow(row),
+    categoryName: row.categoryName,
+    categorySlug: row.categorySlug,
+    authorUsername: row.authorUsername || null,
+  }));
+}
+
+/**
  * Publish a draft or scheduled thread now: clear the schedule and stamp its
  * post time to the moment it goes live, so it sorts in as a fresh discussion
  * rather than back-dated to when the draft was written. The original post's
