@@ -172,7 +172,12 @@ export class ShopDirectoryCommand extends Command {
         page.forEach((shop) => {
           const isBuying = shop.shopType === "buying";
           const transactionType = isBuying ? "💰 Buying" : "📦 Selling";
-          const stockInfo = !isBuying && shop.stock >= 0 ? `**Stock:** ${shop.stock}\n` : "";
+          const stockNum = Number(shop.stock);
+          const stockInfo = isBuying
+            ? ""
+            : (Number.isFinite(stockNum) && stockNum >= 0
+              ? `**Stock:** ${stockNum}\n`
+              : "**Stock:** Unknown\n");
           const contentsInfo = shop.shulkerContents ? `**Contents:** ${shop.shulkerContents}\n` : "";
 
           embed.addFields([
