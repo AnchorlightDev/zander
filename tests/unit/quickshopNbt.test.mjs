@@ -159,6 +159,12 @@ describe("decodeShopItem", () => {
 });
 
 describe("buildIndexValue", () => {
+  it("stores the item hash so in-place item edits can be detected", () => {
+    const value = JSON.parse(buildIndexValue({ id: "honey_block", count: 16 }, "123456"));
+    expect(value).toMatchObject({ v: SHOP_INDEX_VERSION, h: 123456, id: "honey_block", count: 16 });
+    expect(JSON.parse(buildIndexValue(null, 7))).toEqual({ v: SHOP_INDEX_VERSION, h: 7 });
+  });
+
   it("stamps the version and builds searchable tags", () => {
     const value = JSON.parse(buildIndexValue({ id: "enchanted_book", count: 1, ench: { sharpness: 5, unbreaking: 3 } }));
     expect(value.v).toBe(SHOP_INDEX_VERSION);

@@ -22,16 +22,23 @@ function queryAsync(sql, params) {
 }
 
 // Rows that are new-format and not yet indexed at the current version: never
-// indexed (NULL), indexed under the original plain-ID format, or indexed by an
-// older version of this cron (no / different "v"). Matched as text so it works
+// indexed (NULL), indexed under the original plain-ID format, indexed by an
+// older version of this cron (no / different "v"), or whose item changed since
+// it was indexed (stored "h" != CRC32(item)). Matched as text so it works
 // whether `name` is a VARCHAR or a JSON column (MySQL renders JSON as `"v": 2`).
 const versionPattern = `"v": ?${SHOP_INDEX_VERSION}[,}]`;
 
 async function indexBatch() {
   const rows = await queryAsync(
-    `SELECT id, item FROM qs_data
+    `SELECT id, item, CRC32(item) AS h FROM qs_data
      WHERE item NOT LIKE 'item:%'
-       AND (name IS NULL OR CAST(name AS CHAR) NOT REGEXP ?)
+       AND (
+         name IS NULL
+         OR CAST(name AS CHAR) NOT REGEXP ?
+         -- QuickShop edits qs_data.item in place (e.g. /qs size), so also
+         -- re-index when the stored hash no longer matches the item.
+         OR CAST(name AS CHAR) NOT REGEXP CONCAT('"h": ?', CRC32(item), '[,}]')
+       )
      LIMIT ?`,
     [versionPattern, BATCH_SIZE]
   );
@@ -42,7 +49,7 @@ async function indexBatch() {
     rows.map((row) => {
       const meta = decodeShopItem(row.item);
       // On decode failure we still stamp the version so the row isn't retried forever.
-      return queryAsync(`UPDATE qs_data SET name = ? WHERE id = ?`, [buildIndexValue(meta), row.id])
+      return queryAsync(`UPDATE qs_data SET name = ? WHERE id = ?`, [buildIndexValue(meta, row.h), row.id])
         .then(() => (meta ? 1 : 0))
         .catch((err) => {
           console.error(`Shop index update error for data id=${row.id}:`, err);
