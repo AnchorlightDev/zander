@@ -69,18 +69,15 @@ portals:
 portal-wand:
   material: BLAZE_ROD
   display: "<gold>Portal Wand</gold>"
-# Makes it snow in the hub during the listed months. The area around the hub
-# spawn (hub.x / hub.z +/- radius) is switched to snow-biome and kept raining;
-# when the season ends it is set back to normal-biome and the weather cleared.
+# Makes it snow across the whole hub world during the listed months. Each chunk
+# is switched to snow-biome as it loads and remembers its original biome, which
+# it gets back when the season ends; the world is kept raining in season.
 # Snow layers and ice never form in the hub world while block-snow-and-ice is on.
 seasonal-snow:
   enabled: true
   months: [12]
   timezone: Australia/Sydney
   force: false # true = snow now, regardless of month (for testing)
-  radius: 160
-  min-y: 0
-  max-y: 256
   snow-biome: minecraft:snowy_plains
-  normal-biome: minecraft:plains # set this to the hub's real biome (F3)
+  normal-biome: minecraft:plains # only used if a chunk's original biome can't be read
   block-snow-and-ice: true

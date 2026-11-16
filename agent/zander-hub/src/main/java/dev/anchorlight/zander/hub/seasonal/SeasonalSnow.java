@@ -3,40 +3,40 @@ package dev.anchorlight.zander.hub.seasonal;
 import io.papermc.paper.registry.RegistryAccess;
 import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockFormEvent;
+import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
 
-import java.io.File;
-import java.io.IOException;
 import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Deque;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 /**
  * Seasonal hub snow (config: seasonal-snow).
  *
- * During the configured months (December by default) the hub area is switched
- * to a snowy biome and kept raining, so the client renders snowfall. Snow
- * layers and ice are never allowed to form in the hub world. Outside the season
- * the area is switched back to the normal biome and the weather cleared.
- *
- * Whether the snow biome is currently applied is stored in
- * plugins/ZanderHub/seasonal-snow.yml, so a restart mid-season does not redo the
- * work and the revert happens exactly once after the season ends.
+ * During the configured months (December by default) every chunk of the hub
+ * world is switched to a snowy biome and the world is kept raining, so the
+ * client renders snowfall everywhere. Chunks are converted as they load (and
+ * any already loaded when the season starts), so the whole world is covered
+ * without needing to know its size. Each converted chunk remembers its original
+ * biome in its own persistent data; when the season ends, chunks are restored
+ * to that biome as they load. Snow layers and ice never form in the hub world.
  */
 public class SeasonalSnow implements Listener {
 
@@ -45,7 +45,7 @@ public class SeasonalSnow implements Listener {
     private static final int CHUNKS_PER_TICK = 4;
 
     private final JavaPlugin plugin;
-    private final File stateFile;
+    private final NamespacedKey originalBiomeKey;
 
     private boolean enabled;
     private boolean force;
@@ -53,30 +53,25 @@ public class SeasonalSnow implements Listener {
     private Set<Integer> months;
     private ZoneId zone;
     private String worldName;
-    private int centreX;
-    private int centreZ;
-    private int radius;
-    private int minY;
-    private int maxY;
+    private int sampleY;
     private Biome snowBiome;
-    private Biome normalBiome;
+    private Biome fallbackBiome;
 
-    private boolean applied;
-    private boolean working;
+    /** Chunks waiting to be converted or restored, processed a few per tick. */
+    private final Deque<long[]> queue = new ArrayDeque<>();
+    private final Set<Long> queued = new HashSet<>();
+    private boolean season;
 
     public SeasonalSnow(JavaPlugin plugin) {
         this.plugin = plugin;
-        this.stateFile = new File(plugin.getDataFolder(), "seasonal-snow.yml");
+        this.originalBiomeKey = new NamespacedKey(plugin, "snow_original_biome");
     }
 
     public void start() {
         loadConfig();
-        applied = YamlConfiguration.loadConfiguration(stateFile).getBoolean("applied", false);
-        if (!enabled) {
-            plugin.getLogger().info("[SeasonalSnow] Disabled in config.");
-            // Still revert if a previous season was left applied.
-        }
-        Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 40L, CHECK_INTERVAL_TICKS);
+        season = inSeason();
+        Bukkit.getScheduler().runTaskTimer(plugin, this::check, 40L, CHECK_INTERVAL_TICKS);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::drainQueue, 1L, 1L);
     }
 
     private void loadConfig() {
@@ -101,14 +96,10 @@ public class SeasonalSnow implements Listener {
         }
 
         worldName = c.getString("world", plugin.getConfig().getString("hub.world", "world"));
-        centreX = (int) Math.floor(plugin.getConfig().getDouble("hub.x", 0));
-        centreZ = (int) Math.floor(plugin.getConfig().getDouble("hub.z", 0));
-        radius = Math.max(16, c.getInt("radius", 160));
-        minY = c.getInt("min-y", 0);
-        maxY = Math.max(minY, c.getInt("max-y", 256));
-
+        // Height used to read a chunk's original biome before converting it.
+        sampleY = (int) Math.floor(plugin.getConfig().getDouble("hub.y", 64));
         snowBiome = biome(c.getString("snow-biome", "minecraft:snowy_plains"), "snow-biome");
-        normalBiome = biome(c.getString("normal-biome", "minecraft:plains"), "normal-biome");
+        fallbackBiome = biome(c.getString("normal-biome", "minecraft:plains"), "normal-biome");
     }
 
     private Biome biome(String id, String field) {
@@ -126,82 +117,94 @@ public class SeasonalSnow implements Listener {
         return months.contains(LocalDate.now(zone).getMonthValue());
     }
 
-    private void tick() {
-        World world = Bukkit.getWorld(worldName);
-        if (world == null || working) return;
+    private World hubWorld() {
+        return Bukkit.getWorld(worldName);
+    }
 
-        boolean season = inSeason();
+    /** Periodic check: hold the weather and pick up season start/end. */
+    private void check() {
+        World world = hubWorld();
+        if (world == null) return;
+
+        boolean now = inSeason();
+        if (now != season) {
+            season = now;
+            plugin.getLogger().info(now
+                    ? "[SeasonalSnow] Season started, converting the hub world to snow."
+                    : "[SeasonalSnow] Season over, restoring the hub world's biomes.");
+            if (!now) {
+                world.setStorm(false);
+                world.setThundering(false);
+            }
+        }
+
         if (season) {
-            // Keep it snowing; re-applied every check so the natural weather
-            // timer never gets to clear it.
+            // Re-applied every check so the natural weather timer never clears it.
             world.setStorm(true);
             world.setThundering(false);
             world.setWeatherDuration(WEATHER_DURATION_TICKS);
-            if (!applied && snowBiome != null) {
-                plugin.getLogger().info("[SeasonalSnow] Season started, applying snow biome.");
-                paintBiome(world, snowBiome, true);
+        }
+
+        // Catch every loaded chunk that is in the wrong state for the season.
+        Arrays.stream(world.getLoadedChunks()).forEach(this::queueIfNeeded);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onChunkLoad(ChunkLoadEvent event) {
+        if (!event.getWorld().getName().equals(worldName)) return;
+        queueIfNeeded(event.getChunk());
+    }
+
+    private void queueIfNeeded(Chunk chunk) {
+        boolean converted = chunk.getPersistentDataContainer().has(originalBiomeKey, PersistentDataType.STRING);
+        if (season == converted) return; // already right for the season
+        if (season && snowBiome == null) return;
+        long id = Chunk.getChunkKey(chunk.getX(), chunk.getZ());
+        if (queued.add(id)) queue.add(new long[]{chunk.getX(), chunk.getZ()});
+    }
+
+    private void drainQueue() {
+        World world = hubWorld();
+        if (world == null || queue.isEmpty()) return;
+        for (int n = 0; n < CHUNKS_PER_TICK && !queue.isEmpty(); n++) {
+            long[] next = queue.poll();
+            int cx = (int) next[0], cz = (int) next[1];
+            queued.remove(Chunk.getChunkKey(cx, cz));
+            if (!world.isChunkLoaded(cx, cz)) continue; // handled again when it next loads
+            Chunk chunk = world.getChunkAt(cx, cz);
+            PersistentDataContainer pdc = chunk.getPersistentDataContainer();
+            boolean converted = pdc.has(originalBiomeKey, PersistentDataType.STRING);
+
+            if (season && !converted) {
+                int bx = cx << 4, bz = cz << 4;
+                int y = Math.max(world.getMinHeight(), Math.min(world.getMaxHeight() - 1, sampleY));
+                Biome original = world.getBiome(bx + 8, y, bz + 8);
+                pdc.set(originalBiomeKey, PersistentDataType.STRING, original.getKey().toString());
+                paint(world, cx, cz, snowBiome);
+            } else if (!season && converted) {
+                String id = pdc.get(originalBiomeKey, PersistentDataType.STRING);
+                Biome original = biome(id, "stored original");
+                if (original == null) original = fallbackBiome;
+                if (original == null) continue;
+                paint(world, cx, cz, original);
+                pdc.remove(originalBiomeKey);
             }
-        } else if (applied && normalBiome != null) {
-            plugin.getLogger().info("[SeasonalSnow] Season over, restoring normal biome.");
-            world.setStorm(false);
-            world.setThundering(false);
-            paintBiome(world, normalBiome, false);
         }
     }
 
-    /** Set the biome over the hub area a few chunks per tick, then resend those chunks. */
-    private void paintBiome(World world, Biome biome, boolean appliedAfter) {
-        working = true;
-        int minX = centreX - radius, maxX = centreX + radius;
-        int minZ = centreZ - radius, maxZ = centreZ + radius;
-        int lowY = Math.max(minY, world.getMinHeight());
-        int highY = Math.min(maxY, world.getMaxHeight() - 1);
-
-        List<int[]> chunks = new ArrayList<>();
-        for (int cx = minX >> 4; cx <= maxX >> 4; cx++) {
-            for (int cz = minZ >> 4; cz <= maxZ >> 4; cz++) {
-                chunks.add(new int[]{cx, cz});
-            }
-        }
-
-        new BukkitRunnable() {
-            int index = 0;
-
-            @Override
-            public void run() {
-                for (int n = 0; n < CHUNKS_PER_TICK && index < chunks.size(); n++, index++) {
-                    int cx = chunks.get(index)[0], cz = chunks.get(index)[1];
-                    int x0 = Math.max(minX, cx << 4), x1 = Math.min(maxX, (cx << 4) + 15);
-                    int z0 = Math.max(minZ, cz << 4), z1 = Math.min(maxZ, (cz << 4) + 15);
-                    // Biomes are stored per 4x4x4 cell, so one call per cell is enough.
-                    for (int x = x0; x <= x1; x += 4) {
-                        for (int z = z0; z <= z1; z += 4) {
-                            for (int y = lowY; y <= highY; y += 4) {
-                                world.setBiome(x, y, z, biome);
-                            }
-                        }
-                    }
-                    world.refreshChunk(cx, cz);
-                }
-                if (index >= chunks.size()) {
-                    cancel();
-                    applied = appliedAfter;
-                    saveState();
-                    working = false;
-                    plugin.getLogger().info("[SeasonalSnow] Biome update finished (" + chunks.size() + " chunks).");
+    /** Set a whole chunk column to one biome and resend it to players. */
+    private void paint(World world, int cx, int cz, Biome biome) {
+        int bx = cx << 4, bz = cz << 4;
+        int minY = world.getMinHeight(), maxY = world.getMaxHeight() - 1;
+        // Biomes are stored per 4x4x4 cell, so one call per cell is enough.
+        for (int x = bx; x < bx + 16; x += 4) {
+            for (int z = bz; z < bz + 16; z += 4) {
+                for (int y = minY; y <= maxY; y += 4) {
+                    world.setBiome(x, y, z, biome);
                 }
             }
-        }.runTaskTimer(plugin, 1L, 1L);
-    }
-
-    private void saveState() {
-        YamlConfiguration state = new YamlConfiguration();
-        state.set("applied", applied);
-        try {
-            state.save(stateFile);
-        } catch (IOException e) {
-            plugin.getLogger().warning("[SeasonalSnow] Could not save state: " + e.getMessage());
         }
+        world.refreshChunk(cx, cz);
     }
 
     /** No snow layers or ice ever form in the hub world, in or out of season. */
