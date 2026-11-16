@@ -1,9 +1,43 @@
 # Changelog
 
-## Unreleased
+## 2.3.0
+
+### Upgrading from 2.2.0
+
+Read these before deploying.
+
+- **15 database migrations** (`0077`–`0091`) run on deploy via `npm run build`. `0081` moves holograms into announcements: it creates a post for every existing announcement, copies each `hologram_messages` frame in as a hologram announcement, then **drops `hologram_messages`**. `0082` moves scheduled Discord embeds into scheduler jobs and drops `scheduledDiscordMessages`. Take a database backup first.
+- **Rebuild and update every plugin.** `zander-velocity` is needed for per-server tips (an older proxy only receives tips set to all servers, so targeted tips won't show until it is updated). `zander-hub` adds seasonal snow and `/connect`, and fixes permission names. `zander-addon` adds the hologram line-width setting and review fixes. `zander-auth` carries review fixes.
+- **New optional environment variables** (see `.env.example`):
+  - `emailTransport`, `graphMailTenantId`, `graphMailClientId`, `graphMailClientSecret`, `graphMailSender` to send email through Microsoft Graph. Leave `emailTransport` unset to keep SMTP.
+  - `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` for contact form spam protection. Leave blank to disable.
+- **Permission changes:**
+  - `zander.web.holograms` is removed; holograms are part of announcements (`zander.web.announcements`). `/dashboard/holograms` redirects there.
+  - `zander.web.scheduler` now covers every scheduler action, including commands.
+  - New: `zander.web.server.access`.
+  - Regenerate the docs site's permission tables with `node scripts/permissionsTable.mjs`.
+- **New modules start switched off:** Forum ↔ Discord bridge and the Claude connector (MCP). Turn them on at **Dashboard → Modules** if wanted.
+- **Servers need a Velocity name** (Dashboard → Servers) for server access and per-server tips to list them.
+- **Hub seasonal snow** is on by default (December, Sydney time). Configure it under `seasonal-snow` in the hub's `config.yml`, or set `enabled: false`.
+- **The ranks page now lives in the webstore.** `/ranks` keeps working.
 
 ### New
 
+- **Announcements scheduler.** One post can publish to several platforms at once (site banner, popup, in-game tip, server-list MOTD, hologram), each with its own schedule, from a step-by-step editor. Holograms are now an announcement platform, with groups, frame ordering and countdowns.
+- **Unified scheduler.** Jobs run on a schedule (one-off or recurring) and can run server commands or saved routines, send Discord embeds, publish forum drafts, enable or disable announcement posts, send in-game broadcasts, show or hide webstore products, and open or close server access. Includes run history and placeholders such as `{date}`, `{week}` and `{runNumber}`.
+- **In-game tips can target specific servers.** Send a tip to every server, or tick one or more servers (e.g. just Survival) in the In-game tip tab.
+- **Forum drafts and scheduled threads.** Save a discussion as a draft, or schedule it to publish at a set time. Discussions show a view count.
+- **Wrapped.** A yearly recap deck for players, with separate Minecraft and Discord reputation and an admin-managed soundtrack (upload or URL).
+- **Anonymous gifting** in the webstore. The recipient sees "Anonymous" instead of the buyer's name.
+- **Webstore categories sync from Stripe**, and products can be shown or hidden on a schedule.
+- **Claude connector (MCP).** Staff can connect Claude to Zander, with tools limited by their permissions. Off by default.
+- **Cloudflare Turnstile** protects the contact form when keys are set.
+- **Email through Microsoft Graph.** Send site email from a Microsoft 365 mailbox (including shared mailboxes) using an app registration, without SMTP AUTH.
+- **Seasonal hub snow.** The hub world snows through December; snow layers and ice never form, and each chunk returns to its original biome afterwards.
+- **Events:** all-day events in the calendar, and event template banners.
+- **Forms:** labels can be multi-sentence prompts.
+- **Hologram text** is sanitised, and the line width is configurable.
+- **Compass sign-in** takes its staff ranks from Compass, and the "Staff only" page explains why a sign-in was refused.
 - **Forum ↔ Discord forum channel bridge.** A forum category can be bridged to a Discord forum channel (e.g. Shopping District ↔ #shopping-district). New discussions become Discord forum posts and new Discord posts become discussions; replies (including who they reply to), edits, deletes, locks, renames and reactions sync both ways. Website posts appear in Discord under the player's Minecraft name and head. Deleting a Discord post archives the website discussion instead of deleting it. Only members whose Discord is linked to a website account can post or react in a bridged channel; anything else is removed and the member is DMed how to link. Only content created after a channel is bridged syncs. Turn on **Forum ↔ Discord bridge** under **Dashboard → Modules**, set the new **Linked account role** under **Settings → Discord**, then pick the channel on the category under **Forums → Categories**. Website changes are queued and retried, so a Discord outage loses nothing; posts made in Discord while the bot was offline are picked up when it reconnects.
 - **Reactions on forum posts.** Each post has a reaction bar; reactions made in Discord on a bridged post show here too.
 - **Linked account Discord role.** `discord.roles.linked` is given to members whose Discord is linked to a website account and removed when they unlink, with a 30-minute reconcile.
@@ -17,6 +51,10 @@
 
 ### Changed
 
+- **The ranks page is part of the webstore**, with category support in the perk overlay.
+- **Every dashboard page works on phones.** Tables stack into cards on small screens, and the events calendar opens on the month list.
+- **The Discord bot retries its login** with backoff when Discord's gateway is briefly unavailable at startup, instead of staying offline until the next restart.
+- **Full-repo review fixes** across the dashboard, auth and OIDC, the database layer, the API, the Discord bot, the Java plugins, the public site, webstore and finance, forums, and scheduled jobs.
 - **Scheduler → Forum tab links work.** Thread titles now open the thread instead of a dead `/forum/thread/` link.
 - **`/forcelink` and `/lp-audit` permissions** (`zander.discord.forcelink`, `zander.discord.lpaudit`) can now be ticked in the ranks dashboard.
 - **The unused `internal` API scope has been removed** from the API Keys page. No route ever required it; existing keys that have it are unaffected.
@@ -30,6 +68,12 @@
 
 ### Fixed
 
+- **Shop directory stock.** Shops QuickShop hasn't counted show "Stock unknown" (website) and "Stock: Unknown" (Discord) instead of looking in stock.
+- **Shop directory amounts.** When an owner changes a shop's bundle size (e.g. 1 to 16), the directory now picks up the new amount.
+- **Gifts to players who have never joined are refused** before checkout, so nobody is charged for a gift that can't be delivered.
+- **Forum links and pasted images.** Bare URLs in posts become links (existing posts too), and pasted, dropped or picked images are uploaded instead of disappearing on save.
+- **Staff "Send Password Reset" and "Resend Verification"** always failed; they work again.
+- **User detail shows the masked email**, and a staff profile no longer errors when the player has filed no reports.
 - **`/connect <server>` works in the hub.** It was declared but had no command behind it. It now asks the proxy to move you, with the same checks as the navigation compass (`serverpermissions.server.<id>`, unknown servers, rate limit).
 - **zander-hub permission names match the code.** `plugin.yml` declared `zander.fly` and `zanderhub.build`, but the plugin checks `zander.hub.fly` and `zander.hub.build`; the declarations now use the real names. `zanderhub.portal.admin` now grants every `/zportal` permission and `zanderhub.administrator` grants every hub permission (both previously did nothing).
 - **The Finance module switch works.** Switching it off now hides the public Finance Centre and reports, the finance dashboard and `/api/finance`, and drops `/finance` from the sitemap. It was previously only cosmetic.
