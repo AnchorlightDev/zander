@@ -35,6 +35,7 @@ import {
   syncStripeStorefrontCategories,
 } from "../controllers/webstoreController.js";
 import { getAllCategories } from "../controllers/webstoreCategoryController.js";
+import { UserGetter } from "../controllers/userController.js";
 import { getAllItemSettings } from "../controllers/webstoreItemSettingsController.js";
 import { getRankCatalogForPublicPage } from "../controllers/rankCatalogController.js";
 import {
@@ -354,6 +355,27 @@ export default function webstoreRoutes(app, config, features) {
       // Prevent gifting to yourself (not inherently wrong but avoids confusion)
       if (raw.toLowerCase() === purchaserUsername.toLowerCase()) {
         setBannerCookie("info", "To purchase for yourself, select 'My account'.", res);
+        return res.redirect("/webstore");
+      }
+
+      // Gifts are granted by Minecraft username, so a typo or a name that has
+      // never joined would be charged and fulfil to nobody. Only allow players
+      // the network knows about (Zander users or LuckPerms players).
+      let recipientExists;
+      try {
+        recipientExists = await new UserGetter().hasJoined(raw, null, { includePlaceholders: false });
+      } catch (err) {
+        console.error(`[webstore] gift recipient lookup failed | user=${req.session.user.userId} recipient=${raw}:`, err.message);
+        setBannerCookie("danger", "We couldn't check that player right now. Please try again shortly.", res);
+        return res.redirect("/webstore");
+      }
+      if (!recipientExists) {
+        console.log(`[webstore] gift refused, unknown recipient | user=${req.session.user.userId} recipient=${raw}`);
+        setBannerCookie(
+          "warning",
+          `We couldn't find a player called "${raw}". They need to have joined the server before they can receive a gift.`,
+          res
+        );
         return res.redirect("/webstore");
       }
 
