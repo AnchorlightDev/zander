@@ -14,9 +14,9 @@ const {
 } = await import("../../lib/scheduler/actions/index.mjs");
 
 describe("action registry", () => {
-  it("registers the seven action types", () => {
+  it("registers all action types", () => {
     expect(ACTION_TYPES.sort()).toEqual(
-      ["announcement_post", "broadcast", "command", "discord_message", "forum_publish", "routine", "server_access", "webstore_visibility"].sort()
+      ["announcement_post", "broadcast", "wrapped", "command", "discord_message", "forum_publish", "routine", "server_access", "webstore_visibility"].sort()
     );
   });
   it("rejects an unknown action type", () => {

@@ -262,6 +262,16 @@ export async function setWrappedMusicUrl(url) {
   return getWrappedSettings();
 }
 
+/** Toggle availability without changing the reporting period or music. */
+export async function setWrappedEnabled(enabled) {
+  if (typeof enabled !== "boolean") throw new TypeError("Wrapped enabled must be a boolean.");
+  await q(
+    `INSERT INTO wrappedSettings (id, enabled) VALUES (1, ?)
+     ON DUPLICATE KEY UPDATE enabled = VALUES(enabled)`,
+    [enabled ? 1 : 0]
+  );
+}
+
 export async function saveWrappedSettings({ enabled, periodStart, periodEnd, rollingMonths }) {
   await q(
     `INSERT INTO wrappedSettings (id, enabled, periodStart, periodEnd, rollingMonths)

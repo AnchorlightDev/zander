@@ -97,6 +97,7 @@
                 <option value="routine">Run saved routine</option>
                 <option value="discord_message">Send Discord embed</option>
                 <option value="forum_publish">Publish forum draft</option>
+                <option value="wrapped">Enable/disable CFC Wrapped</option>
                 <option value="announcement_post">Enable/disable announcement</option>
                 <option value="broadcast">In-game broadcast</option>
                 <option value="webstore_visibility">Show/hide webstore product</option>
@@ -145,6 +146,7 @@
     routine: [ { k: "routineSlug", label: "Routine", type: "routine" } ],
     discord_message: [ { k: "channelId", label: "Channel", type: "channel" }, { k: "embedTitle", label: "Title", type: "text", ph: true }, { k: "embedDescription", label: "Description (HTML)", type: "textarea", ph: true }, { k: "embedColor", label: "Colour (#hex)", type: "text" } ],
     forum_publish: [ { k: "discussionId", label: "Forum draft", type: "forum" } ],
+    wrapped: [ { k: "mode", label: "Mode", type: "mode" } ],
     announcement_post: [ { k: "postId", label: "Announcement post", type: "post" }, { k: "mode", label: "Mode", type: "mode" } ],
     broadcast: [ { k: "message", label: "Message (& colour codes)", type: "text", ph: true } ],
     webstore_visibility: [ { k: "stripePriceId", label: "Product", type: "product" }, { k: "mode", label: "Mode", type: "mode" } ],
