@@ -1,0 +1,18 @@
+<div class="card shadow-sm border-0 mb-3">
+  <div class="card-header"><h5 class="mb-0">Tickets <span class="badge text-bg-secondary"><%= userTickets.length %></span></h5></div>
+  <div class="card-body">
+    <p class="small text-muted">Staff only. Tickets opened by or directly shared with this player, across all statuses. Only categories you can access are shown.</p>
+    <% if (!userTickets.length) { %>
+      <p class="text-muted mb-0">No tickets available.</p>
+    <% } else { %>
+      <div class="table-responsive"><table class="table align-middle">
+        <thead><tr><th>Ticket</th><th>Category</th><th>Status</th><th>Created</th></tr></thead>
+        <tbody><% userTickets.forEach((ticket) => { %>
+          <tr><td><a href="/support/ticket/<%= encodeURIComponent(ticket.ticketId) %>">#<%= ticket.ticketId %> — <%= ticket.title %></a></td>
+            <td><%= ticket.categoryName %></td><td><%= ticket.status %></td>
+            <td><%= ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : '—' %></td></tr>
+        <% }); %></tbody>
+      </table></div>
+    <% } %>
+  </div>
+</div>

@@ -29,6 +29,10 @@
 
       <%- include("../../admin/_notices.ejs") %>
 
+      <% if (canViewUserTickets) { %>
+        <%- include("../../partials/userTickets.ejs", { userTickets }) %>
+      <% } %>
+
       <div id="actionAlert" class="alert d-none"></div>
 
       <div class="row g-3">

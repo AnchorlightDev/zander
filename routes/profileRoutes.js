@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { canViewUserTickets, getStaffUserTickets } from "../services/userTicketService.js";
 import { MONTHS } from "../lib/birthday.mjs";
 import { groupedTimeZones } from "../lib/timezones.mjs";
 import { getGlobalImage, isLoggedIn, setBannerCookie } from "../api/common.js";
@@ -273,6 +274,8 @@ export default function profileSiteRoutes(
           contextPermissions: contextPermissions,
           platformConnections: profilePlatformConnections,
           profileBadges: profileBadges,
+          canViewUserTickets: canViewUserTickets(req.session.user, contextPermissions),
+          userTickets: await getStaffUserTickets(profileData.userId, req.session.user, contextPermissions),
         }));
         return;
       }

@@ -61,9 +61,15 @@
                                 <% } %>
                             </a>
                         </li>
+                        <% if (canViewUserTickets) { %>
+                          <li class="nav-item" role="presentation"><a class="nav-link profile-tab-link" id="tickets-tab" data-bs-toggle="tab" href="#tickets" role="tab" aria-controls="tickets" aria-selected="false">Tickets <span class="badge text-bg-secondary"><%= userTickets.length %></span></a></li>
+                        <% } %>
                     </ul>
 
                     <div class="tab-content pt-4" id="profileTabsContent">
+                        <% if (canViewUserTickets) { %>
+                          <div class="tab-pane fade" id="tickets" role="tabpanel" aria-labelledby="tickets-tab"><%- include("../../partials/userTickets.ejs", { userTickets }) %></div>
+                        <% } %>
                         <div class="tab-pane fade show active" id="about" role="tabpanel" aria-labelledby="about-tab">
                             <div class="row gy-4 align-items-start mt-1 mb-4">
                                 <div class="col-12 col-sm-6">

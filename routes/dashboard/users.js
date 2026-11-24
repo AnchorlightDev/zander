@@ -21,6 +21,7 @@ import {
   generateLog,
   internalApiHeaders,
 } from "../../api/common.js";
+import { canViewUserTickets, getStaffUserTickets } from "../../services/userTicketService.js";
 import { getWebAnnouncement } from "../../controllers/announcementController.js";
 import { maskEmail, hasPermissionSilent } from "../../controllers/userAccountState.js";
 import { UserGetter, getUserPermissions } from "../../controllers/userController.js";
@@ -188,6 +189,8 @@ export default function dashboardUsersRoute(app, fetch, config, db, features, la
         req,
         features,
         user: { ...user, maskedEmail: user.maskedEmail ?? maskEmail(user.email) },
+        canViewUserTickets: canViewUserTickets(req.session.user),
+        userTickets: await getStaffUserTickets(userId, req.session.user),
         canRevealEmail,
         canManage,
         globalImage,
