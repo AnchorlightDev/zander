@@ -7,9 +7,10 @@
  *   a public, indexable page must not be forgotten.
  *
  * The first is a correctness bug (submitting URLs that serve a "feature
- * disabled" page). The second is the quieter one -- /vault, /forums and
- * /webstore were all public and all missing, which is invisible until you
- * notice they never rank.
+ * disabled" page). The second is the quieter one -- /vault and /webstore were
+ * both public and both missing, which is invisible until you notice they never
+ * rank. (Forums are a deliberate exception: they are noindex, so they must not
+ * appear in the sitemap at all.)
  */
 
 import { describe, expect, it } from "vitest";
@@ -37,18 +38,21 @@ describe("feature flags are respected", () => {
   it("lists the gated pages when their features are on", () => {
     const listed = urls(ALL_ON);
 
-    for (const url of ["/play", "/bedrock", "/vault", "/forums", "/webstore",
+    for (const url of ["/play", "/bedrock", "/vault", "/webstore",
                        "/apply", "/watch", "/events", "/shopdirectory", "/punishments", "/report", "/finance"]) {
       expect(listed, url).toContain(url);
     }
     // /ranks folded into /webstore and now 301-redirects, so it is not listed.
     expect(listed).not.toContain("/ranks");
+    // Forums (and every forum post) are deliberately noindex, so /forums is
+    // never listed in the sitemap, even when the feature is on.
+    expect(listed).not.toContain("/forums");
   });
 
   it("lists none of them when every feature is off", () => {
     const listed = urls({});
 
-    for (const url of ["/play", "/bedrock", "/vault", "/forums", "/webstore",
+    for (const url of ["/play", "/bedrock", "/vault", "/webstore",
                        "/apply", "/watch", "/events", "/shopdirectory", "/punishments", "/report", "/finance"]) {
       expect(listed, url).not.toContain(url);
     }
@@ -58,7 +62,6 @@ describe("feature flags are respected", () => {
     const listed = urls({ ...ALL_ON, vault: false });
 
     expect(listed).not.toContain("/vault");
-    expect(listed).toContain("/forums");
     expect(listed).toContain("/webstore");
   });
 

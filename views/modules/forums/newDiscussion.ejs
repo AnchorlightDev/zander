@@ -1,6 +1,7 @@
 <%- include("../../modules/header.ejs", {
     pageTitle: `Start a Discussion :: ${category ? category.name : pageTitle}`,
-    pageDescription: category && category.description ? category.description : "Start a new community discussion"
+    pageDescription: category && category.description ? category.description : "Start a new community discussion",
+    pageRobots: "noindex, follow"
 }) %>
 
 <%- include("../../modules/navigationBar.ejs") %>

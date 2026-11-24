@@ -1,8 +1,4 @@
 import { listPublishedPages } from "../controllers/customPageController.js";
-import {
-  getCategoriesForUser,
-  getRecentDiscussions,
-} from "../controllers/forumController.js";
 import { getAllPublishedEvents } from "../services/eventService.js";
 import { resolveEventAccess } from "../lib/eventAccess.js";
 
@@ -84,7 +80,9 @@ export function staticSitemapPages(features = {}) {
     // The map archive: years of worlds with seeds, dates and downloads. Rare
     // content, and it was missing from here entirely.
     features.vault && { url: "/vault", priority: "0.7", changefreq: "monthly" },
-    features.forums && { url: "/forums", priority: "0.7", changefreq: "daily" },
+    // Forums and all forum posts are deliberately excluded from search indexing:
+    // every forum page declares `noindex` (pageRobots in the forum views), so
+    // /forums, its categories and its discussions are not listed here either.
     features.webstore && { url: "/webstore", priority: "0.6", changefreq: "weekly" },
     features.finance && { url: "/finance", priority: "0.7", changefreq: "weekly" },
     { url: "/staff", priority: "0.6", changefreq: "weekly" },
@@ -148,7 +146,7 @@ export default function sitemapRoutes(app, config, features) {
     L.push(`# ${sc.siteName || "Website"}`);
     L.push("");
     L.push(
-      `> ${sc.tagline ? sc.tagline + ". " : ""}${sc.siteName || "This site"} is the community website for a Christian Minecraft server: server info and how to join, ranks and perks, community rules, staff applications, forums, events and live player stats.`
+      `> ${sc.tagline ? sc.tagline + ". " : ""}${sc.siteName || "This site"} is the community website for a Christian Minecraft server: server info and how to join, ranks and perks, community rules, staff applications, events and live player stats.`
     );
     L.push("");
     if (sc.email) L.push(`Contact: ${sc.email}`);
@@ -177,7 +175,8 @@ export default function sitemapRoutes(app, config, features) {
     }
 
     L.push("## Community");
-    if (features.forums) L.push(`- [Forums](${baseUrl}/forums): community discussion boards`);
+    // Forums are excluded from search/AI indexing (noindex on every forum page),
+    // so they are intentionally not advertised in llms.txt either.
     if (features.vault) L.push(`- [Map archive](${baseUrl}/vault): every past world with its dates, seed and download`);
     if (features.webstore) L.push(`- [Store](${baseUrl}/webstore): ranks and perks available to buy, with each rank's perks and pricing`);
     if (features.events) L.push(`- [Events](${baseUrl}/events): upcoming and past community events`);
@@ -208,43 +207,9 @@ export default function sitemapRoutes(app, config, features) {
 
     const staticPages = staticSitemapPages(features).map((p) => ({ lastmod: day, ...p }));
 
-    let forumUrls = [];
-    try {
-      // Empty permissions = anonymous user; only publicly accessible content.
-      const { flat = [] } = await getCategoriesForUser([]);
-      const categoryIds = flat.map((c) => c.categoryId);
-
-      for (const cat of flat) {
-        forumUrls.push({
-          url: `/forums/category/${cat.slug}`,
-          priority: "0.6",
-          changefreq: "daily",
-          lastmod: day,
-        });
-      }
-
-      if (categoryIds.length) {
-        const { discussions } = await getRecentDiscussions({
-          categoryIds,
-          page: 1,
-          perPage: 200,
-        });
-        for (const d of discussions) {
-          const path = d.slug
-            ? `/forums/discussion/${d.discussionId}/${d.slug}`
-            : `/forums/discussion/${d.discussionId}`;
-          const stamp = d.lastReplyAt || d.updatedAt || d.createdAt;
-          forumUrls.push({
-            url: path,
-            priority: "0.5",
-            changefreq: "weekly",
-            lastmod: stamp ? new Date(stamp).toISOString().slice(0, 10) : day,
-          });
-        }
-      }
-    } catch (err) {
-      console.error("[SITEMAP] Failed to fetch forum data:", err.message);
-    }
+    // Forums and all forum posts are intentionally omitted from the sitemap:
+    // every forum page declares `noindex` (see the forum views), so it must not
+    // be submitted for indexing here.
 
     let eventUrls = [];
     if (features.events) {
@@ -289,7 +254,7 @@ export default function sitemapRoutes(app, config, features) {
       console.error("[SITEMAP] Failed to fetch custom pages:", err.message);
     }
 
-    const urlEntries = [...staticPages, ...pageUrls, ...forumUrls, ...eventUrls]
+    const urlEntries = [...staticPages, ...pageUrls, ...eventUrls]
       .map(
         ({ url, priority, changefreq, lastmod }) =>
           `  <url>\n    <loc>${escapeXml(baseUrl + url)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`
