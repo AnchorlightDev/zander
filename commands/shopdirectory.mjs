@@ -173,11 +173,14 @@ export class ShopDirectoryCommand extends Command {
           const isBuying = shop.shopType === "buying";
           const transactionType = isBuying ? "💰 Buying" : "📦 Selling";
           const stockNum = Number(shop.stock);
+          // QuickShop's cached stock of -1 means "not counted" (QuickShop does
+          // not reliably refresh this), so omit the Stock line entirely for those
+          // rather than showing a misleading "Unknown". Counted shops show it.
           const stockInfo = isBuying
             ? ""
             : (Number.isFinite(stockNum) && stockNum >= 0
               ? `**Stock:** ${stockNum}\n`
-              : "**Stock:** Unknown\n");
+              : "");
           const contentsInfo = shop.shulkerContents ? `**Contents:** ${shop.shulkerContents}\n` : "";
 
           embed.addFields([

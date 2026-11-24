@@ -78,7 +78,6 @@ const main = async () => {
   await query("sample unknown-stock shops:",
     `SELECT
        s.id AS shop_id,
-       s.owner,
        JSON_UNQUOTE(JSON_EXTRACT(data.name, '$.id')) AS item,
        x.stock, x.space,
        map.world, map.x, map.y, map.z

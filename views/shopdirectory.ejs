@@ -254,15 +254,20 @@
 
       const isBuying = shop.shopType === 'buying';
       // QuickShop's cached stock: -1 (or any negative/missing value) means it
-      // hasn't been counted, so show it as unknown rather than implying it's in stock.
+      // hasn't been counted. QuickShop does not reliably refresh this cache, so
+      // a large share of shops read -1 at any time. Rather than imply they're in
+      // stock ("Selling") or flood the table with grey "Stock unknown" labels,
+      // we show no badge for those: the item and price still carry the useful
+      // information. Counted shops keep their real in/out-of-stock badge.
       const stockNum = Number(shop.stock);
       const stockKnown = Number.isFinite(stockNum) && stockNum >= 0;
       let stockClass = 'shop-stock-in';
       let stockText = 'Buying';
+      let stockHtml = null; // raw HTML override; when set, used instead of stockText
       if (!isBuying) {
         if (!stockKnown) {
           stockClass = 'shop-stock-unknown';
-          stockText = 'Stock unknown';
+          stockHtml = '<span class="text-muted" title="Stock not reported">-</span>';
         } else if (stockNum === 0) {
           stockClass = 'shop-stock-out';
           stockText = 'Out of Stock';
@@ -280,7 +285,7 @@
         <td>${profileImg}${username}</td>
         <td><code>${escapeHtml(String(shop.amount))}</code></td>
         <td class="shop-price"><code>${escapeHtml(String(shop.price))}</code></td>
-        <td class="${stockClass}">${escapeHtml(String(stockText))}</td>
+        <td class="${stockClass}">${stockHtml != null ? stockHtml : escapeHtml(String(stockText))}</td>
         <td class="shop-location"><code>${escapeHtml(String(shop.x))}, ${escapeHtml(String(shop.y))}, ${escapeHtml(String(shop.z))}</code>${shulkerLine}</td>
       </tr>`;
     });
