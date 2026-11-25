@@ -164,6 +164,15 @@ export default function dashboardForumsRoutes(
       const viewPermission = (req.body.viewPermission || "").trim() || null;
       const postPermission = (req.body.postPermission || "").trim() || null;
 
+      // Per-category Discord updates webhook (new topics/replies). Empty clears
+      // it; a non-empty value must look like a Discord webhook URL.
+      const rawWebhook = (req.body.discordUpdateWebhook || "").trim();
+      if (rawWebhook && !/^https:\/\/(discord(app)?\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/webhooks\//.test(rawWebhook)) {
+        setBannerCookie("warning", "That doesn't look like a Discord webhook URL. Leave it blank to turn updates off.", res);
+        return res.redirect(`/dashboard/forums/categories?edit=${categoryId}`);
+      }
+      const discordUpdateWebhook = rawWebhook || null;
+
       // A descendant as parent makes a cycle, and categories in a cycle drop
       // out of both trees (only parentless rows are roots).
       if (parentCategoryId) {
@@ -189,6 +198,7 @@ export default function dashboardForumsRoutes(
           parentCategoryId,
           viewPermission,
           postPermission,
+          discordUpdateWebhook,
         });
 
         setBannerCookie("success", "Category updated.", res);

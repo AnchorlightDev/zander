@@ -118,6 +118,16 @@
               <label class="form-label" for="editCategoryDescription">Description</label>
               <textarea class="form-control" id="editCategoryDescription" name="description" rows="2"><%= categoryToEdit.description || '' %></textarea>
             </div>
+            <div class="col-12">
+              <label class="form-label" for="editCategoryDiscordWebhook">Discord updates webhook</label>
+              <input type="url" class="form-control" id="editCategoryDiscordWebhook" name="discordUpdateWebhook"
+                     value="<%= categoryToEdit.discordUpdateWebhook || '' %>"
+                     placeholder="https://discord.com/api/webhooks/..." maxlength="255">
+              <div class="form-text">
+                New topics and replies in this category are announced to this Discord webhook.
+                Leave blank to turn it off. Ignored while this category is bridged to a Discord forum channel below (the bridge already mirrors posts there).
+              </div>
+            </div>
             <div class="col-12 d-flex justify-content-between">
               <div>
                 <a class="btn btn-link" href="/dashboard/forums/categories">Cancel</a>
