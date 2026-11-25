@@ -34,6 +34,14 @@ import { planStripeCategorySync } from "../lib/webstore/stripeCategorySync.mjs";
 import { ensureCategoriesForStripeKeys } from "./webstoreCategoryController.js";
 import { getAllItemSettings, setStripeCategory } from "./webstoreItemSettingsController.js";
 import { planDeferredRoleRuns } from "../lib/webstore/deferredRoles.mjs";
+import {
+  isPrintifyConfigured,
+  calculateShipping as printifyCalculateShipping,
+  createOrder as printifyCreateOrder,
+  sendToProduction as printifySendToProduction,
+  SHIPPING_METHOD,
+  PrintifyError,
+} from "../lib/printify/client.mjs";
 
 // ---------------------------------------------------------------------------
 // Internal DB helper
@@ -197,6 +205,13 @@ export async function createStripeCheckoutSession({
   purchaserMinecraftUsername,
   isGift,
   isAnonymous = false,
+  // Physical (Printify) orders pass a pre-calculated shipping cost. Stripe's
+  // hosted Checkout cannot price shipping from the address the buyer types on
+  // Stripe's page, so we quote it ourselves beforehand and add it here as a
+  // single fixed shipping line in the same currency as the item.
+  shippingCents = null,
+  shippingCurrency = null,
+  shippingLabel = "Shipping",
 }) {
   const apiKey = process.env.STRIPE_SECRET_KEY;
   if (!apiKey) throw new Error("STRIPE_SECRET_KEY is not configured");
@@ -220,6 +235,20 @@ export async function createStripeCheckoutSession({
   body.append("metadata[purchaserUsername]", purchaserMinecraftUsername);
   body.append("metadata[isGift]", isGift ? "true" : "false");
   body.append("metadata[isAnonymous]", isGift && isAnonymous ? "true" : "false");
+  body.append("metadata[fulfillmentType]", item.fulfillmentType === "printify" ? "printify" : "digital");
+
+  // Physical order: add the pre-quoted shipping as a fixed-amount shipping
+  // option (auto-selected, as it is the only one). Currency must match the
+  // session currency, so callers pass the item's own currency here.
+  if (Number.isInteger(shippingCents) && shippingCents >= 0) {
+    body.append("shipping_options[0][shipping_rate_data][type]", "fixed_amount");
+    body.append("shipping_options[0][shipping_rate_data][fixed_amount][amount]", String(shippingCents));
+    body.append(
+      "shipping_options[0][shipping_rate_data][fixed_amount][currency]",
+      (shippingCurrency || item.currency || "usd").toLowerCase()
+    );
+    body.append("shipping_options[0][shipping_rate_data][display_name]", shippingLabel || "Shipping");
+  }
 
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
@@ -344,6 +373,29 @@ export async function getWebstoreItems(preferredCurrency = null) {
         typeof p.product?.metadata?.category === "string" && p.product.metadata.category.trim()
           ? p.product.metadata.category.trim()
           : null;
+      // Physical (Printify) fulfilment opts in through product metadata, the
+      // same way categories do. An item is physical only when it is explicitly
+      // flagged AND carries both Printify ids — an incomplete mapping is a
+      // misconfiguration we must not take money for (see isPhysicalItem below).
+      const meta = p.product?.metadata || {};
+      const printifyProductId =
+        typeof meta.printify_product_id === "string" && meta.printify_product_id.trim()
+          ? meta.printify_product_id.trim()
+          : null;
+      const printifyVariantId = Number.parseInt(meta.printify_variant_id, 10);
+      const printifyQty = Number.parseInt(meta.printify_quantity, 10);
+      const isPrintify =
+        String(meta.fulfillment || "").toLowerCase() === "printify" &&
+        printifyProductId &&
+        Number.isInteger(printifyVariantId) &&
+        printifyVariantId > 0;
+      const printify = isPrintify
+        ? {
+            productId: printifyProductId,
+            variantId: printifyVariantId,
+            quantity: Number.isInteger(printifyQty) && printifyQty > 0 ? printifyQty : 1,
+          }
+        : null;
       return {
         slug: p.id,
         stripePriceId: p.id,
@@ -353,6 +405,8 @@ export async function getWebstoreItems(preferredCurrency = null) {
         priceCents: amount,
         currency,
         purchaseType: p.type === "recurring" || p.recurring ? "subscription" : "one_time",
+        fulfillmentType: isPrintify ? "printify" : "digital",
+        printify,
         sortKey,
         stripeCategory,
       };
@@ -465,18 +519,28 @@ export async function createPendingPurchase({
   stripeSessionId,
   isGift,
   isAnonymous = false,
+  // Physical orders only: fulfilment type, the shipping-address snapshot taken
+  // at checkout, and the shipping we quoted. Null/undefined for digital items,
+  // which keep the exact pre-Printify behaviour.
+  fulfillmentType = "digital",
+  shippingAddress = null,
+  shippingCents = null,
 }) {
+  const addr = shippingAddress || {};
   const result = await query(
     `INSERT INTO webstorePurchases
-       (userId, itemSlug, itemName, purchaseType,
+       (userId, itemSlug, itemName, purchaseType, fulfillmentType,
         purchaserMinecraftUsername, recipientMinecraftUsername,
-        stripeSessionId, amountCents, currency, isGift, isAnonymous)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        stripeSessionId, amountCents, currency, isGift, isAnonymous,
+        shipName, shipEmail, shipPhone, shipAddress1, shipAddress2,
+        shipCity, shipRegion, shipZip, shipCountry, shippingCents)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       userId,
       item.slug,
       item.displayName,
       item.purchaseType,
+      fulfillmentType === "printify" ? "printify" : "digital",
       purchaserMinecraftUsername,
       recipientMinecraftUsername,
       stripeSessionId,
@@ -484,6 +548,16 @@ export async function createPendingPurchase({
       item.currency,
       isGift ? 1 : 0,
       isGift && isAnonymous ? 1 : 0,
+      addr.name || null,
+      addr.email || null,
+      addr.phone || null,
+      addr.address1 || null,
+      addr.address2 || null,
+      addr.city || null,
+      addr.region || null,
+      addr.zip || null,
+      addr.country ? String(addr.country).toUpperCase() : null,
+      Number.isInteger(shippingCents) ? shippingCents : null,
     ]
   );
   return result.insertId;
@@ -1139,6 +1213,144 @@ export async function retryDeferredDiscordRoles({ userId, discordClient, guildId
       `${result.completed} granted, ${result.failed} failed of ${result.processed}`
   );
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Physical (Printify) fulfilment
+// ---------------------------------------------------------------------------
+
+/** True when an item resolved from the storefront is a physical Printify item. */
+export function isPhysicalItem(item) {
+  return Boolean(item && item.fulfillmentType === "printify" && item.printify?.productId && item.printify?.variantId);
+}
+
+/** Printify line_items array for an item (quantity from its metadata). */
+export function printifyLineItemsFor(item, quantity = null) {
+  return [
+    {
+      product_id: item.printify.productId,
+      variant_id: item.printify.variantId,
+      quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : item.printify.quantity || 1,
+    },
+  ];
+}
+
+/**
+ * Live shipping quote for a physical item to a destination address.
+ * Returns the STANDARD cost in cents, or null when the destination has no
+ * standard rate (not shippable) — the caller then refuses checkout.
+ *
+ * @throws PrintifyError on transport/API failure (caller treats as "try again")
+ */
+export async function quotePhysicalShipping(item, address) {
+  const costs = await printifyCalculateShipping(printifyLineItemsFor(item), address);
+  const standard = costs?.standard;
+  return Number.isInteger(standard) ? standard : null;
+}
+
+/**
+ * Persist the Printify order reference and status on a purchase, and optionally
+ * transition its status (e.g. to "fulfilled").
+ */
+export async function updatePurchasePrintify({ purchaseId, printifyOrderId, printifyStatus, status = null }) {
+  return query(
+    `UPDATE webstorePurchases
+       SET printifyOrderId = COALESCE(?, printifyOrderId),
+           printifyStatus  = COALESCE(?, printifyStatus),
+           status          = COALESCE(?, status),
+           updatedAt       = NOW()
+     WHERE purchaseId = ?`,
+    [printifyOrderId || null, printifyStatus || null, status || null, purchaseId]
+  );
+}
+
+/**
+ * Fulfil a paid physical purchase by creating the Printify order from the
+ * address snapshot captured at checkout and (optionally) sending it to
+ * production.
+ *
+ * Idempotency: external_id is "zander-<purchaseId>". If the purchase already
+ * has a printifyOrderId this is a no-op; if Printify returns a 409 conflict on
+ * the external_id (a prior attempt created it) we treat that as success. Any
+ * other failure throws so the webhook leaves the purchase in "paid" for a
+ * retry rather than marking it fulfilled.
+ *
+ * @param {object} purchase a paid webstorePurchases row (with ship* columns)
+ * @param {object} item     the resolved storefront item (carries printify ids)
+ */
+export async function fulfillPhysicalPurchase(purchase, item, { autoSendToProduction = true } = {}) {
+  if (purchase.printifyOrderId) {
+    console.log(`[webstore] purchase ${purchase.purchaseId} already has Printify order ${purchase.printifyOrderId} — skipping`);
+    return { orderId: purchase.printifyOrderId, skipped: true };
+  }
+  if (!isPrintifyConfigured()) {
+    throw new Error("Printify is not configured (PRINTIFY_API_TOKEN missing) — cannot fulfil physical order");
+  }
+  if (!isPhysicalItem(item)) {
+    throw new Error(`Purchase ${purchase.purchaseId} is physical but item ${purchase.itemSlug} has no Printify mapping`);
+  }
+
+  const address = {
+    firstName: (purchase.shipName || "").split(" ")[0] || purchase.shipName || "",
+    lastName: (purchase.shipName || "").split(" ").slice(1).join(" ") || "",
+    email: purchase.shipEmail || "",
+    phone: purchase.shipPhone || "",
+    country: purchase.shipCountry || "",
+    region: purchase.shipRegion || "",
+    address1: purchase.shipAddress1 || "",
+    address2: purchase.shipAddress2 || "",
+    city: purchase.shipCity || "",
+    zip: purchase.shipZip || "",
+  };
+
+  const externalId = `zander-${purchase.purchaseId}`;
+  let order;
+  try {
+    order = await printifyCreateOrder({
+      externalId,
+      label: `CFC Webstore #${purchase.purchaseId}`,
+      lineItems: printifyLineItemsFor(item),
+      address,
+      shippingMethod: SHIPPING_METHOD.STANDARD,
+      sendShippingNotification: true,
+    });
+  } catch (err) {
+    if (err instanceof PrintifyError && err.status === 409) {
+      // Already created on a prior attempt; the conflict body does not carry
+      // the order id, so leave fulfilment to the next webhook/replay which
+      // will find printifyOrderId once a successful create records it. Record
+      // what we know and treat as handled.
+      console.warn(`[webstore] Printify 409 conflict for ${externalId} — order already exists`);
+      await updatePurchasePrintify({ purchaseId: purchase.purchaseId, printifyStatus: "duplicate" });
+      return { orderId: null, conflict: true };
+    }
+    throw err;
+  }
+
+  const orderId = order?.id ? String(order.id) : null;
+  await updatePurchasePrintify({ purchaseId: purchase.purchaseId, printifyOrderId: orderId, printifyStatus: "created" });
+
+  // Auto send to production unless staff have switched it to hold-for-review.
+  const autoSend = autoSendToProduction !== false;
+  if (orderId && autoSend) {
+    try {
+      await printifySendToProduction(orderId);
+      await updatePurchasePrintify({ purchaseId: purchase.purchaseId, printifyStatus: "in_production", status: "fulfilled" });
+    } catch (err) {
+      // The order exists and is charged-on-submit; production submission failed
+      // but the order is safe in Printify. Leave the purchase "paid" so it is
+      // flagged for a manual send, and surface the error.
+      console.error(`[webstore] Printify send_to_production failed for order ${orderId}:`, err.message);
+      await updatePurchasePrintify({ purchaseId: purchase.purchaseId, printifyStatus: "on_hold_send_failed" });
+      throw err;
+    }
+  } else if (orderId) {
+    // Held for manual review by configuration.
+    await updatePurchasePrintify({ purchaseId: purchase.purchaseId, printifyStatus: "on_hold", status: "fulfilled" });
+  }
+
+  console.log(`[webstore] Printify order ${orderId} created for purchase ${purchase.purchaseId} (autoSend=${autoSend})`);
+  return { orderId, autoSend };
 }
 
 // ---------------------------------------------------------------------------

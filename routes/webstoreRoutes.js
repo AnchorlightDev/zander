@@ -33,7 +33,10 @@ import {
   getWebstoreItems,
   preferredCurrencyFromLocale,
   syncStripeStorefrontCategories,
+  isPhysicalItem,
+  quotePhysicalShipping,
 } from "../controllers/webstoreController.js";
+import { isPrintifyConfigured, PrintifyError } from "../lib/printify/client.mjs";
 import { getAllCategories } from "../controllers/webstoreCategoryController.js";
 import { UserGetter } from "../controllers/userController.js";
 import { getAllItemSettings } from "../controllers/webstoreItemSettingsController.js";
@@ -260,6 +263,63 @@ export default function webstoreRoutes(app, config, features) {
   });
 
   // -------------------------------------------------------------------------
+  // GET /webstore/ship — shipping-address form for a physical (Printify) item
+  // -------------------------------------------------------------------------
+  // Stripe's hosted Checkout can't price shipping from the address the buyer
+  // types on Stripe's page, so for physical goods we collect the address here
+  // first, quote Printify live, then hand Stripe a fixed shipping line.
+  app.get("/webstore/ship", async function (req, res) {
+    if (!features.webstore) return res.redirect("/");
+    if (!isLoggedIn(req)) return res.redirect("/login?returnTo=/webstore");
+
+    const itemSlug = typeof req.query?.item === "string" ? req.query.item.trim() : "";
+    let item = null;
+    try {
+      item = itemSlug ? await findWebstoreItem(itemSlug) : null;
+    } catch (err) {
+      console.error("[webstore] ship: findWebstoreItem error:", err.message);
+    }
+
+    if (!item || !isPhysicalItem(item)) {
+      setBannerCookie("warning", "That item is no longer available.", res);
+      return res.redirect("/webstore");
+    }
+
+    // Respect the storefront's own visibility rules (same as checkout).
+    try {
+      const [settings, categories] = await Promise.all([getAllItemSettings(), getAllCategories()]);
+      const [decorated] = applyItemSettings([item], settings, categories);
+      if (!isPubliclyVisible(decorated)) {
+        setBannerCookie("warning", "That item is no longer available.", res);
+        return res.redirect("/webstore");
+      }
+    } catch (err) {
+      console.error("[webstore] ship: visibility check failed, allowing:", err.message);
+    }
+
+    if (!isPrintifyConfigured()) {
+      setBannerCookie("danger", "Physical orders are temporarily unavailable. Please try again later.", res);
+      return res.redirect("/webstore");
+    }
+
+    return res.view("modules/webstore/ship", {
+      pageTitle: `Ship ${item.displayName}`,
+      pageDescription: "Enter your shipping address.",
+      config,
+      req,
+      features,
+      globalImage: await getGlobalImage(),
+      announcementWeb: await getWebAnnouncement(),
+      item,
+      priceLabel: formatPrice(item.priceCents, item.currency),
+      prefill: {
+        name: req.session.user?.username || "",
+        email: req.session.user?.email || "",
+      },
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // POST /webstore/checkout — create Stripe Checkout session
   // -------------------------------------------------------------------------
   app.post("/webstore/checkout", async function (req, res) {
@@ -322,6 +382,108 @@ export default function webstoreRoutes(app, config, features) {
       // item was already resolved and is assumed visible, as it was before
       // this table existed.
       console.error("[webstore] visibility check failed, allowing checkout:", err.message);
+    }
+
+    // --- Physical (Printify) items: collect address, quote shipping live ---
+    if (isPhysicalItem(item)) {
+      if (!isPrintifyConfigured()) {
+        setBannerCookie("danger", "Physical orders are temporarily unavailable. Please try again later.", res);
+        return res.redirect("/webstore");
+      }
+
+      const b = req.body || {};
+      const address = {
+        name: (typeof b.shipName === "string" ? b.shipName : "").trim(),
+        email: (typeof b.shipEmail === "string" ? b.shipEmail : "").trim(),
+        phone: (typeof b.shipPhone === "string" ? b.shipPhone : "").trim(),
+        address1: (typeof b.shipAddress1 === "string" ? b.shipAddress1 : "").trim(),
+        address2: (typeof b.shipAddress2 === "string" ? b.shipAddress2 : "").trim(),
+        city: (typeof b.shipCity === "string" ? b.shipCity : "").trim(),
+        region: (typeof b.shipRegion === "string" ? b.shipRegion : "").trim(),
+        zip: (typeof b.shipZip === "string" ? b.shipZip : "").trim(),
+        country: (typeof b.shipCountry === "string" ? b.shipCountry : "").trim().toUpperCase(),
+      };
+
+      // No address yet (came straight from the storefront modal) or an
+      // incomplete one → send them to the address form for this item.
+      const required = [address.name, address.address1, address.city, address.zip, address.country, address.email];
+      if (required.some((v) => !v)) {
+        return res.redirect(`/webstore/ship?item=${encodeURIComponent(item.slug)}`);
+      }
+
+      // Split the single name field into the first/last Printify expects.
+      const nameParts = address.name.split(/\s+/);
+      const quoteAddress = {
+        firstName: nameParts[0] || address.name,
+        lastName: nameParts.slice(1).join(" ") || "",
+        email: address.email,
+        phone: address.phone,
+        country: address.country,
+        region: address.region,
+        address1: address.address1,
+        address2: address.address2,
+        city: address.city,
+        zip: address.zip,
+      };
+
+      let shippingCents;
+      try {
+        shippingCents = await quotePhysicalShipping(item, quoteAddress);
+      } catch (err) {
+        const detail = err instanceof PrintifyError ? ` (${err.status || "network"})` : "";
+        console.error(`[webstore] Printify shipping quote failed | item=${item.slug}${detail}:`, err.message);
+        setBannerCookie("danger", "We couldn't work out shipping for that address right now. Please check it and try again.", res);
+        return res.redirect(`/webstore/ship?item=${encodeURIComponent(item.slug)}`);
+      }
+
+      if (shippingCents == null) {
+        console.log(`[webstore] no standard shipping rate | item=${item.slug} country=${address.country}`);
+        setBannerCookie("warning", "Sorry, we can't ship that item to the address you entered.", res);
+        return res.redirect(`/webstore/ship?item=${encodeURIComponent(item.slug)}`);
+      }
+
+      let physSession;
+      try {
+        physSession = await createStripeCheckoutSession({
+          item,
+          userId: req.session.user.userId,
+          recipientMinecraftUsername: purchaserUsername,
+          purchaserMinecraftUsername: purchaserUsername,
+          isGift: false,
+          shippingCents,
+          shippingCurrency: item.currency,
+          shippingLabel: "Shipping (standard)",
+        });
+      } catch (err) {
+        console.error("[webstore] physical checkout session error:", err.message);
+        setBannerCookie("danger", "We could not start checkout right now. Please try again shortly.", res);
+        return res.redirect(`/webstore/ship?item=${encodeURIComponent(item.slug)}`);
+      }
+
+      try {
+        await createPendingPurchase({
+          userId: req.session.user.userId,
+          item,
+          purchaserMinecraftUsername: purchaserUsername,
+          recipientMinecraftUsername: purchaserUsername,
+          stripeSessionId: physSession.id,
+          isGift: false,
+          fulfillmentType: "printify",
+          shippingAddress: address,
+          shippingCents,
+        });
+      } catch (err) {
+        console.error(`[webstore] createPendingPurchase (physical) error | sessionId=${physSession.id}:`, err.message);
+        setBannerCookie("danger", "We could not start checkout right now. Please try again shortly.", res);
+        return res.redirect(`/webstore/ship?item=${encodeURIComponent(item.slug)}`);
+      }
+
+      if (!physSession.url) {
+        setBannerCookie("danger", "Checkout session creation failed. Please try again.", res);
+        return res.redirect(`/webstore/ship?item=${encodeURIComponent(item.slug)}`);
+      }
+      console.log(`[webstore] redirecting to Stripe checkout (physical) | sessionId=${physSession.id} item=${item.slug} shipping=${shippingCents}`);
+      return res.redirect(physSession.url);
     }
 
     // --- Determine recipient ---

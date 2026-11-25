@@ -53,8 +53,10 @@ import {
   fetchStripeInvoice,
   fetchStripeSubscription,
   fulfillPurchase,
+  fulfillPhysicalPurchase,
   fulfillSubscriptionRenewal,
   findWebstoreItem,
+  isPhysicalItem,
   getCommandsByPriceId,
   getPurchaseById,
   getPurchaseByPaymentIntentId,
@@ -486,15 +488,29 @@ async function handleCheckoutCompleted(event, config) {
     console.error("[webstore] Failed to record finance income for purchase", purchase.purchaseId, err.message);
   }
 
-  // --- Enqueue grant commands (last, and only once) ---
-  const alreadyGranted = !wasPending && (await countPurchaseCommandRuns(purchase.purchaseId, "grant")) > 0;
-  if (!alreadyGranted) {
-    await fulfillPurchase(paidPurchase, item, { discordClient, guildId: config?.discord?.guildId });
-  }
+  // --- Fulfilment (last, and only once) ---
+  // Physical (Printify) items create/submit a print-on-demand order; digital
+  // items run their grant commands exactly as before. A resume is idempotent in
+  // both paths: physical keys off an existing printifyOrderId, digital off the
+  // count of recorded grant command runs.
+  if (purchase.fulfillmentType === "printify" || isPhysicalItem(item)) {
+    const alreadyOrdered = Boolean(paidPurchase.printifyOrderId);
+    if (!alreadyOrdered) {
+      await fulfillPhysicalPurchase(paidPurchase, item, {
+        autoSendToProduction: config?.printify?.autoSendToProduction !== false,
+      });
+      await notifyPurchase(config, paidPurchase);
+    }
+  } else {
+    const alreadyGranted = !wasPending && (await countPurchaseCommandRuns(purchase.purchaseId, "grant")) > 0;
+    if (!alreadyGranted) {
+      await fulfillPurchase(paidPurchase, item, { discordClient, guildId: config?.discord?.guildId });
+    }
 
-  // A resumed run whose earlier attempt never reached the grant step never
-  // announced the purchase either, so key the notice off the grant, not wasPending.
-  if (!alreadyGranted) await notifyPurchase(config, paidPurchase);
+    // A resumed run whose earlier attempt never reached the grant step never
+    // announced the purchase either, so key the notice off the grant, not wasPending.
+    if (!alreadyGranted) await notifyPurchase(config, paidPurchase);
+  }
 }
 
 // ---------------------------------------------------------------------------
