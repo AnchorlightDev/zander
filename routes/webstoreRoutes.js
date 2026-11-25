@@ -35,6 +35,7 @@ import {
   syncStripeStorefrontCategories,
   isPhysicalItem,
   quotePhysicalShipping,
+  countUserItemPurchases,
 } from "../controllers/webstoreController.js";
 import { isPrintifyConfigured, PrintifyError } from "../lib/printify/client.mjs";
 import { getAllCategories } from "../controllers/webstoreCategoryController.js";
@@ -384,6 +385,25 @@ export default function webstoreRoutes(app, config, features) {
       console.error("[webstore] visibility check failed, allowing checkout:", err.message);
     }
 
+    // --- Per-account purchase limit (applies to every fulfilment path) ---
+    if (item.purchaseLimit) {
+      try {
+        const already = await countUserItemPurchases(req.session.user.userId, item.slug);
+        if (already >= item.purchaseLimit) {
+          console.log(`[webstore] checkout refused, per-account limit reached | user=${req.session.user.userId} item=${item.slug} limit=${item.purchaseLimit} owned=${already}`);
+          setBannerCookie(
+            "warning",
+            `You've reached the limit for this item (${item.purchaseLimit} per account).`,
+            res
+          );
+          return res.redirect("/webstore");
+        }
+      } catch (err) {
+        // A counting failure must not block a legitimate purchase; log and allow.
+        console.error("[webstore] purchase-limit check failed, allowing checkout:", err.message);
+      }
+    }
+
     // --- Physical (Printify) items: collect address, quote shipping live ---
     if (isPhysicalItem(item)) {
       if (!isPrintifyConfigured()) {
@@ -496,6 +516,16 @@ export default function webstoreRoutes(app, config, features) {
     let isAnonymous = false;
 
     if (purchaseFor === "gift") {
+      if (!item.giftable) {
+        console.log(`[webstore] gift refused, item not giftable | user=${req.session.user.userId} item=${item.slug}`);
+        setBannerCookie(
+          "warning",
+          "Sorry, that item can't be gifted — you can only buy it for your own account.",
+          res
+        );
+        return res.redirect("/webstore");
+      }
+
       const raw = typeof req.body?.recipientUsername === "string"
         ? req.body.recipientUsername.trim()
         : "";

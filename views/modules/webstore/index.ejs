@@ -113,6 +113,9 @@
                     <small class="text-muted fw-normal fs-6">/ month</small>
                   <% } %>
                 </p>
+                <% if (item.purchaseLimit) { %>
+                  <p class="small text-muted mb-2">Limit <%= item.purchaseLimit %> per account</p>
+                <% } %>
                 <% if (loggedIn) { %>
                   <button
                     type="button"
@@ -123,6 +126,7 @@
                     data-item-name="<%= item.displayName %>"
                     data-item-type="<%= item.purchaseType %>"
                     data-item-action="<%= item.purchaseLabel %>"
+                    data-item-giftable="<%= item.giftable ? '1' : '0' %>"
                   >
                     <%= item.purchaseLabel %>
                   </button>
@@ -231,6 +235,7 @@
           const submitBtn        = document.getElementById("modalSubmitBtn");
           const selfRadio        = document.getElementById("purchaseForSelf");
           const giftRadio        = document.getElementById("purchaseForGift");
+          const giftRadioWrapper = document.getElementById("giftRadioWrapper");
           const giftSection      = document.getElementById("giftSection");
           const recipientInput   = document.getElementById("recipientUsername");
           const anonymousInput   = document.getElementById("giftAnonymous");
@@ -246,6 +251,7 @@
             const name   = btn.dataset.itemName   || "item";
             const type   = btn.dataset.itemType   || "one_time";
             const action = btn.dataset.itemAction || "Continue to Payment";
+            const giftable = (btn.dataset.itemGiftable || "1") !== "0";
 
             itemSlugInput.value       = slug;
             modalLabel.textContent    = `Purchase ${name}`;
@@ -258,6 +264,14 @@
             recipientInput.removeAttribute("required");
             recipientInput.value = "";
             clearSuggestions();
+
+            // Hide the gift option entirely for items that can't be gifted
+            // (the server enforces this too). Force "my account".
+            if (giftRadioWrapper) giftRadioWrapper.classList.toggle("d-none", !giftable);
+            if (!giftable) {
+              selfRadio.checked = true;
+              if (giftRadio) giftRadio.checked = false;
+            }
 
             const isSubscription = type === "subscription";
 

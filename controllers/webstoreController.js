@@ -396,6 +396,17 @@ export async function getWebstoreItems(preferredCurrency = null) {
             quantity: Number.isInteger(printifyQty) && printifyQty > 0 ? printifyQty : 1,
           }
         : null;
+      // Gifting: on by default, opt out per product with metadata.giftable set
+      // to a falsy word. Physical items are never giftable (they ship to the
+      // address entered at checkout, not to a Minecraft username).
+      const giftableMeta = !["false", "no", "0", "off"].includes(
+        String(meta.giftable ?? "").trim().toLowerCase()
+      );
+      const giftable = giftableMeta && !isPrintify;
+      // Per-account purchase cap: metadata.purchase_limit = N limits how many
+      // times one account can buy this item. Absent / <= 0 means unlimited.
+      const parsedLimit = Number.parseInt(meta.purchase_limit, 10);
+      const purchaseLimit = Number.isInteger(parsedLimit) && parsedLimit > 0 ? parsedLimit : null;
       return {
         slug: p.id,
         stripePriceId: p.id,
@@ -407,6 +418,8 @@ export async function getWebstoreItems(preferredCurrency = null) {
         purchaseType: p.type === "recurring" || p.recurring ? "subscription" : "one_time",
         fulfillmentType: isPrintify ? "printify" : "digital",
         printify,
+        giftable,
+        purchaseLimit,
         sortKey,
         stripeCategory,
       };
@@ -586,6 +599,24 @@ export async function getPurchaseByPaymentIntentId(paymentIntentId) {
     [paymentIntentId]
   );
   return rows[0] || null;
+}
+
+/**
+ * How many times a user has already bought a given item, counting only
+ * completed purchases (paid or fulfilled). Used to enforce a per-account
+ * purchase cap (metadata.purchase_limit). The user is counted as the
+ * purchaser, so gifts they bought count toward their own cap.
+ */
+export async function countUserItemPurchases(userId, itemSlug) {
+  if (!userId || !itemSlug) return 0;
+  const rows = await query(
+    `SELECT COUNT(*) AS total
+       FROM webstorePurchases
+      WHERE userId = ? AND itemSlug = ?
+        AND status IN ('paid', 'fulfilled')`,
+    [userId, itemSlug]
+  );
+  return Number(rows[0]?.total || 0);
 }
 
 /**
