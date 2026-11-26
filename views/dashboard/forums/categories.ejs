@@ -119,12 +119,13 @@
               <textarea class="form-control" id="editCategoryDescription" name="description" rows="2"><%= categoryToEdit.description || '' %></textarea>
             </div>
             <div class="col-12">
-              <label class="form-label" for="editCategoryDiscordWebhook">Discord updates webhook</label>
-              <input type="url" class="form-control" id="editCategoryDiscordWebhook" name="discordUpdateWebhook"
-                     value="<%= categoryToEdit.discordUpdateWebhook || '' %>"
-                     placeholder="https://discord.com/api/webhooks/..." maxlength="255">
+              <label class="form-label" for="editCategoryDiscordChannel">Discord updates channel ID</label>
+              <input type="text" class="form-control" id="editCategoryDiscordChannel" name="discordUpdateChannelId"
+                     value="<%= categoryToEdit.discordUpdateChannelId || '' %>"
+                     placeholder="e.g. 1234567890123456789" pattern="\d{15,25}" maxlength="25">
               <div class="form-text">
-                New topics and replies in this category are announced to this Discord webhook.
+                New topics and replies in this category are announced to this Discord channel by the bot.
+                Paste the channel ID (enable Developer Mode in Discord, right-click the channel, Copy Channel ID), and make sure the bot can post there.
                 Leave blank to turn it off. Ignored while this category is bridged to a Discord forum channel below (the bridge already mirrors posts there).
               </div>
             </div>

@@ -123,7 +123,7 @@ function mapCategoryRow(row) {
     postPermission: row.postPermission || null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    discordUpdateWebhook: row.discordUpdateWebhook || null,
+    discordUpdateChannelId: row.discordUpdateChannelId || null,
   };
 }
 
@@ -209,7 +209,7 @@ export async function getAllCategoriesForAdmin() {
 
 export async function getCategoryBySlug(slug) {
   const [row] = await query(
-    `SELECT categoryId, parentCategoryId, name, slug, description, position, viewPermission, postPermission, createdAt, updatedAt, discordUpdateWebhook
+    `SELECT categoryId, parentCategoryId, name, slug, description, position, viewPermission, postPermission, createdAt, updatedAt, discordUpdateChannelId
        FROM forumCategories
       WHERE slug = ?
       LIMIT 1`,
@@ -221,7 +221,7 @@ export async function getCategoryBySlug(slug) {
 
 export async function getCategoryById(categoryId) {
   const [row] = await query(
-    `SELECT categoryId, parentCategoryId, name, slug, description, position, viewPermission, postPermission, createdAt, updatedAt, discordUpdateWebhook
+    `SELECT categoryId, parentCategoryId, name, slug, description, position, viewPermission, postPermission, createdAt, updatedAt, discordUpdateChannelId
        FROM forumCategories
       WHERE categoryId = ?
       LIMIT 1`,
@@ -325,7 +325,7 @@ export async function updateCategory(categoryId, {
   position = 0,
   viewPermission = null,
   postPermission = null,
-  discordUpdateWebhook = undefined,
+  discordUpdateChannelId = undefined,
 }) {
   const existing = await getCategoryById(categoryId);
   if (!existing) {
@@ -348,7 +348,7 @@ export async function updateCategory(categoryId, {
             position = ?,
             viewPermission = ?,
             postPermission = ?,
-            discordUpdateWebhook = ?,
+            discordUpdateChannelId = ?,
             updatedAt = NOW()
       WHERE categoryId = ?`,
     [
@@ -360,7 +360,7 @@ export async function updateCategory(categoryId, {
       viewPermission || null,
       postPermission || null,
       // undefined = caller didn't touch it → keep existing; otherwise set/clear.
-      discordUpdateWebhook === undefined ? (existing.discordUpdateWebhook || null) : (discordUpdateWebhook || null),
+      discordUpdateChannelId === undefined ? (existing.discordUpdateChannelId || null) : (discordUpdateChannelId || null),
       categoryId,
     ]
   );
