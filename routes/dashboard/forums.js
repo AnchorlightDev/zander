@@ -12,6 +12,7 @@ import {
   getCategoryById,
 } from "../../controllers/forumController.js";
 import { getBridgeByCategoryId, getOutboxStats, listBridges } from "../../controllers/forumBridgeController.js";
+import { getGuildDirectory } from "../../services/discordDirectoryService.js";
 
 const MANAGE_PERMISSION = "zander.forums.category.manage";
 
@@ -64,6 +65,18 @@ export default function dashboardForumsRoutes(
       console.error("[DASHBOARD] Failed to load forum bridge info", error);
     }
 
+    // Text channels for the "Discord updates channel" picker — same source the
+    // Settings page channel pickers use. Null when the bot can't be reached.
+    let updateChannels = null;
+    try {
+      if (categoryToEdit && config.discord?.guildId) {
+        const dir = await getGuildDirectory(config.discord.guildId);
+        updateChannels = dir?.channels || null;
+      }
+    } catch (error) {
+      console.error("[DASHBOARD] Failed to load Discord channel list for forum updates", error);
+    }
+
     res.header("content-type", "text/html; charset=utf-8").send(
       await app.view("dashboard/forums/categories", {
       pageTitle: `Dashboard - Forum Categories`,
@@ -80,6 +93,7 @@ export default function dashboardForumsRoutes(
       bridge,
       bridgeStats,
       forumChannels,
+      updateChannels,
       bridgedCategoryIds,
       linkedRoleConfigured: Boolean(config.discord?.roles?.linked),
     }));
