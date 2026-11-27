@@ -336,6 +336,6 @@ export default function dashboardAnnouncementSiteRoute(app, fetch, config, db, f
   // Legacy holograms dashboard: 301 to the merged announcements wizard/list.
   //
   for (const path of ["/dashboard/holograms", "/dashboard/holograms/create", "/dashboard/holograms/edit"]) {
-    app.get(path, (req, res) => res.redirect(301, "/dashboard/announcements?platform=hologram"));
+    app.get(path, (req, res) => res.redirect("/dashboard/announcements?platform=hologram", 301));
   }
 }
