@@ -636,6 +636,35 @@
     setTimeout(function () { a.remove(); URL.revokeObjectURL(url); }, 1500);
   }
 
+  function preferShare() {
+    var ua = navigator.userAgent || "";
+    var mobile = (navigator.maxTouchPoints || 0) > 1 || /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+    // Desktop Safari supports Web Share but is unreliable with blob downloads.
+    var safari = /^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(ua);
+    return mobile || safari;
+  }
+
+  // Save a PNG blob. On mobile / Safari the browser often ignores a blob
+  // "download" link, so hand the file to the native share sheet (Web Share),
+  // which gives a real "Save Image" option; desktop keeps the direct download.
+  // Must run inside the click gesture for Web Share to be permitted.
+  function savePng(blob, name, done) {
+    if (preferShare() && navigator.canShare) {
+      try {
+        var file = new File([blob], name, { type: "image/png" });
+        if (navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: "CFC Wrapped" }).then(
+            function () { if (done) done("Shared"); },
+            function () { triggerDownload(blob, name); if (done) done("Saved PNG"); }
+          );
+          return;
+        }
+      } catch (e) { /* fall through to a normal download */ }
+    }
+    triggerDownload(blob, name);
+    if (done) done("Saved PNG");
+  }
+
   function saveCard(url, nameBase, btn, w, h) {
     var orig = btn ? (btn.getAttribute("data-orig") || btn.textContent) : "";
     if (btn) btn.setAttribute("data-orig", orig);
@@ -644,8 +673,7 @@
     var deliver = function (c, isRetry) {
       var png = (c && c.pngBlob) || (c && c.pngDataUrl && dataUrlToBlob(c.pngDataUrl));
       if (png) {
-        triggerDownload(png, nameBase + ".png");
-        done("Saved PNG");
+        savePng(png, nameBase + ".png", done);
         return;
       }
       if (!isRetry) {
@@ -662,7 +690,14 @@
     };
 
     var cached = cardCache[url];
-    if (btn && !(cached && cached.pngBlob)) btn.textContent = "Preparing…";
+    // Fast path: if the PNG is already rasterised, save it synchronously inside
+    // this click gesture. Required so Web Share (mobile / Safari) is permitted —
+    // it is denied if the save happens after an awaited promise resolves.
+    if (cached && cached.pngBlob) {
+      savePng(cached.pngBlob, nameBase + ".png", done);
+      return;
+    }
+    if (btn) btn.textContent = "Preparing…";
     getCard(url, w, h).then(function (c) { deliver(c, false); }, function () { deliver(cardCache[url], false); });
   }
 
