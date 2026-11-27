@@ -1,0 +1,152 @@
+<%#
+    CFC Wrapped prompt — a themed site-wide banner plus a home-page modal.
+
+    Driven entirely by req.session.wrappedPrompt (set once per session in app.js
+    for logged-in users): it holds the active period year when the user hasn't
+    generated their Wrapped yet, or 0 otherwise. So this only ever renders for a
+    signed-in member while Wrapped is live and they haven't opened it.
+
+    Dismissal is per-browser via localStorage, keyed to the period year so a new
+    period shows it again. Opening /wrapped clears the server-side flag, so once
+    someone views their Wrapped it stops everywhere.
+%>
+<% const wrappedYear = (req && req.session && req.session.wrappedPrompt) ? req.session.wrappedPrompt : 0; %>
+<% if (wrappedYear) { %>
+  <% const wrappedIsHome = String(req.url || "/").split("?")[0] === "/"; %>
+
+  <style>
+    .cfcWrappedBanner {
+      display: flex; align-items: center; gap: .75rem;
+      padding: .6rem 1rem; color: #fff;
+      background: linear-gradient(90deg, #6d28d9 0%, #9333ea 35%, #db2777 70%, #f59e0b 100%);
+      font-size: .95rem; position: relative; z-index: 5;
+    }
+    .cfcWrappedBanner-emoji { font-size: 1.25rem; line-height: 1; }
+    .cfcWrappedBanner-text { flex: 1 1 auto; }
+    .cfcWrappedBanner-cta {
+      flex: 0 0 auto; display: inline-block; white-space: nowrap;
+      background: rgba(255,255,255,.95); color: #6d28d9; font-weight: 700;
+      text-decoration: none; padding: .35rem .9rem; border-radius: 999px;
+    }
+    .cfcWrappedBanner-cta:hover { background: #fff; color: #9333ea; }
+    .cfcWrappedBanner-x {
+      flex: 0 0 auto; background: transparent; border: 0; color: #fff;
+      font-size: 1.4rem; line-height: 1; cursor: pointer; opacity: .85; padding: 0 .25rem;
+    }
+    .cfcWrappedBanner-x:hover { opacity: 1; }
+    @media (max-width: 600px) {
+      .cfcWrappedBanner { flex-wrap: wrap; }
+      .cfcWrappedBanner-text { flex-basis: 100%; }
+    }
+
+    .cfcWrappedModal {
+      position: fixed; inset: 0; z-index: 1080;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(17, 12, 34, .72); padding: 1rem;
+    }
+    .cfcWrappedModal-card {
+      position: relative; width: 100%; max-width: 440px; text-align: center;
+      background: #fff; border-radius: 1rem; padding: 2rem 1.75rem 1.75rem;
+      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+      border-top: 6px solid transparent;
+      border-image: linear-gradient(90deg, #6d28d9, #db2777, #f59e0b) 1;
+      overflow: hidden;
+    }
+    .cfcWrappedModal-card::before {
+      content: ""; position: absolute; inset: 0 0 auto 0; height: 120px;
+      background: radial-gradient(120% 140% at 50% 0%, rgba(147,51,234,.14), transparent 70%);
+      pointer-events: none;
+    }
+    .cfcWrappedModal-emoji { font-size: 3rem; line-height: 1; margin-bottom: .5rem; }
+    .cfcWrappedModal-card h3 { margin: 0 0 .5rem; font-weight: 800; }
+    .cfcWrappedModal-card p { margin: 0 0 1.25rem; color: #4b5563; }
+    .cfcWrappedModal-actions { display: flex; gap: .6rem; justify-content: center; flex-wrap: wrap; }
+    .cfcWrappedModal-go {
+      display: inline-block; text-decoration: none; font-weight: 700; color: #fff;
+      padding: .6rem 1.4rem; border-radius: 999px;
+      background: linear-gradient(90deg, #7c3aed, #db2777);
+    }
+    .cfcWrappedModal-go:hover { filter: brightness(1.05); color: #fff; }
+    .cfcWrappedModal-later {
+      background: transparent; border: 0; color: #6b7280; font-weight: 600;
+      padding: .6rem 1rem; cursor: pointer; border-radius: 999px;
+    }
+    .cfcWrappedModal-later:hover { color: #374151; }
+    .cfcWrappedModal-x {
+      position: absolute; top: .5rem; right: .6rem; background: transparent; border: 0;
+      font-size: 1.5rem; line-height: 1; color: #9ca3af; cursor: pointer;
+    }
+    .cfcWrappedModal-x:hover { color: #4b5563; }
+  </style>
+
+  <div class="cfcWrappedBanner" id="cfcWrappedBanner" data-wkey="zander.wrapped.banner.<%= wrappedYear %>">
+    <span class="cfcWrappedBanner-emoji">&#127873;</span>
+    <span class="cfcWrappedBanner-text">Your CFC Wrapped is here &mdash; take a look back at your year on the server.</span>
+    <a class="cfcWrappedBanner-cta" href="/wrapped">Open my Wrapped &rarr;</a>
+    <button type="button" class="cfcWrappedBanner-x" aria-label="Dismiss" title="Dismiss">&times;</button>
+  </div>
+
+  <% if (wrappedIsHome) { %>
+  <div class="cfcWrappedModal" id="cfcWrappedModal" data-wkey="zander.wrapped.modal.<%= wrappedYear %>"
+       role="dialog" aria-modal="true" aria-labelledby="cfcWrappedModalTitle">
+    <div class="cfcWrappedModal-card">
+      <button type="button" class="cfcWrappedModal-x" aria-label="Close" title="Close">&times;</button>
+      <div class="cfcWrappedModal-emoji">&#127873;</div>
+      <h3 id="cfcWrappedModalTitle">Your CFC Wrapped is here</h3>
+      <p>See your year on CFC &mdash; the hours played, blocks mined and moments that made it yours.</p>
+      <div class="cfcWrappedModal-actions">
+        <a class="cfcWrappedModal-go" href="/wrapped">View my Wrapped</a>
+        <button type="button" class="cfcWrappedModal-later">Maybe later</button>
+      </div>
+    </div>
+  </div>
+  <% } %>
+
+  <script>
+  (function () {
+    function readDismissed(key) {
+      try { return window.localStorage.getItem(key) === "1"; } catch (e) { return false; }
+    }
+    function writeDismissed(key) {
+      try { window.localStorage.setItem(key, "1"); } catch (e) {}
+    }
+
+    // Banner
+    var banner = document.getElementById("cfcWrappedBanner");
+    if (banner) {
+      var bKey = banner.getAttribute("data-wkey");
+      if (readDismissed(bKey)) {
+        banner.style.display = "none";
+      } else {
+        var bx = banner.querySelector(".cfcWrappedBanner-x");
+        if (bx) bx.addEventListener("click", function () {
+          banner.style.display = "none";
+          writeDismissed(bKey);
+        });
+      }
+    }
+
+    // Modal (home page only)
+    var modal = document.getElementById("cfcWrappedModal");
+    if (modal) {
+      var mKey = modal.getAttribute("data-wkey");
+      if (readDismissed(mKey)) {
+        modal.style.display = "none";
+      } else {
+        function closeModal() {
+          modal.style.display = "none";
+          writeDismissed(mKey);
+        }
+        var mx = modal.querySelector(".cfcWrappedModal-x");
+        var later = modal.querySelector(".cfcWrappedModal-later");
+        if (mx) mx.addEventListener("click", closeModal);
+        if (later) later.addEventListener("click", closeModal);
+        // Click on the dim backdrop (outside the card) closes it too.
+        modal.addEventListener("click", function (e) {
+          if (e.target === modal) closeModal();
+        });
+      }
+    }
+  })();
+  </script>
+<% } %>

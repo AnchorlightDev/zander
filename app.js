@@ -22,6 +22,7 @@ dotenv.config();
 
 import fastify from "fastify";
 import fastifySession from "@fastify/session";
+import { shouldPromptForWrapped, getConfiguredWrappedPeriod } from "./services/wrapped/wrappedService.js";
 import fastifyCookie from "@fastify/cookie";
 import { FastifyPrismaSessionStore } from "./lib/fastifyPrismaSessionStore.js";
 import {
@@ -570,6 +571,29 @@ const buildApp = async () => {
       } catch (error) {
         app.log.error(error);
       }
+    }
+  });
+
+  // Wrapped prompt flag. Computed once per session for logged-in users (then
+  // cached on the session), so the home-page modal and the site banner know
+  // whether to show without a DB check on every page load. Holds the period
+  // year when the user should be prompted (they haven't generated their
+  // Wrapped yet this active period), or 0 otherwise. Cleared to 0 by the
+  // /wrapped routes once they open or dismiss it.
+  app.addHook("preHandler", async (req, res) => {
+    if (req.method !== "GET") return;
+    if (!req.session?.user?.userId) return;
+    if (req.session.wrappedPrompt !== undefined) return;
+    if (req.url.startsWith("/api/") || req.url.startsWith("/wrapped") || req.url.includes(".")) return;
+    try {
+      if (await shouldPromptForWrapped(req.session.user)) {
+        const period = await getConfiguredWrappedPeriod();
+        req.session.wrappedPrompt = period.year || 1;
+      } else {
+        req.session.wrappedPrompt = 0;
+      }
+    } catch (_) {
+      req.session.wrappedPrompt = 0;
     }
   });
 

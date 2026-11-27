@@ -105,7 +105,7 @@ export default function wrappedSiteRoutes(app, client, fetch, moment, cfg, db, f
     try {
       const { run } = await getOrBuildWrapped(user);
       await markWrappedViewed(user.userId, period.year);
-      if (req.session) delete req.session.wrappedPending;
+      if (req.session) { delete req.session.wrappedPending; req.session.wrappedPrompt = 0; }
       const avatarUrl = await deckAvatarUrl(run.payload?.user);
       const trackUrl = (await getWrappedSettings()).musicUrl;
       return renderHtml(res, "wrapped/show", deckData(run, { shared: false, avatarUrl, trackUrl }));
@@ -126,7 +126,7 @@ export default function wrappedSiteRoutes(app, client, fetch, moment, cfg, db, f
     } catch (err) {
       req.log?.error?.({ err }, "[WRAPPED] dismiss build failed");
     }
-    if (req.session) delete req.session.wrappedPending;
+    if (req.session) { delete req.session.wrappedPending; req.session.wrappedPrompt = 0; }
     return res.redirect("/");
   });
 
